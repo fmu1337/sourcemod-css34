@@ -21,6 +21,7 @@ BUILD_PLATFORM="${BUILD_PLATFORM:-linux}"
 # Clang 15+ understands -Wno-deprecated-non-prototype; older distro clang does not.
 # Probe with -Werror because SourceMod builds with -Werror and unknown -Wno-* is fatal then.
 supports_deprecated_non_prototype=0
+supports_reorder_ctor=0
 compiler_flavor="gcc"
 compiler="${CC:-gcc-9}"
 
@@ -33,10 +34,14 @@ else
   if echo 'int main(void){return 0;}' | "$compiler" -m32 -Werror -Wno-deprecated-non-prototype -x c - -c -o /dev/null 2>/dev/null; then
     supports_deprecated_non_prototype=1
   fi
+  if echo 'int main(void){return 0;}' | "$compiler" -m32 -Werror -Wno-reorder-ctor -x c - -c -o /dev/null 2>/dev/null; then
+    supports_reorder_ctor=1
+  fi
 fi
 
 SOURCEMOD_DIR="$sourcemod_dir" \
 SUPPORTS_WNO_DEPRECATED_NON_PROTOTYPE="$supports_deprecated_non_prototype" \
+SUPPORTS_WNO_REORDER_CTOR="$supports_reorder_ctor" \
 COMPILER_FLAVOR="$compiler_flavor" \
 python3 - <<'PY'
 from pathlib import Path
@@ -44,6 +49,7 @@ import os
 
 sourcemod_dir = os.environ['SOURCEMOD_DIR']
 supports_deprecated_non_prototype = os.environ.get('SUPPORTS_WNO_DEPRECATED_NON_PROTOTYPE') == '1'
+supports_reorder_ctor = os.environ.get('SUPPORTS_WNO_REORDER_CTOR') == '1'
 compiler_flavor = os.environ.get('COMPILER_FLAVOR', 'gcc')
 
 path = Path(sourcemod_dir) / 'AMBuildScript'
@@ -107,8 +113,10 @@ insert = """      '-fvisibility=hidden',
 """
 if compiler_flavor == 'clang':
     insert += """    cxx.cflags += ['-Wno-nonportable-include-path', '-Wno-macro-redefined', '-Wno-writable-strings']  # CSS34 SDK compatibility
-    cxx.cxxflags += ['-Wno-reorder', '-Wno-reorder-ctor', '-Wno-attributes', '-fpermissive']  # CSS34 SDK compatibility
+    cxx.cxxflags += ['-Wno-reorder', '-Wno-attributes', '-fpermissive']  # CSS34 SDK compatibility
 """
+    if supports_reorder_ctor:
+        insert += "    cxx.cxxflags += ['-Wno-reorder-ctor']  # CSS34 clang compatibility\n"
     if supports_deprecated_non_prototype:
         insert += "    cxx.cflags += ['-Wno-deprecated-non-prototype']  # CSS34 clang compatibility\n"
 elif compiler_flavor == 'gcc':
