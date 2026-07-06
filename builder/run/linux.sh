@@ -14,6 +14,12 @@ export PATH="$HOME/.local/bin:$PATH"
 
 echo "Building SourceMod CSS v34 from $WDIR"
 
+if [ -n "${SOURCEMOD_COMMIT:-}" ]; then
+  echo "Pinning sourcemod to $SOURCEMOD_COMMIT"
+  git -C "$SM_DIR" fetch --depth 1 origin "$SOURCEMOD_COMMIT"
+  git -C "$SM_DIR" checkout "$SOURCEMOD_COMMIT"
+fi
+
 git -C "$SM_DIR" submodule update --init --recursive
 
 bash "$WDIR/builder/checkout-deps.sh" "$DEPS"

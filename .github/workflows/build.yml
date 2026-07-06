@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  BUILD_COMMIT: 05c145d8c9bd91382aa966055ef6999841ac6c49
+  SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
   BUILD_TAG: v1.11.0.6572
 
 jobs:
@@ -21,11 +21,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Checkout release revision
-        run: |
-          git checkout "$BUILD_COMMIT"
-          git submodule update --init --recursive
 
       - name: Install build dependencies
         run: |
@@ -52,6 +47,7 @@ jobs:
           CC: gcc-9
           CXX: g++-9
           WDIR: ${{ github.workspace }}
+          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
         run: bash builder/run/linux.sh
 
       - name: Upload package
