@@ -43,17 +43,23 @@ cat > "$WRAPPER_DIR/clang++-9" <<'EOF'
 set -euo pipefail
 REAL="$(cd "$(dirname "$0")/../clang-9/usrbin" && pwd)/clang++-9"
 use_m32=0
+compile_only=0
 for arg in "$@"; do
   if [ "$arg" = "-m32" ]; then
     use_m32=1
-    break
+  elif [ "$arg" = "-c" ]; then
+    compile_only=1
   fi
 done
-if [ "$use_m32" -eq 1 ]; then
-  exec "$REAL" -L/usr/lib/gcc/x86_64-linux-gnu/9/32 "$@"
-else
-  exec "$REAL" -L/usr/lib/gcc/x86_64-linux-gnu/9 "$@"
+extra=()
+if [ "$compile_only" -eq 0 ]; then
+  if [ "$use_m32" -eq 1 ]; then
+    extra=(-L/usr/lib/gcc/x86_64-linux-gnu/9/32)
+  else
+    extra=(-L/usr/lib/gcc/x86_64-linux-gnu/9)
+  fi
 fi
+exec "$REAL" "${extra[@]}" "$@"
 EOF
 
 chmod +x "$WRAPPER_DIR/clang-9" "$WRAPPER_DIR/clang++-9"

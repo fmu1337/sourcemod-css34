@@ -85,13 +85,15 @@ for rel in ('public/minmax.h', 'public/tier0/basetypes.h'):
     text = path.read_text(encoding='latin-1')
     if '#if !defined(__cplusplus)\n#ifndef min' in text:
         continue
+    if '#if !defined(__cplusplus) || defined(_MSC_VER)\n#ifndef min' in text:
+        continue
     text = text.replace(
         '#ifndef min\n#define min(a,b)  (((a) < (b)) ? (a) : (b))\n#endif\n#ifndef max\n#define max(a,b)  (((a) > (b)) ? (a) : (b))\n#endif',
-        '#if !defined(__cplusplus)\n#ifndef min\n#define min(a,b)  (((a) < (b)) ? (a) : (b))\n#endif\n#ifndef max\n#define max(a,b)  (((a) > (b)) ? (a) : (b))\n#endif\n#endif',
+        '#if !defined(__cplusplus) || defined(_MSC_VER)\n#ifndef min\n#define min(a,b)  (((a) < (b)) ? (a) : (b))\n#endif\n#ifndef max\n#define max(a,b)  (((a) > (b)) ? (a) : (b))\n#endif\n#endif',
     )
     text = text.replace(
         '#ifndef min\n\t#define min(a,b)  (((a) < (b)) ? (a) : (b))\n#endif\n\n#ifndef max\n\t#define max(a,b)  (((a) > (b)) ? (a) : (b))\n#endif',
-        '#if !defined(__cplusplus)\n#ifndef min\n\t#define min(a,b)  (((a) < (b)) ? (a) : (b))\n#endif\n\n#ifndef max\n\t#define max(a,b)  (((a) > (b)) ? (a) : (b))\n#endif\n#endif',
+        '#if !defined(__cplusplus) || defined(_MSC_VER)\n#ifndef min\n\t#define min(a,b)  (((a) < (b)) ? (a) : (b))\n#endif\n\n#ifndef max\n\t#define max(a,b)  (((a) > (b)) ? (a) : (b))\n#endif\n#endif',
     )
     path.write_text(text, encoding='latin-1')
 
