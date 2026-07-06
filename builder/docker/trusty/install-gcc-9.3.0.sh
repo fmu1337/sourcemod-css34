@@ -45,7 +45,15 @@ apt-get install -y -qq \
   expect \
   dejagnu \
   chrpath \
-  dwz
+  dwz \
+  quilt \
+  sharutils \
+  pkg-config \
+  texlive-latex-base \
+  ghostscript \
+  docbook-xsl-ns \
+  libxml2-utils \
+  xsltproc
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -63,11 +71,9 @@ tar -xJf gcc-9_9.3.0-10ubuntu2.debian.tar.xz -C gcc-9-9.3.0/
 sed -i '1s/.*/gcc-9 (9.3.0-10ubuntu2~14.04.1) trusty; urgency=medium/' gcc-9-9.3.0/debian/changelog
 sed -i 's/9\.3\.0-10ubuntu2/9.3.0-10ubuntu2~14.04.1/g' gcc-9-9.3.0/debian/rules.parameters
 cp gcc-9-9.3.0/debian/changelog gcc-9-9.3.0/debian/changelog.bak
-cp gcc-9-9.3.0/debian/control gcc-9-9.3.0/debian/control.bak
 
 gunzip -c gcc-9_9.3.0-11ubuntu0.diff.gz | patch -p0 || true
 cp gcc-9-9.3.0/debian/changelog.bak gcc-9-9.3.0/debian/changelog
-cp gcc-9-9.3.0/debian/control.bak gcc-9-9.3.0/debian/control
 
 # Ensure version metadata matches the original Travis toolchain.
 sed -i '1s/.*/gcc-9 (9.3.0-11ubuntu0~14.04) trusty; urgency=medium/' gcc-9-9.3.0/debian/changelog
@@ -118,9 +124,12 @@ EOF
 export DEB_BUILD_OPTIONS="parallel=$(nproc)"
 export DEB_CFLAGS_APPEND='-Wno-error'
 export DEB_CXXFLAGS_APPEND='-Wno-error'
+export CC=gcc
+export CXX=g++
 
 cd gcc-9-9.3.0
-dpkg-buildpackage -b -uc -us -j"$(nproc)"
+# Focal debian/control lists build-deps not satisfiable on trusty; bootstrap with -d.
+dpkg-buildpackage -d -b -uc -us -j"$(nproc)"
 cd ..
 
 shopt -s nullglob
