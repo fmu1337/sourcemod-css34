@@ -2,6 +2,7 @@
 set -euo pipefail
 
 DEPS_DIR="${1:?deps directory required}"
+mkdir -p "$DEPS_DIR"
 DEPS_DIR="$(cd "$DEPS_DIR" && pwd)"
 CLANG_DIR="$DEPS_DIR/clang-9"
 LIBTINFO_DIR="$DEPS_DIR/libtinfo5"
@@ -12,7 +13,7 @@ LIBTINFO_DEB_URL="${LIBTINFO_DEB_URL:-http://archive.ubuntu.com/ubuntu/pool/univ
 ENV_FILE="$DEPS_DIR/clang9.env"
 CONF_FILE="$DEPS_DIR/clang9.conf"
 
-mkdir -p "$DEPS_DIR" "$WRAPPER_DIR"
+mkdir -p "$WRAPPER_DIR"
 
 if [ ! -x "$CLANG_DIR/usrbin/clang-9" ]; then
   echo "==> Installing rom4s clang-9 toolchain" >&2
