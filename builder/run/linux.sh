@@ -64,6 +64,8 @@ fi
 python3 -m pip install --upgrade pip
 python3 -m pip install --user "$DEPS_DIR/ambuild"
 export PATH="$HOME/.local/bin:$PATH"
+export CC=clang
+export CXX=clang++
 
 echo "==> Applying CS:S v34 compatibility patches"
 "$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS_DIR/hl2sdk-css"
@@ -77,8 +79,6 @@ cd build
 
 export HL2SDKCSS="$DEPS_DIR/hl2sdk-css"
 export MMSOURCE110="$DEPS_DIR/mmsource-1.10"
-export CC=clang
-export CXX=clang++
 
 configure_args=(
   -s css

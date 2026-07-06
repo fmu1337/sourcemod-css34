@@ -7,6 +7,9 @@ ambuild_script="$sourcemod_dir/AMBuildScript"
 if grep -q "CSS34 SDK compatibility" "$ambuild_script"; then
   sed -i '/CSS34 SDK compatibility/d' "$ambuild_script"
 fi
+if grep -q "CSS34 clang compatibility" "$ambuild_script"; then
+  sed -i '/CSS34 clang compatibility/d' "$ambuild_script"
+fi
 
 sp_ambuild_script="$sourcemod_dir/sourcepawn/AMBuildScript"
 if [ -f "$sp_ambuild_script" ] && grep -q "CSS34 clang compatibility" "$sp_ambuild_script"; then
@@ -14,8 +17,10 @@ if [ -f "$sp_ambuild_script" ] && grep -q "CSS34 clang compatibility" "$sp_ambui
 fi
 
 # Clang 15+ understands -Wno-deprecated-non-prototype; older distro clang does not.
+# Probe with -Werror because SourceMod builds with -Werror and unknown -Wno-* is fatal then.
 supports_deprecated_non_prototype=0
-if compiler="${CC:-clang}"; echo 'int main(void){return 0;}' | "$compiler" -m32 -Wno-deprecated-non-prototype -x c - -c -o /dev/null 2>/dev/null; then
+compiler="${CC:-clang}"
+if echo 'int main(void){return 0;}' | "$compiler" -m32 -Werror -Wno-deprecated-non-prototype -x c - -c -o /dev/null 2>/dev/null; then
   supports_deprecated_non_prototype=1
 fi
 
