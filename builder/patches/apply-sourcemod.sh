@@ -16,18 +16,24 @@ if [ -f "$sp_ambuild_script" ] && grep -q "CSS34 clang compatibility" "$sp_ambui
   sed -i '/CSS34 clang compatibility/d' "$sp_ambuild_script"
 fi
 
+BUILD_PLATFORM="${BUILD_PLATFORM:-linux}"
+
 # Clang 15+ understands -Wno-deprecated-non-prototype; older distro clang does not.
 # Probe with -Werror because SourceMod builds with -Werror and unknown -Wno-* is fatal then.
 supports_deprecated_non_prototype=0
-compiler="${CC:-gcc-9}"
-if echo 'int main(void){return 0;}' | "$compiler" -m32 -Werror -Wno-deprecated-non-prototype -x c - -c -o /dev/null 2>/dev/null; then
-  supports_deprecated_non_prototype=1
-fi
-
 compiler_flavor="gcc"
-case "$(basename "$compiler")" in
-  clang*) compiler_flavor="clang" ;;
-esac
+compiler="${CC:-gcc-9}"
+
+if [ "$BUILD_PLATFORM" = "windows" ]; then
+  compiler_flavor="msvc"
+else
+  case "$(basename "$compiler")" in
+    clang*) compiler_flavor="clang" ;;
+  esac
+  if echo 'int main(void){return 0;}' | "$compiler" -m32 -Werror -Wno-deprecated-non-prototype -x c - -c -o /dev/null 2>/dev/null; then
+    supports_deprecated_non_prototype=1
+  fi
+fi
 
 SOURCEMOD_DIR="$sourcemod_dir" \
 SUPPORTS_WNO_DEPRECATED_NON_PROTOTYPE="$supports_deprecated_non_prototype" \
@@ -103,7 +109,7 @@ if compiler_flavor == 'clang':
 """
     if supports_deprecated_non_prototype:
         insert += "    cxx.cflags += ['-Wno-deprecated-non-prototype']  # CSS34 clang compatibility\n"
-else:
+elif compiler_flavor == 'gcc':
     insert += """    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings']  # CSS34 SDK compatibility
 """
 if needle not in text:

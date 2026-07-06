@@ -54,3 +54,36 @@ jobs:
         with:
           name: sourcemod-css34-linux
           path: packages/sourcemod-*-css34-linux.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up MSVC (x86)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
+      - name: Build SourceMod for CS:S v34
+        shell: bash
+        env:
+          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
+          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+        run: |
+          export WDIR="$PWD"
+          builder/run/windows.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcemod-css34-windows
+          path: packages/sourcemod-*-css34-windows.zip

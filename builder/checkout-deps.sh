@@ -3,6 +3,8 @@ set -euo pipefail
 
 DEPS="${1:?deps directory required}"
 BUILDER_DIR="${2:?builder directory required}"
+BUILD_PLATFORM="${BUILD_PLATFORM:-linux}"
+export BUILD_PLATFORM
 
 mkdir -p "$DEPS"
 
@@ -46,14 +48,25 @@ patch_episode1_sdk() {
   fi
 }
 
-echo "==> Fetching MySQL 5.6 client SDK"
-if [ ! -f "$DEPS/mysql-5.5/lib/libmysqlclient_r.a" ]; then
-  curl -fsSL -o "$DEPS/mysql.tar.gz" \
-    https://cdn.mysql.com/archives/mysql-5.6/mysql-5.6.15-linux-glibc2.5-i686.tar.gz
-  tar -C "$DEPS" -xzf "$DEPS/mysql.tar.gz"
-  rm -rf "$DEPS/mysql-5.5"
-  mv "$DEPS/mysql-5.6.15-linux-glibc2.5-i686" "$DEPS/mysql-5.5"
-  rm -f "$DEPS/mysql.tar.gz"
+echo "==> Fetching MySQL client SDK"
+if [ "$BUILD_PLATFORM" = "windows" ]; then
+  if [ ! -f "$DEPS/mysql-5.5/lib/mysqlclient.lib" ] && [ ! -f "$DEPS/mysql-5.5/lib/libmysql.lib" ]; then
+    curl -fsSL -o "$DEPS/mysql.zip" \
+      https://cdn.mysql.com/archives/mysql-5.5/mysql-5.5.54-win32.zip
+    rm -rf "$DEPS/mysql-5.5"
+    tar -xf "$DEPS/mysql.zip" -C "$DEPS"
+    mv "$DEPS/mysql-5.5.54-win32" "$DEPS/mysql-5.5"
+    rm -f "$DEPS/mysql.zip"
+  fi
+else
+  if [ ! -f "$DEPS/mysql-5.5/lib/libmysqlclient_r.a" ]; then
+    curl -fsSL -o "$DEPS/mysql.tar.gz" \
+      https://cdn.mysql.com/archives/mysql-5.6/mysql-5.6.15-linux-glibc2.5-i686.tar.gz
+    tar -C "$DEPS" -xzf "$DEPS/mysql.tar.gz"
+    rm -rf "$DEPS/mysql-5.5"
+    mv "$DEPS/mysql-5.6.15-linux-glibc2.5-i686" "$DEPS/mysql-5.5"
+    rm -f "$DEPS/mysql.tar.gz"
+  fi
 fi
 
 echo "==> Fetching Metamod:Source"
@@ -70,7 +83,11 @@ git clone --depth 1 https://github.com/rom4s/hl2sdk-ep1c "$DEPS/hl2sdk-ep1"
 "$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS/hl2sdk-ep1"
 
 echo "==> Fetching AMBuild"
-if ! python3 -c "import ambuild2" 2>/dev/null; then
+if ! python -c "import ambuild2" 2>/dev/null && ! python3 -c "import ambuild2" 2>/dev/null; then
   clone_repo "ambuild" "https://github.com/alliedmodders/ambuild"
-  python3 -m pip install --user "$DEPS/ambuild"
+  if [ "$BUILD_PLATFORM" = "windows" ]; then
+    python -m pip install "$DEPS/ambuild"
+  else
+    python3 -m pip install --user "$DEPS/ambuild"
+  fi
 fi
