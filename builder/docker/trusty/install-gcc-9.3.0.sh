@@ -123,10 +123,10 @@ EOF
 
 # Focal debian metadata targets arches/languages unavailable on trusty.
 sed -i 's/ riscv64//g; s/riscv64 //g' gcc-9-9.3.0/debian/rules.conf
+sed -i 's/^#with_ada := disabled for GCC 9/with_ada := disabled for GCC 9/' gcc-9-9.3.0/debian/rules.defs
 cat >> gcc-9-9.3.0/debian/rules.defs <<'EOF'
 
-# Trusty image: skip languages/architectures we do not need for multilib C/C++.
-with_ada :=
+# Trusty image: skip languages we do not need for multilib C/C++.
 with_d :=
 with_go :=
 with_fortran :=
