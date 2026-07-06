@@ -5,6 +5,27 @@ WDIR="${WDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 DEPS_DIR="${DEPS_DIR:-$WDIR/deps}"
 BUILDER_DIR="$WDIR/builder"
 SOURCEMOD_DIR="$WDIR/sourcemod"
+ENABLE_MYSQL="${ENABLE_MYSQL:-0}"
+MYSQL_PATH="${MYSQL_PATH:-$DEPS_DIR/mysql-5.5}"
+MYSQL_ARCHIVE_URL="${MYSQL_ARCHIVE_URL:-https://cdn.mysql.com/archives/mysql-5.6/mysql-5.6.15-linux-glibc2.5-i686.tar.gz}"
+MYSQL_ARCHIVE_DIR="${MYSQL_ARCHIVE_DIR:-mysql-5.6.15-linux-glibc2.5-i686}"
+
+fetch_mysql_client() {
+  if [ -f "$MYSQL_PATH/lib/libmysqlclient_r.a" ] && [ -f "$MYSQL_PATH/include/mysql.h" ]; then
+    echo "==> Using existing MySQL client SDK at $MYSQL_PATH"
+    return 0
+  fi
+
+  echo "==> Fetching 32-bit MySQL client SDK (~280 MB)"
+  local archive="$DEPS_DIR/mysql-client-i686.tar.gz"
+  mkdir -p "$DEPS_DIR"
+  curl -fsSL "$MYSQL_ARCHIVE_URL" -o "$archive"
+  rm -rf "$DEPS_DIR/$MYSQL_ARCHIVE_DIR"
+  tar -C "$DEPS_DIR" -xzf "$archive"
+  rm -f "$archive"
+  rm -rf "$MYSQL_PATH"
+  mv "$DEPS_DIR/$MYSQL_ARCHIVE_DIR" "$MYSQL_PATH"
+}
 
 echo "==> Installing Linux build dependencies"
 export DEBIAN_FRONTEND=noninteractive
@@ -36,6 +57,10 @@ if [ ! -d "$DEPS_DIR/ambuild" ]; then
   git clone --depth 1 https://github.com/alliedmodders/ambuild "$DEPS_DIR/ambuild"
 fi
 
+if [ "$ENABLE_MYSQL" = "1" ] || [ "$ENABLE_MYSQL" = "true" ] || [ "$ENABLE_MYSQL" = "yes" ]; then
+  fetch_mysql_client
+fi
+
 python3 -m pip install --upgrade pip
 python3 -m pip install --user "$DEPS_DIR/ambuild"
 export PATH="$HOME/.local/bin:$PATH"
@@ -55,11 +80,21 @@ export MMSOURCE110="$DEPS_DIR/mmsource-1.10"
 export CC=clang
 export CXX=clang++
 
-python3 ../configure.py \
-  -s css \
-  --enable-optimize \
-  --no-mysql \
+configure_args=(
+  -s css
+  --enable-optimize
   --disable-auto-versioning
+)
+
+if [ "$ENABLE_MYSQL" = "1" ] || [ "$ENABLE_MYSQL" = "true" ] || [ "$ENABLE_MYSQL" = "yes" ]; then
+  configure_args+=(--mysql-path="$MYSQL_PATH")
+  echo "==> MySQL extension enabled (dbi.mysql.ext.so)"
+else
+  configure_args+=(--no-mysql)
+  echo "==> MySQL extension disabled (set ENABLE_MYSQL=1 to build dbi.mysql.ext.so)"
+fi
+
+python3 ../configure.py "${configure_args[@]}"
 
 echo "==> Building SourceMod"
 ambuild

@@ -14,6 +14,14 @@ builder/run/linux.sh
 
 The script installs multilib toolchain packages, downloads Metamod:Source and AMBuild, applies compatibility patches, and writes `sourcemod-css34-linux.tar.gz` to the repository root.
 
+To include the MySQL DBI extension (`dbi.mysql.ext.so`), pass `ENABLE_MYSQL=1`. The builder downloads the legacy 32-bit MySQL 5.6 client SDK (~280 MB) on first use:
+
+```bash
+ENABLE_MYSQL=1 builder/run/linux.sh
+```
+
+Use `MYSQL_PATH` to point at an existing client SDK tree instead of downloading into `deps/mysql-5.5`.
+
 ## CI
 
 GitHub Actions workflow `.github/workflows/build.yml` runs the same Linux build on pushes and pull requests.
@@ -29,5 +37,5 @@ tar -xzf sourcemod-css34-linux.tar.gz -C /path/to/cstrike
 ## Notes
 
 - Only **CSS** (`-s css`) is built.
-- MySQL extension is disabled (`--no-mysql`).
+- MySQL extension is optional (`ENABLE_MYSQL=1`); SQLite (`dbi.sqlite.ext.so`) is always included.
 - 32-bit (`x86`) binaries are produced for compatibility with the v34 dedicated server.
