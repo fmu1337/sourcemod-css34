@@ -252,10 +252,36 @@ fi
 
 sed -i 's/bool CSoundParametersInternal::operator ==/bool operator ==/' "$sound_emitter"
 
+# glibc/gcc already provide offsetof; ep1c redefines it on Linux.
+datamap_h="$sdk_dir/public/datamap.h"
+if [ -f "$datamap_h" ] && grep -q '#define offsetof(s,m)' "$datamap_h"; then
+  sed -i 's/#if !defined(offsetof) || defined(_LINUX)/#if 0 \/* CSS34: use system offsetof *\//' "$datamap_h"
+fi
+
+utlvector_h="$sdk_dir/public/tier1/utlvector.h"
+if [ -f "$utlvector_h" ] && grep -q 'swap( m_Size, vec.m_Size );' "$utlvector_h"; then
+  sed -i 's/\tswap( m_Size/\tstd::swap( m_Size/g' "$utlvector_h"
+  sed -i 's/\tswap( m_pElements/\tstd::swap( m_pElements/g' "$utlvector_h"
+fi
+
+utlmemory_h="$sdk_dir/public/tier1/utlmemory.h"
+if [ -f "$utlmemory_h" ] && grep -q 'swap( m_nGrowSize, mem.m_nGrowSize );' "$utlmemory_h"; then
+  sed -i 's/\tswap( m_nGrowSize/\tstd::swap( m_nGrowSize/g' "$utlmemory_h"
+  sed -i 's/\tswap( m_pMemory/\tstd::swap( m_pMemory/g' "$utlmemory_h"
+  sed -i 's/\tswap( m_nAllocationCount/\tstd::swap( m_nAllocationCount/g' "$utlmemory_h"
+fi
+
+math_base_h="$sdk_dir/public/mathlib/math_base.h"
+if [ -f "$math_base_h" ] && grep -q 'FORCEINLINE_TEMPLATE void swap( T& x, T& y )' "$math_base_h"; then
+  sed -i '/\/\/ Swap two of anything\./,/^}$/c\
+// Swap template removed for CSS34 gcc compatibility (conflicts with std::swap).' "$math_base_h"
+fi
+
 # Link-time stubs: tier0/vstdlib come from the game at runtime, not from the SDK repo.
 mkdir -p "$sdk_dir/linux_sdk"
+stub_cc="${CC:-gcc-9}"
 for lib in tier0_i486 vstdlib_i486; do
   if [ ! -f "$sdk_dir/linux_sdk/${lib}.so" ]; then
-    echo "void ${lib}_stub(void){}" | clang -m32 -shared -fPIC -x c - -o "$sdk_dir/linux_sdk/${lib}.so"
+    echo "void ${lib}_stub(void){}" | "$stub_cc" -m32 -shared -fPIC -x c - -o "$sdk_dir/linux_sdk/${lib}.so"
   fi
 done

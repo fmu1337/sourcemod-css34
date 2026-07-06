@@ -16,5 +16,5 @@ jobs:
       before_install:
         - export WDIR=$(pwd)
       script:
-        - chmod +x builder/run/linux.sh builder/patches/*.sh
+        - chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/patches/*.sh
         - builder/run/linux.sh
