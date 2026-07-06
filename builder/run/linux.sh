@@ -30,11 +30,8 @@ if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
     linux-libc-dev
 fi
 
-bash "$BUILDER_DIR/install-clang9.sh" "$DEPS_DIR"
-# shellcheck source=/dev/null
-source "$DEPS_DIR/clang9.env"
-export CC="${CC:-clang-9}"
-export CXX="${CXX:-clang++-9}"
+export CC="${CC:-gcc-9}"
+export CXX="${CXX:-g++-9}"
 
 echo "==> Using compiler: $($CC --version | head -1)"
 
