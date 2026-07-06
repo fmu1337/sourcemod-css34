@@ -163,19 +163,22 @@ Ep1 vs episode1 flip in final `.so` size:
 
 ## Part 4: Recommended experiments (priority)
 
-### 1. Dynamic libstdc++ for `ep1` / `css` (link flags)
+### 1. Dynamic libstdc++ for `ep1` / `css` / `episode1` — **implemented 2026-07-06**
 
-In `AMBuildScript` `ConfigureForHL2`, after existing `csgo`/`blade` block:
+`apply-sourcemod.sh` now drops `-static-libstdc++` and `-lgcc_eh` for
+`ep1`, `css`, `episode1` on Linux. Dynamic repro imports `libstdc++.so.6`.
 
-```python
-if sdk.name in ['ep1', 'css', 'episode1']:
-    if '-static-libstdc++' in compiler.linkflags:
-        compiler.linkflags.remove('-static-libstdc++')
-    if '-lgcc_eh' in compiler.linkflags:
-        compiler.linkflags.remove('-lgcc_eh')
-```
+Trusty repro vs original (`v1.11.0.6572`):
 
-**Expected:** smaller `.text`, `U __cxa_throw` like original, possibly closer EH layout.
+| Module | Original | Before (static) | After (dynamic) |
+|---|---:|---:|---:|
+| sourcemod.1.ep1.so | 951419 | 1071248 | **858006** |
+| sdkhooks.ext.1.ep1.so | 383107 | 522630 | **309047** |
+| sdktools.ext.1.ep1.so | 608339 | 737485 | **523975** |
+| game.cstrike.ext.1.ep1.so | 290455 | 395182 | **206688** |
+
+SDK-heavy modules are now **smaller than original** (still 0/20 byte-identical).
+Next: `GetCPUInformation` patch, ep1 include paths, strip mode.
 
 ### 2. Revert `GetCPUInformation` pointer patch
 

@@ -36,7 +36,7 @@ builder/compare-release.sh packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz
 
 ## Current results
 
-### Ubuntu 14.04 Docker + pinned deps + native clang-9
+### Ubuntu 14.04 Docker + pinned deps + native clang-9 + dynamic libstdc++
 
 | Metric | Result |
 |---|---|
@@ -45,6 +45,15 @@ builder/compare-release.sh packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz
 | Other package files | **867 match**, 40 differ |
 
 Same-size `.so` files: `sourcemod.logic`, `bintools`, `dbi.mysql`, `dbi.sqlite`, `geoip`, `regex`, `topmenus`, `updater`, `webternet`.
+
+Size deltas vs original (dynamic libstdc++, Jul 2026):
+
+| Module | Original | Repro | Δ |
+|---|---:|---:|---:|
+| sourcemod.1.ep1.so | 951419 | 858006 | −93413 |
+| sdkhooks.ext.1.ep1.so | 383107 | 309047 | −74060 |
+| sdktools.ext.1.ep1.so | 608339 | 523975 | −84364 |
+| game.cstrike.ext.1.ep1.so | 290455 | 206688 | −83767 |
 
 Very close sizes: `sourcepawn.jit` (−110 B), `sourcemod_mm_i486` (−178 B), `clientprefs` (−22 B).
 
