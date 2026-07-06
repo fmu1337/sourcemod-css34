@@ -32,17 +32,13 @@ RUN curl -fsSL https://www.python.org/ftp/python/3.6.8/Python-3.6.8.tgz -o /tmp/
 
 ENV PATH="/opt/python3.6/bin:${PATH}"
 
-# Same toolchain PPA as original .travis.yml
-RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test \
+# Original Travis used gcc 9.3.0-11ubuntu0~14.04 from ubuntu-toolchain-r/test.
+# That exact PPA revision is superseded; rebuild it from Launchpad source + diff.
+COPY builder/docker/trusty/install-gcc-9.3.0.sh /usr/local/sbin/install-gcc-9.3.0.sh
+RUN chmod +x /usr/local/sbin/install-gcc-9.3.0.sh \
     && dpkg --add-architecture i386 \
     && apt-get update -qq \
-    && apt-get install -y -qq \
-      g++-9-multilib \
-      gcc-9-multilib \
-      lib32stdc++6 \
-      lib32z1-dev \
-      libc6-dev-i386 \
-      linux-libc-dev \
+    && /usr/local/sbin/install-gcc-9.3.0.sh \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
