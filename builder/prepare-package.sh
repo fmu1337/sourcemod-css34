@@ -29,9 +29,26 @@ keep_gamedata=(
 
 echo "==> Stripping Linux binaries"
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then
-  while IFS= read -r -d '' binary; do
-    strip --strip-unneeded "$binary"
-  done < <(find "$SM_ROOT/bin" "$SM_ROOT/extensions" -type f \( -name '*.so' -o -name 'spcomp' \) -print0)
+  strip_mode="${STRIP_MODE:-unneeded}"
+  case "$strip_mode" in
+    none)
+      echo "    (skipped: STRIP_MODE=none)"
+      ;;
+    debug)
+      while IFS= read -r -d '' binary; do
+        strip --strip-debug "$binary"
+      done < <(find "$SM_ROOT/bin" "$SM_ROOT/extensions" -type f \( -name '*.so' -o -name 'spcomp' \) -print0)
+      ;;
+    unneeded)
+      while IFS= read -r -d '' binary; do
+        strip --strip-unneeded "$binary"
+      done < <(find "$SM_ROOT/bin" "$SM_ROOT/extensions" -type f \( -name '*.so' -o -name 'spcomp' \) -print0)
+      ;;
+    *)
+      echo "Unknown STRIP_MODE: $strip_mode" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 echo "==> Trimming gamedata to CS:S v34 layout"
@@ -71,16 +88,36 @@ fi
 echo "==> Fetching upstream translations"
 translations_dir="$DEPS_DIR/sourcemod-translations"
 rm -rf "$translations_dir"
-git clone --depth 1 --filter=blob:none --sparse \
-  https://github.com/alliedmodders/sourcemod "$translations_dir"
-git -C "$translations_dir" sparse-checkout set translations
-if [ "$TRANSLATIONS_REF" != "master" ]; then
+
+if [ "${ORIGINAL_TRANSLATIONS:-0}" = "1" ]; then
+  original_url="${ORIGINAL_RELEASE_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
+  original_tar="$DEPS_DIR/original-release.tar.gz"
+  original_extract="$DEPS_DIR/original-release"
+  echo "    (using translations from original rom4s release tarball)"
+  curl -fsSL -o "$original_tar" "$original_url"
+  rm -rf "$original_extract"
+  mkdir -p "$original_extract"
+  tar -xzf "$original_tar" -C "$original_extract" addons/sourcemod/translations
+  cp -a "$original_extract/addons/sourcemod/translations" "$translations_dir"
+elif [ "$TRANSLATIONS_REF" != "master" ]; then
+  git clone --filter=blob:none --no-checkout \
+    https://github.com/alliedmodders/sourcemod "$translations_dir"
+  git -C "$translations_dir" sparse-checkout init --cone
+  git -C "$translations_dir" sparse-checkout set translations
   git -C "$translations_dir" fetch --depth 1 origin "$TRANSLATIONS_REF"
-  git -C "$translations_dir" checkout "$TRANSLATIONS_REF"
+  git -C "$translations_dir" checkout --detach "$TRANSLATIONS_REF"
+else
+  git clone --depth 1 --filter=blob:none --sparse \
+    https://github.com/alliedmodders/sourcemod "$translations_dir"
+  git -C "$translations_dir" sparse-checkout set translations
 fi
 
 rm -rf "$SM_ROOT/translations"
-cp -a "$translations_dir/translations" "$SM_ROOT/translations"
+if [ "${ORIGINAL_TRANSLATIONS:-0}" = "1" ]; then
+  cp -a "$translations_dir" "$SM_ROOT/translations"
+else
+  cp -a "$translations_dir/translations" "$SM_ROOT/translations"
+fi
 
 if [ ! -f "$SM_ROOT/scripting/include/version_auto.inc" ]; then
   inc_dir="$SOURCEMOD_DIR/build/includes"

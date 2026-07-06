@@ -2,6 +2,8 @@
 set -euo pipefail
 
 DEPS_DIR="${1:?deps directory required}"
+mkdir -p "$DEPS_DIR"
+DEPS_DIR="$(cd "$DEPS_DIR" && pwd)"
 CLANG_DIR="$DEPS_DIR/clang-9"
 LIBTINFO_DIR="$DEPS_DIR/libtinfo5"
 WRAPPER_DIR="$DEPS_DIR/clang9-wrappers"
@@ -11,7 +13,7 @@ LIBTINFO_DEB_URL="${LIBTINFO_DEB_URL:-http://archive.ubuntu.com/ubuntu/pool/univ
 ENV_FILE="$DEPS_DIR/clang9.env"
 CONF_FILE="$DEPS_DIR/clang9.conf"
 
-mkdir -p "$DEPS_DIR" "$WRAPPER_DIR"
+mkdir -p "$WRAPPER_DIR"
 
 if [ ! -x "$CLANG_DIR/usrbin/clang-9" ]; then
   echo "==> Installing rom4s clang-9 toolchain" >&2
@@ -90,16 +92,17 @@ done
 
 extra=()
 if [ "$use_m32" -eq 1 ]; then
-  extra+=(
-    -stdlib=libstdc++
-  )
   if [ "$compile_only" -eq 1 ]; then
     extra+=(
+      -nostdinc++
       -isystem /usr/include/c++/9
       -isystem "$CPP32_ISYSTEM"
     )
   else
-    extra+=(-L"$GCC_INSTALL_DIR/32")
+    extra+=(
+      -stdlib=libstdc++
+      -L"$GCC_INSTALL_DIR/32"
+    )
   fi
 elif [ "$compile_only" -eq 0 ]; then
   extra+=(-L"$GCC_INSTALL_DIR")
@@ -130,6 +133,11 @@ fi
 
 if ! echo '#include <cstdlib>' | clang++-9 -m32 -x c++ - -c -o /dev/null 2>/dev/null; then
   echo "clang++-9 failed to compile a 32-bit C++ test translation unit." >&2
+  exit 1
+fi
+
+if ! echo '#include <fenv.h>' | clang++-9 -m32 -x c++ - -c -o /dev/null 2>/dev/null; then
+  echo "clang++-9 failed to compile a 32-bit C++ translation unit with <fenv.h>." >&2
   exit 1
 fi
 

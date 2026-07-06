@@ -11,7 +11,7 @@ bash "$BUILDER_DIR/prepare-package.sh" \
   "$PACKAGE_DIR" \
   "$SOURCEMOD_DIR" \
   "$BUILDER_DIR" \
-  "$DEPS_DIR"
+  "$DEPS_DIR" >&2
 
 mkdir -p "$OUTPUT_DIR"
 
