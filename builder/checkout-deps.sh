@@ -130,7 +130,9 @@ if [ "${REPRO_BUILD:-0}" = "1" ]; then
 else
   git clone --depth 1 https://github.com/rom4s/hl2sdk-ep1c "$DEPS/hl2sdk-ep1"
 fi
-LINUX_SDK_STUB_CC="${LINUX_SDK_STUB_CC:-gcc}" "$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS/hl2sdk-ep1"
+LINUX_SDK_STUB_CC="${LINUX_SDK_STUB_CC:-gcc}" \
+SKIP_INCLUDE_SYMLINKS="${REPRO_SKIP_INCLUDE_SYMLINKS:-0}" \
+  "$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS/hl2sdk-ep1"
 
 echo "==> Fetching AMBuild"
 if [ "${REPRO_BUILD:-0}" = "1" ] || ! python3 -c "import ambuild2" 2>/dev/null; then

@@ -67,7 +67,9 @@ for dirpath, _, files in os.walk(sdk):
 PY
 }
 
-SDK_DIR="$sdk_dir" create_include_symlinks
+if [ "${SKIP_INCLUDE_SYMLINKS:-0}" != "1" ]; then
+  SDK_DIR="$sdk_dir" create_include_symlinks
+fi
 
 # Modern Linux/clang compatibility fixes for rom4s/hl2sdk-ep1c.
 apply_sed public/tier0/wchartypes.h \
