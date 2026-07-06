@@ -178,44 +178,30 @@ Trusty repro vs original (`v1.11.0.6572`):
 | game.cstrike.ext.1.ep1.so | 290455 | 395182 | **206688** |
 
 SDK-heavy modules are now **smaller than original** (still 0/20 byte-identical).
-Next: `GetCPUInformation` patch, ep1 include paths, strip mode.
 
-### 2. Revert `GetCPUInformation` pointer patch
+### 2. Revert `GetCPUInformation` pointer patch — **failed (2026-07-06)**
 
-In `apply-hl2sdk-ep1c.sh`, drop:
+clang-9 with `-Werror` rejects C-linkage `GetCPUInformation()` returning
+`const CPUInformation&`. Pointer return is **required to compile**.
 
-```bash
-apply_sed public/tier0/platform.h \
-  's/PLATFORM_INTERFACE const CPUInformation\& GetCPUInformation();/PLATFORM_INTERFACE const CPUInformation* GetCPUInformation();/'
-apply_sed public/tier0/fasttimer.h \
-  's/const CPUInformation\& pi = GetCPUInformation();/const CPUInformation\& pi = *GetCPUInformation();/'
-```
+### 3. Narrow ep1 include paths — **partial (2026-07-06)**
 
-Match pristine rom4s API; recompile and diff.
+| Variant | Result |
+|---|---|
+| episode1-only (`dlls`, `game_shared`) | **Build fails** — missing `iplayerinfo.h` |
+| drop `game/shared` + `common` | **OK**, sizes **unchanged** |
 
-### 3. Narrow ep1 include paths
+Current ep1 paths: `game/server`, `toolframework`, `dlls`, `game_shared`.
 
-Try episode1-style paths only:
+### 4. Disable bulk include symlinks — **failed (2026-07-06)**
 
-```python
-elif sdk.name == 'ep1':
-    paths.append(['public', 'dlls'])
-    paths.append(['game_shared'])
-```
+`REPRO_SKIP_INCLUDE_SYMLINKS=1` → fails on `appframework/IAppSystem.h`.
 
-instead of `public/game/server` + `toolframework`. Measure `sdkhooks.ext.1.ep1` `.text`.
+### 5. Pin gcc **9.3.0-11ubuntu0~14.04** — not run yet
 
-### 4. Disable bulk include symlinks
+### 6. `STRIP_MODE=unneeded` — **no effect (2026-07-06)**
 
-Skip `create_include_symlinks` if compile still succeeds (rom4s tree is mostly lowercase).
-
-### 5. Pin gcc **9.3.0-11ubuntu0~14.04** in trusty Docker
-
-Closes 375-byte metadata diffs on the eight “matched” extensions (see `BINARY-DIFF.md`).
-
-### 6. `STRIP_MODE=unneeded`
-
-Original `sourcemod.1.ep1.so` is 951 KB vs repro 1071 KB with more `.eh_frame`/`.symtab`.
+Same sizes as `STRIP_MODE=debug` with dynamic libstdc++.
 
 ---
 
