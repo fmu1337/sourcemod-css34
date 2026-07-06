@@ -8,11 +8,23 @@ if grep -q "CSS34 SDK compatibility" "$ambuild_script"; then
   sed -i '/CSS34 SDK compatibility/d' "$ambuild_script"
 fi
 
-SOURCEMOD_DIR="$sourcemod_dir" python3 - <<'PY'
+sp_ambuild_script="$sourcemod_dir/sourcepawn/AMBuildScript"
+if [ -f "$sp_ambuild_script" ] && grep -q "CSS34 clang compatibility" "$sp_ambuild_script"; then
+  sed -i '/CSS34 clang compatibility/d' "$sp_ambuild_script"
+fi
+
+# Clang 15+ understands -Wno-deprecated-non-prototype; older distro clang does not.
+supports_deprecated_non_prototype=0
+if compiler="${CC:-clang}"; echo 'int main(void){return 0;}' | "$compiler" -m32 -Wno-deprecated-non-prototype -x c - -c -o /dev/null 2>/dev/null; then
+  supports_deprecated_non_prototype=1
+fi
+
+SOURCEMOD_DIR="$sourcemod_dir" SUPPORTS_WNO_DEPRECATED_NON_PROTOTYPE="$supports_deprecated_non_prototype" python3 - <<'PY'
 from pathlib import Path
 import os
 
 sourcemod_dir = os.environ['SOURCEMOD_DIR']
+supports_deprecated_non_prototype = os.environ.get('SUPPORTS_WNO_DEPRECATED_NON_PROTOTYPE') == '1'
 
 path = Path(sourcemod_dir) / 'AMBuildScript'
 text = path.read_text()
@@ -22,15 +34,16 @@ insert = """      '-fvisibility=hidden',
     ]
     cxx.cflags += ['-Wno-nonportable-include-path', '-Wno-macro-redefined', '-Wno-writable-strings']  # CSS34 SDK compatibility
     cxx.cxxflags += ['-Wno-reorder', '-Wno-reorder-ctor', '-Wno-attributes', '-fpermissive']  # CSS34 SDK compatibility
-    cxx.cflags += ['-Wno-deprecated-non-prototype']  # CSS34 clang compatibility
 """
+if supports_deprecated_non_prototype:
+    insert += "    cxx.cflags += ['-Wno-deprecated-non-prototype']  # CSS34 clang compatibility\n"
 if needle not in text:
     raise SystemExit('Failed to locate compiler flags block in AMBuildScript')
 text = text.replace(needle, insert, 1)
 
 sp_script = Path(sourcemod_dir) / 'sourcepawn/AMBuildScript'
 sp_text = sp_script.read_text()
-if '-Wno-deprecated-non-prototype' not in sp_text:
+if supports_deprecated_non_prototype and '-Wno-deprecated-non-prototype' not in sp_text:
     sp_text = sp_text.replace(
         "            '-Werror',\n            '-Wno-switch',",
         "            '-Werror',\n            '-Wno-switch',\n            '-Wno-deprecated-non-prototype',  # CSS34 clang compatibility",
