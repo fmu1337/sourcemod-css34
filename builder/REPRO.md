@@ -57,9 +57,14 @@ Very close sizes: `sourcepawn.jit` (−110 B), `sourcemod_mm_i486` (−178 B), `
 
 ## Why not byte-identical yet
 
+See **`builder/BINARY-DIFF.md`** for the full ELF-level analysis (original vs trusty repro).
+
+Short version:
+
 1. **`sourcemod-css34-builder` is deleted** — patch set is reconstructed, not exact.
-2. **ELF content differs** even when sizes match (e.g. `dbi.mysql.ext.so` has ~6k differing bytes).
-3. **Original release translations** are bundled from the release tarball (`ORIGINAL_TRANSLATIONS=1`); 40 non-binary diffs remain (plugins `.smx`, gamedata, etc.).
+2. **8 simple extensions** already match code sections; diffs are gcc version string + BSS padding.
+3. **4 SDK/game modules** (`sourcemod.1.ep1`, `sdkhooks`, `sdktools`, `game.cstrike`) have +50–65 KB `.text` — hl2sdk/sourcemod patch gap.
+4. **40 non-binary diffs** remain (plugins `.smx`, gamedata, etc.) even with `ORIGINAL_TRANSLATIONS=1`.
 
 ## Settings
 
