@@ -39,7 +39,7 @@ orig_files = rel_files(orig)
 built_files = rel_files(built)
 all_paths = sorted(set(orig_files) | set(built_files))
 
-so_same = so_diff = 0
+so_same = so_diff = so_size_same = 0
 text_same = text_diff = 0
 missing = 0
 
@@ -62,10 +62,13 @@ for rel in all_paths:
         so_diff += 1
         delta = bsz - osz
         sign = '+' if delta >= 0 else ''
-        print(f'DIFF     {rel}: orig={osz} built={bsz} ({sign}{delta})')
+        tag = 'SIZE' if osz == bsz else 'DIFF'
+        if osz == bsz:
+            so_size_same += 1
+        print(f'{tag:5}    {rel}: orig={osz} built={bsz} ({sign}{delta})')
 
 print('\n=== Summary ===')
-print(f'.so files: {so_same} match, {so_diff} differ, {missing} missing')
+print(f'.so files: {so_same} byte-match, {so_size_same} size-match only, {so_diff - so_size_same} size-differ, {missing} missing')
 
 for rel in all_paths:
     if rel.endswith('.so'):

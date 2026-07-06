@@ -2,52 +2,72 @@
 
 Attempts to rebuild the original Linux release as closely as possible.
 
-## Run
+## Recommended: Ubuntu 14.04 Docker (closest to original Travis)
 
 ```bash
-chmod +x builder/run/linux-repro.sh builder/compare-release.sh builder/patches/*.sh
+chmod +x builder/docker/trusty/run.sh
+builder/docker/trusty/run.sh
+```
+
+This builds a Docker image (`ubuntu:14.04` + gcc-9-multilib + **Python 3.6.8** + rom4s clang-9) and runs `linux-repro-trusty.sh` inside it.
+
+Manual:
+
+```bash
+sudo docker build -f builder/docker/trusty/Dockerfile -t sourcemod-css34-repro-trusty .
+sudo rm -rf deps sourcemod/build   # avoid root-owned deps from container
+sudo docker run --rm -v "$PWD:/src" -w /src -e WDIR=/src sourcemod-css34-repro-trusty \
+  builder/run/linux-repro-trusty.sh
+```
+
+## Host repro (Ubuntu 22.04, jammy workarounds)
+
+```bash
 builder/run/linux-repro.sh
 ```
 
-This uses:
+Uses clang-9 wrappers (`-nostdinc++`, libtinfo5). Further from original than Docker/trusty.
 
-- **clang-9** (rom4s tarball) — same compiler family as Travis Ubuntu 14.04
-- **Pinned deps** from `builder/pins.env` (June 2020 revisions)
-- **SourceMod** `832519ab` (git6572)
-- **STRIP_MODE=debug** — keeps `.symtab` like the original release
-- **ORIGINAL_TRANSLATIONS=1** — copies translations from the original release tarball (upstream SourceMod at 6572 only ships 21 phrase files; the release bundles 687)
-
-Compare against the original artifact:
+## Compare against original release
 
 ```bash
 builder/compare-release.sh packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz
 ```
 
-## Current results (Ubuntu 22.04 + jammy workarounds)
+## Current results
 
-| Layer | Match vs original |
+### Ubuntu 14.04 Docker + pinned deps + native clang-9
+
+| Metric | Result |
 |---|---|
-| Native `.so` binaries | **0 / 20** byte-identical |
-| Other package files (with `ORIGINAL_TRANSLATIONS=1`) | ~201 / 241 comparable |
+| Native `.so` byte-identical | **0 / 20** |
+| Native `.so` **same size** as original | **9 / 20** |
+| Other package files | **867 match**, 40 differ |
 
-Closest `.so` size (after strip): `sourcemod.1.ep1.so` **907 KB** built vs **951 KB** original.
+Same-size `.so` files: `sourcemod.logic`, `bintools`, `dbi.mysql`, `dbi.sqlite`, `geoip`, `regex`, `topmenus`, `updater`, `webternet`.
 
-## Why byte-identical `.so` files are hard
+Very close sizes: `sourcepawn.jit` (−110 B), `sourcemod_mm_i486` (−178 B), `clientprefs` (−22 B).
 
-1. **Original CI ran on Ubuntu 14.04 (trusty)** with bare `$HOME/clang-9/usrbin` — no jammy `-nostdinc++` wrappers.
-2. **`sourcemod-css34-builder` is deleted** — exact 2020 patch set is lost; we reconstructed from Travis + artifact analysis.
-3. **Our compatibility patches** (`apply-sourcemod.sh`, `apply-hl2sdk-ep1c.sh`) target modern hosts and differ from the lost builder.
-4. **Debug codegen**: optimize builds emit `-g3`; original binaries have no `.debug_info` (stripped) but different code layout remains.
+### Ubuntu 22.04 host repro
 
-## Next step for closer binary match
+| Metric | Result |
+|---|---|
+| Native `.so` byte-identical | 0 / 20 |
+| Closest `sourcemod.1.ep1.so` | 907 KB vs 951 KB original |
 
-Build inside **Ubuntu 14.04** with the rom4s clang tarball and no jammy-specific wrappers (Docker/VM). That removes glibc/header/wrapper drift.
+## Why not byte-identical yet
 
-## Environment variables
+1. **`sourcemod-css34-builder` is deleted** — patch set is reconstructed, not exact.
+2. **ELF content differs** even when sizes match (e.g. `dbi.mysql.ext.so` has ~6k differing bytes).
+3. **Original release translations** are bundled from the release tarball (`ORIGINAL_TRANSLATIONS=1`); 40 non-binary diffs remain (plugins `.smx`, gamedata, etc.).
+
+## Settings
 
 | Variable | Default (repro) | Purpose |
 |---|---|---|
-| `REPRO_BUILD=1` | set by `linux-repro.sh` | Pin deps in `checkout-deps.sh` |
+| `REPRO_BUILD=1` | set by repro scripts | Pin deps in `checkout-deps.sh` |
+| `CLANG9_NATIVE=1` | trusty entrypoint | Bare rom4s clang-9, no jammy wrappers |
 | `STRIP_MODE` | `debug` | `none`, `debug`, or `unneeded` |
-| `ORIGINAL_TRANSLATIONS` | `1` | Bundle translations from original release |
-| `ORIGINAL_RELEASE_URL` | rom4s v1.11.0.6572 URL | Source for translations |
+| `ORIGINAL_TRANSLATIONS` | `1` | Translations from original release tarball |
+
+Pinned revisions: `builder/pins.env`

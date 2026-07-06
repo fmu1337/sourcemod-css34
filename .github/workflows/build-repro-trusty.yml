@@ -1,0 +1,39 @@
+name: Build (repro trusty)
+
+on:
+  push:
+    branches:
+      - 'cursor/repro-byte-match-2341'
+  pull_request:
+    branches:
+      - 'cursor/repro-byte-match-2341'
+  workflow_dispatch:
+
+jobs:
+  repro-trusty:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build trusty Docker image
+        run: |
+          sudo docker build -f builder/docker/trusty/Dockerfile -t sourcemod-css34-repro-trusty .
+
+      - name: Run repro build in Ubuntu 14.04 container
+        run: |
+          sudo rm -rf deps sourcemod/build
+          sudo docker run --rm \
+            -v "$PWD:/src" \
+            -w /src \
+            -e WDIR=/src \
+            sourcemod-css34-repro-trusty \
+            bash -lc 'chmod +x builder/run/linux-repro-trusty.sh builder/run/linux-repro.sh builder/install-clang9.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/compare-release.sh builder/patches/*.sh && builder/run/linux-repro-trusty.sh'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcemod-css34-linux-repro-trusty
+          path: packages/sourcemod-*-css34-linux.tar.gz

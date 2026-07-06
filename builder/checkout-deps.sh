@@ -40,7 +40,11 @@ fetch_pinned_repo() {
 
   echo "==> Fetching pinned $name @ ${commit:0:12}"
   rm -rf "$DEPS/$name"
-  git clone --filter=blob:none "$url" "$DEPS/$name"
+  if git clone --filter=blob:none "$url" "$DEPS/$name" 2>/dev/null; then
+    :
+  else
+    git clone "$url" "$DEPS/$name"
+  fi
   git -C "$DEPS/$name" fetch --depth 1 origin "$commit"
   git -C "$DEPS/$name" checkout --detach "$commit"
 }

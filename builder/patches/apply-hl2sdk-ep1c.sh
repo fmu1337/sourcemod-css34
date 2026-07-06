@@ -63,7 +63,7 @@ for dirpath, _, files in os.walk(sdk):
             if os.path.lexists(direct):
                 continue
             os.symlink(rel_target, direct)
-            print(f'linked {inc} -> {target}')
+            print('linked {} -> {}'.format(inc, target))
 PY
 }
 

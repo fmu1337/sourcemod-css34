@@ -13,7 +13,13 @@ LIBTINFO_DEB_URL="${LIBTINFO_DEB_URL:-http://archive.ubuntu.com/ubuntu/pool/univ
 ENV_FILE="$DEPS_DIR/clang9.env"
 CONF_FILE="$DEPS_DIR/clang9.conf"
 
-mkdir -p "$WRAPPER_DIR"
+if [ "${CLANG9_NATIVE:-auto}" = "auto" ]; then
+  if [ -f /etc/os-release ] && grep -q 'VERSION_ID="14.04"' /etc/os-release; then
+    CLANG9_NATIVE=1
+  else
+    CLANG9_NATIVE=0
+  fi
+fi
 
 if [ ! -x "$CLANG_DIR/usrbin/clang-9" ]; then
   echo "==> Installing rom4s clang-9 toolchain" >&2
@@ -23,6 +29,39 @@ if [ ! -x "$CLANG_DIR/usrbin/clang-9" ]; then
   tar -xJf "$tmp/$CLANG_ARCHIVE" -C "$DEPS_DIR"
   rm -rf "$tmp"
 fi
+
+if [ "$CLANG9_NATIVE" = "1" ]; then
+  cat > "$ENV_FILE" <<EOF
+export PATH="$CLANG_DIR/usrbin:\$PATH"
+EOF
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+
+  if ! clang-9 --version >/dev/null 2>&1; then
+    echo "clang-9 failed to start after installation." >&2
+    exit 1
+  fi
+
+  if ! clang++-9 -x c++ - <<<'int main(){return 0;}' -o /dev/null 2>/dev/null; then
+    echo "clang++-9 failed to link a test C++ binary." >&2
+    exit 1
+  fi
+
+  if ! echo '#include <cstdlib>' | clang++-9 -m32 -x c++ - -c -o /dev/null 2>/dev/null; then
+    echo "clang++-9 failed to compile a 32-bit C++ test translation unit." >&2
+    exit 1
+  fi
+
+  if ! echo '#include <fenv.h>' | clang++-9 -m32 -x c++ - -c -o /dev/null 2>/dev/null; then
+    echo "clang++-9 failed to compile a 32-bit C++ translation unit with <fenv.h>." >&2
+    exit 1
+  fi
+
+  echo "==> clang-9 ready (native/trusty): $(clang-9 --version | head -1)" >&2
+  exit 0
+fi
+
+mkdir -p "$WRAPPER_DIR"
 
 if [ ! -f "$LIBTINFO_DIR/lib/x86_64-linux-gnu/libtinfo.so.5" ]; then
   echo "==> Installing libtinfo.so.5 for clang-9" >&2
