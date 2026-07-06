@@ -1,0 +1,59 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  BUILD_COMMIT: 05c145d8c9bd91382aa966055ef6999841ac6c49
+  BUILD_TAG: v1.11.0.6572
+
+jobs:
+  linux:
+    name: Build on Linux
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Checkout release revision
+        run: |
+          git checkout "$BUILD_COMMIT"
+          git submodule update --init --recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y \
+            g++-9-multilib \
+            gcc-9-multilib \
+            git \
+            lib32stdc++6 \
+            lib32z1-dev \
+            libc6-dev-i386 \
+            linux-libc-dev \
+            python3 \
+            python3-pip
+
+      - name: Install Python packages
+        run: |
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user requests uritemplate discord-webhook
+
+      - name: Build
+        env:
+          CC: gcc-9
+          CXX: g++-9
+          WDIR: ${{ github.workspace }}
+        run: bash builder/run/linux.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcemod-css34-linux
+          path: packages/*.tar.gz
