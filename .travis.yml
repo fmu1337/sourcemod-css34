@@ -6,54 +6,15 @@ language: cpp
 
 git:
   depth: 10
+  submodules: true
 
 jobs:
   include:
-    # Linux
-    - name: 'Build on Linux (Ubuntu 14.04)'
+    - name: Build on Linux
       os: linux
-      dist: trusty
-      python: "3.6"
+      dist: jammy
       before_install:
-        # install packages
-        - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-        - sudo apt-get -q update
-        - sudo apt-get install -y lib32stdc++6 lib32z1-dev libc6-dev-i386 linux-libc-dev g++-9-multilib aria2 git
-        # set exports
         - export WDIR=$(pwd)
-        - export PYTHON_VER=3.6.8
-        - export CLANG_ARCHIVE=clang-9-ubuntu-14.04-m.tar.xz
-        - export PATH=$HOME/.local/bin:$HOME/clang-9/usrbin:$PATH
-        # download python
-        - if [[ ! -s "$HOME/.pythonz/etc/bashrc" ]]; then (curl -kL https://raw.github.com/saghul/pythonz/master/pythonz-install | bash); fi
-        - source $HOME/.pythonz/etc/bashrc && $(pythonz locate $PYTHON_VER) --version >/dev/null 2>&1 || pythonz install $PYTHON_VER
-        - mkdir -p $HOME/.local/bin/ && ln -s $(pythonz locate $PYTHON_VER) $HOME/.local/bin/python
-        - python -m pip install --upgrade pip
-        - python -m pip install requests uritemplate discord-webhook
-        # TODO: move this to builder,
-        # for download & selecting required compiler
-        - if [ ! -d "$HOME/clang-9/bin" ]; then (aria2c -x 16 -s 16 https://bitbucket.org/rom4s/other.get/downloads/$CLANG_ARCHIVE && echo 'Extract Clang' && time tar -C $HOME -xf $CLANG_ARCHIVE && rm $CLANG_ARCHIVE); fi
       script:
-        - git clone 'https://github.com/rom4s/sourcemod-css34-builder' builder
+        - chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/patches/*.sh
         - builder/run/linux.sh
-      cache:
-        - $HOME/.pythonz
-    # Windows
-    - name: 'Build on Windows'
-      os: windows
-      python: "3.8"
-      before_install:
-        # install packages
-        # - choco install aria2
-        # set exports
-        - export WDIR=$(pwd)
-        - export PATH=/C/Python38:/C/Python38/Scripts:$PATH
-        # download python
-        - if [ ! -d "/C/Python38/Scripts" ]; then (choco install python --version=3.8.0); fi
-        - python -m pip install --upgrade pip
-        - python -m pip install requests uritemplate discord-webhook
-      script:
-        - git clone 'https://github.com/rom4s/sourcemod-css34-builder' builder
-        - powershell 'builder\run\windows.bat'
-      cache:
-        - /C/Python38

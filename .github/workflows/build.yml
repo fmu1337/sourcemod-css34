@@ -1,0 +1,91 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+      - 'cursor/**'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
+  SOURCEMOD_GIT_REV: "6572"
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y \
+            curl \
+            g++-9-multilib \
+            gcc-9-multilib \
+            git \
+            lib32stdc++-9-dev \
+            lib32stdc++6 \
+            lib32z1-dev \
+            libc6-dev-i386 \
+            libstdc++-9-dev \
+            linux-libc-dev \
+            python3 \
+            python3-pip
+
+      - name: Build SourceMod for CS:S v34
+        env:
+          SKIP_APT_INSTALL: 1
+          CC: gcc-9
+          CXX: g++-9
+          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
+          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+        run: |
+          export WDIR="$PWD"
+          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/patches/*.sh
+          builder/run/linux.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcemod-css34-linux
+          path: packages/sourcemod-*-css34-linux.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up MSVC (x86)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
+      - name: Build SourceMod for CS:S v34
+        shell: bash
+        env:
+          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
+          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+        run: |
+          export WDIR="$PWD"
+          builder/run/windows.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcemod-css34-windows
+          path: packages/sourcemod-*-css34-windows.zip

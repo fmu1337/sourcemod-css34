@@ -1,0 +1,5 @@
+/deps/
+/sourcemod/build/
+/packages/
+/sourcemod-css34-linux.tar.gz
+/sourcemod-*-css34-linux.tar.gz
