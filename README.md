@@ -18,7 +18,9 @@ chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builde
 builder/run/linux.sh
 ```
 
-The script installs multilib toolchain packages, pins SourceMod to the v1.11.0.6572 commit, downloads dependencies, applies compatibility patches, and writes `packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz`.
+The script installs multilib packages, pins SourceMod to the v1.11.0.6572 commit, downloads dependencies, applies compatibility patches, and writes `packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz`.
+
+Linux builds use the same **clang-9** toolchain as the original rom4s Travis builder. Before packaging, binaries are stripped, upstream translations are bundled, and gamedata is trimmed to the CS:S v34 layout.
 
 Override the pinned SourceMod commit if needed:
 

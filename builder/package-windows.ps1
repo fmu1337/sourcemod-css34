@@ -19,9 +19,10 @@ $required = @(
     'addons/sourcemod/bin/sourcemod.2.ep1.dll',
     'addons/sourcemod/extensions/dbi.mysql.ext.dll',
     'addons/sourcemod/extensions/dbi.sqlite.ext.dll',
-    'addons/sourcemod/extensions/game.cstrike.ext.1.ep1.dll',
-    'addons/sourcemod/extensions/game.cstrike.ext.2.ep1.dll',
-    'cfg/sourcemod/sourcemod.cfg'
+  'addons/sourcemod/extensions/game.cstrike.ext.1.ep1.dll',
+  'addons/sourcemod/extensions/game.cstrike.ext.2.ep1.dll',
+  'addons/sourcemod/scripting/include/version_auto.inc',
+  'cfg/sourcemod/sourcemod.cfg'
 )
 
 foreach ($rel in $required) {

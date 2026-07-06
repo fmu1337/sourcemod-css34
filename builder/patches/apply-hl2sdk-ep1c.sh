@@ -280,7 +280,7 @@ fi
 # Link-time stubs: tier0/vstdlib come from the game at runtime, not from the SDK repo.
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then
   mkdir -p "$sdk_dir/linux_sdk"
-  stub_cc="${CC:-gcc-9}"
+  stub_cc="${LINUX_SDK_STUB_CC:-gcc}"
   for lib in tier0_i486 vstdlib_i486; do
     if [ ! -f "$sdk_dir/linux_sdk/${lib}.so" ]; then
       echo "void ${lib}_stub(void){}" | "$stub_cc" -m32 -shared -fPIC -x c - -o "$sdk_dir/linux_sdk/${lib}.so"

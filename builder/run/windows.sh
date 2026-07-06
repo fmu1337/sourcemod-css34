@@ -42,7 +42,6 @@ cd build
 
 python ../configure.py \
   --enable-optimize \
-  --disable-auto-versioning \
   --hl2sdk-root="$DEPS_DIR" \
   --mms-path="$DEPS_DIR/mmsource-1.10" \
   --mysql-path="$DEPS_DIR/mysql-5.5" \
@@ -56,6 +55,12 @@ if [ ! -d "$PACKAGE_DIR/addons/sourcemod" ]; then
   echo "Build finished but package directory was not found." >&2
   exit 1
 fi
+
+bash "$BUILDER_DIR/prepare-package.sh" \
+  "$PACKAGE_DIR" \
+  "$SOURCEMOD_DIR" \
+  "$BUILDER_DIR" \
+  "$DEPS_DIR"
 
 mkdir -p "$PACKAGES_DIR"
 ARTIFACT="$(

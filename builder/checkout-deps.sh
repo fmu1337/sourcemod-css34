@@ -54,7 +54,7 @@ if [ "$BUILD_PLATFORM" = "windows" ]; then
     curl -fsSL -o "$DEPS/mysql.zip" \
       https://cdn.mysql.com/archives/mysql-5.5/mysql-5.5.54-win32.zip
     rm -rf "$DEPS/mysql-5.5"
-    tar -xf "$DEPS/mysql.zip" -C "$DEPS"
+    unzip -q -o "$DEPS/mysql.zip" -d "$DEPS"
     mv "$DEPS/mysql-5.5.54-win32" "$DEPS/mysql-5.5"
     rm -f "$DEPS/mysql.zip"
   fi

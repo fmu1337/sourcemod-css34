@@ -30,6 +30,7 @@ jobs:
             g++-9-multilib \
             gcc-9-multilib \
             git \
+            lib32stdc++-9-dev \
             lib32stdc++6 \
             lib32z1-dev \
             libc6-dev-i386 \
@@ -39,14 +40,12 @@ jobs:
 
       - name: Build SourceMod for CS:S v34
         env:
-          CC: gcc-9
-          CXX: g++-9
           SKIP_APT_INSTALL: 1
           SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
           SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
         run: |
           export WDIR="$PWD"
-          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/patches/*.sh
+          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/install-clang9.sh builder/patches/*.sh
           builder/run/linux.sh
 
       - name: Upload artifact

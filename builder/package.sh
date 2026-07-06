@@ -4,6 +4,14 @@ set -euo pipefail
 PACKAGE_DIR="${1:?package directory required}"
 OUTPUT_DIR="${2:?output directory required}"
 SOURCEMOD_DIR="${3:?sourcemod directory required}"
+BUILDER_DIR="${4:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+DEPS_DIR="${5:-$(cd "$BUILDER_DIR/.." && pwd)/deps}"
+
+bash "$BUILDER_DIR/prepare-package.sh" \
+  "$PACKAGE_DIR" \
+  "$SOURCEMOD_DIR" \
+  "$BUILDER_DIR" \
+  "$DEPS_DIR"
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -20,6 +28,7 @@ required=(
   "addons/sourcemod/extensions/dbi.sqlite.ext.so"
   "addons/sourcemod/extensions/game.cstrike.ext.1.ep1.so"
   "addons/sourcemod/extensions/game.cstrike.ext.2.ep1.so"
+  "addons/sourcemod/scripting/include/version_auto.inc"
   "cfg/sourcemod/sourcemod.cfg"
 )
 

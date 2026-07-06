@@ -9,8 +9,6 @@ SOURCEMOD_DIR="$WDIR/sourcemod"
 SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
 SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}"
 
-export CC="${CC:-gcc-9}"
-export CXX="${CXX:-g++-9}"
 export PATH="$HOME/.local/bin:$PATH"
 
 if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
@@ -25,11 +23,20 @@ if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
     python3-pip \
     g++-9-multilib \
     gcc-9-multilib \
+    lib32stdc++-9-dev \
     lib32stdc++6 \
     lib32z1-dev \
     libc6-dev-i386 \
     linux-libc-dev
 fi
+
+bash "$BUILDER_DIR/install-clang9.sh" "$DEPS_DIR"
+# shellcheck source=/dev/null
+source "$DEPS_DIR/clang9.env"
+export CC="${CC:-clang-9}"
+export CXX="${CXX:-clang++-9}"
+
+echo "==> Using compiler: $($CC --version | head -1)"
 
 echo "==> Initializing SourceMod submodule"
 cd "$WDIR"
@@ -57,7 +64,6 @@ cd build
 
 python3 ../configure.py \
   --enable-optimize \
-  --disable-auto-versioning \
   --hl2sdk-root="$DEPS_DIR" \
   --mms-path="$DEPS_DIR/mmsource-1.10" \
   --mysql-path="$DEPS_DIR/mysql-5.5" \
@@ -77,7 +83,9 @@ ARTIFACT="$(
   SOURCEMOD_GIT_REV="$SOURCEMOD_GIT_REV" bash "$BUILDER_DIR/package.sh" \
     "$PACKAGE_DIR" \
     "$PACKAGES_DIR" \
-    "$SOURCEMOD_DIR"
+    "$SOURCEMOD_DIR" \
+    "$BUILDER_DIR" \
+    "$DEPS_DIR"
 )"
 
 ln -sfn "$ARTIFACT" "$WDIR/$(basename "$ARTIFACT")"
