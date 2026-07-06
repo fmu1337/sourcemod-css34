@@ -28,6 +28,7 @@ required=(
   "addons/sourcemod/extensions/dbi.sqlite.ext.so"
   "addons/sourcemod/extensions/game.cstrike.ext.1.ep1.so"
   "addons/sourcemod/extensions/game.cstrike.ext.2.ep1.so"
+  "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt"
   "addons/sourcemod/scripting/include/version_auto.inc"
   "cfg/sourcemod/sourcemod.cfg"
 )

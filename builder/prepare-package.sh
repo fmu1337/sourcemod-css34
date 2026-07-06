@@ -30,7 +30,7 @@ keep_gamedata=(
 echo "==> Stripping Linux binaries"
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then
   while IFS= read -r -d '' binary; do
-    strip --strip-debug "$binary"
+    strip --strip-unneeded "$binary"
   done < <(find "$SM_ROOT/bin" "$SM_ROOT/extensions" -type f \( -name '*.so' -o -name 'spcomp' \) -print0)
 fi
 
@@ -56,6 +56,16 @@ if [ -d "$GAMEDATA_ROOT" ]; then
       "$GAMEDATA_ROOT/sm-cstrike.games/game.cstrike.txt"
   fi
   rm -f "$GAMEDATA_ROOT/sm-cstrike.games/game.csgo.txt"
+  cp -f "$BUILDER_DIR/assets/gamedata/sm-cstrike.games/game.cstrike.txt" \
+    "$GAMEDATA_ROOT/sm-cstrike.games/game.cstrike.txt"
+  cp -f "$BUILDER_DIR/assets/gamedata/sm-cstrike.games/master.games.txt" \
+    "$GAMEDATA_ROOT/sm-cstrike.games/master.games.txt"
+fi
+
+echo "==> Patching core.cfg for CS:S v34 release layout"
+core_cfg="$SM_ROOT/configs/core.cfg"
+if [ -f "$core_cfg" ]; then
+  sed -i 's/^\(\s*"DisableAutoUpdate"\s*\)"no"/\1"yes"/' "$core_cfg"
 fi
 
 echo "==> Fetching upstream translations"
