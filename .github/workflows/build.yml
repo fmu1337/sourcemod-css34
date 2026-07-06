@@ -9,8 +9,9 @@ on:
   workflow_dispatch:
 
 env:
-  SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
-  SOURCEMOD_GIT_REV: "6572"
+  SOURCEMOD_COMMIT: b951843d42f7b9204615c14885468ea131a24002
+  SOURCEMOD_GIT_REV: "7239"
+  SOURCEMOD_MAJOR: "12"
 
 jobs:
   linux:
@@ -46,6 +47,7 @@ jobs:
           CXX: g++-9
           SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
           SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+          SOURCEMOD_MAJOR: ${{ env.SOURCEMOD_MAJOR }}
         run: |
           export WDIR="$PWD"
           chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/patches/*.sh
@@ -80,6 +82,7 @@ jobs:
         env:
           SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
           SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+          SOURCEMOD_MAJOR: ${{ env.SOURCEMOD_MAJOR }}
         run: |
           export WDIR="$PWD"
           builder/run/windows.sh

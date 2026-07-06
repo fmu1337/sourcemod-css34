@@ -27,14 +27,14 @@ keep_gamedata=(
   sm-cstrike.games/master.games.txt
 )
 
-echo "==> Stripping Linux binaries"
+echo "==> Stripping Linux binaries" >&2
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then
   while IFS= read -r -d '' binary; do
     strip --strip-unneeded "$binary"
   done < <(find "$SM_ROOT/bin" "$SM_ROOT/extensions" -type f \( -name '*.so' -o -name 'spcomp' \) -print0)
 fi
 
-echo "==> Trimming gamedata to CS:S v34 layout"
+echo "==> Trimming gamedata to CS:S v34 layout" >&2
 if [ -d "$GAMEDATA_ROOT" ]; then
   while IFS= read -r -d '' file; do
   rel="${file#"$GAMEDATA_ROOT"/}"
@@ -62,13 +62,13 @@ if [ -d "$GAMEDATA_ROOT" ]; then
     "$GAMEDATA_ROOT/sm-cstrike.games/master.games.txt"
 fi
 
-echo "==> Patching core.cfg for CS:S v34 release layout"
+echo "==> Patching core.cfg for CS:S v34 release layout" >&2
 core_cfg="$SM_ROOT/configs/core.cfg"
 if [ -f "$core_cfg" ]; then
   sed -i 's/^\(\s*"DisableAutoUpdate"\s*\)"no"/\1"yes"/' "$core_cfg"
 fi
 
-echo "==> Fetching upstream translations"
+echo "==> Fetching upstream translations" >&2
 translations_dir="$DEPS_DIR/sourcemod-translations"
 rm -rf "$translations_dir"
 git clone --depth 1 --filter=blob:none --sparse \
@@ -91,4 +91,4 @@ if [ ! -f "$SM_ROOT/scripting/include/version_auto.inc" ]; then
   fi
 fi
 
-echo "==> Package prepared"
+echo "==> Package prepared" >&2
