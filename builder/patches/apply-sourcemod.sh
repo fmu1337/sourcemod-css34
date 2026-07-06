@@ -149,6 +149,23 @@ if old_dynamic not in text:
     raise SystemExit('Failed to locate dynamic_libs block in AMBuildScript')
 text = text.replace(old_dynamic, new_dynamic, 1)
 
+libstdcxx_old = """    if builder.target.platform == 'linux':
+      if sdk.name in ['csgo', 'blade']:
+        compiler.linkflags.remove('-static-libstdc++')
+        compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']"""
+libstdcxx_new = """    if builder.target.platform == 'linux':
+      if sdk.name in ['csgo', 'blade', 'ep1', 'css', 'episode1']:
+        if '-static-libstdc++' in compiler.linkflags:
+          compiler.linkflags.remove('-static-libstdc++')
+        if '-lgcc_eh' in compiler.linkflags:
+          compiler.linkflags.remove('-lgcc_eh')
+      if sdk.name in ['csgo', 'blade']:
+        compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']"""
+if libstdcxx_old in text:
+    text = text.replace(libstdcxx_old, libstdcxx_new, 1)
+elif "sdk.name in ['csgo', 'blade', 'ep1', 'css', 'episode1']" not in text:
+    raise SystemExit('Failed to patch dynamic libstdc++ block in AMBuildScript')
+
 path.write_text(text)
 
 cstrike_ambuild = Path(sourcemod_dir) / 'extensions/cstrike/AMBuilder'
