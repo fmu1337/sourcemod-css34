@@ -21,6 +21,8 @@ apt-get update -qq
 apt-get install -y -qq \
   devscripts \
   debhelper \
+  fakeroot \
+  equivs \
   autoconf \
   automake \
   libtool \
@@ -64,6 +66,7 @@ sed -i 's/9\.3\.0-10ubuntu2/9.3.0-10ubuntu2~14.04.1/g' gcc-9-9.3.0/debian/rules.
 gunzip -c gcc-9_9.3.0-11ubuntu0.diff.gz | patch -p0 || true
 
 # Ensure version metadata matches the original Travis toolchain.
+sed -i '1s/.*/gcc-9 (9.3.0-11ubuntu0~14.04) trusty; urgency=medium/' gcc-9-9.3.0/debian/changelog
 cat > gcc-9-9.3.0/debian/rules.parameters <<EOF
 # configuration parameters taken from upstream source files
 GCC_VERSION	:= 9.3.0
@@ -107,31 +110,6 @@ GM2_SONAME	:= 0
 HSAIL_SONAME	:= 0
 LIBC_DEP		:= libc6
 EOF
-
-python3 <<'PY'
-from pathlib import Path
-path = Path('gcc-9-9.3.0/debian/changelog')
-old = path.read_text().splitlines()
-new_top = [
-    'gcc-9 (9.3.0-11ubuntu0~14.04) trusty; urgency=medium',
-    '',
-    '  * PPA upload.',
-    '',
-    ' -- Matthias Klose <doko@ubuntu.com>  Thu, 23 Apr 2020 13:06:56 +0200',
-    '',
-]
-idx = 0
-while idx < len(old) and not old[idx].startswith('gcc-9 ('):
-    idx += 1
-idx += 1
-while idx < len(old) and old[idx].strip() != '':
-    idx += 1
-while idx < len(old) and old[idx].strip() == '':
-    idx += 1
-while idx < len(old) and not old[idx].startswith('gcc-9 ('):
-    idx += 1
-path.write_text('\n'.join(new_top + old[idx:]) + '\n')
-PY
 
 export DEB_BUILD_OPTIONS="parallel=$(nproc)"
 export DEB_CFLAGS_APPEND='-Wno-error'
