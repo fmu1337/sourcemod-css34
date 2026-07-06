@@ -120,7 +120,7 @@ if compiler_flavor == 'clang':
     if supports_deprecated_non_prototype:
         insert += "    cxx.cflags += ['-Wno-deprecated-non-prototype']  # CSS34 clang compatibility\n"
 elif compiler_flavor == 'gcc':
-    insert += """    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare']  # CSS34 SDK compatibility
+    insert += """    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes']  # CSS34 SDK compatibility
 """
 if needle not in text:
     raise SystemExit('Failed to locate compiler flags block in AMBuildScript')
@@ -194,8 +194,12 @@ for rel in ('extensions/cstrike/forwards.cpp', 'extensions/cstrike/natives.cpp')
 PY
 
 ambuild_script="$sourcemod_dir/AMBuildScript"
-if grep -q "CSS34 SDK compatibility" "$ambuild_script" && ! grep -q "'-Wno-sign-compare']  # CSS34 SDK compatibility" "$ambuild_script"; then
-  sed -i "s/'-Wno-write-strings']  # CSS34 SDK compatibility/'-Wno-write-strings', '-Wno-sign-compare']  # CSS34 SDK compatibility/" "$ambuild_script"
+if grep -q "CSS34 SDK compatibility" "$ambuild_script"; then
+  if ! grep -q "'-Wno-sign-compare']  # CSS34 SDK compatibility" "$ambuild_script"; then
+    sed -i "s/'-Wno-write-strings']  # CSS34 SDK compatibility/'-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes']  # CSS34 SDK compatibility/" "$ambuild_script"
+  elif ! grep -q "'-Wno-ignored-attributes']  # CSS34 SDK compatibility" "$ambuild_script"; then
+    sed -i "s/'-Wno-sign-compare']  # CSS34 SDK compatibility/'-Wno-sign-compare', '-Wno-ignored-attributes']  # CSS34 SDK compatibility/" "$ambuild_script"
+  fi
 fi
 
 # Normalize line endings from the upstream SourceMod checkout.
