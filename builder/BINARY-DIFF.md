@@ -123,9 +123,9 @@ with different debug sections. Section comparison shows repro has larger
 
 ## Recommended next steps (by impact)
 
-1. **Diff `apply-hl2sdk-ep1c.sh` / `apply-sourcemod.sh` against inferred original
-   patches** — focus on symbols only in original UND list (Valve tier0/vstdlib API
-   usage, C++ EH linkage).
+See **`builder/SDK-PATCH-DIFF.md`** for the full SDK patch catalog and inferred gaps.
+
+1. **Dynamic libstdc++ for ep1/css** — original imports `__cxa_throw`; repro embeds EH (+text)
 
 2. **Pin gcc-9.3.0-11ubuntu0~14.04** in trusty Dockerfile (download specific
    `.deb` from Ubuntu archive) to eliminate the 375-byte metadata diffs on simple
