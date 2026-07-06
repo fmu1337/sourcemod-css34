@@ -96,7 +96,9 @@ gcc_flags_new = """      '-Wno-array-bounds',
       '-Wno-format-truncation',
       '-Wno-error=format-truncation',
       '-msse',"""
-if gcc_flags_old in text and gcc_flags_new not in text:
+if compiler_flavor == 'clang' and gcc_flags_new in text:
+    text = text.replace(gcc_flags_new, gcc_flags_old, 1)
+elif compiler_flavor == 'gcc' and gcc_flags_old in text and gcc_flags_new not in text:
     text = text.replace(gcc_flags_old, gcc_flags_new, 1)
 
 needle = "      '-fvisibility=hidden',\n    ]\n"

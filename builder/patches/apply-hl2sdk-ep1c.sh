@@ -98,9 +98,15 @@ for rel in ('public/minmax.h', 'public/tier0/basetypes.h'):
 path = sdk / 'public/mathlib/math_base.h'
 text = path.read_text(encoding='latin-1')
 marker = '#include "minmax.h"\n'
-insert = marker + '\n#if defined(__cplusplus)\ntemplate<typename T> inline T min(T a, T b) { return a < b ? a : b; }\ntemplate<typename T> inline T max(T a, T b) { return a > b ? a : b; }\n#endif\n'
+insert = marker + '\n#if defined(__cplusplus) && !defined(_MSC_VER)\ntemplate<typename T> inline T min(T a, T b) { return a < b ? a : b; }\ntemplate<typename T> inline T max(T a, T b) { return a > b ? a : b; }\n#endif\n'
 if 'template<typename T> inline T min(T a, T b)' not in text and marker in text:
     text = text.replace(marker, insert, 1)
+    path.write_text(text, encoding='latin-1')
+elif 'template<typename T> inline T min(T a, T b)' in text:
+    text = text.replace(
+        '#if defined(__cplusplus)\ntemplate<typename T> inline T min(T a, T b)',
+        '#if defined(__cplusplus) && !defined(_MSC_VER)\ntemplate<typename T> inline T min(T a, T b)',
+    )
     path.write_text(text, encoding='latin-1')
 PY
 
