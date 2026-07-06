@@ -467,3 +467,22 @@ PY
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 "$script_dir/apply-api-compat.sh" "$sourcemod_dir"
+
+# -Wno-invalid-offsetof is C++-only; keep it off CFLAGS for mixed C/C++ targets (e.g. DHooks).
+sp_ambuild="$sourcemod_dir/sourcepawn/AMBuildScript"
+if [ -f "$sp_ambuild" ] && grep -q "binary.compiler.cflags += \[" "$sp_ambuild" && grep -A2 "binary.compiler.cflags" "$sp_ambuild" | grep -q "Wno-invalid-offsetof"; then
+  python3 - "$sp_ambuild" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+old = """            binary.compiler.cflags += [
+                '-Wno-invalid-offsetof',
+            ]"""
+new = """            binary.compiler.cxxflags += [
+                '-Wno-invalid-offsetof',
+            ]"""
+if old in text:
+    path.write_text(text.replace(old, new, 1))
+PY
+fi
