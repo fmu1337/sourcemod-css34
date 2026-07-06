@@ -2,6 +2,8 @@
 
 Patched [SourceMod](https://www.sourcemod.net/) builds for **Counter-Strike: Source v34** (non-Steam / legacy builds).
 
+Продолжение наработок [rom4s/sourcemod-css34](https://github.com/rom4s/sourcemod-css34). Последний билд, который он собирал, — **v1.11.0.6572**; `master` воспроизводит тот же layout. Новые версии upstream натягиваются отдельными ветками поверх общих v34-фиксов — см. [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
+
 The repository tracks upstream SourceMod as a git submodule and produces packages matching the original [v1.11.0.6572 release](https://github.com/rom4s/sourcemod-css34/releases/tag/v1.11.0.6572) layout:
 
 - `sourcemod-1.11.0-git6572-css34-linux.tar.gz`
@@ -19,6 +21,12 @@ builder/run/linux.sh
 ```
 
 The script installs multilib packages, pins SourceMod to the v1.11.0.6572 commit, downloads dependencies, applies compatibility patches, and writes `packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz`.
+
+Verify the archive matches the rom4s layout:
+
+```bash
+builder/verify-package.sh packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz
+```
 
 Linux builds use **gcc-9** multilib on Ubuntu 22.04 (clang-9 from the original rom4s Travis builder is fragile on modern hosts). Before packaging, binaries are stripped, upstream translations are bundled, and gamedata is trimmed to the CS:S v34 layout.
 

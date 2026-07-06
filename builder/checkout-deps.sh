@@ -70,7 +70,14 @@ else
 fi
 
 echo "==> Fetching Metamod:Source"
-clone_repo "mmsource-1.10" "https://github.com/alliedmodders/metamod-source" "1.10-dev"
+MMS_BRANCH="${MMS_BRANCH:-1.10-dev}"
+if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
+  MMS_BRANCH="1.12-dev"
+fi
+clone_repo "mmsource-1.10" "https://github.com/alliedmodders/metamod-source" "$MMS_BRANCH"
+if [ "$MMS_BRANCH" = "1.12-dev" ] && [ ! -e "$DEPS/mmsource-1.12" ]; then
+  ln -sfn mmsource-1.10 "$DEPS/mmsource-1.12"
+fi
 
 echo "==> Fetching HL2SDK episode1"
 rm -rf "$DEPS/hl2sdk-episode1"
@@ -83,11 +90,32 @@ git clone --depth 1 https://github.com/rom4s/hl2sdk-ep1c "$DEPS/hl2sdk-ep1"
 "$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS/hl2sdk-ep1"
 
 echo "==> Fetching AMBuild"
-if ! python -c "import ambuild2" 2>/dev/null && ! python3 -c "import ambuild2" 2>/dev/null; then
-  clone_repo "ambuild" "https://github.com/alliedmodders/ambuild"
+AMBUILD_TAG="${AMBUILD_TAG:-}"
+if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
+  AMBUILD_TAG="2.2"
+  rm -rf "$DEPS/ambuild"
+fi
+if ! python3 -c "import ambuild2; from ambuild2 import run; assert getattr(run, 'CURRENT_API', '2.1') >= '2.2'" 2>/dev/null \
+   && [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
+  :
+elif ! python -c "import ambuild2" 2>/dev/null && ! python3 -c "import ambuild2" 2>/dev/null; then
+  if [ -n "$AMBUILD_TAG" ]; then
+    git clone --depth 1 --branch "$AMBUILD_TAG" https://github.com/alliedmodders/ambuild "$DEPS/ambuild"
+  else
+    clone_repo "ambuild" "https://github.com/alliedmodders/ambuild"
+  fi
   if [ "$BUILD_PLATFORM" = "windows" ]; then
     python -m pip install "$DEPS/ambuild"
   else
     python3 -m pip install --user "$DEPS/ambuild"
+  fi
+elif [ -n "$AMBUILD_TAG" ]; then
+  if [ ! -d "$DEPS/ambuild/.git" ]; then
+    git clone --depth 1 --branch "$AMBUILD_TAG" https://github.com/alliedmodders/ambuild "$DEPS/ambuild"
+  fi
+  if [ "$BUILD_PLATFORM" = "windows" ]; then
+    python -m pip install --force-reinstall "$DEPS/ambuild"
+  else
+    python3 -m pip install --user --force-reinstall "$DEPS/ambuild"
   fi
 fi

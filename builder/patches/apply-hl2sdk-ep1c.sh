@@ -110,6 +110,17 @@ elif 'template<typename T> inline T min(T a, T b)' in text:
         '#if defined(__cplusplus) && !defined(_MSC_VER)\ntemplate<typename T> inline T min(T a, T b)',
     )
     path.write_text(text, encoding='latin-1')
+
+path = Path(sdk) / 'public/mathlib/math_base.h'
+text = path.read_text(encoding='latin-1')
+clamp_define = '#define clamp(val, min, max) (((val) > (max)) ? (max) : (((val) < (min)) ? (min) : (val)))'
+if clamp_define in text and '#undef clamp' not in text:
+    text = text.replace(
+        clamp_define,
+        clamp_define + '\n#ifdef __cplusplus\n#undef clamp\n#endif',
+        1,
+    )
+    path.write_text(text, encoding='latin-1')
 PY
 
 apply_sed public/networkvar.h \

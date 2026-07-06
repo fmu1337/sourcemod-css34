@@ -8,6 +8,7 @@ BUILDER_DIR="$WDIR/builder"
 SOURCEMOD_DIR="$WDIR/sourcemod"
 SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
 SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}"
+SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-11}"
 
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -43,6 +44,8 @@ fi
 git -C "$SOURCEMOD_DIR" fetch --depth=8192 origin "$SOURCEMOD_COMMIT"
 git -C "$SOURCEMOD_DIR" reset --hard "$SOURCEMOD_COMMIT"
 git -C "$SOURCEMOD_DIR" submodule update --init --recursive
+
+export SOURCEMOD_MAJOR
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"

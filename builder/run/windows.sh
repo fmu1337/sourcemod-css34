@@ -8,8 +8,10 @@ BUILDER_DIR="$WDIR/builder"
 SOURCEMOD_DIR="$WDIR/sourcemod"
 SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
 SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}"
+SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-11}"
 
 export BUILD_PLATFORM=windows
+export SOURCEMOD_MAJOR
 
 if ! command -v cl >/dev/null 2>&1; then
   echo "MSVC compiler (cl.exe) not found. Run inside a Visual Studio Developer shell." >&2
