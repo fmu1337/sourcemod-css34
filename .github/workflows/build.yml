@@ -1,0 +1,31 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build SourceMod for CS:S v34
+        run: |
+          export WDIR="$PWD"
+          chmod +x builder/run/linux.sh builder/patches/*.sh
+          builder/run/linux.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcemod-css34-linux
+          path: sourcemod-css34-linux.tar.gz
