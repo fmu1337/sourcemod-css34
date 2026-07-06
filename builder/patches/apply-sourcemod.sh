@@ -379,4 +379,49 @@ text = text.replace(
     '#if SOURCE_ENGINE < SE_ORANGEBOX || SOURCE_ENGINE == SE_CSS\n  float flOldValue = atof(oldValue);',
 )
 path.write_text(text)
+
+versioning = Path(sourcemod_dir) / 'tools/buildbot/Versioning'
+if versioning.exists():
+    text = versioning.read_text()
+    marker = 'def _resolve_git_head_path(source_path):'
+    if marker not in text:
+        old = """with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
+  head_contents = fp.read().strip()
+  if re.search('^[a-fA-F0-9]{40}$', head_contents):
+    git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
+  else:
+    git_state = head_contents.split(':')[1].strip()
+    git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
+    if not os.path.exists(git_head_path):
+      git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
+"""
+        new = """def _resolve_git_head_path(source_path):
+  git_meta = os.path.join(source_path, '.git')
+  if os.path.isfile(git_meta):
+    with open(git_meta) as meta_fp:
+      gitdir_line = meta_fp.read().strip()
+    if gitdir_line.startswith('gitdir: '):
+      git_dir = gitdir_line[8:]
+      if not os.path.isabs(git_dir):
+        git_dir = os.path.normpath(os.path.join(source_path, git_dir))
+    else:
+      git_dir = git_meta
+  else:
+    git_dir = git_meta
+  return os.path.join(git_dir, 'HEAD')
+
+git_head_path = _resolve_git_head_path(builder.sourcePath)
+with open(git_head_path) as fp:
+  head_contents = fp.read().strip()
+  if re.search('^[a-fA-F0-9]{40}$', head_contents):
+    pass
+  else:
+    git_state = head_contents.split(':')[1].strip()
+    candidate = os.path.join(os.path.dirname(git_head_path), git_state)
+    if os.path.exists(candidate):
+      git_head_path = candidate
+"""
+        if old not in text:
+            raise SystemExit('Failed to patch tools/buildbot/Versioning for submodule git metadata')
+        versioning.write_text(text.replace(old, new, 1))
 PY

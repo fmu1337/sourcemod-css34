@@ -60,7 +60,7 @@ chmod +x "$WRAPPER_DIR/clang-9" "$WRAPPER_DIR/clang++-9"
 
 cat > "$ENV_FILE" <<EOF
 export PATH="$WRAPPER_DIR:$CLANG_DIR/usrbin:\$PATH"
-export LD_LIBRARY_PATH="$LIBTINFO_DIR/lib/x86_64-linux-gnu:\$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$LIBTINFO_DIR/lib/x86_64-linux-gnu:\${LD_LIBRARY_PATH:-}"
 EOF
 
 # shellcheck source=/dev/null
