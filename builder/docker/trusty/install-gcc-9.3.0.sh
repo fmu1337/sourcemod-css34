@@ -121,7 +121,22 @@ HSAIL_SONAME	:= 0
 LIBC_DEP		:= libc6
 EOF
 
-export DEB_BUILD_OPTIONS="parallel=$(nproc)"
+# Focal debian metadata targets arches/languages unavailable on trusty.
+sed -i 's/ riscv64//g; s/riscv64 //g' gcc-9-9.3.0/debian/rules.conf
+cat >> gcc-9-9.3.0/debian/rules.defs <<'EOF'
+
+# Trusty image: skip languages/architectures we do not need for multilib C/C++.
+with_ada :=
+with_d :=
+with_go :=
+with_fortran :=
+with_objc :=
+with_gcj :=
+with_brig :=
+with_gm2 :=
+EOF
+
+export DEB_BUILD_OPTIONS="parallel=$(nproc),nocheck,nolang=ada,nolang=d,nolang=go,nolang=fortran,nolang=objc,nolang=obj-c++"
 export DEB_CFLAGS_APPEND='-Wno-error'
 export DEB_CXXFLAGS_APPEND='-Wno-error'
 export CC=gcc
