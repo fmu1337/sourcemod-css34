@@ -127,11 +127,7 @@ apply_sed public/tier0/platform.h \
 apply_sed public/tier0/platform.h \
   's/#if defined(LITTLE_ENDIAN)/#if defined(VALVE_LITTLE_ENDIAN)/'
 
-apply_sed public/tier0/platform.h \
-  's/PLATFORM_INTERFACE const CPUInformation\& GetCPUInformation();/PLATFORM_INTERFACE const CPUInformation* GetCPUInformation();/'
-
-apply_sed public/tier0/fasttimer.h \
-  's/const CPUInformation\& pi = GetCPUInformation();/const CPUInformation\& pi = *GetCPUInformation();/'
+# Keep rom4s pristine API: GetCPUInformation() returns const CPUInformation&
 
 apply_sed public/icvar.h \
   's|"appframework/IAppSystem.h"|"appframework/iappsystem.h"|'
