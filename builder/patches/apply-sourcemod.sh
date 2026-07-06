@@ -120,37 +120,11 @@ if compiler_flavor == 'clang':
     if supports_deprecated_non_prototype:
         insert += "    cxx.cflags += ['-Wno-deprecated-non-prototype']  # CSS34 clang compatibility\n"
 elif compiler_flavor == 'gcc':
-    insert += """    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes']  # CSS34 SDK compatibility
+    insert += """    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings']  # CSS34 SDK compatibility
 """
 if needle not in text:
     raise SystemExit('Failed to locate compiler flags block in AMBuildScript')
 text = text.replace(needle, insert, 1)
-
-sp_script = Path(sourcemod_dir) / 'sourcepawn/AMBuildScript'
-sp_text = sp_script.read_text()
-sp_patch = "            '-Werror',\n            '-Wno-switch',"
-sp_replacements = []
-if compiler_flavor == 'clang' and supports_deprecated_non_prototype and '-Wno-deprecated-non-prototype' not in sp_text:
-    sp_replacements.append("            '-Wno-deprecated-non-prototype',  # CSS34 clang compatibility")
-if '-Wno-sign-compare' not in sp_text:
-    sp_replacements.append("            '-Wno-sign-compare',  # CSS34 gcc compatibility")
-if sp_replacements and sp_patch in sp_text:
-    sp_text = sp_text.replace(sp_patch, sp_patch + "\n" + "\n".join(sp_replacements), 1)
-if "'-std=c++17', '-Wno-sign-compare'" not in sp_text and "cxx.cxxflags += ['-std=c++17']" in sp_text:
-    sp_text = sp_text.replace(
-        "cxx.cxxflags += ['-std=c++17']",
-        "cxx.cxxflags += ['-std=c++17', '-Wno-sign-compare']  # CSS34 gcc compatibility",
-        1,
-    )
-elif "'-std=c++14', '-Wno-sign-compare'" not in sp_text and "cxx.cxxflags += ['-std=c++14']" in sp_text:
-    sp_text = sp_text.replace(
-        "cxx.cxxflags += ['-std=c++14']",
-        "cxx.cxxflags += ['-std=c++14', '-Wno-sign-compare']  # CSS34 gcc compatibility",
-        1,
-    )
-sp_orig = sp_script.read_text()
-if sp_text != sp_orig:
-    sp_script.write_text(sp_text)
 
 old_dynamic = (
     "      if sdk.name in ['css', 'hl2dm', 'dods', 'tf2', 'sdk2013', 'bms', 'nucleardawn', 'l4d2', 'insurgency', 'doi']:\n"
@@ -192,15 +166,6 @@ for rel in ('extensions/cstrike/forwards.cpp', 'extensions/cstrike/natives.cpp')
         )
         cstrike_src.write_text(cstrike_code)
 PY
-
-ambuild_script="$sourcemod_dir/AMBuildScript"
-if grep -q "CSS34 SDK compatibility" "$ambuild_script"; then
-  if ! grep -q "'-Wno-sign-compare']  # CSS34 SDK compatibility" "$ambuild_script"; then
-    sed -i "s/'-Wno-write-strings']  # CSS34 SDK compatibility/'-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes']  # CSS34 SDK compatibility/" "$ambuild_script"
-  elif ! grep -q "'-Wno-ignored-attributes']  # CSS34 SDK compatibility" "$ambuild_script"; then
-    sed -i "s/'-Wno-sign-compare']  # CSS34 SDK compatibility/'-Wno-sign-compare', '-Wno-ignored-attributes']  # CSS34 SDK compatibility/" "$ambuild_script"
-  fi
-fi
 
 # Normalize line endings from the upstream SourceMod checkout.
 while IFS= read -r -d '' file; do
@@ -464,25 +429,3 @@ with open(git_head_path) as fp:
             raise SystemExit('Failed to patch tools/buildbot/Versioning for submodule git metadata')
         versioning.write_text(text.replace(old, new, 1))
 PY
-
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-"$script_dir/apply-api-compat.sh" "$sourcemod_dir"
-
-# -Wno-invalid-offsetof is C++-only; keep it off CFLAGS for mixed C/C++ targets (e.g. DHooks).
-sp_ambuild="$sourcemod_dir/sourcepawn/AMBuildScript"
-if [ -f "$sp_ambuild" ] && grep -q "binary.compiler.cflags += \[" "$sp_ambuild" && grep -A2 "binary.compiler.cflags" "$sp_ambuild" | grep -q "Wno-invalid-offsetof"; then
-  python3 - "$sp_ambuild" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-text = path.read_text()
-old = """            binary.compiler.cflags += [
-                '-Wno-invalid-offsetof',
-            ]"""
-new = """            binary.compiler.cxxflags += [
-                '-Wno-invalid-offsetof',
-            ]"""
-if old in text:
-    path.write_text(text.replace(old, new, 1))
-PY
-fi

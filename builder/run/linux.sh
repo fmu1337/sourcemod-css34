@@ -6,8 +6,9 @@ DEPS_DIR="${DEPS_DIR:-$WDIR/deps}"
 PACKAGES_DIR="${PACKAGES_DIR:-$WDIR/packages}"
 BUILDER_DIR="$WDIR/builder"
 SOURCEMOD_DIR="$WDIR/sourcemod"
-SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-f53cb134ef83b580c83e1f4bf35f60d11c4571dd}"
-SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6970}"
+
+# shellcheck source=resolve-version.sh
+source "$BUILDER_DIR/resolve-version.sh"
 
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -33,6 +34,7 @@ fi
 export CC="${CC:-gcc-9}"
 export CXX="${CXX:-g++-9}"
 
+echo "==> Profile: ${SOURCEMOD_PROFILE:-stable} (SourceMod 1.11.0-git${SOURCEMOD_GIT_REV})"
 echo "==> Using compiler: $($CC --version | head -1)"
 
 echo "==> Initializing SourceMod submodule"
@@ -42,6 +44,7 @@ if [ ! -e "$SOURCEMOD_DIR/.git" ]; then
 fi
 git -C "$SOURCEMOD_DIR" fetch --depth=8192 origin "$SOURCEMOD_COMMIT"
 git -C "$SOURCEMOD_DIR" reset --hard "$SOURCEMOD_COMMIT"
+git -C "$SOURCEMOD_DIR" submodule foreach --recursive 'git reset --hard HEAD && git clean -fd'
 git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"
@@ -50,8 +53,9 @@ bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
 python3 -m pip install --upgrade pip --user
 python3 -m pip install --user "$DEPS_DIR/ambuild" 2>/dev/null || true
 
-echo "==> Applying CS:S v34 compatibility patches"
+echo "==> Applying CS:S v34 compatibility patches (rom4s baseline)"
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
+bash "$BUILDER_DIR/apply-upstream-patches.sh" "$SOURCEMOD_DIR" "$SOURCEMOD_GIT_REV"
 
 echo "==> Configuring SourceMod (ep1 + episode1, like original release)"
 cd "$SOURCEMOD_DIR"

@@ -8,12 +8,8 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  SOURCEMOD_COMMIT: f53cb134ef83b580c83e1f4bf35f60d11c4571dd
-  SOURCEMOD_GIT_REV: "6970"
-
 jobs:
-  linux:
+  linux-stable:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -39,22 +35,66 @@ jobs:
             python3 \
             python3-pip
 
-      - name: Build SourceMod for CS:S v34
+      - name: Build stable baseline (6572)
         env:
           SKIP_APT_INSTALL: 1
           CC: gcc-9
           CXX: g++-9
-          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
-          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+          SOURCEMOD_PROFILE: stable
         run: |
           export WDIR="$PWD"
-          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/download-geolite2.sh builder/patches/*.sh
+          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/download-geolite2.sh builder/resolve-version.sh builder/apply-upstream-patches.sh builder/patches/*.sh
           builder/run/linux.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sourcemod-css34-linux
+          name: sourcemod-css34-linux-stable
+          path: packages/sourcemod-*-css34-linux.tar.gz
+
+  linux-experimental:
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y \
+            curl \
+            g++-9-multilib \
+            gcc-9-multilib \
+            git \
+            lib32stdc++-9-dev \
+            lib32stdc++6 \
+            lib32z1-dev \
+            libc6-dev-i386 \
+            libstdc++-9-dev \
+            linux-libc-dev \
+            python3 \
+            python3-pip
+
+      - name: Build experimental upstream (6970)
+        env:
+          SKIP_APT_INSTALL: 1
+          CC: gcc-9
+          CXX: g++-9
+          SOURCEMOD_PROFILE: experimental
+        run: |
+          export WDIR="$PWD"
+          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/download-geolite2.sh builder/resolve-version.sh builder/apply-upstream-patches.sh builder/patches/*.sh
+          builder/run/linux.sh
+
+      - name: Upload artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcemod-css34-linux-experimental
           path: packages/sourcemod-*-css34-linux.tar.gz
 
   windows:
@@ -75,11 +115,10 @@ jobs:
         with:
           arch: x86
 
-      - name: Build SourceMod for CS:S v34
+      - name: Build SourceMod for CS:S v34 (stable)
         shell: bash
         env:
-          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
-          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+          SOURCEMOD_PROFILE: stable
         run: |
           export WDIR="$PWD"
           builder/run/windows.sh

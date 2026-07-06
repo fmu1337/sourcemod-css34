@@ -2,89 +2,104 @@
 
 Patched [SourceMod](https://www.sourcemod.net/) builds for **Counter-Strike: Source v34** (non-Steam / legacy builds).
 
-The repository tracks upstream SourceMod as a git submodule and produces packages for CS:S v34:
+Продолжение наработок [rom4s/sourcemod-css34](https://github.com/rom4s/sourcemod-css34): последний рабочий релиз rom4s — **v1.11.0.6572** (июнь 2020). Этот репозиторий воспроизводит тот билд и даёт способ аккуратно натягивать более новый upstream, не ломая v34-фиксы.
 
-- `sourcemod-1.11.0-git6970-css34-linux.tar.gz`
-- `sourcemod-1.11.0-git6970-css34-windows.zip`
-- `sourcemod.1.ep1.so` / `sourcemod.1.ep1.dll` and `sourcemod.2.ep1.so` / `sourcemod.2.ep1.dll`
-- `game.cstrike.ext.1.ep1.so` / `.dll` and `game.cstrike.ext.2.ep1.so` / `.dll`
-- MySQL and SQLite DBI extensions
+## Модель поддержки
 
-## v1.11.0.6970 vs v1.11.0.6572 (CS:S v34)
+```
+upstream SourceMod (submodule)
+        ↓
+apply-sourcemod.sh     ← rom4s/v34 фиксы (всегда)
+        ↓
+apply-upstream-patches ← API + toolchain (только для новых билдов)
+        ↓
+prepare-package.sh     ← gamedata v34, GeoIP, переводы
+        ↓
+sourcemod-1.11.0-gitXXXX-css34-*
+```
 
-This branch updates the pinned upstream commit from **6572** (Jun 2020) to **6970** (Oct 2024).
+| Слой | Файл | Когда |
+|------|------|-------|
+| **v34 / rom4s** | `builder/patches/apply-sourcemod.sh` | Всегда: ep1 SDK, SE_CSS guards, cstrike ext, tier0_i486 |
+| **API compat** | `builder/patches/apply-api-compat.sh` | upstream ≥ 6800: `CS_OnCSWeaponDrop` default, `SetCollisionGroup` wrapper |
+| **Toolchain** | `builder/patches/apply-toolchain.sh` | upstream ≥ 6800: gcc-9 флаги для SourcePawn/DHooks |
+| **Packaging** | `builder/prepare-package.sh` | Обрезка gamedata, GeoLite2 `.mmdb`, `DisableAutoUpdate` |
 
-### What matters for CS:S v34
+### Профили сборки
 
-| Area | Change |
-|------|--------|
-| **Gamedata** | `engine.ep1.txt` — `DispatchKeyValue`; `engine.css.txt` — `LookupAttachment`; `game.cstrike.txt` — `SetOwnerEntity`, `GetAttachment` |
-| **SDKTools** | New natives: `SetEntityCollisionGroup`, `SetEntityOwner`, `EntityCollisionRulesChanged`, `LookupEntityAttachment`, `GetEntityAttachment` |
-| **Core** | Bug fixes (menus, datapacks, sendprops, SQL, handles), updated SourcePawn compiler |
-| **DHooks** | Bundled into SourceMod core (`extensions/dhooks`, `dhooks.ext`) — same extension name as standalone DHooks |
-| **GeoIP** | GeoLite2 `.mmdb` format; database downloaded at package time into `configs/geoip/` |
+| Профиль | Коммит | Rev | Назначение |
+|---------|--------|-----|------------|
+| **stable** (по умолчанию) | `832519ab` | **6572** | База rom4s, проверенный билд |
+| **experimental** | `f53cb134e` | **6970** | Тест апгрейда upstream |
 
-### Compatibility patches (this repo)
+```bash
+# Стабильный билд (как rom4s 6572)
+builder/run/linux.sh
 
-- **`CS_OnCSWeaponDrop`** — forward signature updated with `bool donated=false` (always `false` on v34; CS:GO-only semantics upstream)
-- **`SetCollisionGroup`** — deprecated stock wrapper with compile-time `#pragma deprecated`; calls `SetEntityCollisionGroup`
-- **GeoIP** — `GeoLite2-Country.mmdb` fetched during packaging (P3TERX mirror)
-- **DHooks** — upstream 6970 ships built-in `dhooks.ext`; remove any standalone DHooks extension from `extensions/` before upgrading to avoid duplicate load
+# Экспериментальный апгрейд
+SOURCEMOD_PROFILE=experimental builder/run/linux.sh
 
-### Not included (other games only)
+# Явный пин
+SOURCEMOD_COMMIT=832519ab647cdecb85763918dbfed1cb5e79c6cb SOURCEMOD_GIT_REV=6572 builder/run/linux.sh
+```
 
-TF2, L4D2, CS:GO gamedata updates, Entity Lump API, x64-specific fixes — trimmed from the release package.
+Пины заданы в `builder/versions.env`.
 
-## Build locally (Linux)
+## Сборка (Linux)
 
 ```bash
 git submodule update --init --recursive
-chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/download-geolite2.sh builder/patches/*.sh
+chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
+  builder/prepare-package.sh builder/download-geolite2.sh builder/resolve-version.sh \
+  builder/apply-upstream-patches.sh builder/patches/*.sh
 builder/run/linux.sh
 ```
 
-The script installs multilib packages, pins SourceMod to the v1.11.0.6970 commit, downloads dependencies, applies CS:S v34 compatibility patches, and writes `packages/sourcemod-1.11.0-git6970-css34-linux.tar.gz`.
+Результат: `packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz`
 
-Linux builds use **gcc-9** multilib on Ubuntu 22.04. Before packaging, binaries are stripped, upstream translations are bundled, gamedata is trimmed to the CS:S v34 layout, and the GeoLite2 database is downloaded.
+Сборка на **gcc-9 multilib**, Ubuntu 22.04. Бинарники strip, gamedata обрезан под v34.
 
-Override the pinned SourceMod commit if needed:
+## Сборка (Windows)
 
-```bash
-SOURCEMOD_COMMIT=f53cb134ef83b580c83e1f4bf35f60d11c4571dd SOURCEMOD_GIT_REV=6970 builder/run/linux.sh
-```
-
-## Build locally (Windows)
-
-Requires Visual Studio Build Tools with the x86 MSVC toolset, Python 3, and Git Bash (or WSL).
+Visual Studio Build Tools (x86), Python 3, Git Bash:
 
 ```bash
-git submodule update --init --recursive
-# Open "x86 Native Tools Command Prompt for VS" or run vcvarsall.bat x86 first
 builder/run/windows.sh
 ```
 
-The script writes `packages/sourcemod-1.11.0-git6970-css34-windows.zip`.
-
 ## CI
 
-GitHub Actions workflow `.github/workflows/build.yml` runs the Linux and Windows builds on pushes and pull requests.
+- **linux-stable** — обязательный, профиль `stable` (6572)
+- **linux-experimental** — опциональный, профиль `experimental` (6970), `continue-on-error`
+- **windows** — stable
 
-## Install / upgrade from 6572
+## Установка
 
-Extract the archive into your CS:S v34 server `cstrike` directory (Metamod:Source must already be installed).
-
-Linux:
+Распаковать в `cstrike` (нужен Metamod:Source):
 
 ```bash
-tar -xzf sourcemod-1.11.0-git6970-css34-linux.tar.gz -C /path/to/cstrike
+tar -xzf sourcemod-1.11.0-git6572-css34-linux.tar.gz -C /path/to/cstrike
 ```
 
-Windows: unzip `sourcemod-1.11.0-git6970-css34-windows.zip` into `cstrike`.
+## Апгрейд upstream (как натягивать новые билды)
 
-**Plugin authors:** update `CS_OnCSWeaponDrop` to three parameters (third defaults to `false`), replace `SetCollisionGroup` with `SetEntityCollisionGroup`, and recompile plugins against the new `scripting/include`.
+1. Обновить `SOURCEMOD_EXPERIMENTAL_*` в `builder/versions.env`
+2. Собрать: `SOURCEMOD_PROFILE=experimental builder/run/linux.sh`
+3. Если падает компиляция — правки в `apply-toolchain.sh` (не трогать v34-логику)
+4. Если ломается API плагинов — правки в `apply-api-compat.sh`
+5. После проверки на сервере — перенести пин в `SOURCEMOD_STABLE_*`
 
-## Notes
+**Не трогать** `apply-sourcemod.sh` без необходимости — это слой rom4s, от которого зависит вся v34-совместимость.
 
-- Builds against `rom4s/hl2sdk-ep1c` (ep1) and `alliedmodders/hl2sdk` episode1, like the original builder.
-- MySQL extension (`dbi.mysql.ext.so`) is included by default.
-- 32-bit (`x86`) binaries are produced for compatibility with the v34 dedicated server.
+### Известные отличия 6970 от 6572 (для v34)
+
+- Вкомплектован **DHooks** (`dhooks.ext`) — убрать standalone DHooks при апгрейде
+- **GeoIP** — формат `.mmdb`, качается при сборке в `configs/geoip/`
+- Новые SDKTools natives (не ломают старые плагины)
+- Gamedata: `engine.css.txt`, `game.cstrike.txt` — доп. оффсеты
+
+## Заметки
+
+- SDK: `rom4s/hl2sdk-ep1c` + `alliedmodders/hl2sdk` episode1
+- MySQL extension включён
+- Только **x86** (32-bit) под v34 dedicated server
