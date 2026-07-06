@@ -65,23 +65,28 @@ if ep1_marker not in text:
 path_block_old = """    if sdk.name == 'episode1' or sdk.name == 'darkm':
       paths.append(['public', 'dlls'])
       paths.append(['game_shared'])"""
-path_block_new = """    if sdk.name in ['episode1', 'darkm']:
+path_block_new = """    if sdk.name in ['episode1', 'darkm', 'ep1']:
+      paths.append(['public', 'dlls'])
+      paths.append(['game_shared'])"""
+if path_block_old in text:
+    text = text.replace(path_block_old, path_block_new, 1)
+elif """    if sdk.name in ['episode1', 'darkm']:
       paths.append(['public', 'dlls'])
       paths.append(['game_shared'])
     elif sdk.name == 'ep1':
       paths.append(['public', 'game', 'server'])
       paths.append(['public', 'toolframework'])
       paths.append(['game', 'shared'])
-      paths.append(['common'])"""
-if path_block_old in text:
-    text = text.replace(path_block_old, path_block_new, 1)
-elif """    if sdk.name in ['episode1', 'darkm', 'ep1']:
-      paths.append(['public', 'dlls'])
-      paths.append(['game_shared'])""" in text:
+      paths.append(['common'])""" in text:
     text = text.replace(
-        """    if sdk.name in ['episode1', 'darkm', 'ep1']:
+        """    if sdk.name in ['episode1', 'darkm']:
       paths.append(['public', 'dlls'])
-      paths.append(['game_shared'])""",
+      paths.append(['game_shared'])
+    elif sdk.name == 'ep1':
+      paths.append(['public', 'game', 'server'])
+      paths.append(['public', 'toolframework'])
+      paths.append(['game', 'shared'])
+      paths.append(['common'])""",
         path_block_new,
         1,
     )
