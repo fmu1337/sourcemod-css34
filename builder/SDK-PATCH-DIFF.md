@@ -202,11 +202,14 @@ Current ep1 paths: `game/server`, `toolframework`, `dlls`, `game_shared`.
 Superseded PPA binaries are gone; `builder/docker/trusty/install-gcc-9.3.0.sh`
 rebuilds from `archive.ubuntu.com` orig/debian + Launchpad diff.
 
-**CI failure (Jul 6):** Docker image build ran 1h17m and failed in `build-nvptx`
-configure. Fix: disable `with_offload_nvptx` / `with_offload_hsa`, skip extra
-languages, install only multilib toolchain `.deb` files.
+**CI failure (Jul 6–12):** `dpkg-buildpackage` ran 1h44m and failed on
+`stamps/05-build-nvptx-stamp` (debian rules ignore `with_offload_nvptx :=` override).
 
-**Status:** script updated; awaiting `Build (repro trusty)` rerun.
+**Fix (Jul 12):** bootstrap upstream gcc 9.3.0 with `--enable-languages=c,c++
+--enable-multilib --disable-bootstrap` and
+`--with-pkgversion='Ubuntu 9.3.0-11ubuntu0~14.04'`.
+
+**Status:** awaiting `Build (repro trusty)` rerun.
 
 ### 7. Linker flags (`-fdata-sections`, `-Wl,--gc-sections`, …) — **wired (2026-07-12)**
 

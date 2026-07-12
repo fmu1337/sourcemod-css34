@@ -1,35 +1,28 @@
 #!/usr/bin/env bash
 # Install gcc/g++ 9.3.0-11ubuntu0~14.04 on Ubuntu 14.04 (trusty).
 #
-# Superseded PPA binaries are no longer in the Launchpad pool; we reconstruct
-# the published source (orig + debian + Launchpad diff) and build locally.
+# Superseded PPA binaries are gone. Full dpkg-buildpackage pulls in nvptx/jit
+# and takes 2+ hours on CI; bootstrap C/C++ multilib only (~20-30 min).
 set -euo pipefail
 
 GCC_DEB_VERSION='9.3.0-11ubuntu0~14.04'
+GCC_PKG_VERSION="Ubuntu ${GCC_DEB_VERSION}"
 BUILD_DIR="${GCC_BUILD_DIR:-/tmp/gcc9-build}"
 ARCHIVE='https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-9'
-PPA_FILES='https://launchpad.net/~ubuntu-toolchain-r/+archive/ubuntu/test/+files'
 
 if command -v gcc-9 >/dev/null 2>&1 && gcc-9 --version 2>&1 | grep -qF "$GCC_DEB_VERSION"; then
   echo "==> gcc-9 ($GCC_DEB_VERSION) already installed"
   exit 0
 fi
 
-echo "==> Building gcc-9 ($GCC_DEB_VERSION) from Ubuntu source"
+echo "==> Bootstrapping gcc-9 ($GCC_DEB_VERSION) (C/C++ multilib, no debian packaging)"
 
 apt-get update -qq
 apt-get install -y -qq \
-  devscripts \
-  debhelper \
-  fakeroot \
-  equivs \
-  autoconf \
-  automake \
-  libtool \
+  build-essential \
   bison \
   flex \
   texinfo \
-  gettext \
   gawk \
   patch \
   make \
@@ -41,156 +34,40 @@ apt-get install -y -qq \
   lib32z1-dev \
   libc6-dev-i386 \
   libisl-dev \
-  libcloog-isl-dev \
-  expect \
-  dejagnu \
-  chrpath \
-  dwz \
-  quilt \
-  sharutils \
-  pkg-config \
-  texlive-latex-base \
-  ghostscript \
-  docbook-xsl-ns \
-  libxml2-utils \
-  xsltproc
+  libcloog-isl-dev
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 curl -fsSL -o gcc-9_9.3.0.orig.tar.gz "$ARCHIVE/gcc-9_9.3.0.orig.tar.gz"
-curl -fsSL -o gcc-9_9.3.0-10ubuntu2.debian.tar.xz "$ARCHIVE/gcc-9_9.3.0-10ubuntu2.debian.tar.xz"
-curl -fsSL -o gcc-9_9.3.0-11ubuntu0.diff.gz \
-  "$PPA_FILES/gcc-9_9.3.0-10ubuntu2~14.04.1_9.3.0-11ubuntu0~14.04.diff.gz"
-
 tar -xzf gcc-9_9.3.0.orig.tar.gz
-tar -xJf gcc-9_9.3.0-10ubuntu2.debian.tar.xz -C gcc-9-9.3.0/
-
-# diff expects 9.3.0-10ubuntu2~14.04.1 debian metadata as the base.
-sed -i '1s/.*/gcc-9 (9.3.0-10ubuntu2~14.04.1) trusty; urgency=medium/' gcc-9-9.3.0/debian/changelog
-sed -i 's/9\.3\.0-10ubuntu2/9.3.0-10ubuntu2~14.04.1/g' gcc-9-9.3.0/debian/rules.parameters
-cp gcc-9-9.3.0/debian/changelog gcc-9-9.3.0/debian/changelog.bak
-
-gunzip -c gcc-9_9.3.0-11ubuntu0.diff.gz | patch -p0 || true
-cp gcc-9-9.3.0/debian/changelog.bak gcc-9-9.3.0/debian/changelog
-
-# Ensure version metadata matches the original Travis toolchain.
-sed -i '1s/.*/gcc-9 (9.3.0-11ubuntu0~14.04) trusty; urgency=medium/' gcc-9-9.3.0/debian/changelog
-cat > gcc-9-9.3.0/debian/rules.parameters <<EOF
-# configuration parameters taken from upstream source files
-GCC_VERSION	:= 9.3.0
-NEXT_GCC_VERSION	:= 9.3.1
-BASE_VERSION	:= 9
-SOURCE_VERSION	:= ${GCC_DEB_VERSION}
-DEB_VERSION	:= ${GCC_DEB_VERSION}
-DEB_EVERSION	:= 1:${GCC_DEB_VERSION}
-DEB_GDC_VERSION	:= ${GCC_DEB_VERSION}
-DEB_SOVERSION	:= 5
-DEB_SOEVERSION	:= 1:5
-DEB_LIBGCC_SOVERSION	:= 
-DEB_LIBGCC_VERSION	:= 1:${GCC_DEB_VERSION}
-DEB_STDCXX_SOVERSION	:= 5
-DEB_GOMP_SOVERSION	:= 5
-GCC_SONAME	:= 1
-CXX_SONAME	:= 6
-FORTRAN_SONAME	:= 5
-OBJC_SONAME	:= 4
-GDC_VERSION	:= 9
-GNAT_VERSION	:= 9
-GNAT_SONAME	:= 9
-FFI_SONAME	:= 7
-SSP_SONAME	:= 0
-GOMP_SONAME	:= 1
-ITM_SONAME	:= 1
-ATOMIC_SONAME	:= 1
-BTRACE_SONAME	:= 1
-ASAN_SONAME	:= 5
-LSAN_SONAME	:= 0
-TSAN_SONAME	:= 0
-UBSAN_SONAME	:= 1
-VTV_SONAME	:= 0
-QUADMATH_SONAME	:= 0
-GO_SONAME		:= 14
-CC1_SONAME	:= 0
-GCCJIT_SONAME	:= 0
-GPHOBOS_SONAME	:= 76
-GDRUNTIME_SONAME	:= 76
-GM2_SONAME	:= 0
-HSAIL_SONAME	:= 0
-LIBC_DEP		:= libc6
-EOF
-
-# Focal debian metadata targets arches/languages unavailable on trusty.
-sed -i 's/ riscv64//g; s/riscv64 //g' gcc-9-9.3.0/debian/rules.conf
-sed -i 's/^#with_ada := disabled for GCC 9/with_ada := disabled for GCC 9/' gcc-9-9.3.0/debian/rules.defs
-cat >> gcc-9-9.3.0/debian/rules.defs <<'EOF'
-
-# Trusty repro: multilib C/C++ toolchain only (CI failed on build-nvptx).
-with_offload_nvptx :=
-with_offload_hsa :=
-with_jit :=
-with_d :=
-with_go :=
-with_fortran :=
-with_objc :=
-with_gcj :=
-with_brig :=
-with_gm2 :=
-EOF
-
-export DEB_BUILD_OPTIONS="parallel=$(nproc),nocheck,nodoc,nolang=ada,nolang=d,nolang=go,nolang=fortran,nolang=objc,nolang=obj-c++"
-export DEB_CFLAGS_APPEND='-Wno-error'
-export DEB_CXXFLAGS_APPEND='-Wno-error'
-export CC=gcc
-export CXX=g++
-
 cd gcc-9-9.3.0
-# Focal debian/control lists build-deps not satisfiable on trusty; bootstrap with -d.
-dpkg-buildpackage -d -b -uc -us -j"$(nproc)"
-cd ..
 
-shopt -s nullglob
-debs=(
-  gcc-9-base_*.deb
-  cpp-9_*.deb
-  gcc-9_[0-9]*_amd64.deb
-  g++-9_[0-9]*_amd64.deb
-  gcc-9-multilib_*.deb
-  g++-9-multilib_*.deb
-  libgcc-9-dev_*.deb
-  lib32gcc-9-dev_*.deb
-  libgcc1_*.deb
-  lib32gcc1_*.deb
-  libstdc++6_*.deb
-  lib32stdc++6_*.deb
-  libstdc++-9-dev_*.deb
-  lib32stdc++-9-dev_*.deb
-  libcc1-0_*.deb
-  libgomp1_*.deb
-  lib32gomp1_*.deb
-  libitm1_*.deb
-  lib32itm1_*.deb
-  libatomic1_*.deb
-  lib32atomic1_*.deb
-  libasan5_*.deb
-  lib32asan5_*.deb
-  liblsan0_*.deb
-  lib32lsan0_*.deb
-  libubsan1_*.deb
-  lib32ubsan1_*.deb
-  libquadmath0_*.deb
-  lib32quadmath0_*.deb
-)
-if [ "${#debs[@]}" -eq 0 ]; then
-  echo "gcc-9 build produced no toolchain .deb files" >&2
-  ls -1 *.deb 2>/dev/null | head -20 >&2 || true
-  exit 1
-fi
+./contrib/download_prerequisites
 
-echo "==> Installing ${#debs[@]} gcc-9 toolchain packages"
-dpkg -i "${debs[@]}" || apt-get -f install -y -qq
-rm -f ./*.deb
+mkdir -p build
+cd build
+../configure \
+  --prefix=/usr \
+  --infodir=/usr/share/info \
+  --mandir=/usr/share/man \
+  --enable-checking=release \
+  --build=x86_64-linux-gnu \
+  --host=x86_64-linux-gnu \
+  --target=x86_64-linux-gnu \
+  --with-arch-32=i686 \
+  --with-multilib-list=m32,m64 \
+  --enable-multilib \
+  --enable-languages=c,c++ \
+  --disable-bootstrap \
+  --disable-libsanitizer \
+  --with-pkgversion="$GCC_PKG_VERSION" \
+  --with-bugurl=file:///usr/share/doc/gcc-9/README.Bugs \
+  --program-suffix=-9
+
+make -j"$(nproc)"
+make install
 
 if ! gcc-9 --version 2>&1 | grep -qF "$GCC_DEB_VERSION"; then
   echo "gcc-9 version mismatch after install:" >&2
@@ -198,10 +75,11 @@ if ! gcc-9 --version 2>&1 | grep -qF "$GCC_DEB_VERSION"; then
   exit 1
 fi
 
-echo "==> Installed $(gcc-9 --version | head -1)"
-apt-mark hold gcc-9 g++-9 gcc-9-multilib g++-9-multilib gcc-9-base cpp-9 \
-  libgcc-9-dev lib32gcc-9-dev libstdc++-9-dev lib32stdc++-9-dev lib32stdc++6 \
-  libstdc++6 libcc1-0 libgomp1 libitm1 libatomic1 libasan5 liblsan0 libubsan1 \
-  libquadmath0 2>/dev/null || true
+if ! echo 'int main(void){return 0;}' | gcc-9 -m32 -x c - -o /tmp/gcc9-m32-test 2>/dev/null; then
+  echo "gcc-9 -m32 smoke test failed" >&2
+  exit 1
+fi
+rm -f /tmp/gcc9-m32-test
 
+echo "==> Installed $(gcc-9 --version | head -1)"
 rm -rf "$BUILD_DIR"
