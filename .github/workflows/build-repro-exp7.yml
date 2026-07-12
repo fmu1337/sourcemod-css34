@@ -1,0 +1,34 @@
+name: Build (repro exp7)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'cursor/repro-byte-match-2341'
+    paths:
+      - 'builder/run/exp7-matrix.sh'
+      - 'builder/patches/apply-sourcemod-exp7.sh'
+      - 'builder/compare-release.sh'
+      - '.github/workflows/build-repro-exp7.yml'
+
+jobs:
+  exp7-matrix:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run EXP7 linker-flag matrix
+        run: |
+          chmod +x builder/run/exp7-matrix.sh
+          builder/run/exp7-matrix.sh
+
+      - name: Upload EXP7 results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exp7-results
+          path: builder/exp7-results/
