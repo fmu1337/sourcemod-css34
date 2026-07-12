@@ -44,8 +44,6 @@ curl -fsSL -o gcc-9_9.3.0.orig.tar.gz "$ARCHIVE/gcc-9_9.3.0.orig.tar.gz"
 tar -xzf gcc-9_9.3.0.orig.tar.gz
 cd gcc-9-9.3.0
 
-./contrib/download_prerequisites
-
 mkdir -p build
 cd build
 ../configure \
@@ -62,6 +60,10 @@ cd build
   --enable-languages=c,c++ \
   --disable-bootstrap \
   --disable-libsanitizer \
+  --with-gmp=/usr \
+  --with-mpfr=/usr \
+  --with-mpc=/usr \
+  --with-isl=/usr \
   --with-pkgversion="$GCC_PKG_VERSION" \
   --with-bugurl=file:///usr/share/doc/gcc-9/README.Bugs \
   --program-suffix=-9
