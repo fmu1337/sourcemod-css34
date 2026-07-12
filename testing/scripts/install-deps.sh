@@ -111,9 +111,11 @@ install_rhel() {
   fix_centos_vault
   local pkgs=(glibc.i686 libstdc++.i686 zlib.i686 ca-certificates unzip bzip2 file procps-ng)
   if command -v dnf >/dev/null 2>&1; then
-    # Rocky/Alma images often ship curl-minimal; keep it and skip full curl.
+    # Align x86_64 runtime with the i686 packages we are about to install.
+    dnf -y update libstdc++ libgcc glibc zlib ca-certificates || true
     dnf -y install "${pkgs[@]}" wget \
-      || dnf -y install "${pkgs[@]}"
+      || dnf -y install --allowerasing "${pkgs[@]}" wget \
+      || dnf -y install --allowerasing "${pkgs[@]}"
     dnf -y install gdb || true
   else
     # CentOS 7: update matching x86_64 libs first to avoid multilib skew.
