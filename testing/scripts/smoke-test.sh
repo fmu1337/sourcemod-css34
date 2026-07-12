@@ -66,13 +66,19 @@ cleanup
 trap - EXIT
 wait "${srcds_pid}" 2>/dev/null || true
 
-echo "----- last 60 console lines -----"
-tail -n 60 "${LOG_FILE}" || true
+echo "----- first 40 console lines -----"
+head -n 40 "${LOG_FILE}" || true
+echo "----- last 40 console lines -----"
+tail -n 40 "${LOG_FILE}" || true
 echo "----- SourceMod log -----"
 if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
   cat "${SM_LOG_DIR}"/L*.log
 else
   echo "(no SourceMod log files)"
+fi
+if [[ -f "${MM_SO:-/dev/null}" ]] || [[ -f "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod_mm_i486.so" ]]; then
+  echo "----- sourcemod_mm exports -----"
+  nm -D "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod_mm_i486.so" 2>/dev/null | grep CreateInterface || true
 fi
 
 fail=0

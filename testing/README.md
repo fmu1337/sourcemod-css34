@@ -4,18 +4,22 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 
 ## Distro matrix
 
-| Job | Images |
-|---|---|
-| `test-debian` | `debian:8`, `9`, `10`, `11`, `12`, `13`, `latest` |
-| `test-centos` | `centos:7`, `rockylinux:8`, `rockylinux:9` |
+| Job | Images | SourceMod under test |
+|---|---|---|
+| `test-debian` | `debian:8` … `13` / `latest` | rom4s **reference** 1.11.0.6572 (or `sm_url`) |
+| `test-centos` | `centos:7`, `rockylinux:8`, `rockylinux:9` | same reference |
+| `check-built-package` | ubuntu-22.04 | freshly built artifact (ABI/export checks) |
+| `test-built-smoke` | ubuntu-22.04 | freshly built artifact (continue-on-error until builder ABI is fixed) |
 
 Rocky Linux stands in for modern CentOS-stream/RHEL-family hosts (CentOS 8+ is EOL).
+
+The distro matrix uses the known-good rom4s package so OS/deps/`srcds_patch` regressions stay visible even when the in-tree build is temporarily unloadable. `check-built-package` currently flags missing `CreateInterface` on `sourcemod_mm_i486.so` and too-new GLIBC symbol versions (2.29+).
 
 ## What the smoke test checks
 
 1. Game DLL loads (`Counter-Strike: Source`)
-2. Dedicated server config / cvars start
-3. Metamod:Source and SourceMod appear in the console log
+2. Map / dedicated server config starts
+3. SourceMod writes a session log (`addons/sourcemod/logs/L*.log`) — proves MM loaded SM
 4. No segfault; not flooded with `Unknown command` (buffer bug signature)
 
 ## Buffer / modern-OS fixes
