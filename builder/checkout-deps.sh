@@ -80,6 +80,8 @@ patch_episode1_sdk "$DEPS/hl2sdk-episode1"
 echo "==> Fetching rom4s/hl2sdk-ep1c as hl2sdk-ep1"
 rm -rf "$DEPS/hl2sdk-ep1"
 git clone --depth 1 https://github.com/rom4s/hl2sdk-ep1c "$DEPS/hl2sdk-ep1"
+# ep1c does not ship tier0/vstdlib; use episode1's real .so so the linker records DT_NEEDED.
+export HL2SDK_EPISODE1_LINUX_SDK="$DEPS/hl2sdk-episode1/linux_sdk"
 "$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS/hl2sdk-ep1"
 
 echo "==> Fetching AMBuild"

@@ -8,12 +8,12 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 |---|---|---|
 | `test-debian` | `debian:8` … `13` / `latest` | rom4s **reference** 1.11.0.6572 (or `sm_url`) |
 | `test-centos` | `centos:7`, `rockylinux:8`, `rockylinux:9` | same reference |
-| `check-built-package` | ubuntu-22.04 | freshly built artifact (ABI/export checks) |
-| `test-built-smoke` | ubuntu-22.04 | freshly built artifact (continue-on-error until builder ABI is fixed) |
+| `check-built-package` | ubuntu-22.04 | freshly built artifact (CreateInterface + DT_NEEDED) |
+| `test-built-smoke` | ubuntu-22.04 | freshly built artifact on the build host |
 
 Rocky Linux stands in for modern CentOS-stream/RHEL-family hosts (CentOS 8+ is EOL).
 
-The distro matrix uses the known-good rom4s package so OS/deps/`srcds_patch` regressions stay visible even when the in-tree build is temporarily unloadable. `check-built-package` currently flags missing `CreateInterface` on `sourcemod_mm_i486.so` and too-new GLIBC symbol versions (2.29+).
+The distro matrix uses the known-good rom4s package so OS/deps/`srcds_patch` stay covered on old glibc. Host-built packages need CreateInterface + real `tier0`/`vstdlib` link libs; they may require GLIBC 2.29+ (Debian 11+ / modern Rocky), while rom4s 6572 stays on ~2.4 for Debian 8–10 / CentOS 7.
 
 ## What the smoke test checks
 

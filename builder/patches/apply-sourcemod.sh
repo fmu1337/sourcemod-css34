@@ -173,6 +173,146 @@ for rel in ('extensions/cstrike/forwards.cpp', 'extensions/cstrike/natives.cpp')
         cstrike_src.write_text(cstrike_code)
 PY
 
+# MM:S 1.10 for CS:S v34 loads the bridge via legacy CreateInterface (API V1),
+# which must open sourcemod.1.ep1.so. Upstream SM removed this export; restore it.
+SOURCEMOD_DIR="$sourcemod_dir" python3 - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'loader' / 'loader.cpp'
+text = path.read_text()
+if 'DLL_EXPORT void *CreateInterface(const char *iface, int *ret)' in text:
+    print('==> loader CreateInterface already present')
+else:
+    if '#define FILENAME_1_4_EP1' not in text:
+        text = text.replace(
+            '#define METAMOD_API_MAJOR\t\t\t2\n',
+            '#define METAMOD_API_MAJOR\t\t\t2\n'
+            '#define FILENAME_1_4_EP1\t\t\t"sourcemod.1.ep1" PLATFORM_EXT\n',
+            1,
+        )
+        if '#define FILENAME_1_4_EP1' not in text:
+            text = text.replace(
+                '#define METAMOD_API_MAJOR\t\t\t2\r\n',
+                '#define METAMOD_API_MAJOR\t\t\t2\r\n'
+                '#define FILENAME_1_4_EP1\t\t\t"sourcemod.1.ep1" PLATFORM_EXT\r\n',
+                1,
+            )
+        if '#define FILENAME_1_4_EP1' not in text:
+            raise SystemExit('Failed to insert FILENAME_1_4_EP1 into loader.cpp')
+
+    win_sep = """\t#define PATH_SEP_CHAR\t\t\t"\\\\"
+\t#include <Windows.h>
+#else"""
+    win_sep_new = """\t#define PATH_SEP_CHAR\t\t\t"\\\\"
+\tinline bool IsPathSepChar(char c)
+\t{
+\t\treturn (c == '/' || c == '\\\\');
+\t}
+\t#include <Windows.h>
+#else"""
+    if 'IsPathSepChar' not in text and win_sep in text:
+        text = text.replace(win_sep, win_sep_new, 1)
+
+    unix_sep = """\ttypedef void *\t\t\t\t\tHINSTANCE;
+\t#define PATH_SEP_CHAR\t\t\t"/"
+\t#include <dlfcn.h>
+#endif"""
+    unix_sep_new = """\ttypedef void *\t\t\t\t\tHINSTANCE;
+\t#define PATH_SEP_CHAR\t\t\t"/"
+\tinline bool IsPathSepChar(char c)
+\t{
+\t\treturn (c == '/');
+\t}
+\t#include <dlfcn.h>
+#endif"""
+    if 'inline bool IsPathSepChar(char c)' not in text and unix_sep in text:
+        text = text.replace(unix_sep, unix_sep_new, 1)
+    if 'IsPathSepChar' not in text:
+        raise SystemExit('Failed to insert IsPathSepChar into loader.cpp')
+
+    getfile = r'''
+bool GetFileOfAddress(void *pAddr, char *buffer, size_t maxlength)
+{
+#if defined _MSC_VER
+	MEMORY_BASIC_INFORMATION mem;
+	if (!VirtualQuery(pAddr, &mem, sizeof(mem)))
+		return false;
+	if (mem.AllocationBase == NULL)
+		return false;
+	HMODULE dll = (HMODULE)mem.AllocationBase;
+	GetModuleFileName(dll, (LPTSTR)buffer, maxlength);
+#else
+	Dl_info info;
+	if (!dladdr(pAddr, &info))
+		return false;
+	if (!info.dli_fbase || !info.dli_fname)
+		return false;
+	const char *dllpath = info.dli_fname;
+	snprintf(buffer, maxlength, "%s", dllpath);
+#endif
+	return true;
+}
+
+'''
+    if 'bool GetFileOfAddress(' not in text:
+        anchor = 'DLL_EXPORT METAMOD_PLUGIN *CreateInterface_MMS('
+        if anchor not in text:
+            raise SystemExit('Failed to locate CreateInterface_MMS in loader.cpp')
+        text = text.replace(anchor, getfile + anchor, 1)
+
+    create = r'''
+DLL_EXPORT void *CreateInterface(const char *iface, int *ret)
+{
+	/**
+	 * If a load has already been attempted, bail out immediately.
+	 */
+	if (load_attempted)
+	{
+		return NULL;
+	}
+
+	if (strcmp(iface, METAMOD_PLAPI_NAME) == 0)
+	{
+		char thisfile[256];
+		char targetfile[256];
+
+		if (!GetFileOfAddress((void *)CreateInterface_MMS, thisfile, sizeof(thisfile)))
+		{
+			return NULL;
+		}
+
+		size_t len = strlen(thisfile);
+		for (size_t iter = len - 1; iter < len; iter--)
+		{
+			if (IsPathSepChar(thisfile[iter]))
+			{
+				thisfile[iter] = '\0';
+				break;
+			}
+		}
+
+		UTIL_Format(targetfile, sizeof(targetfile), "%s" PATH_SEP_CHAR FILENAME_1_4_EP1, thisfile);
+
+		return _GetPluginPtr(targetfile, METAMOD_FAIL_API_V1);
+	}
+
+	return NULL;
+}
+
+'''
+    unload_anchor = 'DLL_EXPORT void UnloadInterface_MMS()'
+    if unload_anchor not in text:
+        raise SystemExit('Failed to locate UnloadInterface_MMS in loader.cpp')
+    # Insert CreateInterface after UnloadInterface_MMS body.
+    end_marker = 'DLL_EXPORT void UnloadInterface_MMS()\n{\n\tif (g_hCore)\n\t{\n\t\tcloselib(g_hCore);\n\t\tg_hCore = NULL;\n\t}\n}\n'
+    if end_marker not in text:
+        raise SystemExit('Failed to locate UnloadInterface_MMS body in loader.cpp')
+    text = text.replace(end_marker, end_marker + create, 1)
+    path.write_text(text)
+    print('==> Restored legacy CreateInterface in loader.cpp for MM:S 1.10 / EP1')
+PY
+
 # Normalize line endings from the upstream SourceMod checkout.
 while IFS= read -r -d '' file; do
   sed -i 's/\r$//' "$file"

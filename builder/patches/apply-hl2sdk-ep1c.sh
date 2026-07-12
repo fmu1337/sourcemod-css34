@@ -285,13 +285,20 @@ if [ -f "$math_base_h" ] && grep -q 'FORCEINLINE_TEMPLATE void swap( T& x, T& y 
 // Swap template removed for CSS34 gcc compatibility (conflicts with std::swap).' "$math_base_h"
 fi
 
-# Link-time stubs: tier0/vstdlib come from the game at runtime, not from the SDK repo.
+# Link against real game tier0/vstdlib so DT_NEEDED is recorded (--as-needed drops empty stubs).
+# Prefer HL2SDK_EPISODE1_LINUX_SDK (alliedmodders episode1 ships the libs); fall back to stubs only as last resort.
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then
   mkdir -p "$sdk_dir/linux_sdk"
+  episode1_linux_sdk="${HL2SDK_EPISODE1_LINUX_SDK:-}"
   stub_cc="${LINUX_SDK_STUB_CC:-gcc}"
-  for lib in tier0_i486 vstdlib_i486; do
-    if [ ! -f "$sdk_dir/linux_sdk/${lib}.so" ]; then
-      echo "void ${lib}_stub(void){}" | "$stub_cc" -m32 -shared -fPIC -x c - -o "$sdk_dir/linux_sdk/${lib}.so"
+  for lib in tier0_i486.so vstdlib_i486.so; do
+    dest="$sdk_dir/linux_sdk/${lib}"
+    if [ -n "$episode1_linux_sdk" ] && [ -f "$episode1_linux_sdk/${lib}" ]; then
+      cp -f "$episode1_linux_sdk/${lib}" "$dest"
+      echo "==> Installed link lib ${lib} from episode1 linux_sdk"
+    elif [ ! -f "$dest" ]; then
+      echo "WARNING: ${lib} missing; creating empty stub (DT_NEEDED may be dropped)" >&2
+      echo "void ${lib%.*}_stub(void){}" | "$stub_cc" -m32 -shared -fPIC -x c - -o "$dest"
     fi
   done
 fi

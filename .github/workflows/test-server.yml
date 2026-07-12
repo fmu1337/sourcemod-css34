@@ -68,8 +68,6 @@ jobs:
   check-built-package:
     needs: [build-linux]
     runs-on: ubuntu-22.04
-    # Non-blocking until the builder emits a css34-loadable ABI again.
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -231,14 +229,10 @@ jobs:
               testing/scripts/smoke-test.sh
             '
 
-  # Boots the freshly built package on the build host OS. Expected to fail
-  # until CreateInterface / GetCVarIF / GLIBC issues in the builder are fixed;
-  # keep it visible but non-blocking for the distro harness.
+  # Boots the freshly built package on the build host OS (Ubuntu 22.04 / modern glibc).
   test-built-smoke:
     needs: [build-linux, prepare-server, check-built-package]
-    if: always() && needs.build-linux.result == 'success' && needs.prepare-server.result == 'success'
     runs-on: ubuntu-22.04
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
