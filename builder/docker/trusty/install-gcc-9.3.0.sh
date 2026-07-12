@@ -46,6 +46,11 @@ cd gcc-9-9.3.0
 tar -xJf gcc-9.3.0.tar.xz
 cd gcc-9.3.0
 
+# Trusty ships libisl10 (isl 0.12); gcc 9.3 needs isl >= 0.15.
+curl -fsSL -o isl-0.18.tar.bz2 https://gcc.gnu.org/pub/gcc/infrastructure/isl-0.18.tar.bz2
+tar -xjf isl-0.18.tar.bz2
+mv isl-0.18 isl
+
 mkdir -p build
 cd build
 ../configure \
@@ -65,7 +70,6 @@ cd build
   --with-gmp=/usr \
   --with-mpfr=/usr \
   --with-mpc=/usr \
-  --with-isl=/usr \
   --with-pkgversion="$GCC_PKG_VERSION" \
   --with-bugurl=file:///usr/share/doc/gcc-9/README.Bugs \
   --program-suffix=-9
