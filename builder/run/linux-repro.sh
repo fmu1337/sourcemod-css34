@@ -51,6 +51,10 @@ echo "    MMS: ${MMSOURCE_110_COMMIT:0:12}"
 echo "    AMBuild: ${AMBUILD_COMMIT:0:12}"
 echo "    Translations: ${TRANSLATIONS_REF:0:12}"
 echo "    STRIP_MODE: $STRIP_MODE"
+if [ "${EXP7_ENABLED:-0}" = "1" ]; then
+  echo "    EXP7_ENABLED: 1"
+  echo "    EXP7_VARIANT: ${EXP7_VARIANT:-baseline}"
+fi
 
 echo "==> Initializing SourceMod submodule"
 cd "$WDIR"
@@ -68,7 +72,11 @@ python3 -m pip install --upgrade pip --user
 python3 -m pip install --user --force-reinstall "$DEPS_DIR/ambuild"
 
 echo "==> Applying CS:S v34 compatibility patches"
-"$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
+if [ "${EXP7_ENABLED:-0}" = "1" ]; then
+  "$BUILDER_DIR/patches/apply-sourcemod-exp7.sh" "$SOURCEMOD_DIR"
+else
+  "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
+fi
 
 echo "==> Configuring SourceMod (ep1 + episode1, like original release)"
 cd "$SOURCEMOD_DIR"

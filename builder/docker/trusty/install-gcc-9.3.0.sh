@@ -126,7 +126,10 @@ sed -i 's/ riscv64//g; s/riscv64 //g' gcc-9-9.3.0/debian/rules.conf
 sed -i 's/^#with_ada := disabled for GCC 9/with_ada := disabled for GCC 9/' gcc-9-9.3.0/debian/rules.defs
 cat >> gcc-9-9.3.0/debian/rules.defs <<'EOF'
 
-# Trusty image: skip languages we do not need for multilib C/C++.
+# Trusty repro: multilib C/C++ toolchain only (CI failed on build-nvptx).
+with_offload_nvptx :=
+with_offload_hsa :=
+with_jit :=
 with_d :=
 with_go :=
 with_fortran :=
@@ -136,7 +139,7 @@ with_brig :=
 with_gm2 :=
 EOF
 
-export DEB_BUILD_OPTIONS="parallel=$(nproc),nocheck,nolang=ada,nolang=d,nolang=go,nolang=fortran,nolang=objc,nolang=obj-c++"
+export DEB_BUILD_OPTIONS="parallel=$(nproc),nocheck,nodoc,nolang=ada,nolang=d,nolang=go,nolang=fortran,nolang=objc,nolang=obj-c++"
 export DEB_CFLAGS_APPEND='-Wno-error'
 export DEB_CXXFLAGS_APPEND='-Wno-error'
 export CC=gcc
@@ -148,13 +151,45 @@ dpkg-buildpackage -d -b -uc -us -j"$(nproc)"
 cd ..
 
 shopt -s nullglob
-debs=(*.deb)
+debs=(
+  gcc-9-base_*.deb
+  cpp-9_*.deb
+  gcc-9_[0-9]*_amd64.deb
+  g++-9_[0-9]*_amd64.deb
+  gcc-9-multilib_*.deb
+  g++-9-multilib_*.deb
+  libgcc-9-dev_*.deb
+  lib32gcc-9-dev_*.deb
+  libgcc1_*.deb
+  lib32gcc1_*.deb
+  libstdc++6_*.deb
+  lib32stdc++6_*.deb
+  libstdc++-9-dev_*.deb
+  lib32stdc++-9-dev_*.deb
+  libcc1-0_*.deb
+  libgomp1_*.deb
+  lib32gomp1_*.deb
+  libitm1_*.deb
+  lib32itm1_*.deb
+  libatomic1_*.deb
+  lib32atomic1_*.deb
+  libasan5_*.deb
+  lib32asan5_*.deb
+  liblsan0_*.deb
+  lib32lsan0_*.deb
+  libubsan1_*.deb
+  lib32ubsan1_*.deb
+  libquadmath0_*.deb
+  lib32quadmath0_*.deb
+)
 if [ "${#debs[@]}" -eq 0 ]; then
-  echo "gcc-9 build produced no .deb files" >&2
+  echo "gcc-9 build produced no toolchain .deb files" >&2
+  ls -1 *.deb 2>/dev/null | head -20 >&2 || true
   exit 1
 fi
 
-dpkg -i ./*.deb || apt-get -f install -y -qq
+echo "==> Installing ${#debs[@]} gcc-9 toolchain packages"
+dpkg -i "${debs[@]}" || apt-get -f install -y -qq
 rm -f ./*.deb
 
 if ! gcc-9 --version 2>&1 | grep -qF "$GCC_DEB_VERSION"; then

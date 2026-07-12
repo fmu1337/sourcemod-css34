@@ -197,7 +197,27 @@ Current ep1 paths: `game/server`, `toolframework`, `dlls`, `game_shared`.
 
 `REPRO_SKIP_INCLUDE_SYMLINKS=1` → fails on `appframework/IAppSystem.h`.
 
-### 5. Pin gcc **9.3.0-11ubuntu0~14.04** — not run yet
+### 5. Pin gcc **9.3.0-11ubuntu0~14.04** — **in progress (2026-07-12)**
+
+Superseded PPA binaries are gone; `builder/docker/trusty/install-gcc-9.3.0.sh`
+rebuilds from `archive.ubuntu.com` orig/debian + Launchpad diff.
+
+**CI failure (Jul 6):** Docker image build ran 1h17m and failed in `build-nvptx`
+configure. Fix: disable `with_offload_nvptx` / `with_offload_hsa`, skip extra
+languages, install only multilib toolchain `.deb` files.
+
+**Status:** script updated; awaiting `Build (repro trusty)` rerun.
+
+### 7. Linker flags (`-fdata-sections`, `-Wl,--gc-sections`, …) — **wired (2026-07-12)**
+
+`EXP7_ENABLED=1` + `EXP7_VARIANT={sections,gc,symbolic,full}` now routes through
+`linux-repro.sh` → `apply-sourcemod-exp7.sh` (Docker env vars forwarded).
+
+```bash
+EXP7_VARIANT=sections builder/run/exp7-linker-flags.sh
+```
+
+**Status:** ready to run; results not measured yet.
 
 ### 6. `STRIP_MODE=unneeded` — **no effect (2026-07-06)**
 
