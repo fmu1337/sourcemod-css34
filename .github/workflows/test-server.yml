@@ -1,0 +1,220 @@
+name: Test Server
+
+on:
+  push:
+    branches:
+      - master
+      - 'cursor/**'
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      sm_url:
+        description: "Optional SourceMod tar.gz URL (overrides built artifact)"
+        required: false
+        default: ""
+      apply_srcds_patch:
+        description: "Apply bruno_args srcds_patch (1/0)"
+        required: false
+        default: "1"
+
+concurrency:
+  group: test-server-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MM_URL: https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz
+  SRCDS_PATCH_URL: https://github.com/fmu1337/sourcemod-css34/raw/bufferfix/srcds_patch%20(1).rar
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y \
+            curl g++-9-multilib gcc-9-multilib git \
+            lib32stdc++-9-dev lib32stdc++6 lib32z1-dev \
+            libc6-dev-i386 libstdc++-9-dev linux-libc-dev \
+            python3 python3-pip
+
+      - name: Build SourceMod for CS:S v34
+        if: ${{ github.event.inputs.sm_url == '' || github.event.inputs.sm_url == null }}
+        env:
+          SKIP_APT_INSTALL: 1
+          CC: gcc-9
+          CXX: g++-9
+          SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
+          SOURCEMOD_GIT_REV: "6572"
+        run: |
+          export WDIR="$PWD"
+          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
+            builder/prepare-package.sh builder/patches/*.sh
+          builder/run/linux.sh
+
+      - name: Download external SourceMod package
+        if: ${{ github.event.inputs.sm_url != '' && github.event.inputs.sm_url != null }}
+        run: |
+          mkdir -p packages
+          curl -fL --retry 5 -o packages/sourcemod-external-css34-linux.tar.gz \
+            "${{ github.event.inputs.sm_url }}"
+
+      - name: Upload SourceMod package
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages/sourcemod-*-css34-linux.tar.gz
+          if-no-files-found: error
+
+  prepare-server:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install extract tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl unzip unrar
+
+      - name: Fetch CS:S v34 server + extract srcds_patch
+        env:
+          SERVER_DIR: ${{ github.workspace }}/.ci-server
+          CACHE_DIR: ${{ github.workspace }}/.ci-cache
+          APPLY_SRCDS_PATCH: ${{ github.event.inputs.apply_srcds_patch || '1' }}
+        run: |
+          chmod +x testing/scripts/*.sh
+          testing/scripts/fetch-server.sh
+          testing/scripts/apply-valve-rc-fix.sh
+          if [[ "${APPLY_SRCDS_PATCH}" == "1" ]]; then
+            testing/scripts/apply-srcds-patch.sh
+          fi
+          # Drop huge unused maps to keep artifact smaller; keep de_dust2 only.
+          find .ci-server/cstrike/maps -type f ! -name 'de_dust2*' -delete || true
+          # platform/hl2 materials still needed; leave them.
+
+      - name: Pack server tree
+        run: |
+          tar -C .ci-server -czf css34-server.tar.gz .
+          ls -lh css34-server.tar.gz
+
+      - name: Upload server tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: css34-server-tree
+          path: css34-server.tar.gz
+          retention-days: 3
+
+  test-debian:
+    needs: [build-linux, prepare-server]
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - debian:8
+          - debian:9
+          - debian:10
+          - debian:11
+          - debian:12
+          - debian:13
+          - debian:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SourceMod package
+        uses: actions/download-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Smoke test in ${{ matrix.image }}
+        env:
+          IMAGE: ${{ matrix.image }}
+          MM_URL: ${{ env.MM_URL }}
+        run: |
+          set -euo pipefail
+          SM_PKG="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          chmod +x testing/scripts/*.sh
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e SM_PACKAGE="/workspace/${SM_PKG}" \
+            -e MM_URL \
+            -e TIMEOUT_SECS=150 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/install-addons.sh
+              testing/scripts/smoke-test.sh
+            '
+
+  test-centos:
+    needs: [build-linux, prepare-server]
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - centos:7
+          - rockylinux:8
+          - rockylinux:9
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SourceMod package
+        uses: actions/download-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Smoke test in ${{ matrix.image }}
+        env:
+          IMAGE: ${{ matrix.image }}
+          MM_URL: ${{ env.MM_URL }}
+        run: |
+          set -euo pipefail
+          SM_PKG="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          chmod +x testing/scripts/*.sh
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e SM_PACKAGE="/workspace/${SM_PKG}" \
+            -e MM_URL \
+            -e TIMEOUT_SECS=150 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/install-addons.sh
+              testing/scripts/smoke-test.sh
+            '
