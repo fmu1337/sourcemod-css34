@@ -43,6 +43,8 @@ cd "$BUILD_DIR"
 curl -fsSL -o gcc-9_9.3.0.orig.tar.gz "$ARCHIVE/gcc-9_9.3.0.orig.tar.gz"
 tar -xzf gcc-9_9.3.0.orig.tar.gz
 cd gcc-9-9.3.0
+tar -xJf gcc-9.3.0.tar.xz
+cd gcc-9.3.0
 
 mkdir -p build
 cd build
