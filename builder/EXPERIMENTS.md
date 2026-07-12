@@ -30,9 +30,11 @@
 
 ### Implementation
 
-**Scripts created:**
+**Scripts:**
 - `builder/patches/apply-sourcemod-exp7.sh` — variants: `baseline`, `sections`, `gc`, `symbolic`, `full`
-- `builder/run/exp7-linker-flags.sh` — wrapper to run variants via Docker trusty
+- `builder/run/exp7-linker-flags.sh` — sets `EXP7_ENABLED=1` and runs trusty Docker
+- `linux-repro.sh` — calls `apply-sourcemod-exp7.sh` when `EXP7_ENABLED=1`
+- `builder/docker/trusty/run.sh` — forwards `EXP7_*` env vars into the container
 
 **Usage:**
 ```bash
