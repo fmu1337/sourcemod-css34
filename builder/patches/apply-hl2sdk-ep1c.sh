@@ -285,6 +285,16 @@ if [ -f "$math_base_h" ] && grep -q 'FORCEINLINE_TEMPLATE void swap( T& x, T& y 
 // Swap template removed for CSS34 gcc compatibility (conflicts with std::swap).' "$math_base_h"
 fi
 
+# CS:S v34 exposes ServerGameDLL006 (same as alliedmodders episode1). ep1c still ships 005.
+eiface="$sdk_dir/public/eiface.h"
+if [ -f "$eiface" ] && grep -q 'INTERFACEVERSION_SERVERGAMEDLL.*"ServerGameDLL005"' "$eiface"; then
+  if ! grep -q 'INTERFACEVERSION_SERVERGAMEDLL_VERSION_5' "$eiface"; then
+    sed -i 's|#define INTERFACEVERSION_SERVERGAMEDLL_VERSION_4\t"ServerGameDLL004"|#define INTERFACEVERSION_SERVERGAMEDLL_VERSION_4\t"ServerGameDLL004"\n#define INTERFACEVERSION_SERVERGAMEDLL_VERSION_5\t"ServerGameDLL005"|' "$eiface"
+  fi
+  sed -i 's|#define INTERFACEVERSION_SERVERGAMEDLL\t\t\t\t"ServerGameDLL005"|#define INTERFACEVERSION_SERVERGAMEDLL\t\t\t\t"ServerGameDLL006"|' "$eiface"
+  echo "==> Bumped INTERFACEVERSION_SERVERGAMEDLL to ServerGameDLL006"
+fi
+
 # Link against real game tier0/vstdlib so DT_NEEDED is recorded (--as-needed drops empty stubs).
 # Prefer HL2SDK_EPISODE1_LINUX_SDK (alliedmodders episode1 ships the libs); fall back to stubs only as last resort.
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then

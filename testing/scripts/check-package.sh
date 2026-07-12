@@ -52,13 +52,54 @@ for lib in tier0_i486.so vstdlib_i486.so; do
   fi
 done
 
-if nm -D "${CORE_SO}" 2>/dev/null | grep -q ' U GetCVarIF$'; then
+echo "==> Checking ConVar is embedded from static tier1 (not imported from vstdlib)"
+# Link order must put tier1_i486.a before vstdlib; otherwise FindCommand hangs on a
+# circular engine cvar list. rom4s embeds these as T/B.
+# Avoid `nm | grep -q` under pipefail (SIGPIPE from nm makes the pipeline fail).
+core_dynsyms="$(nm -D "${CORE_SO}" 2>/dev/null || true)"
+if printf '%s\n' "${core_dynsyms}" | grep -F ' T _ZN6ConVarC1EPKcS1_i' >/dev/null; then
+  echo "OK: ConVar ctor is defined locally (static tier1)"
+else
+  echo "FAIL: ConVar ctor not embedded — likely linked from vstdlib (hang risk)" >&2
+  printf '%s\n' "${core_dynsyms}" | grep 'ConVarC1' || true
+  fail=1
+fi
+if printf '%s\n' "${core_dynsyms}" | grep -F ' B _ZN14ConCommandBase18s_pConCommandBasesE' >/dev/null; then
+  echo "OK: ConCommandBase::s_pConCommandBases is local"
+else
+  echo "FAIL: missing local s_pConCommandBases" >&2
+  fail=1
+fi
+
+if printf '%s\n' "${core_dynsyms}" | grep -E ' U GetCVarIF$' >/dev/null; then
   echo "OK: GetCVarIF is an undefined ref (resolved via vstdlib at runtime)"
-elif nm -D "${CORE_SO}" 2>/dev/null | grep -q 'GetCVarIF'; then
+elif printf '%s\n' "${core_dynsyms}" | grep -F 'GetCVarIF' >/dev/null; then
   echo "OK: GetCVarIF present in dynamic symbol table"
-  nm -D "${CORE_SO}" 2>/dev/null | grep GetCVarIF || true
+  printf '%s\n' "${core_dynsyms}" | grep GetCVarIF || true
 else
   echo "WARN: GetCVarIF not found in dynamic symbols (may still be fine if unused)"
+fi
+
+echo "==> Checking engine interface strings (css34 expects EP1, not OB CSS)"
+# Avoid `strings | grep -q` under `set -o pipefail` (SIGPIPE makes the pipeline "fail").
+iface_strings="$(strings "${CORE_SO}" 2>/dev/null || true)"
+if printf '%s\n' "${iface_strings}" | grep -F 'ServerGameDLL006' >/dev/null; then
+  echo "OK: ServerGameDLL006 present"
+else
+  echo "FAIL: sourcemod.1.ep1.so missing ServerGameDLL006 (ep1c/SDK mismatch)" >&2
+  fail=1
+fi
+if printf '%s\n' "${iface_strings}" | grep -F 'VEngineServer023' >/dev/null; then
+  echo "FAIL: sourcemod.1.ep1.so still embeds VEngineServer023 (SE_CSS shim; css34 MM needs EP1 path)" >&2
+  fail=1
+else
+  echo "OK: no VEngineServer023 shim"
+fi
+if printf '%s\n' "${iface_strings}" | grep -F 'VEngineServer021' >/dev/null; then
+  echo "OK: VEngineServer021 present"
+else
+  echo "FAIL: missing VEngineServer021" >&2
+  fail=1
 fi
 
 echo "==> Checking GLIBC requirements (css34 targets old distros)"

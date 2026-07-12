@@ -79,29 +79,29 @@ CONF="$(cd "$(dirname "$0")/.." && pwd)/clang9.conf"
 source "$CONF"
 
 use_m32=0
-compile_only=0
+link_stage=1
 for arg in "$@"; do
-  if [ "$arg" = "-m32" ]; then
-    use_m32=1
-  elif [ "$arg" = "-c" ]; then
-    compile_only=1
-  fi
+  case "$arg" in
+    -m32) use_m32=1 ;;
+    -c|-E|-S|-M|-MM|-MD|-MMD|-H) link_stage=0 ;;
+  esac
 done
 
 extra=()
 if [ "$use_m32" -eq 1 ]; then
+  # Host clang defaults to the newest GCC install (e.g. 13/14) whose 32-bit
+  # libstdc++ headers are often missing. Force gcc-9 multilib headers via
+  # -nostdinc++ so include_next <fenv.h> resolves to the C library header.
   extra+=(
-    -stdlib=libstdc++
+    -nostdinc++
+    -isystem /usr/include/c++/9
+    -isystem "$CPP32_ISYSTEM"
+    -isystem /usr/include/c++/9/backward
   )
-  if [ "$compile_only" -eq 1 ]; then
-    extra+=(
-      -isystem /usr/include/c++/9
-      -isystem "$CPP32_ISYSTEM"
-    )
-  else
+  if [ "$link_stage" -eq 1 ]; then
     extra+=(-L"$GCC_INSTALL_DIR/32")
   fi
-elif [ "$compile_only" -eq 0 ]; then
+elif [ "$link_stage" -eq 1 ]; then
   extra+=(-L"$GCC_INSTALL_DIR")
 fi
 
@@ -128,8 +128,10 @@ if ! clang++-9 -x c++ - <<<'int main(){return 0;}' -o /dev/null 2>/dev/null; the
   exit 1
 fi
 
-if ! echo '#include <cstdlib>' | clang++-9 -m32 -x c++ - -c -o /dev/null 2>/dev/null; then
-  echo "clang++-9 failed to compile a 32-bit C++ test translation unit." >&2
+if ! echo '#include <cstdlib>
+#include <cfenv>
+int main(){return fegetround();}' | clang++-9 -m32 -x c++ - -c -o /dev/null 2>/dev/null; then
+  echo "clang++-9 failed to compile a 32-bit C++ test translation unit (fenv/libstdc++)." >&2
   exit 1
 fi
 

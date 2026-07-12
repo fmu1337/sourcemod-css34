@@ -62,30 +62,31 @@ cleanup() {
 trap cleanup EXIT
 
 success=0
+srcds_alive=1
 for ((i=1; i<=TIMEOUT_SECS; i++)); do
+  if ! kill -0 "${srcds_pid}" 2>/dev/null; then
+    echo "srcds exited early at t=${i}s"
+    srcds_alive=0
+    break
+  fi
   if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
     if grep -Eiq 'SourceMod log file session started.*Version' "${SM_LOG_DIR}"/L*.log \
       && grep -Eiq 'Mapchange to' "${SM_LOG_DIR}"/L*.log; then
-      echo "Success markers found at t=${i}s"
+      # Extensions register hooks after SM session start; wait briefly and
+      # require the process to still be alive so post-load SIGSEGVs fail CI.
+      sleep 5
+      if ! kill -0 "${srcds_pid}" 2>/dev/null; then
+        echo "srcds died shortly after SM markers (likely extension-load crash)"
+        srcds_alive=0
+        break
+      fi
+      echo "Success markers found at t=${i}s (srcds still alive)"
       success=1
       break
     fi
   fi
-  if ! kill -0 "${srcds_pid}" 2>/dev/null; then
-    echo "srcds exited early at t=${i}s"
-    break
-  fi
   sleep 1
 done
-
-# Final pass in case the process died right after writing the SM log.
-if [[ "${success}" -ne 1 ]] && compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
-  if grep -Eiq 'SourceMod log file session started.*Version' "${SM_LOG_DIR}"/L*.log \
-    && grep -Eiq 'Mapchange to' "${SM_LOG_DIR}"/L*.log; then
-    echo "Success markers found after process exit"
-    success=1
-  fi
-fi
 
 cleanup
 trap - EXIT
@@ -133,11 +134,18 @@ require_grep_glob "${SM_LOG_DIR}/L*.log" 'SourceMod log file session started' "S
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'Version "' "SourceMod version recorded"
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'Mapchange to' "SourceMod saw mapchange"
 
-if grep -Eiq 'Segmentation fault|SIGSEGV' "${LOG_FILE}"; then
-  echo "FAIL: segfault in console log" >&2
+if [[ "${srcds_alive}" -ne 1 ]]; then
+  echo "FAIL: srcds was not alive after SM load markers" >&2
   fail=1
 else
-  echo "OK: absent segfault in console log"
+  echo "OK: srcds stayed alive after SM load"
+fi
+
+if grep -Eiq 'Segmentation fault|SIGSEGV|Aborted|SIGABRT' "${LOG_FILE}"; then
+  echo "FAIL: crash marker in console log" >&2
+  fail=1
+else
+  echo "OK: absent crash marker in console log"
 fi
 
 unknown_count="$(grep -c 'Unknown command' "${LOG_FILE}" || true)"

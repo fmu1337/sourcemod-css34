@@ -71,6 +71,7 @@ fi
 
 echo "==> Fetching Metamod:Source"
 clone_repo "mmsource-1.10" "https://github.com/alliedmodders/metamod-source" "1.10-dev"
+MMS_DIR="$DEPS/mmsource-1.10" "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/mmsource-1.10"
 
 echo "==> Fetching HL2SDK episode1"
 rm -rf "$DEPS/hl2sdk-episode1"
