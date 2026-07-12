@@ -295,6 +295,151 @@ if [ -f "$eiface" ] && grep -q 'INTERFACEVERSION_SERVERGAMEDLL.*"ServerGameDLL00
   echo "==> Bumped INTERFACEVERSION_SERVERGAMEDLL to ServerGameDLL006"
 fi
 
+# CS:S v34 engine actually has QueryCvar APIs (StartQueryCvarValue /
+# OnQueryCvarValueFinished) matching alliedmodders episode1. Stock hl2sdk-ep1
+# omits them, so SE_EPISODEONE SourceHook decls fail to compile and SE_CSS
+# builds skip the hooks — both leave sourcemod.1.ep1.so ABI-mismatched vs
+# rom4s and crash metamod when engine extensions register hooks.
+SDK_DIR="$sdk_dir" python3 - <<'PY'
+from pathlib import Path
+import os
+
+sdk = Path(os.environ['SDK_DIR'])
+plugin = sdk / 'public/engine/iserverplugin.h'
+eiface = sdk / 'public/eiface.h'
+
+if plugin.exists():
+    text = plugin.read_text(encoding='latin-1')
+    if 'QueryCvarCookie_t' not in text:
+        old = '''} PLUGIN_RESULT;
+
+
+#define INTERFACEVERSION_ISERVERPLUGINCALLBACKS\t"ISERVERPLUGINCALLBACKS001"
+'''
+        new = '''} PLUGIN_RESULT;
+
+typedef enum
+{
+\teQueryCvarValueStatus_ValueIntact=0,\t// It got the value fine.
+\teQueryCvarValueStatus_CvarNotFound=1,
+\teQueryCvarValueStatus_NotACvar=2,\t\t// There's a ConCommand, but it's not a ConVar.
+\teQueryCvarValueStatus_CvarProtected=3\t// The cvar was marked with FCVAR_SERVER_CAN_NOT_QUERY, so the server is not allowed to have its value.
+} EQueryCvarValueStatus;
+
+typedef int QueryCvarCookie_t;
+
+#define InvalidQueryCvarCookie -1
+#define INTERFACEVERSION_ISERVERPLUGINCALLBACKS_VERSION_1\t"ISERVERPLUGINCALLBACKS001"
+#define INTERFACEVERSION_ISERVERPLUGINCALLBACKS\t\t\t\t"ISERVERPLUGINCALLBACKS002"
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate ISERVERPLUGINCALLBACKS version marker in iserverplugin.h')
+        text = text.replace(old, new, 1)
+
+        old = '''\t// A user has had their network id setup and validated 
+\tvirtual PLUGIN_RESULT\tNetworkIDValidated( const char *pszUserName, const char *pszNetworkID ) = 0;
+};
+'''
+        new = '''\t// A user has had their network id setup and validated 
+\tvirtual PLUGIN_RESULT\tNetworkIDValidated( const char *pszUserName, const char *pszNetworkID ) = 0;
+\t
+\t// This is called when a query from IServerPluginHelpers::StartQueryCvarValue is finished.
+\t// iCookie is the value returned by IServerPluginHelpers::StartQueryCvarValue.
+\t// Added with version 2 of the interface.
+\tvirtual void OnQueryCvarValueFinished( QueryCvarCookie_t iCookie, edict_t *pPlayerEntity, EQueryCvarValueStatus eStatus, const char *pCvarName, const char *pCvarValue )
+\t{
+\t}
+};
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate NetworkIDValidated tail in iserverplugin.h')
+        text = text.replace(old, new, 1)
+
+        old = '''\tvirtual void CreateMessage( edict_t *pEntity, DIALOG_TYPE type, KeyValues *data, IServerPluginCallbacks *plugin ) = 0;
+\tvirtual void ClientCommand( edict_t *pEntity, const char *cmd ) = 0;
+};
+'''
+        new = '''\tvirtual void CreateMessage( edict_t *pEntity, DIALOG_TYPE type, KeyValues *data, IServerPluginCallbacks *plugin ) = 0;
+\tvirtual void ClientCommand( edict_t *pEntity, const char *cmd ) = 0;
+
+\t// Call this to find out the value of a cvar on the client.
+\t//
+\t// It is an asynchronous query, and it will call IServerPluginCallbacks::OnQueryCvarValueFinished when
+\t// the value comes in from the client.
+\t//
+\t// Store the return value if you want to match this specific query to the OnQueryCvarValueFinished call.
+\t// Returns InvalidQueryCvarCookie if the entity is invalid.
+\tvirtual QueryCvarCookie_t StartQueryCvarValue( edict_t *pEntity, const char *pName ) = 0;
+};
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate IServerPluginHelpers tail in iserverplugin.h')
+        text = text.replace(old, new, 1)
+        plugin.write_text(text, encoding='latin-1')
+        print('==> Added QueryCvar APIs to iserverplugin.h (ISERVERPLUGINCALLBACKS002)')
+
+if eiface.exists():
+    text = eiface.read_text(encoding='latin-1')
+    changed = False
+    if 'virtual QueryCvarCookie_t StartQueryCvarValue(' not in text:
+        old = '''\tvirtual IChangeInfoAccessor *GetChangeAccessor( const edict_t *pEdict ) = 0;\t
+};
+'''
+        # tolerate both tab-space variants after GetChangeAccessor
+        if old not in text:
+            old = '''\tvirtual IChangeInfoAccessor *GetChangeAccessor( const edict_t *pEdict ) = 0;
+};
+'''
+        new = '''\tvirtual IChangeInfoAccessor *GetChangeAccessor( const edict_t *pEdict ) = 0;
+\t
+\t// Call this to find out the value of a cvar on the client.
+\t//
+\t// It is an asynchronous query, and it will call IServerGameDLL::OnQueryCvarValueFinished when 
+\t// the value comes in from the client.
+\t//
+\t// Store the return value if you want to match this specific query to the OnQueryCvarValueFinished call.
+\t// Returns InvalidQueryCvarCookie if the entity is invalid.
+\tvirtual QueryCvarCookie_t StartQueryCvarValue( edict_t *pPlayerEntity, const char *pName ) = 0;
+};
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate IVEngineServer GetChangeAccessor tail in eiface.h')
+        text = text.replace(old, new, 1)
+        changed = True
+
+    # Note: StartQueryCvarValue comments mention OnQueryCvarValueFinished — check the method itself.
+    if 'virtual void OnQueryCvarValueFinished(' not in text:
+        old = '''\tvirtual void\t\t\tGetSaveCommentEx( char *comment, int maxlength, float flMinutes, float flSeconds  ) = 0;
+#ifdef _XBOX
+\tvirtual void\t\t\tGetTitleName( const char *pMapName, char* pTitleBuff, int titleBuffSize ) = 0;
+#endif
+};
+'''
+        new = '''\tvirtual void\t\t\tGetSaveCommentEx( char *comment, int maxlength, float flMinutes, float flSeconds  ) = 0;
+#ifdef _XBOX
+\tvirtual void\t\t\tGetTitleName( const char *pMapName, char* pTitleBuff, int titleBuffSize ) = 0;
+#endif
+
+\t// * This function is new with version 6 of the interface.
+\t//
+\t// This is called when a query from IVEngineServer::StartQueryCvarValue is finished.
+\t// iCookie is the value returned by IVEngineServer::StartQueryCvarValue.
+\t// Added with version 2 of the interface.
+\tvirtual void OnQueryCvarValueFinished( QueryCvarCookie_t iCookie, edict_t *pPlayerEntity, EQueryCvarValueStatus eStatus, const char *pCvarName, const char *pCvarValue )
+\t{
+\t}
+};
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate IServerGameDLL GetSaveCommentEx tail in eiface.h')
+        text = text.replace(old, new, 1)
+        changed = True
+
+    if changed:
+        eiface.write_text(text, encoding='latin-1')
+        print('==> Added QueryCvar APIs to eiface.h (ServerGameDLL006 / VEngineServer)')
+PY
+
 # Link against real game tier0/vstdlib so DT_NEEDED is recorded (--as-needed drops empty stubs).
 # Prefer HL2SDK_EPISODE1_LINUX_SDK (alliedmodders episode1 ships the libs); fall back to stubs only as last resort.
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then

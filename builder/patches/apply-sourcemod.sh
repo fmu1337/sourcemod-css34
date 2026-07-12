@@ -246,6 +246,22 @@ if 'css34: static tier1 BEFORE shared vstdlib' not in text:
 
 path.write_text(text)
 
+# css34: force GAMEFIX "1.ep1" for the ep1 SDK binary (SE_EPISODEONE would
+# otherwise bake "2.ep1" and load the wrong engine extension set).
+text = path.read_text()
+marker = "    compiler.defines += ['SOURCE_ENGINE=' + sdk.code]"
+insert = """    compiler.defines += ['SOURCE_ENGINE=' + sdk.code]
+    # css34: sourcemod.1.ep1.so must advertise gamesuffix 1.ep1
+    if sdk.name == 'ep1':
+      compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']"""
+if 'SM_CSS34_GAMEFIX_1_EP1' in text:
+    print('==> SM_CSS34_GAMEFIX_1_EP1 already in AMBuildScript')
+elif marker in text:
+    path.write_text(text.replace(marker, insert, 1))
+    print('==> Added SM_CSS34_GAMEFIX_1_EP1 define for ep1 SDK')
+else:
+    raise SystemExit('Failed to locate SOURCE_ENGINE define in AMBuildScript')
+
 cstrike_ambuild = Path(sourcemod_dir) / 'extensions/cstrike/AMBuilder'
 if cstrike_ambuild.exists():
     cstrike_text = cstrike_ambuild.read_text()
