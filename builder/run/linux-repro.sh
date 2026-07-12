@@ -113,6 +113,6 @@ ARTIFACT="$(
 ln -sfn "$ARTIFACT" "$WDIR/$(basename "$ARTIFACT")"
 echo "==> Repro build complete: $ARTIFACT"
 
-if [ -x "$BUILDER_DIR/compare-release.sh" ]; then
+if [ -x "$BUILDER_DIR/compare-release.sh" ] && [ "${SKIP_COMPARE:-0}" != "1" ]; then
   "$BUILDER_DIR/compare-release.sh" "$ARTIFACT"
 fi

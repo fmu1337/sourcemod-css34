@@ -50,7 +50,11 @@ SDK_MODULES = [
 
 def read_comment_strings(path):
     try:
-        out = subprocess.check_output(['readelf', '-p', '.comment', str(path)], text=True, stderr=subprocess.DEVNULL)
+        out = subprocess.check_output(
+            ['readelf', '-p', '.comment', str(path)],
+            universal_newlines=True,
+            stderr=subprocess.DEVNULL,
+        )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return []
     strings = []

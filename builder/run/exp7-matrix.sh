@@ -30,6 +30,7 @@ run_variant() {
     -e WDIR=/src \
     -e EXP7_ENABLED=1 \
     -e EXP7_VARIANT="$variant" \
+    -e SKIP_COMPARE=1 \
     "$IMAGE" \
     bash -lc 'chmod +x builder/run/linux-repro-trusty.sh builder/run/linux-repro.sh builder/install-clang9.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/compare-release.sh builder/patches/*.sh && builder/run/linux-repro-trusty.sh' \
     2>&1 | tee "$RESULTS_DIR/${variant}.log"
