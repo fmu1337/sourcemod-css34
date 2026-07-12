@@ -28,6 +28,70 @@ create_minimal_symlinks() {
   fi
 }
 
+create_required_symlinks() {
+  create_minimal_symlinks
+  SDK_DIR="$sdk_dir" SCAN_ROOT="${EXP8_SYMLINK_SCAN_ROOT:-}" python3 - <<'PY'
+import os, re
+sdk = os.environ['SDK_DIR']
+public = os.path.join(sdk, 'public')
+scan_roots = [os.environ.get('SCAN_ROOT', '')]
+scan_roots = [p for p in scan_roots if p and os.path.isdir(p)]
+if not scan_roots:
+    scan_roots = [sdk]
+
+def find_case_insensitive(root, rel):
+    parts = rel.split('/')
+    cur = root
+    for part in parts:
+        if not os.path.isdir(cur):
+            return None
+        match = None
+        for entry in os.listdir(cur):
+            if entry.lower() == part.lower():
+                match = entry
+                break
+        if match is None:
+            return None
+        cur = os.path.join(cur, match)
+    return cur
+
+includes = set()
+for scan_root in scan_roots:
+    for dirpath, _, files in os.walk(scan_root):
+        for fname in files:
+            if not fname.endswith(('.h', '.cpp', '.c', '.inc')):
+                continue
+            path = os.path.join(dirpath, fname)
+            try:
+                text = open(path, errors='ignore').read()
+            except OSError:
+                continue
+            for match in re.finditer(r'#include\s*[<"]([^">]+)[">]', text):
+                inc = match.group(1)
+                if inc.startswith('../'):
+                    continue
+                if not any(c.isupper() for c in inc):
+                    continue
+                includes.add(inc)
+
+for inc in sorted(includes):
+    direct = os.path.join(public, inc)
+    if os.path.exists(direct):
+        continue
+    target = find_case_insensitive(public, inc)
+    if target is None:
+        target = find_case_insensitive(sdk, inc)
+    if target is None:
+        continue
+    os.makedirs(os.path.dirname(direct), exist_ok=True)
+    if os.path.lexists(direct):
+        continue
+    rel_target = os.path.relpath(target, os.path.dirname(direct))
+    os.symlink(rel_target, direct)
+    print('linked {} -> {}'.format(inc, target))
+PY
+}
+
 create_include_symlinks() {
   python3 - <<'PY'
 import os, re
@@ -83,10 +147,12 @@ PY
 }
 
 symlink_mode="${EXP8_SYMLINK_MODE:-full}"
-if [ "${SKIP_INCLUDE_SYMLINKS:-0}" = "1" ] || [ "$symlink_mode" = "minimal" ]; then
+if [ "${SKIP_INCLUDE_SYMLINKS:-0}" = "1" ]; then
   create_minimal_symlinks
+elif [ "$symlink_mode" = "minimal" ]; then
+  create_required_symlinks
 elif [ "$symlink_mode" = "none" ]; then
-  :
+  create_minimal_symlinks
 else
   create_minimal_symlinks
   SDK_DIR="$sdk_dir" create_include_symlinks

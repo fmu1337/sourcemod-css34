@@ -17,6 +17,7 @@ $DOCKER build -f builder/docker/trusty/Dockerfile -t "$IMAGE" .
 run_variant() {
   local variant="$1"
   local symlink_mode="full"
+  local variant_failed=0
   if [ "$variant" = "minimal-symlinks" ]; then
     symlink_mode="minimal"
   fi
@@ -28,6 +29,12 @@ run_variant() {
 
   sudo rm -rf "$ROOT/deps" "$ROOT/sourcemod/build"
 
+  # Scan SourceMod (not full SDK) for mixed-case includes when using minimal symlinks.
+  local scan_root_arg=()
+  if [ "$symlink_mode" = "minimal" ]; then
+    scan_root_arg=(-e EXP8_SYMLINK_SCAN_ROOT="$ROOT/sourcemod")
+  fi
+
   $DOCKER run --rm \
     -v "$ROOT:/src" \
     -w /src \
@@ -36,9 +43,15 @@ run_variant() {
     -e EXP8_VARIANT="$variant" \
     -e EXP8_SYMLINK_MODE="$symlink_mode" \
     -e SKIP_COMPARE=1 \
+    "${scan_root_arg[@]}" \
     "$IMAGE" \
     bash -lc 'chmod +x builder/run/linux-repro-trusty.sh builder/run/linux-repro.sh builder/install-clang9.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/compare-release.sh builder/patches/*.sh && builder/run/linux-repro-trusty.sh' \
-    2>&1 | tee "$RESULTS_DIR/${variant}.log"
+    2>&1 | tee "$RESULTS_DIR/${variant}.log" || variant_failed=1
+
+  if [ "$variant_failed" -ne 0 ]; then
+    echo "==> EXP8 variant $variant FAILED (see ${variant}.log)" >&2
+    return 0
+  fi
 
   local artifact
   artifact="$(ls -1 "$ROOT"/packages/sourcemod-*-css34-linux.tar.gz | tail -1)"
