@@ -48,7 +48,7 @@ SDK_MODULES = [
     'addons/sourcemod/extensions/game.cstrike.ext.2.ep1.so',
 ]
 
-def read_comment_strings(path: Path) -> list[str]:
+def read_comment_strings(path):
     try:
         out = subprocess.check_output(['readelf', '-p', '.comment', str(path)], text=True, stderr=subprocess.DEVNULL)
     except (subprocess.CalledProcessError, FileNotFoundError):

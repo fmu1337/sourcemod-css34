@@ -60,7 +60,7 @@ def inject_sections_flags(content: str) -> str:
         )
     raise SystemExit("Failed to locate cxxflags marker for EXP7 sections injection")
 
-def inject_link_flags(content: str, flags: list[str], comment: str) -> str:
+def inject_link_flags(content, flags, comment):
     if all(flag in content for flag in flags):
         return content
     if libstdcxx_anchor not in content:
