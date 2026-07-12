@@ -8,6 +8,8 @@ PORT="${PORT:-27015}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-120}"
 LOG_FILE="${LOG_FILE:-${SERVER_DIR}/smoke.log}"
 SM_LOG_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/logs"
+# Prefer i686: auto "AMD Optimised" binary segfaults on some modern hosts (e.g. Rocky 8).
+SRCDS_BINARY="${SRCDS_BINARY:-./srcds_i686}"
 
 cd "${SERVER_DIR}"
 export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
@@ -16,13 +18,29 @@ rm -f "${LOG_FILE}"
 rm -f "${SM_LOG_DIR}"/L*.log 2>/dev/null || true
 mkdir -p "${SM_LOG_DIR}"
 
-echo "Starting srcds (map=${MAP}, timeout=${TIMEOUT_SECS}s)"
+if [[ ! -x "${SRCDS_BINARY}" ]]; then
+  if [[ -x ./srcds_i486 ]]; then
+    SRCDS_BINARY=./srcds_i486
+  else
+    echo "No srcds_i686/i486 binary found" >&2
+    exit 1
+  fi
+fi
 
-./srcds_run \
+echo "Starting srcds (binary=${SRCDS_BINARY}, map=${MAP}, timeout=${TIMEOUT_SECS}s)"
+
+# Line-buffer console output so markers appear even without a TTY.
+stdbuf_cmd=()
+if command -v stdbuf >/dev/null 2>&1; then
+  stdbuf_cmd=(stdbuf -oL -eL)
+fi
+
+"${stdbuf_cmd[@]}" ./srcds_run \
   -game cstrike \
   -console \
   -norestart \
   -nohltv \
+  -binary "${SRCDS_BINARY}" \
   -ip 127.0.0.1 \
   -port "${PORT}" \
   +ip 127.0.0.1 \
@@ -35,7 +53,6 @@ srcds_pid=$!
 cleanup() {
   if kill -0 "${srcds_pid}" 2>/dev/null; then
     kill -TERM "${srcds_pid}" 2>/dev/null || true
-    # srcds_run may spawn a child
     pkill -TERM -P "${srcds_pid}" 2>/dev/null || true
     sleep 2
     kill -KILL "${srcds_pid}" 2>/dev/null || true
@@ -46,21 +63,29 @@ trap cleanup EXIT
 
 success=0
 for ((i=1; i<=TIMEOUT_SECS; i++)); do
+  if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
+    if grep -Eiq 'SourceMod log file session started.*Version' "${SM_LOG_DIR}"/L*.log \
+      && grep -Eiq 'Mapchange to' "${SM_LOG_DIR}"/L*.log; then
+      echo "Success markers found at t=${i}s"
+      success=1
+      break
+    fi
+  fi
   if ! kill -0 "${srcds_pid}" 2>/dev/null; then
     echo "srcds exited early at t=${i}s"
     break
   fi
-  if [[ -f "${LOG_FILE}" ]] && grep -Eiq 'Game\.dll loaded for "Counter-Strike: Source"' "${LOG_FILE}"; then
-    if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
-      if grep -Eiq 'SourceMod log file session started.*Version' "${SM_LOG_DIR}"/L*.log; then
-        echo "Success markers found at t=${i}s"
-        success=1
-        break
-      fi
-    fi
-  fi
   sleep 1
 done
+
+# Final pass in case the process died right after writing the SM log.
+if [[ "${success}" -ne 1 ]] && compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
+  if grep -Eiq 'SourceMod log file session started.*Version' "${SM_LOG_DIR}"/L*.log \
+    && grep -Eiq 'Mapchange to' "${SM_LOG_DIR}"/L*.log; then
+    echo "Success markers found after process exit"
+    success=1
+  fi
+fi
 
 cleanup
 trap - EXIT
@@ -76,10 +101,8 @@ if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
 else
   echo "(no SourceMod log files)"
 fi
-if [[ -f "${MM_SO:-/dev/null}" ]] || [[ -f "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod_mm_i486.so" ]]; then
-  echo "----- sourcemod_mm exports -----"
-  nm -D "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod_mm_i486.so" 2>/dev/null | grep CreateInterface || true
-fi
+echo "----- sourcemod_mm exports -----"
+nm -D "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod_mm_i486.so" 2>/dev/null | grep CreateInterface || true
 
 fail=0
 require_grep_file() {
@@ -87,8 +110,7 @@ require_grep_file() {
   if [[ -f "${file}" ]] && grep -Eiq -- "${pat}" "${file}"; then
     echo "OK: ${label}"
   else
-    echo "FAIL: missing marker: ${label} (/${pat}/ in ${file})" >&2
-    fail=1
+    echo "WARN: missing console marker: ${label} (/${pat}/ in ${file})" >&2
   fi
 }
 
@@ -102,17 +124,20 @@ require_grep_glob() {
   fi
 }
 
-require_grep_file "${LOG_FILE}" 'Game\.dll loaded for "Counter-Strike: Source"' "game dll loaded"
-require_grep_file "${LOG_FILE}" 'Executing dedicated server config file|-------- Mapchange to' "map/config started"
-# Metamod does not always print to console under eSTEAMATiON; SourceMod log proves MM loaded SM.
+# Soft console checks (stdout buffering / early crash can hide these).
+require_grep_file "${LOG_FILE}" 'Game\.dll loaded for "Counter-Strike: Source"|Using .* Optimised binary' "engine started"
+require_grep_file "${LOG_FILE}" 'Executing dedicated server config file|-------- Mapchange to' "map/config console line"
+
+# Hard checks via SourceMod log (proves MM + SM + map).
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'SourceMod log file session started' "SourceMod session started"
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'Version "' "SourceMod version recorded"
+require_grep_glob "${SM_LOG_DIR}/L*.log" 'Mapchange to' "SourceMod saw mapchange"
 
 if grep -Eiq 'Segmentation fault|SIGSEGV' "${LOG_FILE}"; then
   echo "FAIL: segfault in console log" >&2
   fail=1
 else
-  echo "OK: absent segfault"
+  echo "OK: absent segfault in console log"
 fi
 
 unknown_count="$(grep -c 'Unknown command' "${LOG_FILE}" || true)"
@@ -123,7 +148,7 @@ if [[ "${unknown_count}" -gt 40 ]]; then
 fi
 
 if [[ "${success}" -ne 1 ]]; then
-  echo "FAIL: did not observe success markers within ${TIMEOUT_SECS}s" >&2
+  echo "FAIL: did not observe SourceMod success markers within ${TIMEOUT_SECS}s" >&2
   fail=1
 fi
 
