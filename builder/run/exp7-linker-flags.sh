@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Experiment #7: Linker Flags Investigation
+# Experiment #7: Linker Flags for Byte-Match
 # 
 # Tests whether aggressive linker optimizations used by the original builder
 # can reduce .text section size on SDK-heavy modules (sdkhooks, sdktools, etc.).
