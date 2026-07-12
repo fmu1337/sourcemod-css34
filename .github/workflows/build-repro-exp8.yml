@@ -1,0 +1,35 @@
+name: Build (repro exp8)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'cursor/repro-byte-match-2341'
+    paths:
+      - 'builder/run/exp8-matrix.sh'
+      - 'builder/patches/apply-sourcemod-exp8.sh'
+      - 'builder/patches/apply-hl2sdk-ep1c.sh'
+      - 'builder/checkout-deps.sh'
+      - '.github/workflows/build-repro-exp8.yml'
+
+jobs:
+  exp8-matrix:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run EXP8 SDK matrix
+        run: |
+          chmod +x builder/run/exp8-matrix.sh
+          builder/run/exp8-matrix.sh
+
+      - name: Upload EXP8 results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exp8-results
+          path: builder/exp8-results/

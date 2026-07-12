@@ -17,7 +17,7 @@ mkdir -p "$orig_dir" "$built_dir"
 tar -xzf "$orig_tar" -C "$orig_dir"
 tar -xzf "$artifact" -C "$built_dir"
 
-ORIG_DIR="$orig_dir" BUILT_DIR="$built_dir" EXP7_VARIANT="${EXP7_VARIANT:-}" python3 - <<'PY'
+ORIG_DIR="$orig_dir" BUILT_DIR="$built_dir" EXP7_VARIANT="${EXP7_VARIANT:-}" EXP8_VARIANT="${EXP8_VARIANT:-}" python3 - <<'PY'
 import hashlib
 import os
 import re
@@ -160,9 +160,9 @@ for rel in SIMPLE_EXTENSIONS:
 
 print(f'\n.comment: {comment_match} exact-match, {comment_diff} differ (of {len(SIMPLE_EXTENSIONS)} simple extensions)')
 
-variant = os.environ.get('EXP7_VARIANT', '')
+variant = os.environ.get('EXP7_VARIANT', '') or os.environ.get('EXP8_VARIANT', '')
 if variant:
-    print(f'\n=== SDK module sizes (EXP7_VARIANT={variant}) ===')
+    print(f'\n=== SDK module sizes (variant={variant}) ===')
     for rel in SDK_MODULES:
         o = orig / rel
         b = built / rel

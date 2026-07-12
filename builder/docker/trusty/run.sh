@@ -20,6 +20,9 @@ $DOCKER run --rm \
   -e WDIR=/src \
   -e EXP7_ENABLED="${EXP7_ENABLED:-0}" \
   -e EXP7_VARIANT="${EXP7_VARIANT:-baseline}" \
+  -e EXP8_ENABLED="${EXP8_ENABLED:-0}" \
+  -e EXP8_VARIANT="${EXP8_VARIANT:-baseline}" \
+  -e EXP8_SYMLINK_MODE="${EXP8_SYMLINK_MODE:-full}" \
   "$IMAGE" \
   bash -lc 'chmod +x builder/run/linux-repro-trusty.sh builder/run/linux-repro.sh builder/install-clang9.sh builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh builder/compare-release.sh builder/patches/*.sh && builder/run/linux-repro-trusty.sh'
 

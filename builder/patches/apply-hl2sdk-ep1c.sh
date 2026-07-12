@@ -13,6 +13,21 @@ if [ ! -e "$sdk_dir/public/SoundEmitterSystem" ] && [ -d "$sdk_dir/public/sounde
   ln -s soundemittersystem "$sdk_dir/public/SoundEmitterSystem"
 fi
 
+create_minimal_symlinks() {
+  local appframework="$sdk_dir/public/appframework"
+  if [ -d "$appframework" ]; then
+    if [ -f "$appframework/iappsystem.h" ] && [ ! -e "$appframework/IAppSystem.h" ]; then
+      ln -sfn iappsystem.h "$appframework/IAppSystem.h"
+    fi
+    if [ -f "$appframework/iappsystemgroup.h" ] && [ ! -e "$appframework/IAppSystemGroup.h" ]; then
+      ln -sfn iappsystemgroup.h "$appframework/IAppSystemGroup.h"
+    fi
+    if [ -f "$appframework/appframework.h" ] && [ ! -e "$appframework/AppFramework.h" ]; then
+      ln -sfn appframework.h "$appframework/AppFramework.h"
+    fi
+  fi
+}
+
 create_include_symlinks() {
   python3 - <<'PY'
 import os, re
@@ -67,7 +82,13 @@ for dirpath, _, files in os.walk(sdk):
 PY
 }
 
-if [ "${SKIP_INCLUDE_SYMLINKS:-0}" != "1" ]; then
+symlink_mode="${EXP8_SYMLINK_MODE:-full}"
+if [ "${SKIP_INCLUDE_SYMLINKS:-0}" = "1" ] || [ "$symlink_mode" = "minimal" ]; then
+  create_minimal_symlinks
+elif [ "$symlink_mode" = "none" ]; then
+  :
+else
+  create_minimal_symlinks
   SDK_DIR="$sdk_dir" create_include_symlinks
 fi
 

@@ -55,6 +55,11 @@ if [ "${EXP7_ENABLED:-0}" = "1" ]; then
   echo "    EXP7_ENABLED: 1"
   echo "    EXP7_VARIANT: ${EXP7_VARIANT:-baseline}"
 fi
+if [ "${EXP8_ENABLED:-0}" = "1" ]; then
+  echo "    EXP8_ENABLED: 1"
+  echo "    EXP8_VARIANT: ${EXP8_VARIANT:-baseline}"
+  echo "    EXP8_SYMLINK_MODE: ${EXP8_SYMLINK_MODE:-full}"
+fi
 
 echo "==> Initializing SourceMod submodule"
 cd "$WDIR"
@@ -74,6 +79,8 @@ python3 -m pip install --user --force-reinstall "$DEPS_DIR/ambuild"
 echo "==> Applying CS:S v34 compatibility patches"
 if [ "${EXP7_ENABLED:-0}" = "1" ]; then
   "$BUILDER_DIR/patches/apply-sourcemod-exp7.sh" "$SOURCEMOD_DIR"
+elif [ "${EXP8_ENABLED:-0}" = "1" ]; then
+  "$BUILDER_DIR/patches/apply-sourcemod-exp8.sh" "$SOURCEMOD_DIR"
 else
   "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
 fi

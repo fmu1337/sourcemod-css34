@@ -131,6 +131,7 @@ else
   git clone --depth 1 https://github.com/rom4s/hl2sdk-ep1c "$DEPS/hl2sdk-ep1"
 fi
 LINUX_SDK_STUB_CC="${LINUX_SDK_STUB_CC:-gcc}" \
+EXP8_SYMLINK_MODE="${EXP8_SYMLINK_MODE:-full}" \
 SKIP_INCLUDE_SYMLINKS="${REPRO_SKIP_INCLUDE_SYMLINKS:-0}" \
   "$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS/hl2sdk-ep1"
 
