@@ -37,7 +37,7 @@ if ! command -v expect >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Starting srcds (binary=${SRCDS_BINARY}, map=${MAP}, port=${PORT}, args=-nomaster -localcser, timeout=${TIMEOUT_SECS}s)"
+echo "Starting srcds (binary=${SRCDS_BINARY}, map=${MAP}, port=${PORT}, args=-nomaster -localcser -tickrate 66, timeout=${TIMEOUT_SECS}s)"
 
 export SERVER_DIR MAP PORT SRCDS_BINARY CONSOLE_PROBE_LOG
 export CONSOLE_PROBE_TIMEOUT="${TIMEOUT_SECS}"

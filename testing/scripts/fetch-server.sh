@@ -60,12 +60,13 @@ writeid
 writeip
 EOF
 
-# Use stock valve.rc from the server zip by default. On modern glibc hosts the
-# original stuffcmds path can corrupt console input unless srcds_patch is applied;
-# valve-minimal.rc avoids that when running the unpatched binary.
+# Leave stock valve.rc from the server zip by default (matches a working Debian
+# setup). Optional overrides:
+#   APPLY_VALVE_RC=1        -> testing/configs/valve.rc (stuffcmds; use with srcds_patch)
+#   USE_MINIMAL_VALVE_RC=1  -> testing/configs/valve-minimal.rc
 if [[ "${APPLY_VALVE_RC:-0}" == "1" ]]; then
   cp -f "${ROOT}/testing/configs/valve.rc" "${SERVER_DIR}/cstrike/cfg/valve.rc"
-elif [[ "${USE_MINIMAL_VALVE_RC:-1}" == "1" ]]; then
+elif [[ "${USE_MINIMAL_VALVE_RC:-0}" == "1" ]]; then
   cp -f "${ROOT}/testing/configs/valve-minimal.rc" "${SERVER_DIR}/cstrike/cfg/valve.rc"
 fi
 

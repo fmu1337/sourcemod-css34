@@ -15,7 +15,7 @@ on:
       apply_srcds_patch:
         description: "Apply bruno_args srcds_patch (1/0)"
         required: false
-        default: "0"
+        default: "1"
 
 concurrency:
   group: test-server-${{ github.workflow }}-${{ github.ref }}
@@ -108,8 +108,8 @@ jobs:
         env:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
-          APPLY_SRCDS_PATCH: ${{ github.event.inputs.apply_srcds_patch || '0' }}
-          APPLY_VALVE_RC: ${{ github.event.inputs.apply_srcds_patch || '0' }}
+          APPLY_SRCDS_PATCH: ${{ github.event.inputs.apply_srcds_patch || '1' }}
+          APPLY_VALVE_RC: ${{ github.event.inputs.apply_srcds_patch || '1' }}
         run: |
           chmod +x testing/scripts/*.sh
           testing/scripts/fetch-server.sh

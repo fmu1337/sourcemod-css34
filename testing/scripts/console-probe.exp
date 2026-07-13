@@ -18,7 +18,7 @@ set env(LD_LIBRARY_PATH) ".:bin:$env(LD_LIBRARY_PATH)"
 
 # Match common v34 dedicated launch (see start.sh in the rom4s server zip).
 spawn ./srcds_run -game cstrike -console -norestart -nohltv -binary $binary \
-    -nomaster -localcser \
+    -nomaster -localcser -tickrate 66 \
     -ip 127.0.0.1 -port $port +ip 127.0.0.1 +sv_lan 1 +maxplayers 10 +map $map
 
 expect {
