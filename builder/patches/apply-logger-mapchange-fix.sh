@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # css34: always emit Mapchange log on first map (Logger::_UpdateFiles else-branch gap).
+#
+# Bisect: only sourcemod.logic.so differs between pass/fail (same built core).
+# Without this patch built logic completes LevelInit but never prints Mapchange to
+# console (smoke timeout). rom4s logic hits Logger's else-branch because an
+# earlier SMGlobalClass callback opens the daily log first (link/init order).
 set -euo pipefail
 
 sourcemod_dir="${1:?sourcemod directory required}"
