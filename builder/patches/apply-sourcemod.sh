@@ -929,7 +929,7 @@ text = path.read_text()
 
 logic_loop_new = """for arch in SM.archs:
   if builder.target.platform == 'linux':
-    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT trusty libstdc++4.8.
+    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT gcc-8 libstdc++.
     import shutil as _shutil
     import os as _os
     logic_cxx = builder.cxx.clone()
@@ -950,10 +950,10 @@ logic_loop_new = """for arch in SM.archs:
     if _sysroot and arch == 'x86':
       logic_cxx.cxxflags += [
         '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8/backward'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/8/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/8/backward'),
       ]
     for _flag in ('-lgcc_eh',):
       if _flag in logic_cxx.linkflags:
@@ -1002,7 +1002,7 @@ logic_loop_old_variants = [
     binary = SM.Library(builder, 'sourcemod.logic', arch)""",
     """for arch in SM.archs:
   if builder.target.platform == 'linux':
-    # css34: rom4s built logic with clang 10; clang-9 object code hangs in srcds.
+    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT trusty libstdc++4.8.
     import shutil as _shutil
     logic_cxx = builder.cxx.clone()
     _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
@@ -1025,7 +1025,7 @@ logic_loop_old_variants = [
     binary = SM.Library(builder, 'sourcemod.logic', arch)""",
 ]
 
-if 'SM_LOGIC_CXX_SYSROOT trusty libstdc++4.8' in text:
+if 'SM_LOGIC_CXX_SYSROOT gcc-8 libstdc++' in text:
     print('==> logic AMBuilder clang-10/sysroot already patched')
 else:
     replaced = False
@@ -1079,7 +1079,7 @@ else:
     print('==> Patched logic AMBuilder for rom4s-compatible logic.so')
 
 linux_block_new = """  if builder.target.platform == 'linux':
-    # css34: trusty libstdc++4.8 static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
+    # css34: gcc-8 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
     import os as _os
     for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++'):
       if flag in binary.compiler.linkflags:
@@ -1088,11 +1088,13 @@ linux_block_new = """  if builder.target.platform == 'linux':
     _stdcxx = None
     _sup = None
     if _sysroot:
-      _base = _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8')
-      _cand = _os.path.join(_base, 'libstdc++.a')
-      if _os.path.isfile(_cand):
-        _stdcxx = _cand
-        _sup = _os.path.join(_base, 'libsupc++.a')
+      for _ver in ('8', '4.8'):
+        _base = _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu', _ver)
+        _cand = _os.path.join(_base, 'libstdc++.a')
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_base, 'libsupc++.a')
+          break
     if _stdcxx is None:
       for _cand in (
           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
@@ -1185,7 +1187,7 @@ linux_block_old_variants = [
     ]""",
 ]
 
-if 'trusty libstdc++4.8 static when SM_LOGIC_CXX_SYSROOT set' in text:
+if 'gcc-8 libstdc++ static when SM_LOGIC_CXX_SYSROOT set' in text:
     print('==> logic AMBuilder link flags already patched')
 else:
     replaced = False
