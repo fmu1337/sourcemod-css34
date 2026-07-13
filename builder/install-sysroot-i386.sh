@@ -41,7 +41,8 @@ for deb in "$libstdcxx" "$lib32stdcxx" "$libgcc" "$lib32gcc"; do
   dpkg-deb -x "$deb" "$SYSROOT"
 done
 
-if [[ ! -f "$SYSROOT/usr/lib/gcc/i686-linux-gnu/8/libstdc++.a" ]]; then
+if [[ ! -f "$SYSROOT/usr/lib/gcc/x86_64-linux-gnu/8/32/libstdc++.a" \
+  && ! -f "$SYSROOT/usr/lib/gcc/i686-linux-gnu/8/libstdc++.a" ]]; then
   echo "buster gcc-8 libstdc++.a missing after sysroot install" >&2
   find "$SYSROOT/usr/lib/gcc" -name 'libstdc++.a' 2>/dev/null || true
   exit 1
@@ -54,4 +55,5 @@ EOF
 
 date -u > "$MARKER"
 echo "==> Logic sysroot ready: $SYSROOT" >&2
-ls -la "$SYSROOT/usr/lib/gcc/i686-linux-gnu/8/libstdc++.a" >&2
+ls -la "$SYSROOT/usr/lib/gcc/x86_64-linux-gnu/8/32/libstdc++.a" 2>/dev/null \
+  || ls -la "$SYSROOT/usr/lib/gcc/i686-linux-gnu/8/libstdc++.a" >&2

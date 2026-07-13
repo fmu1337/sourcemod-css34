@@ -951,6 +951,7 @@ logic_loop_new = """for arch in SM.archs:
       logic_cxx.cxxflags += [
         '-nostdinc++',
         '-isystem', _os.path.join(_sysroot, 'usr/include/c++/8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/8/32'),
         '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/8'),
         '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/8/i686-linux-gnu'),
         '-isystem', _os.path.join(_sysroot, 'usr/include/c++/8/backward'),
@@ -1004,9 +1005,14 @@ logic_loop_old_variants = [
   if builder.target.platform == 'linux':
     # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT trusty libstdc++4.8.
     import shutil as _shutil
+    import os as _os
     logic_cxx = builder.cxx.clone()
-    _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
-    _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
+    _deps = _os.environ.get('DEPS_DIR', '')
+    _clangpp = _os.path.join(_deps, 'clang-10/usrbin/clang++-10') if _deps else ''
+    _clang = _os.path.join(_deps, 'clang-10/usrbin/clang-10') if _deps else ''
+    if not _os.path.isfile(_clangpp):
+      _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
+      _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
     _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
     logic_cxx.cxx_argv = [_clangpp]
     logic_cxx.cc_argv = [_clang]
@@ -1014,6 +1020,15 @@ logic_loop_old_variants = [
     if arch == 'x86':
       logic_cxx.cflags += ['-m32']
       logic_cxx.linkflags += ['-m32']
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8/backward'),
+      ]
     for _flag in ('-lgcc_eh',):
       if _flag in logic_cxx.linkflags:
         logic_cxx.linkflags.remove(_flag)
@@ -1088,8 +1103,11 @@ linux_block_new = """  if builder.target.platform == 'linux':
     _stdcxx = None
     _sup = None
     if _sysroot:
-      for _ver in ('8', '4.8'):
-        _base = _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu', _ver)
+      for _base in (
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
+      ):
         _cand = _os.path.join(_base, 'libstdc++.a')
         if _os.path.isfile(_cand):
           _stdcxx = _cand
