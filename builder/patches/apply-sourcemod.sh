@@ -896,23 +896,22 @@ else:
     raise SystemExit('Failed to patch static-libstdc++ block for css34')
 PYLINK
 
-# bintools needs modern SourceHook ProtoInfo/CProtoInfoBuilder; css34 MM requires SH v4
-# ISourceHook ABI. Skip bintools until a dual ProtoInfo shim lands — core smoke does not need it.
+# bintools: modern ProtoInfo/CProtoInfoBuilder via sourcehook_pibuilder.h shim (see apply-mmsource-css34.sh).
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
 text = path.read_text()
-old = "  'extensions/bintools/AMBuilder',\n"
-new = (
+skipped = (
     "  # css34: bintools needs modern ProtoInfo; SH v4 headers omit sourcehook_pibuilder.h\n"
     "  # 'extensions/bintools/AMBuilder',\n"
 )
-if old in text:
-    path.write_text(text.replace(old, new, 1))
-    print('==> Skipping bintools extension under css34 SourceHook v4 headers')
-elif "css34: bintools needs modern ProtoInfo" in text:
-    print('==> bintools already skipped for css34')
+enabled = "  'extensions/bintools/AMBuilder',\n"
+if skipped in text:
+    path.write_text(text.replace(skipped, enabled, 1))
+    print('==> Re-enabled bintools extension (ProtoInfo shim installed in MMS sourcehook)')
+elif enabled in text:
+    print('==> bintools extension already enabled')
 else:
     raise SystemExit('Failed to locate bintools AMBuilder entry')
 PY
