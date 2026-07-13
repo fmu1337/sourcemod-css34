@@ -12,8 +12,8 @@
     "1.11-myarena-bundle": "https://bitbucket.org/fmu1337/danyas_dl/downloads/mms-1.11.0-1130_sourcemod-1.11.0-6522-css_v34-linux-up-git6541-10.05.2020-fix-gamedata-12.10.2020_1.zip"
   },
   "notes": [
-    "Primary CI smoke uses freshly built packages from this repo: MM 1.10.7-dev + SM 1.11.0.6572.",
-    "Legacy glibc jobs (Debian 8-10 / CentOS 7) still pull rom4s MM 1.10.6 + SM 6572 from the URLs above.",
+    "CI smoke uses only freshly built packages from this repo: MM 1.10.7-dev + SM 1.11.0.6572.",
+    "URLs above are for local comparison / historical reference; Test Server workflow does not download them.",
     "myarena bundles are zip overlays; install-addons.sh currently expects tar.gz for SM_URL/SM_PACKAGE."
   ]
 }

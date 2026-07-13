@@ -147,19 +147,49 @@ if compiler_flavor == 'clang' and supports_deprecated_non_prototype and '-Wno-de
     sp_script.write_text(sp_text)
 
 # css34: keep DT_NEEDED libpthread/librt on sourcepawn.jit.x86.so.
-# Default --as-needed drops them; on glibc < 2.34 (Debian 11) that leaves
-# pthread_key_create unresolved and Metamod fails to load sourcemod_mm.
+# Configure()'s cxx.postlink is NOT applied to Root.Library() clones when SM
+# embeds sourcepawn (link line has -lm/-static-libstdc++ but no -lpthread).
+# Without libpthread, Metamod fails on glibc < 2.34 (Debian 11):
+#   undefined symbol: pthread_key_create
+jit_ambuilder = Path(sourcemod_dir) / 'sourcepawn/vm/AMBuilder'
+jit_text = jit_ambuilder.read_text()
+jit_old = """dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
+dll.compiler.includes += Includes
+dll.compiler.linkflags[0:0] = [
+  libsourcepawn_a.binary,
+  SP.zlib[arch],
+]
+"""
+jit_new = """dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
+dll.compiler.includes += Includes
+dll.compiler.linkflags[0:0] = [
+  libsourcepawn_a.binary,
+  SP.zlib[arch],
+]
+# css34: force pthread/rt NEEDED (postlink from Configure does not reach this dll)
+if builder.target.platform == 'linux':
+  dll.compiler.linkflags += ['-Wl,--no-as-needed', '-lpthread', '-lrt']
+"""
+if "css34: force pthread/rt NEEDED (postlink from Configure" in jit_text:
+    print('==> sourcepawn.jit pthread/rt already patched')
+elif jit_old in jit_text:
+    jit_ambuilder.write_text(jit_text.replace(jit_old, jit_new, 1))
+    print('==> Patched sourcepawn vm/AMBuilder for pthread/rt DT_NEEDED on jit dll')
+else:
+    raise SystemExit('Failed to locate sourcepawn.jit.x86 Library block in vm/AMBuilder')
+
+# Keep Configure postlink patched too (shell/tools binaries).
 sp_text = sp_script.read_text()
 sp_old_pthread = "        cxx.postlink += ['-lpthread', '-lrt']"
 sp_new_pthread = (
     "        # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
     "        cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
 )
-if "css34: force pthread/rt NEEDED" in sp_text:
-    print('==> sourcepawn pthread/rt no-as-needed already patched')
+if "css34: force pthread/rt NEEDED for Debian 11" in sp_text:
+    print('==> sourcepawn Configure pthread/rt no-as-needed already patched')
 elif sp_old_pthread in sp_text:
     sp_script.write_text(sp_text.replace(sp_old_pthread, sp_new_pthread, 1))
-    print('==> Patched sourcepawn AMBuildScript for pthread/rt DT_NEEDED')
+    print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt DT_NEEDED')
 else:
     raise SystemExit('Failed to locate sourcepawn linux pthread postlink block')
 

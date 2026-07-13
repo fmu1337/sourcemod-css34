@@ -47,12 +47,9 @@ The script writes `packages/sourcemod-1.11.0-git6572-css34-windows.zip`.
 
 GitHub Actions workflow `.github/workflows/build.yml` runs the Linux and Windows builds on pushes and pull requests.
 
-`.github/workflows/test-server.yml` builds our Metamod 1.10.7 + SourceMod 6572 packages and smoke-tests them on a real CS:S v34 dedicated server under:
+`.github/workflows/test-server.yml` builds **our** Metamod 1.10.7 + SourceMod 6572 packages and smoke-tests them on a real CS:S v34 dedicated server under Debian 11 / 12 / 13 / Latest, Rocky Linux 9, and the Ubuntu 22.04 host runner.
 
-- **Our packages:** Debian 11 / 12 / 13 / Latest, Rocky Linux 9, and the Ubuntu 22.04 host runner
-- **rom4s reference (legacy glibc harness):** Debian 8 / 9 / 10 and CentOS 7
-
-It applies the modern-OS buffer fix (`srcds_patch` + `valve.rc`), loads Metamod + SourceMod, and asserts console markers. Details: [`testing/README.md`](testing/README.md), buffer-fix notes: [`testing/docs/bufferfix.md`](testing/docs/bufferfix.md).
+It applies the modern-OS buffer fix (`srcds_patch` + `valve.rc`), loads our Metamod + SourceMod, and asserts console markers. Details: [`testing/README.md`](testing/README.md), buffer-fix notes: [`testing/docs/bufferfix.md`](testing/docs/bufferfix.md).
 
 ## Install
 

@@ -8,10 +8,6 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      sm_url:
-        description: "Optional SourceMod tar.gz URL for the reference legacy matrix (default: rom4s 6572)"
-        required: false
-        default: ""
       apply_srcds_patch:
         description: "Apply bruno_args srcds_patch (1/0)"
         required: false
@@ -22,10 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # rom4s reference drops — used only on legacy glibc distros (Debian 8–10 / CentOS 7).
-  MM_URL: https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz
   SRCDS_PATCH_URL: https://github.com/fmu1337/sourcemod-css34/raw/bufferfix/srcds_patch%20(1).rar
-  REFERENCE_SM_URL: https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz
 
 jobs:
   build-linux:
@@ -284,62 +277,6 @@ jobs:
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
           retention-days: 7
-
-  # Legacy glibc harness: rom4s reference MM+SM so deps/srcds_patch/boot stay covered
-  # on Debian 8–10 / CentOS 7 (our debian:11-built packages need newer glibc).
-  test-reference-legacy:
-    needs: [prepare-server]
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: debian:8
-          - image: debian:9
-          - image: debian:10
-          - image: centos:7
-            srcds_binary: ./srcds_i686
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download server tree
-        uses: actions/download-artifact@v4
-        with:
-          name: css34-server-tree
-          path: server-art
-
-      - name: Smoke test reference MM+SM in ${{ matrix.image }}
-        env:
-          IMAGE: ${{ matrix.image }}
-          MM_URL: ${{ env.MM_URL }}
-          SM_URL: ${{ github.event.inputs.sm_url || env.REFERENCE_SM_URL }}
-          SRCDS_BINARY: ${{ matrix.srcds_binary || './srcds_i686' }}
-          MM_VERSION_EXPECT: "1.10.6"
-          SM_VERSION_EXPECT: "1.11.0.6572"
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD:/workspace" \
-            -e SERVER_DIR=/workspace/.ci-server \
-            -e CACHE_DIR=/workspace/.ci-cache \
-            -e SM_URL \
-            -e MM_URL \
-            -e SRCDS_BINARY \
-            -e MM_VERSION_EXPECT \
-            -e SM_VERSION_EXPECT \
-            -e TIMEOUT_SECS=120 \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
-              testing/scripts/install-deps.sh
-              testing/scripts/install-addons.sh
-              testing/scripts/smoke-test.sh
-            '
 
   # Boots freshly built Metamod + SourceMod on the GitHub Actions host runner.
   test-built-smoke:

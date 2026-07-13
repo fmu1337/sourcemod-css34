@@ -1,20 +1,19 @@
 # Server smoke testing (CS:S v34)
 
-Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated server with Metamod:Source + SourceMod on a matrix of Linux distributions.
+Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated server with **our** Metamod:Source + SourceMod packages on a matrix of Linux distributions.
 
 ## Distro matrix
 
 | Job | Images | Packages under test |
 |---|---|---|
-| `test-built-debian` | `debian:11` … `13` / `latest` | **our built** MM 1.10.7 + SM 6572 |
-| `test-built-rhel` | `rockylinux:9` | **our built** MM 1.10.7 + SM 6572 |
-| `test-built-smoke` | ubuntu-22.04 host | **our built** MM 1.10.7 + SM 6572 |
+| `test-built-debian` | `debian:11` … `13` / `latest` | **built** MM 1.10.7 + SM 6572 |
+| `test-built-rhel` | `rockylinux:9` | **built** MM 1.10.7 + SM 6572 |
+| `test-built-smoke` | ubuntu-22.04 host | **built** MM 1.10.7 + SM 6572 |
 | `check-built-package` | ubuntu-22.04 | freshly built SM artifact (CreateInterface + DT_NEEDED) |
-| `test-reference-legacy` | `debian:8`–`10`, `centos:7` | rom4s reference MM 1.10.6 + SM 6572 |
 
-Rocky Linux stands in for modern CentOS-stream/RHEL-family hosts (CentOS 8+ is EOL).
+CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` artifacts from `build-linux`. rom4s reference drops are not used in this workflow.
 
-Primary CI gate is **our in-tree packages** on Debian 11+ / Rocky 9 / Ubuntu host. Legacy distros stay on rom4s reference so `deps` / `srcds_patch` / boot remain covered on old glibc (our `debian:11` legacy-build packages are too new for Debian 8–10 / CentOS 7).
+Packages come from `legacy-build.sh` (`debian:11`), so the smoke matrix starts at Debian 11+ / Rocky 9.
 
 When the CI server tree is trimmed to a single map (`de_dust2`), `testing/scripts/trim-server-maps.sh` also rewrites `mapcycle.txt` so the engine does not spam `Map_IsValid: No such map` for deleted BSPs.
 
@@ -60,13 +59,10 @@ USE_BUILT_MM=1 \
 SM_PACKAGE=$PWD/packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz \
 MM_VERSION_EXPECT=1.10.7 \
   testing/scripts/run-smoke.sh
-
-# Reference rom4s packages (legacy glibc / harness debug):
-SERVER_DIR=$PWD/.ci-server CACHE_DIR=$PWD/.ci-cache testing/scripts/run-smoke.sh
 ```
 
-Needs root (or passwordless sudo) inside the target distro for package installs, plus network access to Bitbucket/GitHub downloads.
+Needs root (or passwordless sudo) inside the target distro for package installs.
 
 ## Version URLs
 
-Known SM/MM download URLs used in the community builds are listed in [`versions/matrix.json`](versions/matrix.json). Workflow dispatch accepts an optional `sm_url` to override the reference SourceMod package on legacy jobs.
+Historical community SM/MM download URLs are listed in [`versions/matrix.json`](versions/matrix.json) for local comparison only — CI does not pull them.
