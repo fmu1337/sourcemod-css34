@@ -52,6 +52,16 @@ EOF
       binutils ca-certificates \
       g++-9-multilib gcc-9-multilib \
       lib32stdc++-9-dev libstdc++-9-dev
+    # Volume mount is owned by the host UID; git 2.35+ blocks submodule ops otherwise.
+    # bullseye ships git 2.30 (no safe.directory=*); register mounted repos explicitly.
+    register_git_safe_dirs() {
+      local gd repo
+      while IFS= read -r -d "" gd; do
+        repo="${gd%/.git}"
+        git config --global --add safe.directory "${repo}" 2>/dev/null || true
+      done < <(find /workspace -name .git \( -type d -o -type f \) -print0 2>/dev/null || true)
+    }
+    register_git_safe_dirs
 
     export CC=gcc-9 CXX=g++-9
     chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
