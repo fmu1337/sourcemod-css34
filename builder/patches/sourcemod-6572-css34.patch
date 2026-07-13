@@ -1,0 +1,1400 @@
+From: sourcemod-css34 builder
+Subject: [PATCH] CS:S v34 compatibility for SourceMod 1.11.0-git6572
+
+Diff between upstream SourceMod at commit 832519ab647cdecb85763918dbfed1cb5e79c6cb
+(v1.11.0-git6572) and the rom4s CSS34 build patches.
+
+Normalize CRLF to LF in *.h, *.cpp, AMBuildScript, and tools/buildbot/Versioning
+before applying (apply-sourcemod.sh does this automatically).
+
+Apply from the sourcemod/ directory:
+  patch -p1 < ../builder/patches/sourcemod-6572-css34.patch
+
+--- a/AMBuildScript
++++ b/AMBuildScript
+@@ -37,6 +37,7 @@
+ 
+ PossibleSDKs = {
+   'episode1':  SDK('HL2SDK', '2.ep1', '1', 'EPISODEONE', WinLinux, 'episode1'),
++  'ep1':  SDK('HL2SDK', '1.ep1', '6', 'CSS', WinLinux, 'ep1'),
+   'ep2':  SDK('HL2SDKOB', '2.ep2', '3', 'ORANGEBOX', WinLinux, 'orangebox'),
+   'css':  SDK('HL2SDKCSS', '2.css', '6', 'CSS', WinLinuxMac, 'css'),
+   'hl2dm':  SDK('HL2SDKHL2DM', '2.hl2dm', '7', 'HL2DM', WinLinuxMac, 'hl2dm'),
+@@ -278,9 +279,16 @@
+       '-Wno-unused',
+       '-Wno-switch',
+       '-Wno-array-bounds',
++      '-Wno-stringop-overflow',
++      '-Wno-error=stringop-overflow',
++      '-Wno-stringop-truncation',
++      '-Wno-error=stringop-truncation',
++      '-Wno-format-truncation',
++      '-Wno-error=format-truncation',
+       '-msse',
+       '-fvisibility=hidden',
+     ]
++    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings']  # CSS34 SDK compatibility
+ 
+     if cxx.version == 'apple-clang-6.0' or cxx.version == 'clang-3.4':
+       cxx.cxxflags += ['-std=c++1y']
+@@ -514,9 +522,14 @@
+       ['public', 'tier0'],
+       ['public', 'tier1']
+     ]
+-    if sdk.name == 'episode1' or sdk.name == 'darkm':
++    if sdk.name in ['episode1', 'darkm']:
+       paths.append(['public', 'dlls'])
+       paths.append(['game_shared'])
++    elif sdk.name == 'ep1':
++      paths.append(['public', 'game', 'server'])
++      paths.append(['public', 'toolframework'])
++      paths.append(['game', 'shared'])
++      paths.append(['common'])
+     else:
+       paths.append(['public', 'game', 'server'])
+       paths.append(['public', 'toolframework'])
+@@ -559,7 +572,7 @@
+       compiler.cxxincludes += [os.path.join(sdk.path, *path)]
+ 
+     if builder.target.platform == 'linux':
+-      if sdk.name == 'episode1':
++      if sdk.name in ['episode1', 'ep1']:
+         lib_folder = os.path.join(sdk.path, 'linux_sdk')
+       elif sdk.name in ['sdk2013', 'bms']:
+         lib_folder = os.path.join(sdk.path, 'lib', 'public', 'linux32')
+@@ -595,8 +608,10 @@
+ 
+     dynamic_libs = []
+     if builder.target.platform == 'linux':
+-      if sdk.name in ['css', 'hl2dm', 'dods', 'tf2', 'sdk2013', 'bms', 'nucleardawn', 'l4d2', 'insurgency', 'doi']:
++      if sdk.name in ['hl2dm', 'dods', 'tf2', 'sdk2013', 'bms', 'nucleardawn', 'l4d2', 'insurgency', 'doi']:
+         dynamic_libs = ['libtier0_srv.so', 'libvstdlib_srv.so']
++      elif sdk.name == 'css':
++        dynamic_libs = ['tier0_i486.so', 'vstdlib_i486.so']
+       elif arch == 'x64' and sdk.name in ['csgo', 'blade']:
+         dynamic_libs = ['libtier0_client.so', 'libvstdlib_client.so']
+       elif sdk.name in ['l4d', 'blade', 'insurgency', 'doi', 'csgo']:
+--- a/core/ConVarManager.cpp
++++ b/core/ConVarManager.cpp
+@@ -631,7 +631,7 @@
+ 	return sCoreProviderImpl.IsClientConVarQueryingSupported();
+ }
+ 
+-#if SOURCE_ENGINE != SE_DARKMESSIAH
++#if SOURCE_ENGINE != SE_DARKMESSIAH && SOURCE_ENGINE != SE_CSS
+ void ConVarManager::OnClientQueryFinished(QueryCvarCookie_t cookie,
+                                           int client,
+                                           EQueryCvarValueStatus result,
+--- a/core/ConVarManager.h
++++ b/core/ConVarManager.h
+@@ -158,7 +158,7 @@
+ 
+ 	// Called via game hooks.
+ 	void OnConVarChanged(ConVar *pConVar, const char *oldValue, float flOldValue);
+-#if SOURCE_ENGINE != SE_DARKMESSIAH
++#if SOURCE_ENGINE != SE_DARKMESSIAH && SOURCE_ENGINE != SE_CSS
+ 	void OnClientQueryFinished(
+ 	  QueryCvarCookie_t cookie,
+ 	  int client,
+--- a/core/ConsoleDetours.cpp
++++ b/core/ConsoleDetours.cpp
+@@ -62,7 +62,7 @@
+ # include <unistd.h>
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	SH_DECL_EXTERN1_void(ConCommand, Dispatch, SH_NOATTRIB, false, const CCommand &);
+ #else
+ 	SH_DECL_EXTERN0_void(ConCommand, Dispatch, SH_NOATTRIB, false);
+@@ -123,14 +123,14 @@
+ 		}
+ 	}
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	void Dispatch(const CCommand& args)
+ #else
+ 	void Dispatch()
+ #endif
+ 	{
+ 		cell_t res = ConsoleDetours::Dispatch(META_IFACEPTR(ConCommand)
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 			, args
+ #endif
+ 			);
+@@ -390,7 +390,7 @@
+ 	return result;
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ cell_t ConsoleDetours::Dispatch(ConCommand *pBase, const CCommand& args)
+ {
+ #else
+--- a/core/ConsoleDetours.h
++++ b/core/ConsoleDetours.h
+@@ -59,7 +59,7 @@
+ 	bool RemoveListener(IPluginFunction *fun, const char *command);
+ private:
+ 	cell_t InternalDispatch(int client, const SourceMod::ICommandArgs *args);
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	static cell_t Dispatch(ConCommand *pBase, const CCommand& args);
+ #else
+ 	static cell_t Dispatch(ConCommand *pBase);
+--- a/core/CoreConfig.cpp
++++ b/core/CoreConfig.cpp
+@@ -67,7 +67,7 @@
+ 
+ void CheckAndFinalizeConfigs();
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ SH_DECL_EXTERN1_void(ConCommand, Dispatch, SH_NOATTRIB, false, const CCommand &);
+ void Hook_ExecDispatchPre(const CCommand &cmd)
+ #else
+@@ -75,7 +75,7 @@
+ void Hook_ExecDispatchPre()
+ #endif
+ {
+-#if SOURCE_ENGINE <= SE_DARKMESSIAH
++#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	CCommand cmd;
+ #endif
+ 
+@@ -87,7 +87,7 @@
+ 	}
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void Hook_ExecDispatchPost(const CCommand &cmd)
+ #else
+ void Hook_ExecDispatchPost()
+@@ -412,7 +412,7 @@
+ 				for (iter = convars->begin(); iter != convars->end(); iter++)
+ 				{
+ 					const ConVar *cvar = (*iter);
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 					if (cvar->IsFlagSet(FCVAR_DONTRECORD))
+ #else
+ 					if (cvar->IsBitSet(FCVAR_DONTRECORD))
+@@ -582,7 +582,7 @@
+ 
+ CON_COMMAND(sm_internal, "")
+ {
+-#if SOURCE_ENGINE <= SE_DARKMESSIAH
++#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	CCommand args;
+ #endif
+ 
+--- a/core/GameHooks.cpp
++++ b/core/GameHooks.cpp
+@@ -30,18 +30,18 @@
+ #include "command_args.h"
+ #include "provider.h"
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ SH_DECL_HOOK3_void(ICvar, CallGlobalChangeCallbacks, SH_NOATTRIB, false, ConVar *, const char *, float);
+ #else
+ SH_DECL_HOOK2_void(ICvar, CallGlobalChangeCallback, SH_NOATTRIB, false, ConVar *, const char *);
+ #endif
+ 
+-#if SOURCE_ENGINE != SE_DARKMESSIAH
++#if SOURCE_ENGINE != SE_DARKMESSIAH && SOURCE_ENGINE != SE_CSS
+ SH_DECL_HOOK5_void(IServerGameDLL, OnQueryCvarValueFinished, SH_NOATTRIB, 0, QueryCvarCookie_t, edict_t *, EQueryCvarValueStatus, const char *, const char *);
+ SH_DECL_HOOK5_void(IServerPluginCallbacks, OnQueryCvarValueFinished, SH_NOATTRIB, 0, QueryCvarCookie_t, edict_t *, EQueryCvarValueStatus, const char *, const char *);
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ SH_DECL_HOOK1_void(ConCommand, Dispatch, SH_NOATTRIB, false, const CCommand &);
+ #else
+ SH_DECL_HOOK0_void(ConCommand, Dispatch, SH_NOATTRIB, false);
+@@ -58,7 +58,7 @@
+ void GameHooks::Start()
+ {
+ 	// Hook ICvar::CallGlobalChangeCallbacks.
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	hooks_ += SH_ADD_HOOK(ICvar, CallGlobalChangeCallbacks, icvar, SH_STATIC(OnConVarChanged), false);
+ #else
+ 	hooks_ += SH_ADD_HOOK(ICvar, CallGlobalChangeCallback, icvar, SH_STATIC(OnConVarChanged), false);
+@@ -83,7 +83,7 @@
+ 	if (g_SMAPI->GetSourceEngineBuild() == SOURCE_ENGINE_ORIGINAL || vsp_version < 2)
+ 		return;
+ 
+-#if SOURCE_ENGINE != SE_DARKMESSIAH
++#if SOURCE_ENGINE != SE_DARKMESSIAH && SOURCE_ENGINE != SE_CSS
+ 	hooks_ += SH_ADD_HOOK(IServerPluginCallbacks, OnQueryCvarValueFinished, vsp_interface, SH_MEMBER(this, &GameHooks::OnQueryCvarValueFinished), false);
+ 	client_cvar_query_mode_ = ClientCvarQueryMode::VSP;
+ #endif
+@@ -98,19 +98,19 @@
+ 	client_cvar_query_mode_ = ClientCvarQueryMode::Unavailable;
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void GameHooks::OnConVarChanged(ConVar *pConVar, const char *oldValue, float flOldValue)
+ #else
+ void GameHooks::OnConVarChanged(ConVar *pConVar, const char *oldValue)
+ #endif
+ {
+-#if SOURCE_ENGINE < SE_ORANGEBOX
++#if SOURCE_ENGINE < SE_ORANGEBOX || SOURCE_ENGINE == SE_CSS
+   float flOldValue = atof(oldValue);
+ #endif
+   g_ConVarManager.OnConVarChanged(pConVar, oldValue, flOldValue);
+ }
+ 
+-#if SOURCE_ENGINE != SE_DARKMESSIAH
++#if SOURCE_ENGINE != SE_DARKMESSIAH && SOURCE_ENGINE != SE_CSS
+ void GameHooks::OnQueryCvarValueFinished(QueryCvarCookie_t cookie, edict_t *pPlayer, EQueryCvarValueStatus result,
+                                          const char *cvarName, const char *cvarValue){
+ 	int client = IndexOfEdict(pPlayer);
+--- a/core/GameHooks.h
++++ b/core/GameHooks.h
+@@ -40,7 +40,7 @@
+ class CCommand;
+ struct CCommandContext;
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ # define DISPATCH_ARGS      const CCommand &command
+ # define DISPATCH_PROLOGUE
+ #else
+@@ -99,14 +99,14 @@
+ 
+ private:
+ 	// Static callback that Valve's ConVar object executes when the convar's value changes.
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	static void OnConVarChanged(ConVar *pConVar, const char *oldValue, float flOldValue);
+ #else
+ 	static void OnConVarChanged(ConVar *pConVar, const char *oldValue);
+ #endif
+ 
+ 	// Callback for when StartQueryCvarValue() has finished.
+-#if SOURCE_ENGINE != SE_DARKMESSIAH
++#if SOURCE_ENGINE != SE_DARKMESSIAH && SOURCE_ENGINE != SE_CSS
+ 	void OnQueryCvarValueFinished(QueryCvarCookie_t cookie, edict_t *pPlayer, EQueryCvarValueStatus result,
+ 	                              const char *cvarName, const char *cvarValue);
+ #endif
+--- a/core/HalfLife2.cpp
++++ b/core/HalfLife2.cpp
+@@ -178,7 +178,6 @@
+ #if SOURCE_ENGINE == SE_TF2        \
+ 	|| SOURCE_ENGINE == SE_DODS    \
+ 	|| SOURCE_ENGINE == SE_HL2DM   \
+-	|| SOURCE_ENGINE == SE_CSS     \
+ 	|| SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS     \
+ 	|| SOURCE_ENGINE == SE_NUCLEARDAWN
+@@ -789,7 +788,7 @@
+ 	CachedCommandInfo info;
+ 
+ 	info.args = cmd;
+-#if SOURCE_ENGINE <= SE_DARKMESSIAH
++#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	ke::SafeStrcpy(info.cmd, sizeof(info.cmd), cmd->Arg(0));
+ #endif
+ 
+@@ -813,7 +812,7 @@
+ 
+ const char *CHalfLife2::CurrentCommandName()
+ {
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	return m_CommandStack.front().args->Arg(0);
+ #else
+ 	return m_CommandStack.front().cmd;
+@@ -1317,7 +1316,7 @@
+ 		return SMFindMapResult::FuzzyMatch;
+ 	}
+ 
+-#elif SOURCE_ENGINE == SE_TF2 || SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_HL2DM \
++#elif SOURCE_ENGINE == SE_TF2 || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_HL2DM \
+ 	|| SOURCE_ENGINE == SE_SDK2013 || SOURCE_ENGINE == SE_BMS
+ 	static IVEngineServer *engine23 = (IVEngineServer *)(g_SMAPI->GetEngineFactory()("VEngineServer023", nullptr));
+ 	if (engine23)
+@@ -1368,7 +1367,7 @@
+ }
+ 
+ // TODO: Add ep1 support for this. (No IServerTools available there)
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ string_t CHalfLife2::AllocPooledString(const char *pszValue)
+ {
+ 	// This is admittedly a giant hack, but it's a relatively safe method for
+@@ -1439,7 +1438,6 @@
+ #if SOURCE_ENGINE == SE_BLADE          \
+ 	|| SOURCE_ENGINE == SE_BMS         \
+ 	|| SOURCE_ENGINE == SE_CSGO        \
+-	|| SOURCE_ENGINE == SE_CSS         \
+ 	|| SOURCE_ENGINE == SE_DODS        \
+ 	|| SOURCE_ENGINE == SE_EYE         \
+ 	|| SOURCE_ENGINE == SE_HL2DM       \
+--- a/core/HalfLife2.h
++++ b/core/HalfLife2.h
+@@ -69,7 +69,7 @@
+ #define SOURCE_BIN_SUFFIX ""
+ #define SOURCE_BIN_EXT ".dylib"
+ #elif defined __linux__
+-#if SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_TF2 \
++#if SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_TF2 \
+ 	|| SOURCE_ENGINE == SE_SDK2013 || SOURCE_ENGINE == SE_LEFT4DEAD2 || SOURCE_ENGINE == SE_NUCLEARDAWN \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_INSURGENCY || SOURCE_ENGINE == SE_DOI
+ #define SOURCE_BIN_PREFIX "lib"
+@@ -143,7 +143,7 @@
+ struct CachedCommandInfo
+ {
+ 	const ICommandArgs *args;
+-#if SOURCE_ENGINE <= SE_DARKMESSIAH
++#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	char cmd[300];
+ #endif
+ };
+@@ -239,7 +239,7 @@
+ 	void FreeUtlVectorUtlString(CUtlVector<CUtlString, CUtlMemoryGlobalMalloc<CUtlString>> &vec);
+ #endif
+ 	bool GetMapDisplayName(const char *pMapName, char *pDisplayname, size_t nMapNameMax);
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	string_t AllocPooledString(const char *pszValue);
+ #endif
+ 	bool GetServerSteam3Id(char *pszOut, size_t len) const override;
+--- a/core/MenuVoting.cpp
++++ b/core/MenuVoting.cpp
+@@ -84,7 +84,7 @@
+ 					   1.0);
+ 
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void OnVoteDelayChange(IConVar *cvar, const char *value, float flOldValue);
+ #else
+ void OnVoteDelayChange(ConVar *cvar, const char *value);
+@@ -99,7 +99,7 @@
+ 					 0.0,
+ 					 OnVoteDelayChange);
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void OnVoteDelayChange(IConVar *cvar, const char *value, float flOldValue)
+ #else
+ void OnVoteDelayChange(ConVar *cvar, const char *value)
+--- a/core/NextMap.cpp
++++ b/core/NextMap.cpp
+@@ -48,7 +48,7 @@
+ SH_DECL_HOOK4_void(IVEngineServer, ChangeLevel, SH_NOATTRIB, 0, const char *, const char *, const char *, bool);
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ SH_DECL_EXTERN1_void(ConCommand, Dispatch, SH_NOATTRIB, false, const CCommand &);
+ #else
+ SH_DECL_EXTERN0_void(ConCommand, Dispatch, SH_NOATTRIB, false);
+@@ -63,7 +63,7 @@
+ 
+ void NextMapManager::OnSourceModAllInitialized_Post()
+ {
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	SH_ADD_HOOK(IVEngineServer, ChangeLevel, engine, SH_MEMBER(this, &NextMapManager::HookChangeLevel), false);
+ #else
+ 	SH_ADD_HOOK(IVEngineServer, ChangeLevel, engine, SH_MEMBER(this, &NextMapManager::HookChangeLevel), false);
+@@ -79,7 +79,7 @@
+ 
+ void NextMapManager::OnSourceModShutdown()
+ {
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	SH_REMOVE_HOOK(IVEngineServer, ChangeLevel, engine, SH_MEMBER(this, &NextMapManager::HookChangeLevel), false);
+ #else
+ 	SH_REMOVE_HOOK(IVEngineServer, ChangeLevel, engine, SH_MEMBER(this, &NextMapManager::HookChangeLevel), false);
+@@ -205,7 +205,7 @@
+ 	m_mapHistory = SourceHook::List<MapChangeData *>();
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void CmdChangeLevelCallback(const CCommand &command)
+ {
+ #else
+--- a/core/NextMap.h
++++ b/core/NextMap.h
+@@ -59,7 +59,7 @@
+ 	time_t startTime;
+ };
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void CmdChangeLevelCallback(const CCommand &command);
+ #else
+ void CmdChangeLevelCallback();
+@@ -70,7 +70,7 @@
+ public:
+ 	NextMapManager();
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	friend void CmdChangeLevelCallback(const CCommand &command);
+ #else
+ 	friend void CmdChangeLevelCallback();
+--- a/core/PlayerManager.cpp
++++ b/core/PlayerManager.cpp
+@@ -69,14 +69,14 @@
+ SH_DECL_HOOK5(IServerGameClients, ClientConnect, SH_NOATTRIB, 0, bool, edict_t *, const char *, const char *, char *, int);
+ SH_DECL_HOOK2_void(IServerGameClients, ClientPutInServer, SH_NOATTRIB, 0, edict_t *, const char *);
+ SH_DECL_HOOK1_void(IServerGameClients, ClientDisconnect, SH_NOATTRIB, 0, edict_t *);
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ SH_DECL_HOOK2_void(IServerGameClients, ClientCommand, SH_NOATTRIB, 0, edict_t *, const CCommand &);
+ #else
+ SH_DECL_HOOK1_void(IServerGameClients, ClientCommand, SH_NOATTRIB, 0, edict_t *);
+ #endif
+ SH_DECL_HOOK1_void(IServerGameClients, ClientSettingsChanged, SH_NOATTRIB, 0, edict_t *);
+ 
+-#if SOURCE_ENGINE >= SE_EYE
++#if SOURCE_ENGINE >= SE_EYE && SOURCE_ENGINE != SE_CSS
+ SH_DECL_HOOK2_void(IServerGameClients, ClientCommandKeyValues, SH_NOATTRIB, 0, edict_t *, KeyValues *);
+ #endif
+ 
+@@ -84,11 +84,11 @@
+ 
+ #if SOURCE_ENGINE >= SE_LEFT4DEAD
+ SH_DECL_HOOK1_void(IServerGameDLL, ServerHibernationUpdate, SH_NOATTRIB, 0, bool);
+-#elif SOURCE_ENGINE > SE_EYE // 2013/orangebox, but not original orangebox.
++#elif SOURCE_ENGINE > SE_EYE && SOURCE_ENGINE != SE_CSS // 2013/orangebox, but not original orangebox.
+ SH_DECL_HOOK1_void(IServerGameDLL, SetServerHibernation, SH_NOATTRIB, 0, bool);
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ SH_DECL_EXTERN1_void(ConCommand, Dispatch, SH_NOATTRIB, false, const CCommand &);
+ #else
+ SH_DECL_EXTERN0_void(ConCommand, Dispatch, SH_NOATTRIB, false);
+@@ -168,7 +168,7 @@
+ 	SH_ADD_HOOK(IServerGameClients, ClientDisconnect, serverClients, SH_MEMBER(this, &PlayerManager::OnClientDisconnect), false);
+ 	SH_ADD_HOOK(IServerGameClients, ClientDisconnect, serverClients, SH_MEMBER(this, &PlayerManager::OnClientDisconnect_Post), true);
+ 	SH_ADD_HOOK(IServerGameClients, ClientCommand, serverClients, SH_MEMBER(this, &PlayerManager::OnClientCommand), false);
+-#if SOURCE_ENGINE >= SE_EYE
++#if SOURCE_ENGINE >= SE_EYE && SOURCE_ENGINE != SE_CSS
+ 	SH_ADD_HOOK(IServerGameClients, ClientCommandKeyValues, serverClients, SH_MEMBER(this, &PlayerManager::OnClientCommandKeyValues), false);
+ 	SH_ADD_HOOK(IServerGameClients, ClientCommandKeyValues, serverClients, SH_MEMBER(this, &PlayerManager::OnClientCommandKeyValues_Post), true);
+ #endif
+@@ -176,7 +176,7 @@
+ 	SH_ADD_HOOK(IServerGameDLL, ServerActivate, gamedll, SH_MEMBER(this, &PlayerManager::OnServerActivate), true);
+ #if SOURCE_ENGINE >= SE_LEFT4DEAD
+ 	SH_ADD_HOOK(IServerGameDLL, ServerHibernationUpdate, gamedll, SH_MEMBER(this, &PlayerManager::OnServerHibernationUpdate), true);
+-#elif SOURCE_ENGINE > SE_EYE // 2013/orangebox, but not original orangebox.
++#elif SOURCE_ENGINE > SE_EYE && SOURCE_ENGINE != SE_CSS // 2013/orangebox, but not original orangebox.
+ 	SH_ADD_HOOK(IServerGameDLL, SetServerHibernation, gamedll, SH_MEMBER(this, &PlayerManager::OnServerHibernationUpdate), true);
+ #endif
+ 	SH_ADD_HOOK(IVEngineServer, ClientPrintf, engine, SH_MEMBER(this, &PlayerManager::OnClientPrintf), false);
+@@ -222,7 +222,7 @@
+ 	SH_REMOVE_HOOK(IServerGameClients, ClientDisconnect, serverClients, SH_MEMBER(this, &PlayerManager::OnClientDisconnect), false);
+ 	SH_REMOVE_HOOK(IServerGameClients, ClientDisconnect, serverClients, SH_MEMBER(this, &PlayerManager::OnClientDisconnect_Post), true);
+ 	SH_REMOVE_HOOK(IServerGameClients, ClientCommand, serverClients, SH_MEMBER(this, &PlayerManager::OnClientCommand), false);
+-#if SOURCE_ENGINE >= SE_EYE
++#if SOURCE_ENGINE >= SE_EYE && SOURCE_ENGINE != SE_CSS
+ 	SH_REMOVE_HOOK(IServerGameClients, ClientCommandKeyValues, serverClients, SH_MEMBER(this, &PlayerManager::OnClientCommandKeyValues), false);
+ 	SH_REMOVE_HOOK(IServerGameClients, ClientCommandKeyValues, serverClients, SH_MEMBER(this, &PlayerManager::OnClientCommandKeyValues_Post), true);
+ #endif
+@@ -230,7 +230,7 @@
+ 	SH_REMOVE_HOOK(IServerGameDLL, ServerActivate, gamedll, SH_MEMBER(this, &PlayerManager::OnServerActivate), true);
+ #if SOURCE_ENGINE >= SE_LEFT4DEAD
+ 	SH_REMOVE_HOOK(IServerGameDLL, ServerHibernationUpdate, gamedll, SH_MEMBER(this, &PlayerManager::OnServerHibernationUpdate), true);
+-#elif SOURCE_ENGINE > SE_EYE // 2013/orangebox, but not original orangebox.
++#elif SOURCE_ENGINE > SE_EYE && SOURCE_ENGINE != SE_CSS // 2013/orangebox, but not original orangebox.
+ 	SH_REMOVE_HOOK(IServerGameDLL, SetServerHibernation, gamedll, SH_MEMBER(this, &PlayerManager::OnServerHibernationUpdate), true);
+ #endif
+ 	SH_REMOVE_HOOK(IVEngineServer, ClientPrintf, engine, SH_MEMBER(this, &PlayerManager::OnClientPrintf), false);
+@@ -868,7 +868,7 @@
+ 		RETURN_META(MRES_IGNORED);
+ 
+ 	size_t nMsgLen = strlen(szMsg);
+-#if SOURCE_ENGINE == SE_EPISODEONE || SOURCE_ENGINE == SE_DARKMESSIAH
++#if SOURCE_ENGINE == SE_EPISODEONE || SOURCE_ENGINE == SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	static const int nNumBitsWritten = 0;
+ #else
+ 	int nNumBitsWritten = pNetChan->GetNumBitsWritten(false); // SVC_Print uses unreliable netchan
+@@ -913,7 +913,7 @@
+ 
+ 	while (!player.m_PrintfBuffer.empty())
+ 	{
+-#if SOURCE_ENGINE == SE_EPISODEONE || SOURCE_ENGINE == SE_DARKMESSIAH
++#if SOURCE_ENGINE == SE_EPISODEONE || SOURCE_ENGINE == SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 		static const int nNumBitsWritten = 0;
+ #else
+ 		int nNumBitsWritten = pNetChan->GetNumBitsWritten(false); // SVC_Print uses unreliable netchan
+@@ -1124,7 +1124,7 @@
+ 	}
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void PlayerManager::OnClientCommand(edict_t *pEntity, const CCommand &args)
+ {
+ #else
+@@ -1239,7 +1239,7 @@
+ 	}
+ }
+ 
+-#if SOURCE_ENGINE >= SE_EYE
++#if SOURCE_ENGINE >= SE_EYE && SOURCE_ENGINE != SE_CSS
+ static bool s_LastCCKVAllowed = true;
+ 
+ void PlayerManager::OnClientCommandKeyValues(edict_t *pEntity, KeyValues *pCommand)
+@@ -1993,7 +1993,7 @@
+ 	return 0;
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void CmdMaxplayersCallback(const CCommand &command)
+ {
+ #else
+@@ -2055,7 +2055,6 @@
+ 	m_IpNoPort.assign(ip2);
+ 
+ #if SOURCE_ENGINE == SE_TF2      \
+-	|| SOURCE_ENGINE == SE_CSS   \
+ 	|| SOURCE_ENGINE == SE_DODS  \
+ 	|| SOURCE_ENGINE == SE_HL2DM \
+ 	|| SOURCE_ENGINE == SE_BMS   \
+@@ -2148,8 +2147,8 @@
+ 	
+ 	m_Steam2Id = szAuthBuffer;
+ 	
+-	// TODO: make sure all hl2sdks' steamclientpublic.h have k_unSteamUserDesktopInstance.
+-	if (m_SteamId.GetUnAccountInstance() == 1 /* k_unSteamUserDesktopInstance */)
++	// TODO: make sure all hl2sdks' steamclientpublic.h have 1.
++	if (m_SteamId.GetUnAccountInstance() == 1 /* 1 */)
+ 	{
+ 		ke::SafeSprintf(szAuthBuffer, sizeof(szAuthBuffer), "[U:%u:%u]", m_SteamId.GetEUniverse(), m_SteamId.GetAccountID());
+ 	}
+@@ -2176,17 +2175,17 @@
+ {
+ 	if (IsFakeClient())
+ 	{
+-		m_SteamId = k_steamIDNil;
++		m_SteamId = CSteamID();
+ 		return true; /* This is the default value. There's a bug-out branch in the caller function. */
+ 	}
+ 
+-#if SOURCE_ENGINE < SE_ORANGEBOX
++#if SOURCE_ENGINE < SE_ORANGEBOX || SOURCE_ENGINE == SE_CSS
+ 	const char *pAuth = GetAuthString();
+ 	/* STEAM_0:1:123123 | STEAM_ID_LAN | STEAM_ID_PENDING */
+ 	if (pAuth && (strlen(pAuth) > 10) && pAuth[8] != '_')
+ 	{
+ 		CSteamID sid = CSteamID(atoi(&pAuth[8]) | (atoi(&pAuth[10]) << 1),
+-			k_unSteamUserDesktopInstance, k_EUniversePublic, k_EAccountTypeIndividual);
++			1, k_EUniversePublic, k_EAccountTypeIndividual);
+ 
+ 		if (m_SteamId != sid)
+ 		{
+@@ -2223,7 +2222,7 @@
+ 	m_Name.clear();
+ 	m_Ip.clear();
+ 	m_AuthID = "";
+-	m_SteamId = k_steamIDNil;
++	m_SteamId = CSteamID();
+ 	m_Steam2Id = "";
+ 	m_Steam3Id = "";
+ 	m_pEdict = NULL;
+@@ -2305,7 +2304,7 @@
+ {
+ 	if (validated && !IsAuthStringValidated())
+ 	{
+-		static const CSteamID invalidId = k_steamIDNil;
++		static const CSteamID invalidId = CSteamID();
+ 		return invalidId;
+ 	}
+ 	
+@@ -2376,7 +2375,7 @@
+ 
+ bool CPlayer::IsAuthStringValidated()
+ {     
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	if (!IsFakeClient() && g_Players.m_bAuthstringValidation && !g_HL2.IsLANServer())
+ 	{
+ 		return engine->IsClientFullyAuthenticated(m_pEdict);
+--- a/core/PlayerManager.h
++++ b/core/PlayerManager.h
+@@ -181,9 +181,9 @@
+ 	void OnClientPutInServer(edict_t *pEntity, char const *playername);
+ 	void OnClientDisconnect(edict_t *pEntity);
+ 	void OnClientDisconnect_Post(edict_t *pEntity);
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	void OnClientCommand(edict_t *pEntity, const CCommand &args);
+-#if SOURCE_ENGINE >= SE_EYE
++#if SOURCE_ENGINE >= SE_EYE && SOURCE_ENGINE != SE_CSS
+ 	void OnClientCommandKeyValues(edict_t *pEntity, KeyValues *pCommand);
+ 	void OnClientCommandKeyValues_Post(edict_t *pEntity, KeyValues *pCommand);
+ #endif
+@@ -277,7 +277,7 @@
+ 	static const int SVC_Print_BufferSize = 2048 - 1; // -1 for terminating \0
+ };
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void CmdMaxplayersCallback(const CCommand &command);
+ #else
+ void CmdMaxplayersCallback();
+--- a/core/concmd_cleaner.cpp
++++ b/core/concmd_cleaner.cpp
+@@ -34,7 +34,7 @@
+ #include "compat_wrappers.h"
+ #include <amtl/am-string.h>
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ SH_DECL_HOOK1_void(ICvar, UnregisterConCommand, SH_NOATTRIB, 0, ConCommandBase *);
+ #if SOURCE_ENGINE == SE_CSGO
+ SH_DECL_HOOK2_void(ICvar, RegisterConCommand, SH_NOATTRIB, 0, ConCommandBase *, bool);
+@@ -64,7 +64,7 @@
+ public:
+ 	void OnSourceModAllInitialized()
+ 	{
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 		SH_ADD_HOOK(ICvar, UnregisterConCommand, icvar, SH_MEMBER(this, &ConCommandCleaner::UnlinkConCommandBase), false);
+ 		SH_ADD_HOOK(ICvar, RegisterConCommand, icvar, SH_MEMBER(this, &ConCommandCleaner::LinkConCommandBase), false);
+ #else
+@@ -74,7 +74,7 @@
+ 
+ 	void OnSourceModShutdown()
+ 	{
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 		SH_REMOVE_HOOK(ICvar, UnregisterConCommand, icvar, SH_MEMBER(this, &ConCommandCleaner::UnlinkConCommandBase), false);
+ 		SH_REMOVE_HOOK(ICvar, RegisterConCommand, icvar, SH_MEMBER(this, &ConCommandCleaner::LinkConCommandBase), false);
+ #else
+--- a/core/logic_bridge.cpp
++++ b/core/logic_bridge.cpp
+@@ -607,7 +607,7 @@
+ 
+ int CoreProviderImpl::QueryClientConVar(int client, const char *cvar)
+ {
+-#if SOURCE_ENGINE != SE_DARKMESSIAH
++#if SOURCE_ENGINE != SE_DARKMESSIAH && SOURCE_ENGINE != SE_CSS
+ 	switch (hooks_.GetClientCvarQueryMode()) {
+ 	case ClientCvarQueryMode::DLL:
+ 		return ::engine->StartQueryCvarValue(PEntityOfEntIndex(client), cvar);
+--- a/core/smn_console.cpp
++++ b/core/smn_console.cpp
+@@ -55,7 +55,7 @@
+ #include <netmessages.pb.h>
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_EYE
++#if SOURCE_ENGINE >= SE_EYE && SOURCE_ENGINE != SE_CSS
+ #define NETMSG_BITS 6
+ #else
+ #define NETMSG_BITS 5
+@@ -1272,7 +1272,7 @@
+ 
+ static cell_t FakeClientCommandKeyValues(IPluginContext *pContext, const cell_t *params)
+ {
+-#if SOURCE_ENGINE >= SE_EYE
++#if SOURCE_ENGINE >= SE_EYE && SOURCE_ENGINE != SE_CSS
+ 	int client = params[1];
+ 
+ 	CPlayer *pPlayer = g_Players.GetPlayerByIndex(client);
+--- a/core/smn_entities.cpp
++++ b/core/smn_entities.cpp
+@@ -2380,7 +2380,7 @@
+ 
+ 	if (bIsStringIndex)
+ 	{
+-#if SOURCE_ENGINE < SE_ORANGEBOX
++#if SOURCE_ENGINE < SE_ORANGEBOX || SOURCE_ENGINE == SE_CSS
+ 		return pContext->ThrowNativeError("Cannot set %s. Setting string_t values not supported on this game.", prop);
+ #else
+ 		*(string_t *) ((intptr_t) pEntity + offset) = g_HL2.AllocPooledString(src);
+@@ -2471,7 +2471,7 @@
+ 		case FL_FREEZING:
+ 			return ENTFLAG_FREEZING;
+ #elif SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+-	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_TF2
++	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ 		case FL_EP2V_UNKNOWN:
+ 			return ENTFLAG_EP2V_UNKNOWN1;
+ #endif
+@@ -2550,7 +2550,7 @@
+ 		case ENTFLAG_FREEZING:
+ 			return FL_FREEZING;
+ #elif SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+-	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_TF2
++	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ 		case ENTFLAG_EP2V_UNKNOWN1:
+ 			return FL_EP2V_UNKNOWN;
+ #endif
+--- a/core/smn_vector.cpp
++++ b/core/smn_vector.cpp
+@@ -31,7 +31,7 @@
+ 
+ #include "sm_globals.h"
+ #include <vector.h>
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ #include <mathlib.h>
+ #else
+ #include <math_base.h>
+--- a/core/sourcemm_api.cpp
++++ b/core/sourcemm_api.cpp
+@@ -54,7 +54,7 @@
+ IBaseFileSystem *basefilesystem = NULL;
+ IFileSystem *filesystem = NULL;
+ IEngineSound *enginesound = NULL;
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ IServerTools *servertools = NULL;
+ #endif
+ IServerPluginHelpers *serverpluginhelpers = NULL;
+@@ -98,7 +98,7 @@
+ 	GET_V_IFACE_CURRENT(GetFileSystemFactory, basefilesystem, IBaseFileSystem, BASEFILESYSTEM_INTERFACE_VERSION);
+ 	GET_V_IFACE_CURRENT(GetFileSystemFactory, filesystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
+ 	GET_V_IFACE_CURRENT(GetEngineFactory, enginesound, IEngineSound, IENGINESOUND_SERVER_INTERFACE_VERSION);
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	GET_V_IFACE_CURRENT(GetServerFactory, servertools, IServerTools, VSERVERTOOLS_INTERFACE_VERSION);
+ #endif
+ 	GET_V_IFACE_CURRENT(GetEngineFactory, serverpluginhelpers, IServerPluginHelpers, INTERFACEVERSION_ISERVERPLUGINHELPERS);
+--- a/core/sourcemm_api.h
++++ b/core/sourcemm_api.h
+@@ -84,7 +84,7 @@
+ extern IBaseFileSystem *basefilesystem;
+ extern IFileSystem *filesystem;
+ extern IEngineSound *enginesound;
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ extern IServerTools *servertools;
+ #endif
+ extern IServerPluginHelpers *serverpluginhelpers;
+--- a/core/sourcemod.cpp
++++ b/core/sourcemod.cpp
+@@ -762,7 +762,7 @@
+ public:
+ 	void OnSourceModStartup(bool late) override
+ 	{
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 		g_pCVar = icvar;
+ #endif
+ 		CONVAR_REGISTER(this);
+--- a/extensions/cstrike/AMBuilder
++++ b/extensions/cstrike/AMBuilder
+@@ -21,7 +21,7 @@
+ ]
+ project.compiler.defines += ['HAVE_STRING_H'];
+ 
+-for sdk_name in ['css', 'csgo']:
++for sdk_name in ['ep1', 'episode1', 'css', 'csgo']:
+   if sdk_name not in SM.sdks:
+     continue
+   sdk = SM.sdks[sdk_name]
+--- a/extensions/cstrike/forwards.cpp
++++ b/extensions/cstrike/forwards.cpp
+@@ -126,7 +126,7 @@
+ }
+ #endif
+ 
+-#if SOURCE_ENGINE == SE_CSS
++#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE
+ DETOUR_DECL_MEMBER2(DetourTerminateRound, void, float, delay, int, reason)
+ {
+ 	if (g_pIgnoreTerminateDetour)
+@@ -189,7 +189,7 @@
+ 	reason++;
+ #endif
+ 	
+-#if SOURCE_ENGINE == SE_CSS
++#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE
+ 	if (result == Pl_Changed)
+ 		return DETOUR_MEMBER_CALL(DetourTerminateRound)(delay, reason);
+ 
+--- a/extensions/cstrike/natives.cpp
++++ b/extensions/cstrike/natives.cpp
+@@ -297,7 +297,7 @@
+ 	reason++;
+ #endif
+ 	
+-#if SOURCE_ENGINE == SE_CSS
++#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE
+ 	static ICallWrapper *pWrapper = NULL;
+ 
+ 	if (!pWrapper)
+@@ -665,14 +665,10 @@
+ 	else
+ 	{
+ 		datamap_t *pMap = gamehelpers->GetDataMap(pPlayerEntity);
+-		typedescription_t *td = gamehelpers->FindInDataMap(pMap, pszBaseVar);
+-		if (td)
++		sm_datatable_info_t datamapInfo;
++		if (gamehelpers->FindDataMapInfo(pMap, pszBaseVar, &datamapInfo))
+ 		{
+-#if SOURCE_ENGINE >= SE_LEFT4DEAD
+-			interimOffset = td->fieldOffset;
+-#else
+-			interimOffset = td->fieldOffset[TD_OFFSET_NORMAL];
+-#endif
++			interimOffset = datamapInfo.actual_offset;
+ 		}
+ 	}
+ 
+--- a/extensions/sdkhooks/extension.cpp
++++ b/extensions/sdkhooks/extension.cpp
+@@ -106,7 +106,7 @@
+ IBinTools *g_pBinTools = NULL;
+ ICvar *icvar = NULL;
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ IServerTools *servertools = NULL;
+ #endif
+ 
+@@ -260,7 +260,7 @@
+ 
+ 	SetupHooks();
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	int index;
+ 	CBaseHandle hndl;
+ 	for (IHandleEntity *pEnt = (IHandleEntity *)servertools->FirstEntity(); pEnt; pEnt = (IHandleEntity *)servertools->NextEntity((CBaseEntity *)pEnt))
+@@ -367,7 +367,7 @@
+ {
+ 	GET_V_IFACE_CURRENT(GetEngineFactory, icvar, ICvar, CVAR_INTERFACE_VERSION);
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	GET_V_IFACE_ANY(GetServerFactory, servertools, IServerTools, VSERVERTOOLS_INTERFACE_VERSION);
+ 	g_pCVar = icvar;
+ #endif
+--- a/extensions/sdkhooks/extension.h
++++ b/extensions/sdkhooks/extension.h
+@@ -12,7 +12,7 @@
+ #include <iplayerinfo.h>
+ #include <shareddefs.h>
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ #include <itoolentity.h>
+ #endif
+ 
+@@ -348,7 +348,7 @@
+ 
+ extern ICvar *icvar;
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ extern IServerTools *servertools;
+ #endif
+ 
+--- a/extensions/sdkhooks/takedamageinfohack.cpp
++++ b/extensions/sdkhooks/takedamageinfohack.cpp
+@@ -46,7 +46,7 @@
+ 		m_hAttacker = pInflictor;
+ 	}
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_LEFT4DEAD
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS && SOURCE_ENGINE != SE_LEFT4DEAD
+ 	m_hWeapon = pWeapon;
+ #endif
+ 
+@@ -62,13 +62,13 @@
+ 	m_vecReportedPosition = vec3_origin;
+ 	m_iAmmoType = -1;
+ 
+-#if SOURCE_ENGINE < SE_ORANGEBOX
++#if SOURCE_ENGINE < SE_ORANGEBOX || SOURCE_ENGINE == SE_CSS
+ 	m_iCustomKillType = 0;
+-#else
++#elif SOURCE_ENGINE >= SE_ORANGEBOX
+ 	m_iDamageCustom = 0;
+ #endif
+ 
+-#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#if SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ 	m_iDamagedOtherPlayers = 0;
+ 	m_iPlayerPenetrationCount = 0;
+@@ -76,7 +76,7 @@
+ 	m_bForceFriendlyFire = false;
+ #endif
+ 
+-#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_TF2
++#if SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_TF2
+ 	m_flDamageForForce = 0.f;
+ #endif
+ 
+--- a/extensions/sdkhooks/takedamageinfohack.h
++++ b/extensions/sdkhooks/takedamageinfohack.h
+@@ -61,7 +61,7 @@
+ 	CTakeDamageInfoHack( CBaseEntity *pInflictor, CBaseEntity *pAttacker, float flDamage, int bitsDamageType, CBaseEntity *pWeapon, Vector vecDamageForce, Vector vecDamagePosition );
+ 	inline int GetAttacker() const { return m_hAttacker.IsValid() ? m_hAttacker.GetEntryIndex() : -1; }
+ 	inline int GetInflictor() const { return m_hInflictor.IsValid() ? m_hInflictor.GetEntryIndex() : -1; }
+-#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_LEFT4DEAD
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS && SOURCE_ENGINE != SE_LEFT4DEAD
+ 	inline int GetWeapon() const { return m_hWeapon.IsValid() ? m_hWeapon.GetEntryIndex() : -1; }
+ #else
+ 	inline int GetWeapon() const { return -1; }
+@@ -81,7 +81,7 @@
+ 		m_vecDamagePosition.y = y;
+ 		m_vecDamagePosition.z = z;
+ 	}
+-#if SOURCE_ENGINE < SE_ORANGEBOX
++#if SOURCE_ENGINE < SE_ORANGEBOX || SOURCE_ENGINE == SE_CSS
+ 	inline int GetDamageCustom() const { return GetCustomKill(); }
+ #endif
+ };
+--- a/extensions/sdktools/extension.cpp
++++ b/extensions/sdktools/extension.cpp
+@@ -77,7 +77,7 @@
+ CGlobalVars *gpGlobals;
+ ISoundEmitterSystemBase *soundemitterbase = NULL;
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ IServerTools *servertools = NULL;
+ #endif
+ 
+@@ -162,7 +162,7 @@
+ 		return false;
+ 	}
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	g_pCVar = icvar;
+ #endif
+ 	CONVAR_REGISTER(this);
+@@ -306,7 +306,7 @@
+ 	GET_V_IFACE_CURRENT(GetEngineFactory, icvar, ICvar, CVAR_INTERFACE_VERSION);
+ 	GET_V_IFACE_CURRENT(GetFileSystemFactory, basefilesystem, IBaseFileSystem, BASEFILESYSTEM_INTERFACE_VERSION);
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	GET_V_IFACE_ANY(GetServerFactory, servertools, IServerTools, VSERVERTOOLS_INTERFACE_VERSION);
+ #endif
+ 	GET_V_IFACE_ANY(GetEngineFactory, soundemitterbase, ISoundEmitterSystemBase, SOUNDEMITTERSYSTEM_INTERFACE_VERSION);
+--- a/extensions/sdktools/extension.h
++++ b/extensions/sdktools/extension.h
+@@ -57,7 +57,7 @@
+ #endif
+ #include "SoundEmitterSystem/isoundemittersystembase.h"
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ #include <itoolentity.h>
+ #endif
+ 
+@@ -100,7 +100,7 @@
+ public: // IVoiceServer
+ 	bool OnSetClientListening(int iReceiver, int iSender, bool bListen);
+ 	void VoiceInit();
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	void OnClientCommand(edict_t *pEntity, const CCommand &args);
+ #else
+ 	void OnClientCommand(edict_t *pEntity);
+@@ -143,7 +143,7 @@
+ extern IServer *iserver;
+ extern IBaseFileSystem *basefilesystem;
+ extern CGlobalVars *gpGlobals;
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ extern IServerTools *servertools;
+ #endif
+ extern ISoundEmitterSystemBase *soundemitterbase;
+--- a/extensions/sdktools/tempents.cpp
++++ b/extensions/sdktools/tempents.cpp
+@@ -47,7 +47,7 @@
+ 
+ CON_COMMAND(sm_dump_teprops, "Dumps tempentity props to a file")
+ {
+-#if SOURCE_ENGINE <= SE_DARKMESSIAH
++#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	CCommand args;
+ #endif
+ 	if (!g_TEManager.IsAvailable())
+@@ -288,7 +288,6 @@
+ #if SOURCE_ENGINE == SE_TF2        \
+ 	|| SOURCE_ENGINE == SE_DODS    \
+ 	|| SOURCE_ENGINE == SE_HL2DM   \
+-	|| SOURCE_ENGINE == SE_CSS     \
+ 	|| SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS     \
+ 	|| SOURCE_ENGINE == SE_NUCLEARDAWN
+--- a/extensions/sdktools/vglobals.cpp
++++ b/extensions/sdktools/vglobals.cpp
+@@ -220,7 +220,6 @@
+ #if SOURCE_ENGINE == SE_TF2        \
+ 	|| SOURCE_ENGINE == SE_DODS    \
+ 	|| SOURCE_ENGINE == SE_HL2DM   \
+-	|| SOURCE_ENGINE == SE_CSS     \
+ 	|| SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS     \
+ 	|| SOURCE_ENGINE == SE_DOI     \
+@@ -291,7 +290,7 @@
+ {
+ 	g_ResourceEntity.Term();
+ 	
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	const char *classname = g_pGameConf->GetKeyValue("ResourceEntityClassname");
+ 	if (classname != NULL)
+ 	{
+--- a/extensions/sdktools/vhelpers.cpp
++++ b/extensions/sdktools/vhelpers.cpp
+@@ -266,7 +266,7 @@
+ 
+ bool GetPlayerInfo(int client, player_info_t *info)
+ {
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	return engine->GetPlayerInfo(client, info);
+ #else
+ 	return (iserver) ? iserver->GetPlayerInfo(client-1, info) : false;
+@@ -369,7 +369,7 @@
+ 	{
+ 		strcat(str, "Collapsible|");
+ 	}
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	if (flags & SPROP_COORD_MP)
+ 	{
+ 		strcat(str, "CoordMP|");
+@@ -507,7 +507,7 @@
+ 
+ CON_COMMAND(sm_dump_netprops_xml, "Dumps the networkable property table as an XML file")
+ {
+-#if SOURCE_ENGINE <= SE_DARKMESSIAH
++#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	CCommand args;
+ #endif
+ 
+@@ -563,7 +563,7 @@
+ 
+ CON_COMMAND(sm_dump_netprops, "Dumps the networkable property table as a text file")
+ {
+-#if SOURCE_ENGINE <= SE_DARKMESSIAH
++#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	CCommand args;
+ #endif
+ 
+@@ -622,7 +622,6 @@
+ 	static CEntityFactoryDictionary *dict = NULL;
+ 
+ #if SOURCE_ENGINE == SE_TF2        \
+-	|| SOURCE_ENGINE == SE_CSS     \
+ 	|| SOURCE_ENGINE == SE_DODS    \
+ 	|| SOURCE_ENGINE == SE_HL2DM   \
+ 	|| SOURCE_ENGINE == SE_SDK2013 \
+@@ -697,7 +696,7 @@
+ 
+ CON_COMMAND(sm_dump_classes, "Dumps the class list as a text file")
+ {
+-#if SOURCE_ENGINE <= SE_DARKMESSIAH
++#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	CCommand args;
+ #endif
+ 
+@@ -861,7 +860,7 @@
+ 
+ CON_COMMAND(sm_dump_datamaps, "Dumps the data map list as a text file")
+ {
+-#if SOURCE_ENGINE <= SE_DARKMESSIAH
++#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ 	CCommand args;
+ #endif
+ 
+--- a/extensions/sdktools/vnatives.cpp
++++ b/extensions/sdktools/vnatives.cpp
+@@ -421,7 +421,7 @@
+ 	return 1;
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ /* :TODO: This is Team Fortress 2 specific */
+ static cell_t ForcePlayerSuicide(IPluginContext *pContext, const cell_t *params)
+ {
+@@ -753,7 +753,7 @@
+ 	return got_angles ? 1 : 0;
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ static cell_t NativeFindEntityByClassname(IPluginContext *pContext, const cell_t *params)
+ {
+ 	char *searchname;
+@@ -835,7 +835,6 @@
+ #if SOURCE_ENGINE == SE_TF2        \
+ 	|| SOURCE_ENGINE == SE_DODS    \
+ 	|| SOURCE_ENGINE == SE_HL2DM   \
+-	|| SOURCE_ENGINE == SE_CSS     \
+ 	|| SOURCE_ENGINE == SE_BMS     \
+ 	|| SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_NUCLEARDAWN
+@@ -866,7 +865,7 @@
+ 	static ValveCall *pCall = NULL;
+ 	static bool bProbablyNoFEBC = false;
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	if (bProbablyNoFEBC)
+ 	{
+ 		return NativeFindEntityByClassname(pContext, params);
+@@ -891,7 +890,7 @@
+ 
+ 		if (error[0] != '\0')
+ 		{
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 			if (!bProbablyNoFEBC)
+ 			{
+ 				bProbablyNoFEBC = true;
+@@ -922,7 +921,7 @@
+ 	return gamehelpers->EntityToBCompatRef(pEntity);
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ static cell_t CreateEntityByName(IPluginContext *pContext, const cell_t *params)
+ {
+ 	if (!g_pSM->IsMapRunning())
+@@ -977,7 +976,7 @@
+ }
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ static cell_t DispatchSpawn(IPluginContext *pContext, const cell_t *params)
+ {
+ 	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+@@ -1016,7 +1015,7 @@
+ }
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ static cell_t DispatchKeyValue(IPluginContext *pContext, const cell_t *params)
+ {
+ 	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+@@ -1061,7 +1060,7 @@
+ }
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ static cell_t DispatchKeyValueFloat(IPluginContext *pContext, const cell_t *params)
+ {
+ 	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+@@ -1106,7 +1105,7 @@
+ }
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ static cell_t DispatchKeyValueVector(IPluginContext *pContext, const cell_t *params)
+ {
+ 	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+@@ -1136,7 +1135,7 @@
+ 	{
+ 		ValvePassInfo pass[3];
+ 		InitPass(pass[0], Valve_String, PassType_Basic, PASSFLAG_BYVAL);
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 		InitPass(pass[1], Valve_Vector, PassType_Basic, PASSFLAG_BYVAL);
+ #else
+ 		InitPass(pass[1], Valve_Vector, PassType_Object, PASSFLAG_BYVAL|PASSFLAG_OCTOR|PASSFLAG_OASSIGNOP);
+--- a/extensions/sdktools/voice.cpp
++++ b/extensions/sdktools/voice.cpp
+@@ -58,7 +58,7 @@
+ 
+ SH_DECL_HOOK3(IVoiceServer, SetClientListening, SH_NOATTRIB, 0, bool, int, int, bool);
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ SH_DECL_HOOK2_void(IServerGameClients, ClientCommand, SH_NOATTRIB, 0, edict_t *, const CCommand &);
+ #else
+ SH_DECL_HOOK1_void(IServerGameClients, ClientCommand, SH_NOATTRIB, 0, edict_t *);
+@@ -91,7 +91,7 @@
+ 	SH_ADD_HOOK(IServerGameClients, ClientCommand, serverClients, SH_MEMBER(this, &SDKTools::OnClientCommand), true);
+ }
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ void SDKTools::OnClientCommand(edict_t *pEntity, const CCommand &args)
+ {
+ 	int client = IndexOfEdict(pEntity);
+--- a/extensions/sdktools/vsound.cpp
++++ b/extensions/sdktools/vsound.cpp
+@@ -40,7 +40,7 @@
+ #elif SOURCE_ENGINE >= SE_PORTAL2
+ SH_DECL_HOOK17(IEngineSound, EmitSound, SH_NOATTRIB, 0, int, IRecipientFilter &, int, int, const char *, unsigned int, const char *, float, float, int, int, int, const Vector *, const Vector *, CUtlVector<Vector> *, bool, float, int);
+ SH_DECL_HOOK17(IEngineSound, EmitSound, SH_NOATTRIB, 1, int, IRecipientFilter &, int, int, const char *, unsigned int, const char *, float, soundlevel_t, int, int, int, const Vector *, const Vector *, CUtlVector<Vector> *, bool, float, int);
+-#elif SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#elif SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ SH_DECL_HOOK15_void(IEngineSound, EmitSound, SH_NOATTRIB, 0, IRecipientFilter &, int, int, const char *, float, float, int, int, int, const Vector *, const Vector *, CUtlVector<Vector> *, bool, float, int);
+ SH_DECL_HOOK15_void(IEngineSound, EmitSound, SH_NOATTRIB, 1, IRecipientFilter &, int, int, const char *, float, soundlevel_t, int, int, int, const Vector *, const Vector *, CUtlVector<Vector> *, bool, float, int);
+@@ -326,7 +326,7 @@
+ 							 float flVolume, soundlevel_t iSoundlevel, int nSeed, int iFlags, int iPitch, const Vector *pOrigin, 
+ 							 const Vector *pDirection, CUtlVector<Vector> *pUtlVecOrigins, bool bUpdatePositions, 
+ 							 float soundtime, int speakerentity)
+-#elif SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#elif SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ void SoundHooks::OnEmitSound(IRecipientFilter &filter, int iEntIndex, int iChannel, const char *pSample, 
+ 							 float flVolume, soundlevel_t iSoundlevel, int iFlags, int iPitch, int iSpecialDSP, const Vector *pOrigin, 
+@@ -440,7 +440,7 @@
+ 					(crf, iEntIndex, iChannel, soundEntry, nSoundEntryHash, buffer, flVolume, iSoundlevel, nSeed, iFlags, iPitch, pOrigin,
+ 					pDirection, pUtlVecOrigins, bUpdatePositions, soundtime, speakerentity)
+ 					);
+-#elif SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#elif SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ 				RETURN_META_NEWPARAMS(
+ 					MRES_IGNORED,
+@@ -477,7 +477,7 @@
+ 							 float flVolume, float flAttenuation, int nSeed, int iFlags, int iPitch, const Vector *pOrigin, 
+ 							 const Vector *pDirection, CUtlVector<Vector> *pUtlVecOrigins, bool bUpdatePositions, 
+ 							 float soundtime, int speakerentity)
+-#elif SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#elif SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ void SoundHooks::OnEmitSound2(IRecipientFilter &filter, int iEntIndex, int iChannel, const char *pSample, 
+ 							 float flVolume, float flAttenuation, int iFlags, int iPitch, int iSpecialDSP, const Vector *pOrigin, 
+@@ -592,7 +592,7 @@
+ 					(crf, iEntIndex, iChannel, soundEntry, nSoundEntryHash, buffer, flVolume, SNDLVL_TO_ATTN(static_cast<soundlevel_t>(sndlevel)),
+ 					nSeed, iFlags, iPitch, pOrigin, pDirection, pUtlVecOrigins, bUpdatePositions, soundtime, speakerentity)
+ 					);
+-#elif SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#elif SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ RETURN_META_NEWPARAMS(
+ 					MRES_IGNORED,
+@@ -970,7 +970,7 @@
+ 					soundtime,
+ 					speakerentity);
+ 			}
+-#elif SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#elif SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ 			if (g_InSoundHook)
+ 			{
+@@ -1146,7 +1146,7 @@
+ 				soundtime,
+ 				speakerentity);
+ 		}
+-#elif SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#elif SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ 		if (g_InSoundHook)
+ 		{
+@@ -1477,7 +1477,7 @@
+ #endif
+ 		flags, 
+ 		pitch, 
+-#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#if SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ 		0, 
+ #endif
+--- a/extensions/sdktools/vsound.h
++++ b/extensions/sdktools/vsound.h
+@@ -72,7 +72,7 @@
+ 		const Vector *pDirection, CUtlVector<Vector> *pUtlVecOrigins, bool bUpdatePositions, 
+ 		float soundtime, int speakerentity);
+ #else
+-#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
++#if SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_SDK2013 \
+ 	|| SOURCE_ENGINE == SE_BMS || SOURCE_ENGINE == SE_TF2
+ 	
+ 	void OnEmitSound(IRecipientFilter& filter, int iEntIndex, int iChannel, const char *pSample, float flVolume, 
+--- a/extensions/sdktools/vstringtable.cpp
++++ b/extensions/sdktools/vstringtable.cpp
+@@ -203,7 +203,7 @@
+ 	pContext->LocalToString(params[3], &addr);
+ 
+ 	int maxBytes = params[4];
+-	size_t numBytes = MIN(maxBytes, datalen);
++	size_t numBytes = (maxBytes < datalen ? maxBytes : datalen);
+ 
+ 	if (userdata)
+ 	{
+@@ -256,7 +256,7 @@
+ 	pContext->LocalToString(params[2], &str);
+ 	pContext->LocalToString(params[3], &userdata);
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	pTable->AddString(true, str, params[4], userdata);
+ #else
+ 	pTable->AddString(str, params[4], userdata);
+--- a/public/compat_wrappers.h
++++ b/public/compat_wrappers.h
+@@ -34,12 +34,12 @@
+ 
+ #include <datamap.h>
+ 
+-#if SOURCE_ENGINE == SE_DARKMESSIAH
++#if SOURCE_ENGINE == SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS
+ class EQueryCvarValueStatus;
+ typedef int QueryCvarCookie_t;
+ #endif
+ 
+-#if SOURCE_ENGINE >= SE_ORANGEBOX
++#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS
+ 	#define CONVAR_REGISTER(object)				ConVar_Register(0, object)
+ 
+ 	inline bool IsFlagSet(ConCommandBase *cmd, int flag)
+--- a/tools/buildbot/Versioning
++++ b/tools/buildbot/Versioning
+@@ -17,15 +17,31 @@
+   os.path.join(builder.buildFolder, 'includes', 'version_auto.inc'),
+ ]
+ 
+-with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
++def _resolve_git_head_path(source_path):
++  git_meta = os.path.join(source_path, '.git')
++  if os.path.isfile(git_meta):
++    with open(git_meta) as meta_fp:
++      gitdir_line = meta_fp.read().strip()
++    if gitdir_line.startswith('gitdir: '):
++      git_dir = gitdir_line[8:]
++      if not os.path.isabs(git_dir):
++        git_dir = os.path.normpath(os.path.join(source_path, git_dir))
++    else:
++      git_dir = git_meta
++  else:
++    git_dir = git_meta
++  return os.path.join(git_dir, 'HEAD')
++
++git_head_path = _resolve_git_head_path(builder.sourcePath)
++with open(git_head_path) as fp:
+   head_contents = fp.read().strip()
+   if re.search('^[a-fA-F0-9]{40}$', head_contents):
+-    git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
++    pass
+   else:
+     git_state = head_contents.split(':')[1].strip()
+-    git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
+-    if not os.path.exists(git_head_path):
+-      git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
++    candidate = os.path.join(os.path.dirname(git_head_path), git_state)
++    if os.path.exists(candidate):
++      git_head_path = candidate
+ 
+ sources = [
+   os.path.join(builder.sourcePath, 'product.version'),
