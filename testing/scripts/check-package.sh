@@ -62,12 +62,17 @@ for lib in libpthread.so.0 librt.so.1; do
   fi
 done
 if printf '%s\n' "${logic_needed}" | grep -qx 'libstdc++.so.6'; then
-  echo "WARN: sourcemod.logic.so links libstdc++.so.6 dynamically (rom4s embeds static libstdc++; hang risk)"
+  echo "FAIL: sourcemod.logic.so links libstdc++.so.6 dynamically (rom4s embeds static libstdc++; hang risk)" >&2
+  fail=1
 else
   echo "OK: sourcemod.logic.so does not DT_NEEDED libstdc++.so.6 (static embed like rom4s)"
 fi
-if printf '%s\n' "${logic_dynsyms}" | grep -q '__cxx11'; then
-  echo "WARN: logic.so exports C++11 std::string ABI symbols (rom4s logic has none)"
+logic_cxx11="$(printf '%s\n' "${logic_dynsyms}" | grep -c '__cxx11' || true)"
+if [[ "${logic_cxx11}" -gt 0 ]]; then
+  echo "FAIL: logic.so exports ${logic_cxx11} C++11 std::string ABI symbols (rom4s logic has none; hang risk)" >&2
+  fail=1
+else
+  echo "OK: logic.so has no __cxx11 ABI exports"
 fi
 
 echo "==> Checking DT_NEEDED for game libs (GetCVarIF / tier0)"
@@ -135,26 +140,40 @@ fi
 
 echo "==> Checking GLIBC requirements (css34 targets old distros)"
 max_glibc="$(
-  objdump -T "${MM_SO}" "${CORE_SO}" 2>/dev/null \
+  objdump -T "${MM_SO}" "${CORE_SO}" "${LOGIC_SO}" 2>/dev/null \
     | grep -oE 'GLIBC_[0-9.]+' \
     | sed 's/GLIBC_//' \
     | sort -t. -k1,1n -k2,2n -k3,3n \
     | tail -n1 || true
 )"
-echo "Highest GLIBC symbol version referenced: ${max_glibc:-unknown}"
-# Debian 10 = 2.28, Debian 9 = 2.24, CentOS 7 = 2.17. rom4s builds stay on 2.4-era symbols.
-# Ubuntu 22.04 host builds typically pull 2.33/2.34 from system libc; that still loads on
-# Debian 12+ / modern Rocky. Soft-warn so CreateInterface/DT_NEEDED stay the hard gates.
-if [[ -n "${max_glibc}" ]]; then
-  major="${max_glibc%%.*}"
-  rest="${max_glibc#*.}"
-  minor="${rest%%.*}"
-  if [[ "${major}" -gt 2 || ( "${major}" -eq 2 && "${minor}" -ge 29 ) ]]; then
-    echo "WARN: package requires GLIBC_${max_glibc} (>= 2.29); too new for Debian 8-10 / CentOS 7"
-    echo "      Use the rom4s reference package on legacy distros; host-built packages need newer glibc."
-  else
-    echo "OK: GLIBC_${max_glibc} is within legacy-server range"
-  fi
+logic_max_glibc="$(
+  objdump -T "${LOGIC_SO}" 2>/dev/null \
+    | grep -oE 'GLIBC_[0-9.]+' \
+    | sed 's/GLIBC_//' \
+    | sort -t. -k1,1n -k2,2n -k3,3n \
+    | tail -n1 || true
+)"
+echo "Highest GLIBC symbol version referenced: ${max_glibc:-unknown} (logic: ${logic_max_glibc:-unknown})"
+# Debian 10 = 2.28, Debian 9 = 2.24, CentOS 7 = 2.17. rom4s logic stays on 2.12-era symbols.
+glibc_too_new() {
+  local ver="$1"
+  [[ -z "${ver}" ]] && return 1
+  local major="${ver%%.*}"
+  local rest="${ver#*.}"
+  local minor="${rest%%.*}"
+  [[ "${major}" -gt 2 || ( "${major}" -eq 2 && "${minor}" -ge 29 ) ]]
+}
+if glibc_too_new "${logic_max_glibc}"; then
+  echo "FAIL: sourcemod.logic.so requires GLIBC_${logic_max_glibc} (>= 2.29); jammy-native logic hangs srcds" >&2
+  fail=1
+elif [[ -n "${logic_max_glibc}" ]]; then
+  echo "OK: logic GLIBC_${logic_max_glibc} is within legacy-server range"
+fi
+if glibc_too_new "${max_glibc}"; then
+  echo "WARN: package requires GLIBC_${max_glibc} (>= 2.29); too new for Debian 8-10 / CentOS 7"
+  echo "      Use the rom4s reference package on legacy distros; host-built packages need newer glibc."
+else
+  echo "OK: GLIBC_${max_glibc} is within legacy-server range"
 fi
 
 if [[ "${fail}" -ne 0 ]]; then
