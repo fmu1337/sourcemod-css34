@@ -41,11 +41,27 @@ git submodule update --init --recursive
 builder/run/windows.sh
 ```
 
-The script writes `packages/sourcemod-1.11.0-git6572-css34-windows.zip`.
+The script builds Metamod + SourceMod and writes:
+
+- `packages/mmsource-1.10.7-dev-css34-windows.zip`
+- `packages/sourcemod-1.11.0-git6572-css34-windows.zip`
 
 ## CI
 
 GitHub Actions workflow `.github/workflows/build.yml` runs the Linux and Windows builds on pushes and pull requests.
+
+Release builds publish from **tags** only. Short tag format:
+
+```text
+1.11.0.6572-mm1.10.7
+```
+
+Push a matching tag to run `.github/workflows/release.yml`, which builds SM + MM for Linux and Windows and attaches the four packages to a GitHub Release.
+
+```bash
+git tag 1.11.0.6572-mm1.10.7
+git push origin 1.11.0.6572-mm1.10.7
+```
 
 `.github/workflows/test-server.yml` builds **our** Metamod 1.10.7 + SourceMod 6572 packages and smoke-tests them on a real CS:S v34 dedicated server under Debian 11 / 12 / 13 / Latest, Rocky Linux 9, and the Ubuntu 22.04 host runner.
 
@@ -53,15 +69,16 @@ It applies the modern-OS buffer fix (`srcds_patch` + `valve.rc`), loads our Meta
 
 ## Install
 
-Extract the archive into your CS:S v34 server `cstrike` directory (Metamod:Source must already be installed).
+Extract the Metamod package into the CS:S v34 server `cstrike` directory first, then SourceMod.
 
 Linux:
 
 ```bash
+tar -xzf mmsource-1.10.7-dev-css34-linux.tar.gz -C /path/to/cstrike
 tar -xzf sourcemod-1.11.0-git6572-css34-linux.tar.gz -C /path/to/cstrike
 ```
 
-Windows: unzip `sourcemod-1.11.0-git6572-css34-windows.zip` into `cstrike`.
+Windows: unzip `mmsource-*-css34-windows.zip`, then `sourcemod-*-css34-windows.zip`, into `cstrike`.
 
 ## Notes
 
