@@ -9,7 +9,7 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 | `test-debian` | `debian:8` … `13` / `latest` | rom4s **reference** 1.11.0.6572 (or `sm_url`) |
 | `test-centos` | `centos:7`, `rockylinux:8`, `rockylinux:9` | same reference |
 | `check-built-package` | ubuntu-22.04 | freshly built artifact (CreateInterface + DT_NEEDED) |
-| `test-built-smoke` | ubuntu-22.04 | freshly built artifact on the build host |
+| `test-built-smoke` | ubuntu-22.04 | **built MM** + rom4s SM 6572 (until in-tree SM smoke is green) |
 
 Rocky Linux stands in for modern CentOS-stream/RHEL-family hosts (CentOS 8+ is EOL).
 
@@ -51,7 +51,13 @@ chmod +x testing/scripts/*.sh
 # Uses rom4s SM 1.11.0.6572 by default:
 SERVER_DIR=$PWD/.ci-server CACHE_DIR=$PWD/.ci-cache testing/scripts/run-smoke.sh
 
-# Or test a local package from builder/:
+# Test freshly built SM + MM from builder/run/linux.sh:
+USE_BUILT_MM=1 \
+SM_PACKAGE=$PWD/packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz \
+  testing/scripts/run-smoke.sh
+
+# Or explicit Metamod package tarball:
+MM_PACKAGE=$PWD/packages/mmsource-1.10.7-dev-css34-linux.tar.gz \
 SM_PACKAGE=$PWD/packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz \
   testing/scripts/run-smoke.sh
 ```

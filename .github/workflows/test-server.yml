@@ -41,7 +41,8 @@ jobs:
           SOURCEMOD_GIT_REV: "6572"
         run: |
           chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
-            builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh \
+            builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
+            builder/build-metamod.sh builder/prepare-package.sh \
             builder/py.sh builder/patches/*.sh \
             builder/install-clang9.sh builder/install-clang10.sh
           builder/docker/legacy-build.sh
@@ -51,6 +52,13 @@ jobs:
         with:
           name: sourcemod-css34-linux-for-test
           path: packages/sourcemod-*-css34-linux.tar.gz
+          if-no-files-found: error
+
+      - name: Upload Metamod package
+        uses: actions/upload-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
+          path: packages/mmsource-*-css34-linux.tar.gz
           if-no-files-found: error
 
   check-built-package:
@@ -222,7 +230,7 @@ jobs:
               testing/scripts/smoke-test.sh
             '
 
-  # Boots the freshly built package on the build host OS (Ubuntu 22.04 / modern glibc).
+  # Boots freshly built Metamod + SourceMod (legacy-build packages) on the host.
   test-built-smoke:
     needs: [build-linux, prepare-server, check-built-package]
     runs-on: ubuntu-22.04
@@ -234,6 +242,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download Metamod package
+        uses: actions/download-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
           path: packages
 
       - name: Download server tree
@@ -248,20 +262,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y expect lib32gcc-s1 lib32stdc++6 lib32z1 libc6-i386 libstdc++6:i386 zlib1g:i386
 
-      - name: Smoke test built package
+      - name: Smoke test built Metamod + built SourceMod
         env:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
-          MM_URL: ${{ env.MM_URL }}
+          MM_VERSION_EXPECT: "1.10.7"
           TIMEOUT_SECS: 120
           SMOKE_CONDEBUG: "1"
           SMOKE_VERBOSE: "1"
         run: |
           chmod +x testing/scripts/*.sh
-          mkdir -p .ci-server
+          mkdir -p .ci-server .ci-cache
           tar -xzf server-art/css34-server.tar.gz -C .ci-server
           SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
-          export SM_PACKAGE
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
+          export SM_PACKAGE MM_PACKAGE
           testing/scripts/install-addons.sh
           testing/scripts/smoke-test.sh
 
