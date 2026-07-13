@@ -1,0 +1,3 @@
+// Minimal valve.rc for CI without srcds_patch (avoids stuffcmds buffer bug).
+r_decal_cullsize 1
+exec autoexec.cfg

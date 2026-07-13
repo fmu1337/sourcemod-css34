@@ -30,10 +30,31 @@ if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
     linux-libc-dev
 fi
 
-export CC="${CC:-gcc-9}"
-export CXX="${CXX:-g++-9}"
+# rom4s SM 1.11.0.6572 was built with clang-9; gcc-9 produces a core that
+# loads alone but SIGSEGVs inside css34 metamod when engine extensions
+# register SourceHook hooks (FastDelegate / HookMan ABI drift).
+USE_CLANG9="${USE_CLANG9:-1}"
+if [ "$USE_CLANG9" = "1" ]; then
+  echo "==> Installing/using clang-9 (rom4s-compatible toolchain)"
+  bash "$BUILDER_DIR/install-clang9.sh" "$DEPS_DIR"
+  # shellcheck source=/dev/null
+  source "$DEPS_DIR/clang9.env"
+  export CC="${CC:-clang-9}"
+  export CXX="${CXX:-clang++-9}"
+  # Prefer clang-9 wrappers even if a parent env exported gcc-9.
+  case "$CC" in
+    gcc*|g++*) export CC=clang-9 ;;
+  esac
+  case "$CXX" in
+    g++*|gcc*) export CXX=clang++-9 ;;
+  esac
+else
+  export CC="${CC:-gcc-9}"
+  export CXX="${CXX:-g++-9}"
+fi
 
 echo "==> Using compiler: $($CC --version | head -1)"
+echo "==> Using C++ compiler: $($CXX --version | head -1)"
 
 echo "==> Initializing SourceMod submodule"
 cd "$WDIR"
@@ -46,6 +67,7 @@ git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
+chmod +x "$BUILDER_DIR/py.sh" 2>/dev/null || true
 
 python3 -m pip install --upgrade pip --user
 python3 -m pip install --user "$DEPS_DIR/ambuild" 2>/dev/null || true

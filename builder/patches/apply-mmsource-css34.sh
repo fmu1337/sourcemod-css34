@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# CS:S v34 Metamod:Source 1.10.6 uses the PLAPI 11 / core-legacy ABI and
+# SourceHook iface v4. Upstream mmsource 1.10-dev defaults to core/ (SH v5 /
+# modern ISmmAPI), which produces plugins that crash inside css34 MM when
+# registering hooks (HookManPubFunc / AddHook ABI mismatch → null call).
+#
+# We:
+#  1) Replace core/sourcehook with core-legacy (SH_IFACE_VERSION 4)
+#  2) Keep legacy ISmmAPI *vtable order* (and PLAPI 11) but rename methods to
+#     modern SourceMod-facing names so SM compiles without metamod_wrappers.h
+#     macros that break Valve IConCommandBaseAccessor::RegisterConCommandBase.
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Always invoke via bash so a missing +x bit cannot break CI checkouts.
+PY=(bash "$script_dir/../py.sh")
+
+mms_dir="${1:?mmsource directory required}"
+core_dir="$mms_dir/core"
+legacy_dir="$mms_dir/core-legacy"
+ext_h="$core_dir/ISmmPluginExt.h"
+
+if [ ! -d "$core_dir" ]; then
+  echo "Missing Metamod core dir: $core_dir" >&2
+  exit 1
+fi
+
+# --- SourceHook v4 (required by css34 metamod.1.ep1.so) ---
+if [ -d "$legacy_dir/sourcehook" ]; then
+  echo "==> Installing core-legacy SourceHook (SH_IFACE_VERSION 4) into core/"
+  rm -rf "$core_dir/sourcehook"
+  cp -a "$legacy_dir/sourcehook" "$core_dir/sourcehook"
+  # loader/AMBuilder also looks for $mms_root/sourcehook
+  if [ "${BUILD_PLATFORM:-linux}" = "windows" ]; then
+    rm -rf "$mms_dir/sourcehook"
+    cp -a "$core_dir/sourcehook" "$mms_dir/sourcehook"
+  else
+    ln -sfn core/sourcehook "$mms_dir/sourcehook"
+  fi
+  if ! grep -q 'SH_IFACE_VERSION 4' "$core_dir/sourcehook/sourcehook.h"; then
+    echo "Expected SH_IFACE_VERSION 4 after core-legacy sourcehook install" >&2
+    exit 1
+  fi
+  # SourceMod 1.11 uses SH_DECL_EXTERN* (modern-only). Emit v4-ABI equivalents
+  # (AddHook has no AddHookMode; VP hooks use separate FHVPAdd).
+  export MMS_CSS34_SH_H="$core_dir/sourcehook/sourcehook.h"
+  export MMS_CSS34_ROOT="$mms_dir"
+  "${PY[@]}" "$script_dir/gen-sh-decl-extern-v4.py"
+else
+  echo "Missing $legacy_dir/sourcehook — cannot target css34 Metamod" >&2
+  exit 1
+fi
+
+MMS_LEGACY_SHA="${MMS_LEGACY_SHA:-a112f84e1fe9659918300c65102ad97cdc5b106d}"
+tmpdir="$(mktemp -d)"
+cleanup() { rm -rf "$tmpdir"; }
+trap cleanup EXIT
+
+echo "==> Fetching Metamod core-legacy ISmm headers (${MMS_LEGACY_SHA})"
+curl -fsSL -o "$tmpdir/ISmmAPI.h" \
+  "https://raw.githubusercontent.com/alliedmodders/metamod-source/${MMS_LEGACY_SHA}/core-legacy/ISmmAPI.h"
+curl -fsSL -o "$tmpdir/ISmmPlugin.h" \
+  "https://raw.githubusercontent.com/alliedmodders/metamod-source/${MMS_LEGACY_SHA}/core-legacy/ISmmPlugin.h"
+
+export MMS_CORE_DIR="$core_dir"
+export MMS_TMPDIR="$tmpdir"
+"${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+import re
+
+core = Path(os.environ['MMS_CORE_DIR'])
+tmpdir = Path(os.environ['MMS_TMPDIR'])
+
+def strip_old_gcc_guard(text: str) -> str:
+    return re.sub(
+        r'#if defined __GNUC__\n#if \(\(__GNUC__ == 3\).*?#endif //__GNUC__\n',
+        '',
+        text,
+        count=1,
+        flags=re.S,
+    )
+
+def wrap_sourcemm(text: str, usings: list) -> str:
+    text = strip_old_gcc_guard(text)
+    if 'namespace SourceMM' in text:
+        return text
+    m = re.search(r'#ifndef\s+\w+\n#define\s+\w+\n', text)
+    if not m:
+        raise SystemExit('Could not find include guard start')
+    endif = text.rfind('#endif')
+    if endif < 0:
+        raise SystemExit('Could not find include guard end')
+    head, body, tail = text[:m.end()], text[m.end():endif], text[endif:]
+    preamble, decls = [], []
+    for line in body.splitlines(True):
+        stripped = line.lstrip()
+        if stripped.startswith('#include'):
+            preamble.append(line)
+        else:
+            decls.append(line)
+    using_lines = ''.join(f'using SourceMM::{name};\n' for name in usings)
+    return (
+        head + ''.join(preamble) + '\nnamespace SourceMM {\n'
+        + ''.join(decls) + '\n} // namespace SourceMM\n\n'
+        + using_lines + '\n' + tail
+    )
+
+# Modern names, legacy slot order.
+api_renames = [
+    ('engineFactory', 'GetEngineFactory'),
+    ('physicsFactory', 'GetPhysicsFactory'),
+    ('fileSystemFactory', 'GetFileSystemFactory'),
+    ('serverFactory', 'GetServerFactory'),
+    ('pGlobals', 'GetCGlobals'),
+    ('RegisterConCmdBase', 'RegisterConCommandBase'),
+    ('UnregisterConCmdBase', 'UnregisterConCommandBase'),
+]
+
+api = (tmpdir / 'ISmmAPI.h').read_text()
+for old, new in api_renames:
+    # Only rename method declarations / references that are the identifier.
+    api = re.sub(rf'\b{old}\b', new, api)
+
+# META_REG* macros in legacy ISmmPlugin still say RegisterConCmdBase — fix after wrap.
+plugin = (tmpdir / 'ISmmPlugin.h').read_text()
+plugin = plugin.replace('RegisterConCmdBase', 'RegisterConCommandBase')
+plugin = plugin.replace('UnregisterConCmdBase', 'UnregisterConCommandBase')
+
+api = wrap_sourcemm(api, ['ISmmAPI'])
+plugin = wrap_sourcemm(plugin, ['ISmmPlugin', 'IMetamodListener'])
+
+# Legacy headers only export with default visibility on GCC 4.x; gcc-9 needs >= 4.
+plugin = plugin.replace(
+    '#if (__GNUC__ == 4) && (__GNUC_MINOR__ >= 1)',
+    '#if (__GNUC__ >= 4)',
+)
+
+if 'GetEngineFactory' not in api or 'SetLastMetaReturn' not in api:
+    raise SystemExit('ISmmAPI rename/wrap failed sanity check')
+if 'PLAPI_VERSION' not in plugin:
+    raise SystemExit('ISmmPlugin missing PLAPI_VERSION')
+if '#if (__GNUC__ >= 4)' not in plugin:
+    raise SystemExit('Failed to patch SMM_API visibility for modern GCC')
+
+(core / 'ISmmAPI.h').write_text(api)
+(core / 'ISmmPlugin.h').write_text(plugin)
+print('==> Installed legacy-layout ISmmAPI/ISmmPlugin with modern method names')
+PY
+
+# Ext.h: define METAMOD_PLAPI_VERSION=11 so smsdk_ext takes the modern-name code path
+# against our renamed legacy-layout ISmmAPI. GetApiVersion still returns PLAPI_VERSION (11)
+# from ISmmPlugin.h.
+if [ -f "$ext_h" ]; then
+  "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+import re
+path = Path(os.environ['MMS_CORE_DIR']) / 'ISmmPluginExt.h'
+text = path.read_text()
+if re.search(r'^#define METAMOD_PLAPI_VERSION\s+11\b', text, re.M):
+    print('==> ISmmPluginExt.h already has METAMOD_PLAPI_VERSION 11')
+elif 'css34 uses PLAPI_VERSION 11' in text or 'METAMOD_PLAPI_VERSION omitted' in text:
+    text2 = re.sub(
+        r'/\* METAMOD_PLAPI_VERSION omitted:.*? \*/',
+        '#define METAMOD_PLAPI_VERSION\t\t\t11\t\t\t\t/**< css34 Metamod max API */',
+        text,
+        count=1,
+        flags=re.S,
+    )
+    path.write_text(text2)
+    print('==> Restored METAMOD_PLAPI_VERSION 11 in ISmmPluginExt.h')
+else:
+    text2, n = re.subn(
+        r'^#define METAMOD_PLAPI_VERSION\s+\d+.*$',
+        '#define METAMOD_PLAPI_VERSION\t\t\t11\t\t\t\t/**< css34 Metamod max API */',
+        text,
+        count=1,
+        flags=re.M,
+    )
+    if n != 1:
+        raise SystemExit('Failed to pin METAMOD_PLAPI_VERSION in ISmmPluginExt.h')
+    path.write_text(text2)
+    print('==> Pinned METAMOD_PLAPI_VERSION to 11 in ISmmPluginExt.h')
+PY
+fi

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Always invoke via bash so a missing +x bit cannot break CI checkouts.
+PY=(bash "$script_dir/../py.sh")
+
 sdk_dir="${1:?hl2sdk directory required}"
 
 apply_sed() {
@@ -14,7 +18,7 @@ if [ ! -e "$sdk_dir/public/SoundEmitterSystem" ] && [ -d "$sdk_dir/public/sounde
 fi
 
 create_include_symlinks() {
-  python3 - <<'PY'
+  "${PY[@]}" - <<'PY'
 import os, re
 sdk = os.environ['SDK_DIR']
 public = os.path.join(sdk, 'public')
@@ -76,7 +80,7 @@ apply_sed public/tier0/wchartypes.h \
 apply_sed public/bitmap/imageformat.h \
   's/#pragma warning(disable : 4514)/#ifdef _MSC_VER\n#pragma warning(disable : 4514)\n#endif/'
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 sdk = Path(__import__('os').environ['SDK_DIR'])
 
@@ -151,7 +155,7 @@ if [ ! -e "$sdk_dir/public/steamcommon.h" ]; then
   ln -sf ../common/steamcommon.h "$sdk_dir/public/steamcommon.h"
 fi
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 path = Path(__import__('os').environ['SDK_DIR']) / 'public/tier0/memalloc.h'
 text = path.read_text(encoding='latin-1')
@@ -184,7 +188,7 @@ apply_sed public/tier1/utlmemory.h \
 apply_sed public/edict.h \
   's|"engine/ICollideable.h"|"engine/icollideable.h"|'
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 path = Path(__import__('os').environ['SDK_DIR']) / 'public/tier0/threadtools.h'
 text = path.read_text(encoding='latin-1')
@@ -204,7 +208,7 @@ for old, new in replacements:
 path.write_text(text, encoding='latin-1')
 PY
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 path = Path(__import__('os').environ['SDK_DIR']) / 'public/dt_common.h'
 text = path.read_text(encoding='latin-1')
@@ -217,7 +221,7 @@ if 'SPROP_VARINT' not in text:
     path.write_text(text, encoding='latin-1')
 PY
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 path = Path(__import__('os').environ['SDK_DIR']) / 'public/tier0/platform.h'
 text = path.read_text(encoding='latin-1')
@@ -236,7 +240,7 @@ apply_sed public/engine/iserverplugin.h \
 apply_sed public/toolframework/itoolentity.h \
   's|"Color.h"|"color.h"|'
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import re
 
@@ -285,13 +289,175 @@ if [ -f "$math_base_h" ] && grep -q 'FORCEINLINE_TEMPLATE void swap( T& x, T& y 
 // Swap template removed for CSS34 gcc compatibility (conflicts with std::swap).' "$math_base_h"
 fi
 
-# Link-time stubs: tier0/vstdlib come from the game at runtime, not from the SDK repo.
+# CS:S v34 exposes ServerGameDLL006 (same as alliedmodders episode1). ep1c still ships 005.
+eiface="$sdk_dir/public/eiface.h"
+if [ -f "$eiface" ] && grep -q 'INTERFACEVERSION_SERVERGAMEDLL.*"ServerGameDLL005"' "$eiface"; then
+  if ! grep -q 'INTERFACEVERSION_SERVERGAMEDLL_VERSION_5' "$eiface"; then
+    sed -i 's|#define INTERFACEVERSION_SERVERGAMEDLL_VERSION_4\t"ServerGameDLL004"|#define INTERFACEVERSION_SERVERGAMEDLL_VERSION_4\t"ServerGameDLL004"\n#define INTERFACEVERSION_SERVERGAMEDLL_VERSION_5\t"ServerGameDLL005"|' "$eiface"
+  fi
+  sed -i 's|#define INTERFACEVERSION_SERVERGAMEDLL\t\t\t\t"ServerGameDLL005"|#define INTERFACEVERSION_SERVERGAMEDLL\t\t\t\t"ServerGameDLL006"|' "$eiface"
+  echo "==> Bumped INTERFACEVERSION_SERVERGAMEDLL to ServerGameDLL006"
+fi
+
+# CS:S v34 engine actually has QueryCvar APIs (StartQueryCvarValue /
+# OnQueryCvarValueFinished) matching alliedmodders episode1. Stock hl2sdk-ep1
+# omits them, so SE_EPISODEONE SourceHook decls fail to compile and SE_CSS
+# builds skip the hooks — both leave sourcemod.1.ep1.so ABI-mismatched vs
+# rom4s and crash metamod when engine extensions register hooks.
+SDK_DIR="$sdk_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+sdk = Path(os.environ['SDK_DIR'])
+plugin = sdk / 'public/engine/iserverplugin.h'
+eiface = sdk / 'public/eiface.h'
+
+if plugin.exists():
+    text = plugin.read_text(encoding='latin-1')
+    if 'QueryCvarCookie_t' not in text:
+        old = '''} PLUGIN_RESULT;
+
+
+#define INTERFACEVERSION_ISERVERPLUGINCALLBACKS\t"ISERVERPLUGINCALLBACKS001"
+'''
+        new = '''} PLUGIN_RESULT;
+
+typedef enum
+{
+\teQueryCvarValueStatus_ValueIntact=0,\t// It got the value fine.
+\teQueryCvarValueStatus_CvarNotFound=1,
+\teQueryCvarValueStatus_NotACvar=2,\t\t// There's a ConCommand, but it's not a ConVar.
+\teQueryCvarValueStatus_CvarProtected=3\t// The cvar was marked with FCVAR_SERVER_CAN_NOT_QUERY, so the server is not allowed to have its value.
+} EQueryCvarValueStatus;
+
+typedef int QueryCvarCookie_t;
+
+#define InvalidQueryCvarCookie -1
+#define INTERFACEVERSION_ISERVERPLUGINCALLBACKS_VERSION_1\t"ISERVERPLUGINCALLBACKS001"
+#define INTERFACEVERSION_ISERVERPLUGINCALLBACKS\t\t\t\t"ISERVERPLUGINCALLBACKS002"
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate ISERVERPLUGINCALLBACKS version marker in iserverplugin.h')
+        text = text.replace(old, new, 1)
+
+        old = '''\t// A user has had their network id setup and validated 
+\tvirtual PLUGIN_RESULT\tNetworkIDValidated( const char *pszUserName, const char *pszNetworkID ) = 0;
+};
+'''
+        new = '''\t// A user has had their network id setup and validated 
+\tvirtual PLUGIN_RESULT\tNetworkIDValidated( const char *pszUserName, const char *pszNetworkID ) = 0;
+\t
+\t// This is called when a query from IServerPluginHelpers::StartQueryCvarValue is finished.
+\t// iCookie is the value returned by IServerPluginHelpers::StartQueryCvarValue.
+\t// Added with version 2 of the interface.
+\tvirtual void OnQueryCvarValueFinished( QueryCvarCookie_t iCookie, edict_t *pPlayerEntity, EQueryCvarValueStatus eStatus, const char *pCvarName, const char *pCvarValue )
+\t{
+\t}
+};
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate NetworkIDValidated tail in iserverplugin.h')
+        text = text.replace(old, new, 1)
+
+        old = '''\tvirtual void CreateMessage( edict_t *pEntity, DIALOG_TYPE type, KeyValues *data, IServerPluginCallbacks *plugin ) = 0;
+\tvirtual void ClientCommand( edict_t *pEntity, const char *cmd ) = 0;
+};
+'''
+        new = '''\tvirtual void CreateMessage( edict_t *pEntity, DIALOG_TYPE type, KeyValues *data, IServerPluginCallbacks *plugin ) = 0;
+\tvirtual void ClientCommand( edict_t *pEntity, const char *cmd ) = 0;
+
+\t// Call this to find out the value of a cvar on the client.
+\t//
+\t// It is an asynchronous query, and it will call IServerPluginCallbacks::OnQueryCvarValueFinished when
+\t// the value comes in from the client.
+\t//
+\t// Store the return value if you want to match this specific query to the OnQueryCvarValueFinished call.
+\t// Returns InvalidQueryCvarCookie if the entity is invalid.
+\tvirtual QueryCvarCookie_t StartQueryCvarValue( edict_t *pEntity, const char *pName ) = 0;
+};
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate IServerPluginHelpers tail in iserverplugin.h')
+        text = text.replace(old, new, 1)
+        plugin.write_text(text, encoding='latin-1')
+        print('==> Added QueryCvar APIs to iserverplugin.h (ISERVERPLUGINCALLBACKS002)')
+
+if eiface.exists():
+    text = eiface.read_text(encoding='latin-1')
+    changed = False
+    if 'virtual QueryCvarCookie_t StartQueryCvarValue(' not in text:
+        old = '''\tvirtual IChangeInfoAccessor *GetChangeAccessor( const edict_t *pEdict ) = 0;\t
+};
+'''
+        # tolerate both tab-space variants after GetChangeAccessor
+        if old not in text:
+            old = '''\tvirtual IChangeInfoAccessor *GetChangeAccessor( const edict_t *pEdict ) = 0;
+};
+'''
+        new = '''\tvirtual IChangeInfoAccessor *GetChangeAccessor( const edict_t *pEdict ) = 0;
+\t
+\t// Call this to find out the value of a cvar on the client.
+\t//
+\t// It is an asynchronous query, and it will call IServerGameDLL::OnQueryCvarValueFinished when 
+\t// the value comes in from the client.
+\t//
+\t// Store the return value if you want to match this specific query to the OnQueryCvarValueFinished call.
+\t// Returns InvalidQueryCvarCookie if the entity is invalid.
+\tvirtual QueryCvarCookie_t StartQueryCvarValue( edict_t *pPlayerEntity, const char *pName ) = 0;
+};
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate IVEngineServer GetChangeAccessor tail in eiface.h')
+        text = text.replace(old, new, 1)
+        changed = True
+
+    # Note: StartQueryCvarValue comments mention OnQueryCvarValueFinished — check the method itself.
+    if 'virtual void OnQueryCvarValueFinished(' not in text:
+        old = '''\tvirtual void\t\t\tGetSaveCommentEx( char *comment, int maxlength, float flMinutes, float flSeconds  ) = 0;
+#ifdef _XBOX
+\tvirtual void\t\t\tGetTitleName( const char *pMapName, char* pTitleBuff, int titleBuffSize ) = 0;
+#endif
+};
+'''
+        new = '''\tvirtual void\t\t\tGetSaveCommentEx( char *comment, int maxlength, float flMinutes, float flSeconds  ) = 0;
+#ifdef _XBOX
+\tvirtual void\t\t\tGetTitleName( const char *pMapName, char* pTitleBuff, int titleBuffSize ) = 0;
+#endif
+
+\t// * This function is new with version 6 of the interface.
+\t//
+\t// This is called when a query from IVEngineServer::StartQueryCvarValue is finished.
+\t// iCookie is the value returned by IVEngineServer::StartQueryCvarValue.
+\t// Added with version 2 of the interface.
+\tvirtual void OnQueryCvarValueFinished( QueryCvarCookie_t iCookie, edict_t *pPlayerEntity, EQueryCvarValueStatus eStatus, const char *pCvarName, const char *pCvarValue )
+\t{
+\t}
+};
+'''
+        if old not in text:
+            raise SystemExit('Failed to locate IServerGameDLL GetSaveCommentEx tail in eiface.h')
+        text = text.replace(old, new, 1)
+        changed = True
+
+    if changed:
+        eiface.write_text(text, encoding='latin-1')
+        print('==> Added QueryCvar APIs to eiface.h (ServerGameDLL006 / VEngineServer)')
+PY
+
+# Link against real game tier0/vstdlib so DT_NEEDED is recorded (--as-needed drops empty stubs).
+# Prefer HL2SDK_EPISODE1_LINUX_SDK (alliedmodders episode1 ships the libs); fall back to stubs only as last resort.
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then
   mkdir -p "$sdk_dir/linux_sdk"
+  episode1_linux_sdk="${HL2SDK_EPISODE1_LINUX_SDK:-}"
   stub_cc="${LINUX_SDK_STUB_CC:-gcc}"
-  for lib in tier0_i486 vstdlib_i486; do
-    if [ ! -f "$sdk_dir/linux_sdk/${lib}.so" ]; then
-      echo "void ${lib}_stub(void){}" | "$stub_cc" -m32 -shared -fPIC -x c - -o "$sdk_dir/linux_sdk/${lib}.so"
+  for lib in tier0_i486.so vstdlib_i486.so; do
+    dest="$sdk_dir/linux_sdk/${lib}"
+    if [ -n "$episode1_linux_sdk" ] && [ -f "$episode1_linux_sdk/${lib}" ]; then
+      cp -f "$episode1_linux_sdk/${lib}" "$dest"
+      echo "==> Installed link lib ${lib} from episode1 linux_sdk"
+    elif [ ! -f "$dest" ]; then
+      echo "WARNING: ${lib} missing; creating empty stub (DT_NEEDED may be dropped)" >&2
+      echo "void ${lib%.*}_stub(void){}" | "$stub_cc" -m32 -shared -fPIC -x c - -o "$dest"
     fi
   done
 fi
