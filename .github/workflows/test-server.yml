@@ -69,8 +69,9 @@ jobs:
       - name: ABI / export checks
         run: |
           chmod +x testing/scripts/*.sh
+          sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y binutils
+          sudo apt-get install -y binutils gcc-9-multilib libc6-dev-i386
           ls -la packages || true
           SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
           if [[ -z "${SM_PACKAGE}" || ! -f "${SM_PACKAGE}" ]]; then

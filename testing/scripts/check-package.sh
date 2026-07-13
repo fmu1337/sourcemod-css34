@@ -103,8 +103,9 @@ rm -rf "${ref_tmp}"
 
 echo "==> Checking logic.so dlopen (libstdc++ link sanity)"
 if command -v gcc >/dev/null 2>&1; then
-  dlopen_test="$(mktemp -t sm-logic-dlopen.XXXXXX.c)"
-  dlopen_bin="$(mktemp -t sm-logic-dlopen.XXXXXX)"
+  dlopen_dir="$(mktemp -d)"
+  dlopen_test="${dlopen_dir}/probe.c"
+  dlopen_bin="${dlopen_dir}/probe"
   cat >"${dlopen_test}" <<'EOF'
 #include <dlfcn.h>
 #include <stdio.h>
@@ -121,16 +122,20 @@ int main(int argc, char **argv) {
   return 0;
 }
 EOF
-  if gcc -m32 -o "${dlopen_bin}" "${dlopen_test}" -ldl 2>/dev/null \
-    && "${dlopen_bin}" "${LOGIC_SO}" >/dev/null 2>&1; then
-    echo "OK: logic.so dlopen + logic_load resolve"
+  if gcc -m32 -o "${dlopen_bin}" "${dlopen_test}" -ldl 2>"${dlopen_dir}/build.err"; then
+    chmod +x "${dlopen_bin}"
+    if "${dlopen_bin}" "${LOGIC_SO}" >/dev/null 2>"${dlopen_dir}/run.err"; then
+      echo "OK: logic.so dlopen + logic_load resolve"
+    else
+      echo "FAIL: logic.so failed dlopen (sized-delete / static libstdc++ mismatch?)" >&2
+      sed 's/^/      /' "${dlopen_dir}/run.err" >&2 || true
+      fail=1
+    fi
   else
-    echo "FAIL: logic.so failed dlopen (sized-delete / static libstdc++ mismatch?)" >&2
-    gcc -m32 -o "${dlopen_bin}" "${dlopen_test}" -ldl 2>/dev/null || true
-    "${dlopen_bin}" "${LOGIC_SO}" 2>&1 | sed 's/^/      /' >&2 || true
-    fail=1
+    echo "WARN: gcc -m32 unavailable; skipping logic.so dlopen probe" >&2
+    sed 's/^/      /' "${dlopen_dir}/build.err" >&2 || true
   fi
-  rm -f "${dlopen_test}" "${dlopen_bin}"
+  rm -rf "${dlopen_dir}"
 else
   echo "WARN: gcc not available; skipping logic.so dlopen probe"
 fi
