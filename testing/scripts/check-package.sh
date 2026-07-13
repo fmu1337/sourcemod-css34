@@ -11,6 +11,7 @@ tar -xzf "${SM_PACKAGE}" -C "${TMP}"
 MM_SO="${TMP}/addons/sourcemod/bin/sourcemod_mm_i486.so"
 CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so"
 LOGIC_SO="${TMP}/addons/sourcemod/bin/sourcemod.logic.so"
+JIT_SO="${TMP}/addons/sourcemod/bin/sourcepawn.jit.x86.so"
 
 fail=0
 
@@ -24,6 +25,10 @@ if [[ ! -f "${CORE_SO}" ]]; then
 fi
 if [[ ! -f "${LOGIC_SO}" ]]; then
   echo "FAIL: missing sourcemod.logic.so" >&2
+  exit 1
+fi
+if [[ ! -f "${JIT_SO}" ]]; then
+  echo "FAIL: missing sourcepawn.jit.x86.so" >&2
   exit 1
 fi
 
@@ -59,6 +64,17 @@ for lib in libpthread.so.0 librt.so.1; do
     echo "OK: sourcemod.logic.so NEEDED ${lib}"
   else
     echo "WARN: sourcemod.logic.so missing DT_NEEDED ${lib} (rom4s lists both)"
+  fi
+done
+
+echo "==> Checking sourcepawn.jit pthread/rt (required on glibc < 2.34)"
+jit_needed="$(readelf -d "${JIT_SO}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]')"
+for lib in libpthread.so.0 librt.so.1; do
+  if printf '%s\n' "${jit_needed}" | grep -qx "${lib}"; then
+    echo "OK: sourcepawn.jit.x86.so NEEDED ${lib}"
+  else
+    echo "FAIL: sourcepawn.jit.x86.so missing DT_NEEDED ${lib} (Debian 11 cannot resolve pthread_key_create)" >&2
+    fail=1
   fi
 done
 if printf '%s\n' "${logic_needed}" | grep -qx 'libstdc++.so.6'; then

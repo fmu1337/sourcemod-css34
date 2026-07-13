@@ -146,6 +146,23 @@ if compiler_flavor == 'clang' and supports_deprecated_non_prototype and '-Wno-de
     )
     sp_script.write_text(sp_text)
 
+# css34: keep DT_NEEDED libpthread/librt on sourcepawn.jit.x86.so.
+# Default --as-needed drops them; on glibc < 2.34 (Debian 11) that leaves
+# pthread_key_create unresolved and Metamod fails to load sourcemod_mm.
+sp_text = sp_script.read_text()
+sp_old_pthread = "        cxx.postlink += ['-lpthread', '-lrt']"
+sp_new_pthread = (
+    "        # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
+    "        cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
+)
+if "css34: force pthread/rt NEEDED" in sp_text:
+    print('==> sourcepawn pthread/rt no-as-needed already patched')
+elif sp_old_pthread in sp_text:
+    sp_script.write_text(sp_text.replace(sp_old_pthread, sp_new_pthread, 1))
+    print('==> Patched sourcepawn AMBuildScript for pthread/rt DT_NEEDED')
+else:
+    raise SystemExit('Failed to locate sourcepawn linux pthread postlink block')
+
 old_dynamic = (
     "      if sdk.name in ['css', 'hl2dm', 'dods', 'tf2', 'sdk2013', 'bms', 'nucleardawn', 'l4d2', 'insurgency', 'doi']:\n"
     "        dynamic_libs = ['libtier0_srv.so', 'libvstdlib_srv.so']"
@@ -848,6 +865,37 @@ with open(git_head_path) as fp:
         versioning.write_text(text.replace(old, new, 1))
 PY
 
+
+# css34: ExtLibrary (clientprefs etc.) also needs pthread/rt DT_NEEDED on
+# pre-2.34 glibc; HL2Library already gets it via the ep1 linkflags patch.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYEXT'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+old = """  def ExtLibrary(self, context, name, arch):
+    binary = self.Library(context, name, arch)
+    self.ConfigureForExtension(context, binary.compiler)
+    return binary
+"""
+new = """  def ExtLibrary(self, context, name, arch):
+    binary = self.Library(context, name, arch)
+    self.ConfigureForExtension(context, binary.compiler)
+    # css34: match rom4s clientprefs DT_NEEDED on Debian 11 / old glibc
+    if builder.target.platform == 'linux':
+      for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
+        if flag not in binary.compiler.linkflags:
+          binary.compiler.linkflags += [flag]
+    return binary
+"""
+if "css34: match rom4s clientprefs DT_NEEDED" in text:
+    print('==> ExtLibrary pthread/rt already patched')
+elif old in text:
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched ExtLibrary for pthread/rt DT_NEEDED')
+else:
+    raise SystemExit('Failed to patch ExtLibrary for css34 pthread/rt')
+PYEXT
 
 # css34: match rom4s DT_NEEDED — keep static libstdc++, dynamic libgcc_s +
 # pthread/rt, and disable HL2 malloc overrides (NO_HOOK_MALLOC).
