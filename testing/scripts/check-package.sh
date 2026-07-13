@@ -60,6 +60,11 @@ for lib in libpthread.so.0 librt.so.1; do
     echo "WARN: sourcemod.logic.so missing DT_NEEDED ${lib} (rom4s lists both)"
   fi
 done
+if printf '%s\n' "${logic_needed}" | grep -qx 'libstdc++.so.6'; then
+  echo "WARN: sourcemod.logic.so links libstdc++.so.6 dynamically (rom4s embeds static libstdc++; hang risk)"
+else
+  echo "OK: sourcemod.logic.so does not DT_NEEDED libstdc++.so.6 (static embed like rom4s)"
+fi
 logic_dynsyms="$(nm -D "${LOGIC_SO}" 2>/dev/null || true)"
 if printf '%s\n' "${logic_dynsyms}" | grep -q '__cxx11'; then
   echo "WARN: logic.so exports C++11 std::string ABI symbols (rom4s logic has none)"

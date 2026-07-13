@@ -55,7 +55,8 @@ jobs:
         run: |
           export WDIR="$PWD"
           chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
-            builder/prepare-package.sh builder/py.sh builder/patches/*.sh
+            builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
+            builder/install-clang9.sh builder/install-clang10.sh
           builder/run/linux.sh
 
       - name: Upload SourceMod package

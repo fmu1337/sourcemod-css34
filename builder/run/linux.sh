@@ -37,8 +37,11 @@ USE_CLANG9="${USE_CLANG9:-1}"
 if [ "$USE_CLANG9" = "1" ]; then
   echo "==> Installing/using clang-9 (rom4s-compatible toolchain)"
   bash "$BUILDER_DIR/install-clang9.sh" "$DEPS_DIR"
+  bash "$BUILDER_DIR/install-clang10.sh" "$DEPS_DIR"
   # shellcheck source=/dev/null
   source "$DEPS_DIR/clang9.env"
+  # shellcheck source=/dev/null
+  source "$DEPS_DIR/clang10.env"
   export CC="${CC:-clang-9}"
   export CXX="${CXX:-clang++-9}"
   # Prefer clang-9 wrappers even if a parent env exported gcc-9.
