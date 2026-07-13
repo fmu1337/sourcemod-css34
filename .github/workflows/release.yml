@@ -1,17 +1,20 @@
-name: Build
+name: Release
 
+# Tag format (short): 1.11.0.6572-mm1.10.7
+# Pushing a matching tag builds SM+MM for Linux and Windows and publishes a GitHub Release.
 on:
   push:
-    branches:
-      - master
-      - 'cursor/**'
-  pull_request:
+    tags:
+      - '*-mm*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
-  SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
+  SOURCEMOD_COMMIT: "832519ab647cdecb85763918dbfed1cb5e79c6cb"
   SOURCEMOD_GIT_REV: "6572"
-  MMS_COMMIT: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
+  MMS_COMMIT: "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2"
 
 jobs:
   linux:
@@ -52,7 +55,8 @@ jobs:
           export WDIR="$PWD"
           chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
             builder/package-metamod.sh builder/build-metamod.sh builder/prepare-package.sh \
-            builder/write-build-stamps.sh builder/py.sh builder/patches/*.sh
+            builder/write-build-stamps.sh builder/py.sh builder/patches/*.sh \
+            builder/install-clang9.sh builder/install-clang10.sh
           builder/run/linux.sh
 
       - name: Upload SourceMod artifact
@@ -113,3 +117,40 @@ jobs:
           name: metamod-css34-windows
           path: packages/mmsource-*-css34-windows.zip
           if-no-files-found: error
+
+  release:
+    needs: [linux, windows]
+    runs-on: ubuntu-22.04
+    if: github.ref_type == 'tag'
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List release assets
+        run: ls -la artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
+          files: |
+            artifacts/sourcemod-*-css34-linux.tar.gz
+            artifacts/sourcemod-*-css34-windows.zip
+            artifacts/mmsource-*-css34-linux.tar.gz
+            artifacts/mmsource-*-css34-windows.zip
+          body: |
+            CS:S v34 packages for tag `${{ github.ref_name }}`.
+
+            **Assets**
+            - SourceMod Linux / Windows
+            - Metamod:Source Linux / Windows
+
+            Upstream pins in this build:
+            - SourceMod `${{ env.SOURCEMOD_COMMIT }}` (git ${{ env.SOURCEMOD_GIT_REV }})
+            - Metamod:Source `${{ env.MMS_COMMIT }}`

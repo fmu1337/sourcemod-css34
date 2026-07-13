@@ -99,8 +99,10 @@ export HL2SDK_EPISODE1_LINUX_SDK="$DEPS/hl2sdk-episode1/linux_sdk"
 "$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS/hl2sdk-ep1"
 
 echo "==> Fetching AMBuild"
-if ! python -c "import ambuild2" 2>/dev/null && ! python3 -c "import ambuild2" 2>/dev/null; then
+if [ ! -d "$DEPS/ambuild/.git" ]; then
   clone_repo "ambuild" "https://github.com/alliedmodders/ambuild"
+fi
+if ! python -c "import ambuild2" 2>/dev/null && ! python3 -c "import ambuild2" 2>/dev/null; then
   if [ "$BUILD_PLATFORM" = "windows" ]; then
     python -m pip install "$DEPS/ambuild"
   else

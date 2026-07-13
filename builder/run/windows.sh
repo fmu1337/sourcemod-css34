@@ -8,6 +8,7 @@ BUILDER_DIR="$WDIR/builder"
 SOURCEMOD_DIR="$WDIR/sourcemod"
 SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
 SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}"
+MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
 
 export BUILD_PLATFORM=windows
 
@@ -27,19 +28,40 @@ git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
-chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR"/patches/*.sh 2>/dev/null || true
+chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/write-build-stamps.sh" \
+  "$BUILDER_DIR"/patches/*.sh 2>/dev/null || true
 
 python -m pip install --upgrade pip
 python -m pip install "$DEPS_DIR/ambuild"
 
+# RootConsoleMenu.cpp / Metamod versioning include css34_build_stamp.h.
+echo "==> Writing CSS34 build stamp headers (pre-Metamod)"
+WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
+  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" \
+  bash "$BUILDER_DIR/write-build-stamps.sh"
+
+echo "==> Building Metamod:Source (css34 metamod.1.ep1, Windows)"
+WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
+  BUILD_PLATFORM=windows \
+  bash "$BUILDER_DIR/build-metamod.sh"
+
+mkdir -p "$PACKAGES_DIR"
+MM_ARTIFACT="$(
+  powershell -NoProfile -ExecutionPolicy Bypass \
+    -File "$BUILDER_DIR/package-metamod-windows.ps1" \
+    -PackageDir "$DEPS_DIR/mmsource-1.10/build/package" \
+    -OutputDir "$PACKAGES_DIR" \
+    -MmsDir "$DEPS_DIR/mmsource-1.10"
+)"
+cp -f "$MM_ARTIFACT" "$WDIR/$(basename "$MM_ARTIFACT")"
+echo "==> Metamod package: $MM_ARTIFACT"
+
 echo "==> Applying CS:S v34 compatibility patches"
 bash "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
 
-# RootConsoleMenu.cpp includes css34_build_stamp.h — must exist before ambuild.
-echo "==> Writing CSS34 build stamp headers"
-chmod +x "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
+echo "==> Writing CSS34 build stamp headers (pre-SourceMod)"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
-  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}" \
+  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" \
   bash "$BUILDER_DIR/write-build-stamps.sh"
 
 echo "==> Configuring SourceMod (ep1 + episode1, Windows)"
@@ -70,7 +92,6 @@ bash "$BUILDER_DIR/prepare-package.sh" \
   "$BUILDER_DIR" \
   "$DEPS_DIR"
 
-mkdir -p "$PACKAGES_DIR"
 ARTIFACT="$(
   SOURCEMOD_GIT_REV="$SOURCEMOD_GIT_REV" powershell -NoProfile -ExecutionPolicy Bypass \
     -File "$BUILDER_DIR/package-windows.ps1" \
