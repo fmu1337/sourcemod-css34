@@ -11,6 +11,7 @@ on:
 env:
   SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
   SOURCEMOD_GIT_REV: "6572"
+  MMS_COMMIT: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
 
 jobs:
   linux:
@@ -46,11 +47,12 @@ jobs:
           CXX: g++-9
           SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
           SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+          MMS_COMMIT: ${{ env.MMS_COMMIT }}
         run: |
           export WDIR="$PWD"
           chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
             builder/package-metamod.sh builder/build-metamod.sh builder/prepare-package.sh \
-            builder/py.sh builder/patches/*.sh
+            builder/write-build-stamps.sh builder/py.sh builder/patches/*.sh
           builder/run/linux.sh
 
       - name: Upload SourceMod artifact

@@ -21,6 +21,11 @@ ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 # Override to 1.10.6 for rom4s reference legacy jobs.
 MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
 SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
+# Explicit upstream commits baked into `meta version` / `sm version` Built from.
+MM_COMMIT_EXPECT="${MM_COMMIT_EXPECT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
+SM_COMMIT_EXPECT="${SM_COMMIT_EXPECT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
+# Packaging repo commit (CSS34 pack line). Empty skips the check.
+CSS34_PACK_COMMIT_EXPECT="${CSS34_PACK_COMMIT_EXPECT:-}"
 
 cd "${SERVER_DIR}"
 export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
@@ -102,6 +107,23 @@ require_grep "${CONSOLE_PROBE_LOG}" 'SourceMod|SM' "sm version command output"
 
 require_grep "${CONSOLE_PROBE_LOG}" "${MM_VERSION_EXPECT}" "Metamod version ${MM_VERSION_EXPECT}"
 require_grep "${CONSOLE_PROBE_LOG}" "${SM_VERSION_EXPECT}" "SourceMod version ${SM_VERSION_EXPECT}"
+
+# Explicit build identity from version headers (Built from / CSS34 pack).
+require_grep "${CONSOLE_PROBE_LOG}" \
+  "metamod-source/commit/${MM_COMMIT_EXPECT}" \
+  "meta Built from commit ${MM_COMMIT_EXPECT}"
+require_grep "${CONSOLE_PROBE_LOG}" \
+  "sourcemod/commit/${SM_COMMIT_EXPECT}" \
+  "sm Built from commit ${SM_COMMIT_EXPECT}"
+if [[ -n "${CSS34_PACK_COMMIT_EXPECT}" ]]; then
+  require_grep "${CONSOLE_PROBE_LOG}" \
+    "sourcemod-css34/commit/${CSS34_PACK_COMMIT_EXPECT}" \
+    "CSS34 pack commit ${CSS34_PACK_COMMIT_EXPECT}"
+else
+  require_grep "${CONSOLE_PROBE_LOG}" \
+    'sourcemod-css34/commit/[0-9a-f]{7,40}' \
+    "CSS34 pack commit present in version output"
+fi
 
 print_console_section() {
   local start_pat="$1" end_pat="$2" label="$3"

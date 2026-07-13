@@ -230,3 +230,59 @@ else:
     print('==> Pinned METAMOD_PLAPI_VERSION to 11 in ISmmPluginExt.h')
 PY
 fi
+
+# css34: stamp full upstream SHA into metamod_version_auto.h and print CSS34 pack
+# commit from `meta version`.
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYHDR'
+from pathlib import Path
+import os
+path = Path(os.environ['MMS_DIR']) / 'support/buildbot/generate_headers.py'
+text = path.read_text()
+# Use full 40-char SHA for Built from / Build ID.
+old = '""".format(tag, shorthash, major, minor, release, count))'
+new = '""".format(tag, longhash, major, minor, release, count))'
+if 'css34: full commit SHA' in text:
+    print('==> MM generate_headers already uses full SHA')
+elif old in text:
+    text = text.replace(
+        '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
+        '  # css34: full commit SHA for meta version Built from\n'
+        '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
+        1,
+    )
+    text = text.replace(old, new, 1)
+    path.write_text(text)
+    print('==> Patched MM generate_headers.py to emit full commit SHA')
+else:
+    raise SystemExit('Failed to patch MM generate_headers.py for full SHA')
+PYHDR
+
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYCONS'
+from pathlib import Path
+import os
+path = Path(os.environ['MMS_DIR']) / 'core/metamod_console.cpp'
+text = path.read_text()
+if 'CSS34 pack:' in text:
+    print('==> meta version already prints CSS34 pack commit')
+else:
+    if '#include <versionlib.h>' not in text:
+        raise SystemExit('Failed to locate versionlib.h include in metamod_console.cpp')
+    text = text.replace(
+        '#include <versionlib.h>',
+        '#include <versionlib.h>\n#include <css34_build_stamp.h>',
+        1,
+    )
+    old = '''\t\t\tCONMSG("Built from: https://github.com/alliedmodders/metamod-source/commit/%s\\n", METAMOD_BUILD_SHA);
+#endif
+\t\t\tCONMSG("Build ID: %s:%s\\n", METAMOD_BUILD_LOCAL_REV, METAMOD_BUILD_SHA);
+'''
+    new = '''\t\t\tCONMSG("Built from: https://github.com/alliedmodders/metamod-source/commit/%s\\n", METAMOD_BUILD_SHA);
+#endif
+\t\t\tCONMSG("CSS34 pack: https://github.com/fmu1337/sourcemod-css34/commit/%s\\n", CSS34_PACK_COMMIT);
+\t\t\tCONMSG("Build ID: %s:%s\\n", METAMOD_BUILD_LOCAL_REV, METAMOD_BUILD_SHA);
+'''
+    if old not in text:
+        raise SystemExit('Failed to locate Built from block in metamod_console.cpp')
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched meta version to print CSS34 pack commit')
+PYCONS

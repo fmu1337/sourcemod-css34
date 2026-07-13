@@ -1532,3 +1532,64 @@ PY
 
 bash "$script_dir/apply-logger-mapchange-fix.sh" "$sourcemod_dir"
 bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"
+
+# css34: full upstream SHA in sourcemod_version_auto.h + CSS34 pack line in `sm version`.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYHDR'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'tools/buildbot/generate_headers.py'
+text = path.read_text()
+old = '    """.format(tag, shorthash, major, minor, release, fullstring, count))'
+# There are two format() calls (h + inc); replace both to use longhash for CSET.
+if 'css34: full commit SHA' in text:
+    print('==> SM generate_headers already uses full SHA')
+else:
+    if text.count(old) < 1:
+        # tolerate slight formatting diffs
+        old2 = '.format(tag, shorthash, major, minor, release, fullstring, count)'
+        if old2 not in text:
+            raise SystemExit('Failed to locate SM generate_headers format(shorthash) call')
+        text = text.replace(old2, '.format(tag, longhash, major, minor, release, fullstring, count)')
+    else:
+        text = text.replace(old, '    """.format(tag, longhash, major, minor, release, fullstring, count))')
+    # Annotate once
+    text = text.replace(
+        'def output_version_headers():\n',
+        'def output_version_headers():\n  # css34: full commit SHA for sm version Built from\n',
+        1,
+    )
+    path.write_text(text)
+    print('==> Patched SM generate_headers.py to emit full commit SHA')
+PYHDR
+
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYVER'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'core/logic/RootConsoleMenu.cpp'
+text = path.read_text()
+if 'CSS34 pack:' in text:
+    print('==> sm version already prints CSS34 pack commit')
+else:
+    if '#include <sourcemod_version.h>' not in text:
+        raise SystemExit('Failed to locate sourcemod_version.h include in RootConsoleMenu.cpp')
+    text = text.replace(
+        '#include <sourcemod_version.h>',
+        '#include <sourcemod_version.h>\n#include <css34_build_stamp.h>',
+        1,
+    )
+    old = '''#if defined(SM_GENERATED_BUILD)
+\t\tConsolePrint("    Built from: https://github.com/alliedmodders/sourcemod/commit/%s", SOURCEMOD_SHA);
+\t\tConsolePrint("    Build ID: %s:%s", SOURCEMOD_LOCAL_REV, SOURCEMOD_SHA);
+#endif
+'''
+    new = '''#if defined(SM_GENERATED_BUILD)
+\t\tConsolePrint("    Built from: https://github.com/alliedmodders/sourcemod/commit/%s", SOURCEMOD_SHA);
+\t\tConsolePrint("    CSS34 pack: https://github.com/fmu1337/sourcemod-css34/commit/%s", CSS34_PACK_COMMIT);
+\t\tConsolePrint("    Build ID: %s:%s", SOURCEMOD_LOCAL_REV, SOURCEMOD_SHA);
+#endif
+'''
+    if old not in text:
+        raise SystemExit('Failed to locate Built from block in RootConsoleMenu.cpp')
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched sm version to print CSS34 pack commit')
+PYVER

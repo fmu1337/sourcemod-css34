@@ -70,12 +70,18 @@ git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
-chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/package-metamod.sh" 2>/dev/null || true
+chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/package-metamod.sh" \
+  "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
 
 python3 -m pip install --upgrade pip --user
 chmod +x "$BUILDER_DIR/patches/patch-ambuild-linker.sh" 2>/dev/null || true
 bash "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$DEPS_DIR/ambuild"
 python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS_DIR/ambuild" 2>/dev/null || true
+
+echo "==> Writing CSS34 build stamp headers (pre-Metamod)"
+WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
+  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}" \
+  bash "$BUILDER_DIR/write-build-stamps.sh"
 
 echo "==> Building Metamod:Source (css34 metamod.1.ep1)"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
@@ -93,6 +99,11 @@ echo "==> Metamod package: $MM_ARTIFACT"
 
 echo "==> Applying CS:S v34 compatibility patches"
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
+
+echo "==> Writing CSS34 build stamp headers (pre-SourceMod)"
+WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
+  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}" \
+  bash "$BUILDER_DIR/write-build-stamps.sh"
 
 echo "==> Configuring SourceMod (ep1 + episode1, like original release)"
 cd "$SOURCEMOD_DIR"
