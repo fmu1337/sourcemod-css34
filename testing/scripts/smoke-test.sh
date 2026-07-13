@@ -150,7 +150,7 @@ if [[ "${listed_exts:-0}" -lt 5 ]]; then
   fail=1
 fi
 
-for required_ext in 'SDK Tools' 'CS Tools'; do
+for required_ext in 'BinTools' 'SDK Tools' 'CS Tools'; do
   require_grep "${CONSOLE_PROBE_LOG}" "${required_ext}" "required extension (${required_ext})"
 done
 
