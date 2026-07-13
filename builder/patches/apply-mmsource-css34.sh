@@ -294,13 +294,15 @@ PYVER
 MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYCONS'
 from pathlib import Path
 import os
-path = Path(os.environ['MMS_DIR']) / 'core/metamod_console.cpp'
-text = path.read_text()
-if 'CSS34 pack:' in text:
-    print('==> meta version already prints CSS34 pack commit')
-else:
+
+def patch_console(rel: str) -> None:
+    path = Path(os.environ['MMS_DIR']) / rel
+    text = path.read_text()
+    if 'CSS34 pack:' in text:
+        print(f'==> {rel}: meta version already prints CSS34 pack commit')
+        return
     if '#include <versionlib.h>' not in text:
-        raise SystemExit('Failed to locate versionlib.h include in metamod_console.cpp')
+        raise SystemExit(f'Failed to locate versionlib.h include in {rel}')
     text = text.replace(
         '#include <versionlib.h>',
         '#include <versionlib.h>\n#include <css34_build_stamp.h>',
@@ -316,7 +318,11 @@ else:
 \t\t\tCONMSG("Build ID: %s:%s\\n", METAMOD_BUILD_LOCAL_REV, METAMOD_BUILD_SHA);
 '''
     if old not in text:
-        raise SystemExit('Failed to locate Built from block in metamod_console.cpp')
+        raise SystemExit(f'Failed to locate Built from block in {rel}')
     path.write_text(text.replace(old, new, 1))
-    print('==> Patched meta version to print CSS34 pack commit')
+    print(f'==> Patched {rel} to print CSS34 pack commit')
+
+# metamod.1.ep1.so is built from core-legacy; core/ is the modern EP2 tree.
+patch_console('core-legacy/concommands.cpp')
+patch_console('core/metamod_console.cpp')
 PYCONS
