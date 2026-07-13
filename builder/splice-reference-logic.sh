@@ -7,37 +7,40 @@ ARTIFACT="${1:?package tarball required}"
 REF_URL="${REFERENCE_SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
 SPLICE_REFERENCE_LOGIC="${SPLICE_REFERENCE_LOGIC:-auto}"
 
-logic_cxx11_count() {
+logic_needs_splice() {
   local tarball="$1"
-  local tmp logic count
+  local tmp logic needed cxx11
   tmp="$(mktemp -d)"
   tar -xzf "${tarball}" -C "${tmp}" addons/sourcemod/bin/sourcemod.logic.so
   logic="${tmp}/addons/sourcemod/bin/sourcemod.logic.so"
-  count="$(nm -D "${logic}" 2>/dev/null | grep -c '__cxx11' || true)"
+  needed="$(readelf -d "${logic}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]' || true)"
+  cxx11="$(nm -D "${logic}" 2>/dev/null | grep -c '__cxx11' || true)"
   rm -rf "${tmp}"
-  echo "${count:-0}"
+  if [[ "${cxx11:-0}" -gt 0 ]]; then
+    echo "==> Built logic.so exports ${cxx11} __cxx11 symbols" >&2
+    return 0
+  fi
+  if printf '%s\n' "${needed}" | grep -qx 'libstdc++.so.6'; then
+    echo "==> Built logic.so DT_NEEDED libstdc++.so.6 (rom4s embeds static libstdc++)" >&2
+    return 0
+  fi
+  echo "==> Built logic.so matches rom4s link profile; keeping in-tree logic" >&2
+  return 1
 }
 
 should_splice() {
   case "${SPLICE_REFERENCE_LOGIC}" in
     0|false|no|off) return 1 ;;
     1|yes|true|on) return 0 ;;
-    auto|*)
-      local n
-      n="$(logic_cxx11_count "${ARTIFACT}")"
-      if [[ "${n}" -gt 0 ]]; then
-        echo "==> Built logic.so exports ${n} __cxx11 symbols; splicing rom4s reference logic" >&2
-        return 0
-      fi
-      echo "==> Built logic.so has no __cxx11 exports; keeping in-tree logic" >&2
-      return 1
-      ;;
+    auto|*) logic_needs_splice "${ARTIFACT}" ;;
   esac
 }
 
 if ! should_splice; then
   exit 0
 fi
+
+echo "==> Splicing rom4s reference sourcemod.logic.so" >&2
 
 tmp_pkg="$(mktemp -d)"
 tmp_ref="$(mktemp -d)"
