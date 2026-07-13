@@ -35,29 +35,16 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install build dependencies
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y \
-            curl g++-9-multilib gcc-9-multilib git \
-            lib32stdc++-9-dev lib32stdc++6 lib32z1-dev \
-            libc6-dev-i386 libstdc++-9-dev linux-libc-dev \
-            python3 python3-pip binutils
-
       - name: Build SourceMod for CS:S v34
         env:
-          SKIP_APT_INSTALL: 1
-          CC: gcc-9
-          CXX: g++-9
           SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
           SOURCEMOD_GIT_REV: "6572"
         run: |
-          export WDIR="$PWD"
-          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
-            builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
+          chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
+            builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh \
+            builder/py.sh builder/patches/*.sh \
             builder/install-clang9.sh builder/install-clang10.sh
-          builder/run/linux.sh
+          builder/docker/legacy-build.sh
 
       - name: Upload SourceMod package
         uses: actions/upload-artifact@v4
