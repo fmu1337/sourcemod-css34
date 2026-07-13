@@ -12,7 +12,8 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PY="$script_dir/../py.sh"
+# Always invoke via bash so a missing +x bit cannot break CI checkouts.
+PY=(bash "$script_dir/../py.sh")
 
 mms_dir="${1:?mmsource directory required}"
 core_dir="$mms_dir/core"
@@ -44,7 +45,7 @@ if [ -d "$legacy_dir/sourcehook" ]; then
   # (AddHook has no AddHookMode; VP hooks use separate FHVPAdd).
   export MMS_CSS34_SH_H="$core_dir/sourcehook/sourcehook.h"
   export MMS_CSS34_ROOT="$mms_dir"
-  "$PY" "$script_dir/gen-sh-decl-extern-v4.py"
+  "${PY[@]}" "$script_dir/gen-sh-decl-extern-v4.py"
 else
   echo "Missing $legacy_dir/sourcehook — cannot target css34 Metamod" >&2
   exit 1
@@ -63,7 +64,7 @@ curl -fsSL -o "$tmpdir/ISmmPlugin.h" \
 
 export MMS_CORE_DIR="$core_dir"
 export MMS_TMPDIR="$tmpdir"
-"$PY" - <<'PY'
+"${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 import re
@@ -151,7 +152,7 @@ PY
 # against our renamed legacy-layout ISmmAPI. GetApiVersion still returns PLAPI_VERSION (11)
 # from ISmmPlugin.h.
 if [ -f "$ext_h" ]; then
-  "$PY" - <<'PY'
+  "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 import re

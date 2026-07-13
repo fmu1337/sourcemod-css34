@@ -2,7 +2,8 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PY="$script_dir/../py.sh"
+# Always invoke via bash so a missing +x bit cannot break CI checkouts.
+PY=(bash "$script_dir/../py.sh")
 
 sourcemod_dir="${1:?sourcemod directory required}"
 ambuild_script="$sourcemod_dir/AMBuildScript"
@@ -46,7 +47,7 @@ SOURCEMOD_DIR="$sourcemod_dir" \
 SUPPORTS_WNO_DEPRECATED_NON_PROTOTYPE="$supports_deprecated_non_prototype" \
 SUPPORTS_WNO_REORDER_CTOR="$supports_reorder_ctor" \
 COMPILER_FLAVOR="$compiler_flavor" \
-"$PY" - <<'PY'
+"${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 
@@ -289,7 +290,7 @@ PY
 
 # MM:S 1.10 for CS:S v34 loads the bridge via legacy CreateInterface (API V1),
 # which must open sourcemod.1.ep1.so. Upstream SM removed this export; restore it.
-SOURCEMOD_DIR="$sourcemod_dir" "$PY" - <<'PY'
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 
@@ -520,9 +521,10 @@ fi
 # shims as well for any residual SE_CSS compile units.
 logic_bridge="$sourcemod_dir/core/logic_bridge.cpp"
 if [ -f "$logic_bridge" ]; then
-  "$PY" - <<PY
+  LOGIC_BRIDGE="$logic_bridge" "${PY[@]}" - <<'PY'
 from pathlib import Path
-path = Path("$logic_bridge")
+import os
+path = Path(os.environ['LOGIC_BRIDGE'])
 text = path.read_text()
 changed = False
 
@@ -631,7 +633,7 @@ while IFS= read -r -d '' file; do
   sed -i 's/#if SOURCE_ENGINE <= SE_DARKMESSIAH$/#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS/g' "$file"
 done < <(find "$sourcemod_dir/extensions/sdktools" -type f \( -name 'vhelpers.cpp' -o -name 'tempents.cpp' \) -print0)
 
-SOURCEMOD_DIR="$sourcemod_dir" "$PY" - <<'PY'
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 import os
 from pathlib import Path
 
@@ -846,7 +848,7 @@ PY
 
 # css34: match rom4s DT_NEEDED — keep static libstdc++, dynamic libgcc_s +
 # pthread/rt, and disable HL2 malloc overrides (NO_HOOK_MALLOC).
-SOURCEMOD_DIR="$sourcemod_dir" "$PY" - <<'PYLINK'
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYLINK'
 from pathlib import Path
 import os
 path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
@@ -893,9 +895,10 @@ PYLINK
 
 # bintools needs modern SourceHook ProtoInfo/CProtoInfoBuilder; css34 MM requires SH v4
 # ISourceHook ABI. Skip bintools until a dual ProtoInfo shim lands — core smoke does not need it.
-"$PY" - <<PY
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
-path = Path("$sourcemod_dir/AMBuildScript")
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
 text = path.read_text()
 old = "  'extensions/bintools/AMBuilder',\n"
 new = (

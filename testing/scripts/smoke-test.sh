@@ -44,7 +44,10 @@ export SERVER_DIR MAP PORT SRCDS_BINARY CONSOLE_PROBE_LOG
 export CONSOLE_PROBE_TIMEOUT="${TIMEOUT_SECS}"
 /usr/bin/expect "${ROOT}/testing/scripts/console-probe.exp" >"${LOG_FILE}" 2>&1 || {
   echo "Console probe failed (see ${LOG_FILE})" >&2
-  tail -n 60 "${LOG_FILE}" || true
+  echo "----- smoke.log (last 80) -----" >&2
+  tail -n 80 "${LOG_FILE}" >&2 || true
+  echo "----- console-probe.log (last 80) -----" >&2
+  tail -n 80 "${CONSOLE_PROBE_LOG}" >&2 || true
   exit 1
 }
 

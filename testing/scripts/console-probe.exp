@@ -16,13 +16,19 @@ set binary [expr {[info exists env(SRCDS_BINARY)] ? $env(SRCDS_BINARY) : "./srcd
 cd $server_dir
 set env(LD_LIBRARY_PATH) ".:bin:$env(LD_LIBRARY_PATH)"
 
-# Match common v34 dedicated launch (see start.sh in the rom4s server zip).
-spawn ./srcds_run -game cstrike -console -norestart -nohltv -binary $binary \
+# Spawn the engine binary directly (not srcds_run). The shell wrapper has caused
+# early EOF / opaque failures on some RHEL 8 images under expect's pty.
+spawn $binary -game cstrike -console -nohltv \
     -nomaster -localcser -tickrate 66 \
     -ip 127.0.0.1 -port $port +ip 127.0.0.1 +sv_lan 1 +maxplayers 10 +map $map
 
 expect {
+    -re "-------- Mapchange to ${map} --------" {}
     -re "Mapchange to ${map}" {}
+    eof {
+        puts stderr "srcds exited before map $map loaded"
+        exit 1
+    }
     timeout {
         puts stderr "timeout waiting for map $map"
         exit 1
@@ -35,6 +41,10 @@ sleep 3
 send "status\r"
 expect {
     -re {hostname|# [0-9]+} {}
+    eof {
+        puts stderr "srcds exited while waiting for status output"
+        exit 2
+    }
     timeout {
         puts stderr "timeout waiting for status output"
         exit 2
@@ -43,7 +53,11 @@ expect {
 
 send "version\r"
 expect {
-    -re {Protocol version|version} {}
+    -re {Protocol version|Exe version|version} {}
+    eof {
+        puts stderr "srcds exited while waiting for version output"
+        exit 3
+    }
     timeout {
         puts stderr "timeout waiting for version output"
         exit 3
@@ -53,6 +67,10 @@ expect {
 send "meta version\r"
 expect {
     -re {Metamod|metamod|MM:S} {}
+    eof {
+        puts stderr "srcds exited while waiting for meta version output"
+        exit 4
+    }
     timeout {
         puts stderr "timeout waiting for meta version output"
         exit 4
@@ -61,7 +79,11 @@ expect {
 
 send "sm version\r"
 expect {
-    -re {SourceMod|SM} {}
+    -re {SourceMod Version|SourceMod} {}
+    eof {
+        puts stderr "srcds exited while waiting for sm version output"
+        exit 5
+    }
     timeout {
         puts stderr "timeout waiting for sm version output"
         exit 5
@@ -71,6 +93,10 @@ expect {
 send "sm plugins list\r"
 expect {
     -re {\[SM\] Listing [0-9]+ plugins:} {}
+    eof {
+        puts stderr "srcds exited while waiting for sm plugins list output"
+        exit 6
+    }
     timeout {
         puts stderr "timeout waiting for sm plugins list output"
         exit 6
@@ -81,4 +107,7 @@ expect {
 sleep 1
 
 send "quit\r"
-expect eof
+expect {
+    eof {}
+    timeout {}
+}

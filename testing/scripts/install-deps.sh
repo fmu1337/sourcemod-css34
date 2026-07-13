@@ -116,6 +116,8 @@ install_rhel() {
     dnf -y install "${pkgs[@]}" wget \
       || dnf -y install --allowerasing "${pkgs[@]}" wget \
       || dnf -y install --allowerasing "${pkgs[@]}"
+    # RHEL 8+: libnsl moved out of glibc; old srcds/steamclient may need it.
+    dnf -y install libnsl.i686 libnsl || true
     dnf -y install gdb || true
   else
     # CentOS 7: update matching x86_64 libs first to avoid multilib skew.
