@@ -1042,15 +1042,29 @@ else:
     print('==> Patched logic AMBuilder for rom4s-compatible logic.so')
 
 linux_block_new = """  if builder.target.platform == 'linux':
-    # css34: g++-9 -static-libstdc++ embeds gcc-9 libstdc++ (rom4s-like, no libstdc++.so.6 NEEDED).
-    for flag in ('-lgcc_eh',):
+    # css34: explicit gcc-9 libstdc++.a; hide static archive symbols from dynamic table.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
+    _gcc9_stdcxx = None
+    for _cand in (
+        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+    ):
+      if _os.path.isfile(_cand):
+        _gcc9_stdcxx = _cand
+        break
+    if _gcc9_stdcxx is None:
+      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
+    _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
-    if '-static-libstdc++' not in binary.compiler.linkflags:
-      binary.compiler.linkflags += ['-static-libstdc++']
-    binary.compiler.linkflags += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']"""
+    binary.compiler.linkflags += [
+      '-Wl,-Bstatic', _gcc9_stdcxx, _gcc9_sup, '-Wl,-Bdynamic',
+      '-Wl,--exclude-libs,ALL',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]"""
 
 linux_block_old_variants = [
     """  if builder.target.platform == 'linux':
@@ -1125,11 +1139,21 @@ linux_block_old_variants = [
     ]""",
 ]
 
-if 'g++-9 -static-libstdc++ embeds gcc-9 libstdc++' in text:
+if 'explicit gcc-9 libstdc++.a; hide static archive symbols' in text:
     print('==> logic AMBuilder link flags already patched')
 else:
     replaced = False
-    for old in linux_block_old_variants:
+    prev_static = """  if builder.target.platform == 'linux':
+    # css34: g++-9 -static-libstdc++ embeds gcc-9 libstdc++ (rom4s-like, no libstdc++.so.6 NEEDED).
+    for flag in ('-lgcc_eh',):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    if '-static-libstdc++' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libstdc++']
+    binary.compiler.linkflags += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']"""
+    for old in linux_block_old_variants + [prev_static]:
         if old in text:
             text = text.replace(old, linux_block_new, 1)
             replaced = True
