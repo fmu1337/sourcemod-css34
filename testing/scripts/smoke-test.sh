@@ -11,6 +11,7 @@ LOG_FILE="${LOG_FILE:-${SERVER_DIR}/smoke.log}"
 CONSOLE_PROBE_LOG="${CONSOLE_PROBE_LOG:-${SERVER_DIR}/console-probe.log}"
 SM_LOG_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/logs"
 SM_PLUGINS_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/plugins"
+SM_EXTENSIONS_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/extensions"
 SRCDS_BINARY="${SRCDS_BINARY:-./srcds_i686}"
 SMOKE_VERBOSE="${SMOKE_VERBOSE:-0}"
 SMOKE_CONDEBUG="${SMOKE_CONDEBUG:-1}"
@@ -101,6 +102,66 @@ require_grep "${CONSOLE_PROBE_LOG}" 'SourceMod|SM' "sm version command output"
 require_grep "${CONSOLE_PROBE_LOG}" "${MM_VERSION_EXPECT}" "Metamod version ${MM_VERSION_EXPECT}"
 require_grep "${CONSOLE_PROBE_LOG}" "${SM_VERSION_EXPECT}" "SourceMod version ${SM_VERSION_EXPECT}"
 
+print_console_section() {
+  local start_pat="$1" end_pat="$2" label="$3"
+  echo "----- ${label} -----"
+  if [[ ! -f "${CONSOLE_PROBE_LOG}" ]]; then
+    echo "(missing ${CONSOLE_PROBE_LOG})"
+    return 0
+  fi
+  awk -v start="${start_pat}" -v end="${end_pat}" '
+    $0 ~ start { show=1 }
+    show { print }
+    show && $0 ~ end && $0 !~ start { exit }
+  ' "${CONSOLE_PROBE_LOG}" || true
+}
+
+print_console_section 'sm exts list' 'sm plugins list' 'sm exts list (console)'
+print_console_section 'sm plugins list' '^quit$' 'sm plugins list (console)'
+
+# Extensions must load — stock plugins depend on sdktools/sdkhooks/game.cstrike/etc.
+if grep -Eiq '\[SM\] No extensions are loaded\.' "${CONSOLE_PROBE_LOG}"; then
+  echo "FAIL: sm exts list reports no loaded extensions" >&2
+  fail=1
+else
+  require_grep "${CONSOLE_PROBE_LOG}" '\[SM\] Displaying [0-9]+ extensions:' \
+    "sm exts list header (Displaying N extensions)"
+fi
+
+ext_header_count="$(
+  grep -Eo '\[SM\] Displaying [0-9]+ extensions:' "${CONSOLE_PROBE_LOG}" 2>/dev/null \
+    | grep -Eo '[0-9]+' \
+    | tail -n1 || true
+)"
+listed_exts="$(
+  awk '/sm exts list/{show=1; next} /sm plugins list/{show=0} show && /^[[:space:]]*\[[0-9]+\]/{c++} END{print c+0}' \
+    "${CONSOLE_PROBE_LOG}" 2>/dev/null || true
+)"
+echo "Extensions: header=${ext_header_count:-?} listed_lines=${listed_exts:-0}"
+if [[ -n "${ext_header_count}" && "${listed_exts}" -ne "${ext_header_count}" ]]; then
+  echo "FAIL: sm exts list header says ${ext_header_count} but saw ${listed_exts} extension line(s)" >&2
+  fail=1
+else
+  echo "OK: sm exts list enumerates ${listed_exts} extension(s)"
+fi
+
+if [[ "${listed_exts:-0}" -lt 5 ]]; then
+  echo "FAIL: too few extensions loaded (${listed_exts:-0}); logic/core likely broken" >&2
+  fail=1
+fi
+
+for required_ext in 'SDK Tools' 'CS Tools'; do
+  require_grep "${CONSOLE_PROBE_LOG}" "${required_ext}" "required extension (${required_ext})"
+done
+
+if grep -Eiq '<FAILED>' "${CONSOLE_PROBE_LOG}"; then
+  echo "FAIL: failed extension(s) in sm exts list" >&2
+  grep -Ei '<FAILED>' "${CONSOLE_PROBE_LOG}" >&2 || true
+  fail=1
+else
+  echo "OK: no <FAILED> extensions in console probe log"
+fi
+
 # All enabled .smx plugins must be listed as running.
 expected_plugins="$(find "${SM_PLUGINS_DIR}" -maxdepth 1 -name '*.smx' 2>/dev/null | wc -l | tr -d ' ')"
 if [[ "${expected_plugins}" -lt 1 ]]; then
@@ -119,8 +180,14 @@ else
   echo "OK: no plugin load errors in console probe log"
 fi
 
-# Each listed plugin entry should include a version string.
-listed_plugins="$(grep -Ec '^[[:space:]]*[0-9]+[[:space:]]+("|<Failed>)' "${CONSOLE_PROBE_LOG}" || true)"
+# Each listed plugin entry must be Running (quoted name), not Failed.
+listed_plugins="$(grep -Ec '^[[:space:]]*[0-9]+[[:space:]]+"' "${CONSOLE_PROBE_LOG}" || true)"
+failed_plugins="$(grep -Ec '^[[:space:]]*[0-9]+[[:space:]]+<Failed>' "${CONSOLE_PROBE_LOG}" || true)"
+if [[ "${failed_plugins:-0}" -gt 0 ]]; then
+  echo "FAIL: ${failed_plugins} plugin(s) in Failed state" >&2
+  grep -E '^[[:space:]]*[0-9]+[[:space:]]+<Failed>' "${CONSOLE_PROBE_LOG}" >&2 || true
+  fail=1
+fi
 if [[ "${expected_plugins:-0}" -gt 0 && "${listed_plugins}" -ne "${expected_plugins}" ]]; then
   echo "FAIL: expected ${expected_plugins} plugin lines in sm plugins list, saw ${listed_plugins}" >&2
   fail=1

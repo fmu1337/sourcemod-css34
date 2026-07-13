@@ -121,16 +121,32 @@ expect {
     }
 }
 
+send "sm exts list\r"
+expect {
+    -re {\[SM\] Displaying [0-9]+ extensions:|\[SM\] No extensions are loaded\.} {}
+    eof {
+        puts stderr "srcds exited while waiting for sm exts list output"
+        exit 6
+    }
+    timeout {
+        puts stderr "timeout waiting for sm exts list output"
+        exit 6
+    }
+}
+
+# Allow extension lines to flush before plugin list.
+sleep 1
+
 send "sm plugins list\r"
 expect {
     -re {\[SM\] Listing [0-9]+ plugins:} {}
     eof {
         puts stderr "srcds exited while waiting for sm plugins list output"
-        exit 6
+        exit 7
     }
     timeout {
         puts stderr "timeout waiting for sm plugins list output"
-        exit 6
+        exit 7
     }
 }
 

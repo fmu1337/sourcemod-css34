@@ -29,9 +29,12 @@ The distro matrix uses the known-good rom4s package so OS/deps/`srcds_patch` sta
 ## What the smoke test checks
 
 1. Game DLL loads (`Counter-Strike: Source`)
-2. Map / dedicated server config starts
-3. SourceMod writes a session log (`addons/sourcemod/logs/L*.log`) — proves MM loaded SM
-4. No segfault; not flooded with `Unknown command` (buffer bug signature)
+2. Map / dedicated server config starts (`Mapchange to …` in console)
+3. `sm version` — expected MM/SM versions
+4. `sm exts list` — prints full list; fails on `<FAILED>`; requires SDK Tools + CS Tools
+5. `sm plugins list` — every enabled `.smx` listed as Running (not `<Failed>`)
+6. SourceMod session log (`addons/sourcemod/logs/L*.log`) — no error markers
+7. No segfault; not flooded with `Unknown command` (buffer bug signature)
 
 ## Buffer / modern-OS fixes
 
