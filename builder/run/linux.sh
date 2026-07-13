@@ -70,12 +70,26 @@ git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
-chmod +x "$BUILDER_DIR/py.sh" 2>/dev/null || true
+chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/package-metamod.sh" 2>/dev/null || true
 
 python3 -m pip install --upgrade pip --user
 chmod +x "$BUILDER_DIR/patches/patch-ambuild-linker.sh" 2>/dev/null || true
 bash "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$DEPS_DIR/ambuild"
 python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS_DIR/ambuild" 2>/dev/null || true
+
+echo "==> Building Metamod:Source (css34 metamod.1.ep1)"
+WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
+  CC="$CC" CXX="$CXX" USE_CLANG9="$USE_CLANG9" \
+  bash "$BUILDER_DIR/build-metamod.sh"
+
+MM_ARTIFACT="$(
+  bash "$BUILDER_DIR/package-metamod.sh" \
+    "$DEPS_DIR/mmsource-1.10/build/package" \
+    "$PACKAGES_DIR" \
+    "$DEPS_DIR/mmsource-1.10"
+)"
+ln -sfn "$MM_ARTIFACT" "$WDIR/$(basename "$MM_ARTIFACT")"
+echo "==> Metamod package: $MM_ARTIFACT"
 
 echo "==> Applying CS:S v34 compatibility patches"
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"

@@ -66,6 +66,7 @@ EOF
 
     export CC=gcc-9 CXX=g++-9
     chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
+      builder/package-metamod.sh builder/build-metamod.sh \
       builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
       builder/install-clang9.sh builder/install-clang10.sh \
       builder/install-sysroot-i386.sh \

@@ -8,6 +8,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CACHE_DIR="${CACHE_DIR:-${ROOT}/.ci-cache}"
 
 MM_URL="${MM_URL:-https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz}"
+MM_PACKAGE="${MM_PACKAGE:-}"
+BUILT_MM_DIR="${BUILT_MM_DIR:-}"
+USE_BUILT_MM="${USE_BUILT_MM:-0}"
 SM_PACKAGE="${SM_PACKAGE:-}"
 SM_URL="${SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
 
@@ -24,10 +27,30 @@ download() {
   mv "${out}.partial" "${out}"
 }
 
-MM_TGZ="${CACHE_DIR}/mmsource-1.10.6-css34-linux.tar.gz"
-download "${MM_URL}" "${MM_TGZ}"
-tar -xzf "${MM_TGZ}" -C "${SERVER_DIR}/cstrike"
-echo "Installed Metamod:Source from ${MM_URL}"
+  install_metamod() {
+  rm -rf "${SERVER_DIR}/cstrike/addons/metamod" "${SERVER_DIR}/cstrike/addons/metamod.vdf"
+  if [[ "${USE_BUILT_MM}" == "1" || -n "${BUILT_MM_DIR}" || -n "${BUILT_MM_PACKAGE:-}" ]]; then
+    BUILT_MM_PACKAGE="${BUILT_MM_PACKAGE:-${ROOT}/deps/mmsource-1.10/build/package}" \
+      BUILT_MM_DIR="${BUILT_MM_DIR:-}" \
+      SERVER_DIR="${SERVER_DIR}" \
+      bash "${ROOT}/testing/scripts/install-built-metamod.sh"
+    echo "Installed Metamod:Source from local build (${BUILT_MM_PACKAGE})"
+  elif [[ -n "${MM_PACKAGE}" ]]; then
+    if [[ ! -f "${MM_PACKAGE}" ]]; then
+      echo "MM_PACKAGE not found: ${MM_PACKAGE}" >&2
+      exit 1
+    fi
+    echo "Installing Metamod:Source from local package ${MM_PACKAGE}"
+    tar -xzf "${MM_PACKAGE}" -C "${SERVER_DIR}/cstrike"
+  else
+    MM_TGZ="${CACHE_DIR}/mmsource-1.10.6-css34-linux.tar.gz"
+    download "${MM_URL}" "${MM_TGZ}"
+    tar -xzf "${MM_TGZ}" -C "${SERVER_DIR}/cstrike"
+    echo "Installed Metamod:Source from ${MM_URL}"
+  fi
+}
+
+install_metamod
 
 if [[ -n "${SM_PACKAGE}" ]]; then
   if [[ ! -f "${SM_PACKAGE}" ]]; then
