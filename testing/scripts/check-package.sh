@@ -101,6 +101,40 @@ if curl -fsSL -o "${ref_tmp}/ref.tar.gz" "${REF_URL}" \
 fi
 rm -rf "${ref_tmp}"
 
+echo "==> Checking logic.so dlopen (libstdc++ link sanity)"
+if command -v gcc >/dev/null 2>&1; then
+  dlopen_test="$(mktemp -t sm-logic-dlopen.XXXXXX.c)"
+  dlopen_bin="$(mktemp -t sm-logic-dlopen.XXXXXX)"
+  cat >"${dlopen_test}" <<'EOF'
+#include <dlfcn.h>
+#include <stdio.h>
+int main(int argc, char **argv) {
+  void *h = dlopen(argv[1], RTLD_NOW);
+  if (!h) {
+    fprintf(stderr, "%s\n", dlerror());
+    return 1;
+  }
+  if (!dlsym(h, "logic_load")) {
+    fprintf(stderr, "logic_load missing: %s\n", dlerror());
+    return 2;
+  }
+  return 0;
+}
+EOF
+  if gcc -m32 -o "${dlopen_bin}" "${dlopen_test}" -ldl 2>/dev/null \
+    && "${dlopen_bin}" "${LOGIC_SO}" >/dev/null 2>&1; then
+    echo "OK: logic.so dlopen + logic_load resolve"
+  else
+    echo "FAIL: logic.so failed dlopen (sized-delete / static libstdc++ mismatch?)" >&2
+    gcc -m32 -o "${dlopen_bin}" "${dlopen_test}" -ldl 2>/dev/null || true
+    "${dlopen_bin}" "${LOGIC_SO}" 2>&1 | sed 's/^/      /' >&2 || true
+    fail=1
+  fi
+  rm -f "${dlopen_test}" "${dlopen_bin}"
+else
+  echo "WARN: gcc not available; skipping logic.so dlopen probe"
+fi
+
 echo "==> Checking DT_NEEDED for game libs (GetCVarIF / tier0)"
 needed="$(readelf -d "${CORE_SO}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]')"
 for lib in tier0_i486.so vstdlib_i486.so; do

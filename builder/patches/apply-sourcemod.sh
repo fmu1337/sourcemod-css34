@@ -968,6 +968,7 @@ logic_loop_new = """for arch in SM.archs:
       '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
       '-Wno-stringop-truncation', '-Wno-unused-result',
       '-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0',
+      '-fno-sized-deallocation',
     ]
     binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
   else:
@@ -1227,6 +1228,7 @@ linux_block_new = """  if builder.target.platform == 'linux':
       '-Wl,-Bdynamic',
       '-lc', '-lm',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+      '-Wl,--no-undefined',
     ]"""
 
 linux_block_old_variants = [
@@ -1422,6 +1424,42 @@ else:
     print('==> Patched logic AMBuilder link flags (static libstdc++, pthread/rt)')
 
 path.write_text(text)
+PY
+
+# css34: g++-9 may emit sized delete(_ZdlPvj); gcc-4.9 static libstdc++ has no such symbol.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'core/logic/AMBuilder'
+text = path.read_text()
+changed = False
+
+if '-fno-sized-deallocation' not in text:
+    needle = "'-D_GLIBCXX_USE_CXX11_ABI=0',"
+    if needle in text:
+        text = text.replace(needle, needle + "\n      '-fno-sized-deallocation',", 1)
+        changed = True
+    else:
+        raise SystemExit('Failed to add -fno-sized-deallocation to logic AMBuilder')
+
+if '-Wl,--no-undefined' not in text:
+    needle = "'-lgcc_s',"
+    if needle in text:
+        text = text.replace(
+            needle,
+            "'-lgcc_s',\n      '-Wl,--no-undefined',",
+            1,
+        )
+        changed = True
+    else:
+        raise SystemExit('Failed to add -Wl,--no-undefined to logic AMBuilder')
+
+if changed:
+    path.write_text(text)
+    print('==> logic AMBuilder: sized-deallocation + no-undefined link guard')
+else:
+    print('==> logic AMBuilder sized-deallocation guard already present')
 PY
 
 # css34: rom4s builds the whole tree with the legacy libstdc++ ABI.
