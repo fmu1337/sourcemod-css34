@@ -1146,6 +1146,7 @@ defines_new = """  binary.compiler.defines += [
     '_GLIBCXX_USE_CXX11_ABI=0',
     'NO_HOOK_MALLOC',
     'NO_MALLOC_OVERRIDE',
+    'SM_BOOT_TRACE',
   ]"""
 
 defines_old_variants = [
@@ -1165,6 +1166,9 @@ defines_old_variants = [
 
 if '_GLIBCXX_USE_CXX11_ABI=0' in text and 'NO_HOOK_MALLOC' in text:
     print('==> logic AMBuilder css34 defines already present')
+    if "'SM_BOOT_TRACE'" not in text:
+        text = text.replace("'NO_MALLOC_OVERRIDE',", "'NO_MALLOC_OVERRIDE',\n    'SM_BOOT_TRACE',", 1)
+        print('==> logic AMBuilder: added SM_BOOT_TRACE to defines')
 else:
     replaced = False
     for old in defines_old_variants:
@@ -1437,3 +1441,5 @@ elif old in text:
 else:
     raise SystemExit('Failed to patch configure_linux CXX11 ABI block')
 PY
+
+bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"
