@@ -45,7 +45,8 @@ else
 fi
 
 echo "==> Checking logic module exports"
-if nm -D "${LOGIC_SO}" 2>/dev/null | grep -q ' T logic_load$'; then
+logic_dynsyms="$(nm -D "${LOGIC_SO}" 2>/dev/null || true)"
+if printf '%s\n' "${logic_dynsyms}" | grep -F ' T logic_load' >/dev/null; then
   echo "OK: logic_load export present"
 else
   echo "FAIL: sourcemod.logic.so missing logic_load" >&2
@@ -65,7 +66,6 @@ if printf '%s\n' "${logic_needed}" | grep -qx 'libstdc++.so.6'; then
 else
   echo "OK: sourcemod.logic.so does not DT_NEEDED libstdc++.so.6 (static embed like rom4s)"
 fi
-logic_dynsyms="$(nm -D "${LOGIC_SO}" 2>/dev/null || true)"
 if printf '%s\n' "${logic_dynsyms}" | grep -q '__cxx11'; then
   echo "WARN: logic.so exports C++11 std::string ABI symbols (rom4s logic has none)"
 fi

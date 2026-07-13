@@ -156,9 +156,12 @@ new_dynamic = (
     "      elif sdk.name == 'css':\n"
     "        dynamic_libs = ['tier0_i486.so', 'vstdlib_i486.so']"
 )
-if old_dynamic not in text:
+if new_dynamic in text or "elif sdk.name == 'css':" in text:
+    pass  # css34 dynamic_libs already patched
+elif old_dynamic in text:
+    text = text.replace(old_dynamic, new_dynamic, 1)
+else:
     raise SystemExit('Failed to locate dynamic_libs block in AMBuildScript')
-text = text.replace(old_dynamic, new_dynamic, 1)
 
 # css34/ep1: embed ConVar from static tier1_i486.a (like rom4s). Shared
 # vstdlib_i486.so also exports ConVar; if it appears before tier1 on the link
@@ -943,7 +946,7 @@ logic_loop_new = """for arch in SM.archs:
         logic_cxx.linkflags.remove(_flag)
     if '-static-libgcc' not in logic_cxx.linkflags:
       logic_cxx.linkflags += ['-static-libgcc']
-    logic_cxx.cxxflags += ['-Wno-tautological-overlap-compare']
+    logic_cxx.cxxflags += ['-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0']
     binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
   else:
     binary = SM.Library(builder, 'sourcemod.logic', arch)"""
@@ -1039,28 +1042,15 @@ else:
     print('==> Patched logic AMBuilder for rom4s-compatible logic.so')
 
 linux_block_new = """  if builder.target.platform == 'linux':
-    # css34: jammy -static-libstdc++ embeds GCC 13; rom4s used gcc-9 static + pthread/rt NEEDED.
-    import os as _os
-    for flag in ('-static-libstdc++', '-lgcc_eh'):
+    # css34: g++-9 -static-libstdc++ embeds gcc-9 libstdc++ (rom4s-like, no libstdc++.so.6 NEEDED).
+    for flag in ('-lgcc_eh',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
-    _gcc9_stdcxx = None
-    for _cand in (
-        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-    ):
-      if _os.path.isfile(_cand):
-        _gcc9_stdcxx = _cand
-        break
-    if _gcc9_stdcxx is None:
-      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
-    _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
-    binary.compiler.linkflags += [
-      '-Wl,-Bstatic', _gcc9_stdcxx, _gcc9_sup, '-Wl,-Bdynamic',
-      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
-    ]"""
+    if '-static-libstdc++' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libstdc++']
+    binary.compiler.linkflags += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']"""
 
 linux_block_old_variants = [
     """  if builder.target.platform == 'linux':
@@ -1110,9 +1100,32 @@ linux_block_old_variants = [
       '-Wl,-Bstatic', _gcc9_stdcxx, _gcc9_sup, '-Wl,-Bdynamic',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]""",
+    """  if builder.target.platform == 'linux':
+    # css34: jammy -static-libstdc++ embeds GCC 13; rom4s used gcc-9 static + pthread/rt NEEDED.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _gcc9_stdcxx = None
+    for _cand in (
+        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+    ):
+      if _os.path.isfile(_cand):
+        _gcc9_stdcxx = _cand
+        break
+    if _gcc9_stdcxx is None:
+      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
+    _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    binary.compiler.linkflags += [
+      '-Wl,-Bstatic', _gcc9_stdcxx, _gcc9_sup, '-Wl,-Bdynamic',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]""",
 ]
 
-if 'jammy -static-libstdc++ embeds GCC 13' in text:
+if 'g++-9 -static-libstdc++ embeds gcc-9 libstdc++' in text:
     print('==> logic AMBuilder link flags already patched')
 else:
     replaced = False
