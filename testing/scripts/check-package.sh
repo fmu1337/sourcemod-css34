@@ -68,11 +68,38 @@ else
 fi
 logic_cxx11="$(printf '%s\n' "${logic_dynsyms}" | grep -c '__cxx11' || true)"
 if [[ "${logic_cxx11}" -gt 0 ]]; then
-  echo "WARN: logic.so exports ${logic_cxx11} C++11 std::string ABI symbols (rom4s logic has none)"
-  echo "      Smoke test is the runtime gate; debian:11 legacy builds may still export these."
+  echo "FAIL: logic.so exports ${logic_cxx11} C++11 std::string ABI symbols (rom4s logic has none)" >&2
+  fail=1
 else
   echo "OK: logic.so has no __cxx11 ABI exports"
 fi
+
+logic_t_count="$(printf '%s\n' "${logic_dynsyms}" | grep -c ' T ' || true)"
+if [[ "${logic_t_count}" -lt 100 ]]; then
+  echo "FAIL: logic.so exports only ${logic_t_count} defined symbols (rom4s ~285; missing libstdc++ EH exports?)" >&2
+  fail=1
+else
+  echo "OK: logic.so exports ${logic_t_count} defined symbols (libstdc++ EH visible)"
+fi
+
+# Guard against rom4s logic splice masking in-tree build regressions.
+REF_URL="${REFERENCE_SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
+ref_tmp="$(mktemp -d)"
+if curl -fsSL -o "${ref_tmp}/ref.tar.gz" "${REF_URL}" \
+  && tar -xzf "${ref_tmp}/ref.tar.gz" -C "${ref_tmp}" addons/sourcemod/bin/sourcemod.logic.so 2>/dev/null; then
+  ref_logic="${ref_tmp}/addons/sourcemod/bin/sourcemod.logic.so"
+  pkg_logic="${TMP}/logic-cmp.so"
+  cp -f "${LOGIC_SO}" "${pkg_logic}"
+  strip --strip-unneeded "${ref_logic}" 2>/dev/null || true
+  strip --strip-unneeded "${pkg_logic}" 2>/dev/null || true
+  if cmp -s "${pkg_logic}" "${ref_logic}"; then
+    echo "FAIL: sourcemod.logic.so is byte-identical to stripped rom4s reference (logic splice mask)" >&2
+    fail=1
+  else
+    echo "OK: logic.so is not a rom4s splice copy"
+  fi
+fi
+rm -rf "${ref_tmp}"
 
 echo "==> Checking DT_NEEDED for game libs (GetCVarIF / tier0)"
 needed="$(readelf -d "${CORE_SO}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]')"
