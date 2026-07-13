@@ -263,8 +263,9 @@ tier1_before_vstdlib_new = (
     "      compiler.linkflags[0:0] = [compiler.Dep(library, linker)]\n"
     "\n"
     "    # css34: static tier1 BEFORE shared vstdlib so ConVar is embedded (T),\n"
-    "    # not imported from vstdlib (U). MM extensions only — core has PLUGIN_EXPOSE.\n"
-    "    if 'extensions' in getattr(binary, 'localFolder', ''):\n"
+    "    # not imported from vstdlib (U). Core + extensions; skip logic/mm/jit.\n"
+    "    _lf = getattr(binary, 'localFolder', '')\n"
+    "    if 'sourcemod.logic' not in _lf and 'sourcepawn' not in _lf and 'sourcemod_mm' not in _lf:\n"
     "      if builder.target.platform in ['linux', 'mac']:\n"
     "        if not (sdk.name in ['sdk2013', 'bms'] or arch == 'x64'):\n"
     "          compiler.linkflags[0:0] = [\n"
@@ -300,9 +301,10 @@ tier1_before_vstdlib_6970_new = (
     "      compiler.linkflags[0:0] = [library]\n"
     "\n"
     "    # css34: static tier1 BEFORE shared vstdlib so ConVar is embedded (T),\n"
-    "    # not imported from vstdlib (U). MM extensions only — core exports CreateInterface.\n"
+    "    # not imported from vstdlib (U). Core + extensions; skip logic/mm/jit.\n"
     "    _css34_src = context.currentSourcePath.replace('\\\\', '/')\n"
-    "    if '/extensions/' in _css34_src:\n"
+    "    _lf = getattr(binary, 'localFolder', '')\n"
+    "    if 'sourcemod.logic' not in _lf and 'sourcepawn' not in _lf and 'sourcemod_mm' not in _lf:\n"
     "      if compiler.target.platform in ['linux', 'mac']:\n"
     "        if not (sdk.name in ['sdk2013', 'bms'] or compiler.target.arch == 'x86_64'):\n"
     "          compiler.linkflags[0:0] = [\n"
@@ -318,6 +320,56 @@ if 'css34: static tier1 BEFORE shared vstdlib' not in text:
         text = text.replace(tier1_before_vstdlib_6970, tier1_before_vstdlib_6970_new, 1)
     else:
         raise SystemExit('Failed to locate dynamic_libs linkflags prepend in AMBuildScript')
+else:
+    tier1_core_ext_block = (
+        "    # css34: static tier1 BEFORE shared vstdlib so ConVar is embedded (T),\n"
+        "    # not imported from vstdlib (U). Core + extensions; skip logic/mm/jit.\n"
+        "    _lf = getattr(binary, 'localFolder', '')\n"
+        "    if 'sourcemod.logic' not in _lf and 'sourcepawn' not in _lf and 'sourcemod_mm' not in _lf:\n"
+        "      if builder.target.platform in ['linux', 'mac']:\n"
+        "        if not (sdk.name in ['sdk2013', 'bms'] or arch == 'x64'):\n"
+        "          compiler.linkflags[0:0] = [\n"
+        "            compiler.Dep(os.path.join(lib_folder, 'tier1_i486.a'))\n"
+        "          ]"
+    )
+    tier1_core_ext_block_6970 = (
+        "    # css34: static tier1 BEFORE shared vstdlib so ConVar is embedded (T),\n"
+        "    # not imported from vstdlib (U). Core + extensions; skip logic/mm/jit.\n"
+        "    _lf = getattr(binary, 'localFolder', '')\n"
+        "    if 'sourcemod.logic' not in _lf and 'sourcepawn' not in _lf and 'sourcemod_mm' not in _lf:\n"
+        "      if compiler.target.platform in ['linux', 'mac']:\n"
+        "        if not (sdk.name in ['sdk2013', 'bms'] or compiler.target.arch == 'x86_64'):\n"
+        "          compiler.linkflags[0:0] = [\n"
+        "            os.path.join(lib_folder, 'tier1_i486.a')\n"
+        "          ]"
+    )
+    old_ext_only = (
+        "    # css34: static tier1 BEFORE shared vstdlib so ConVar is embedded (T),\n"
+        "    # not imported from vstdlib (U). MM extensions only — core has PLUGIN_EXPOSE.\n"
+        "    if 'extensions' in getattr(binary, 'localFolder', ''):\n"
+        "      if builder.target.platform in ['linux', 'mac']:\n"
+        "        if not (sdk.name in ['sdk2013', 'bms'] or arch == 'x64'):\n"
+        "          compiler.linkflags[0:0] = [\n"
+        "            compiler.Dep(os.path.join(lib_folder, 'tier1_i486.a'))\n"
+        "          ]"
+    )
+    old_ext_only_6970 = (
+        "    # css34: static tier1 BEFORE shared vstdlib so ConVar is embedded (T),\n"
+        "    # not imported from vstdlib (U). MM extensions only — core exports CreateInterface.\n"
+        "    _css34_src = context.currentSourcePath.replace('\\\\', '/')\n"
+        "    if '/extensions/' in _css34_src:\n"
+        "      if compiler.target.platform in ['linux', 'mac']:\n"
+        "        if not (sdk.name in ['sdk2013', 'bms'] or compiler.target.arch == 'x86_64'):\n"
+        "          compiler.linkflags[0:0] = [\n"
+        "            os.path.join(lib_folder, 'tier1_i486.a')\n"
+        "          ]"
+    )
+    if old_ext_only in text and 'Core + extensions; skip logic/mm/jit' not in text:
+        text = text.replace(old_ext_only, tier1_core_ext_block, 1)
+        print('==> Upgraded tier1 link: extensions-only -> core+extensions')
+    elif old_ext_only_6970 in text and 'Core + extensions; skip logic/mm/jit' not in text:
+        text = text.replace(old_ext_only_6970, tier1_core_ext_block_6970, 1)
+        print('==> Upgraded tier1 link (6970): extensions-only -> core+extensions')
 
 path.write_text(text)
 
@@ -1760,3 +1812,37 @@ PY
 
 bash "$script_dir/apply-logger-mapchange-fix.sh" "$sourcemod_dir"
 bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"
+
+# css34: AM build numbers (6588, 6970) != git rev-list --count on full clones.
+gen_headers="$sourcemod_dir/tools/buildbot/generate_headers.py"
+if [ -f "$gen_headers" ] && ! grep -q 'SOURCEMOD_GIT_REV' "$gen_headers"; then
+  SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'tools' / 'buildbot' / 'generate_headers.py'
+text = path.read_text()
+old = """def get_git_version():
+  revision_count = run_and_return(['git', 'rev-list', '--count', 'HEAD'])
+  revision_hash = run_and_return(['git', 'log', '--pretty=format:%h:%H', '-n', '1'])
+  shorthash, longhash = revision_hash.split(':')
+
+  return revision_count, shorthash, longhash"""
+new = """def get_git_version():
+  forced = os.environ.get('SOURCEMOD_GIT_REV', '').strip()
+  if forced:
+    revision_count = forced
+  else:
+    revision_count = run_and_return(['git', 'rev-list', '--count', 'HEAD'])
+  revision_hash = run_and_return(['git', 'log', '--pretty=format:%h:%H', '-n', '1'])
+  shorthash, longhash = revision_hash.split(':')
+
+  return revision_count, shorthash, longhash"""
+if old not in text:
+    raise SystemExit('Failed to patch generate_headers.py for SOURCEMOD_GIT_REV')
+path.write_text(text.replace(old, new, 1))
+print('==> Patched generate_headers.py to honor SOURCEMOD_GIT_REV')
+PY
+elif [ -f "$gen_headers" ]; then
+  echo "==> generate_headers.py SOURCEMOD_GIT_REV override already present"
+fi

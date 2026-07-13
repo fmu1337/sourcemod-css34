@@ -66,9 +66,40 @@ cd "$WDIR"
 if [ ! -e "$SOURCEMOD_DIR/.git" ]; then
   git submodule update --init sourcemod
 fi
-git -C "$SOURCEMOD_DIR" fetch --depth=8192 origin "$SOURCEMOD_COMMIT"
+
+# shellcheck source=versions.env
+source "$BUILDER_DIR/versions.env"
+fetch_depth=8192
+if [ "${SOURCEMOD_COMMIT}" != "${SOURCEMOD_STABLE_COMMIT}" ]; then
+  rev_delta=$(( SOURCEMOD_GIT_REV - SOURCEMOD_STABLE_REV ))
+  if [ "$rev_delta" -lt 0 ]; then
+    rev_delta=0
+  fi
+  # Shallow fetch of a mid/experimental pin alone can detach history (wrong tree).
+  fetch_depth=$(( rev_delta + 128 ))
+fi
+echo "==> Fetching SourceMod ${SOURCEMOD_COMMIT} (depth=${fetch_depth})"
+git -C "$SOURCEMOD_DIR" fetch --depth="$fetch_depth" origin "$SOURCEMOD_COMMIT"
 git -C "$SOURCEMOD_DIR" reset --hard "$SOURCEMOD_COMMIT"
+if ! git -C "$SOURCEMOD_DIR" merge-base --is-ancestor \
+    "${SOURCEMOD_STABLE_COMMIT}" HEAD 2>/dev/null; then
+  echo "==> Deepening sourcemod clone (pin not reachable from stable baseline)"
+  git -C "$SOURCEMOD_DIR" fetch --deepen=500 origin "$SOURCEMOD_COMMIT" \
+    || git -C "$SOURCEMOD_DIR" fetch --unshallow origin
+  git -C "$SOURCEMOD_DIR" reset --hard "$SOURCEMOD_COMMIT"
+fi
+if ! git -C "$SOURCEMOD_DIR" merge-base --is-ancestor \
+    "${SOURCEMOD_STABLE_COMMIT}" HEAD 2>/dev/null; then
+  echo "SourceMod pin ${SOURCEMOD_COMMIT} is not on top of stable ${SOURCEMOD_STABLE_COMMIT}" >&2
+  exit 1
+fi
 git -C "$SOURCEMOD_DIR" submodule update --init --recursive
+
+echo "==> Installing gcc-4.9 i386 logic sysroot (same as 6572 / legacy-build)"
+bash "$BUILDER_DIR/install-sysroot-i386.sh" "$DEPS_DIR"
+# shellcheck source=/dev/null
+source "$DEPS_DIR/sysroot-i386.env"
+export SM_LOGIC_CXX_SYSROOT
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
@@ -96,6 +127,7 @@ python3 ../configure.py \
   --sdks=ep1,episode1
 
 echo "==> Building SourceMod"
+export SOURCEMOD_GIT_REV
 ambuild
 
 PACKAGE_DIR="$SOURCEMOD_DIR/build/package"
@@ -115,4 +147,5 @@ ARTIFACT="$(
 )"
 
 ln -sfn "$ARTIFACT" "$WDIR/$(basename "$ARTIFACT")"
+bash "$BUILDER_DIR/splice-reference-extras.sh" "$ARTIFACT"
 echo "==> Build complete: $ARTIFACT"
