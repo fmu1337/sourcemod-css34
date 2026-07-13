@@ -254,7 +254,7 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y lib32gcc-s1 lib32stdc++6 lib32z1 libc6-i386 libstdc++6:i386 zlib1g:i386
+          sudo apt-get install -y expect lib32gcc-s1 lib32stdc++6 lib32z1 libc6-i386 libstdc++6:i386 zlib1g:i386
 
       - name: Smoke test built package
         env:

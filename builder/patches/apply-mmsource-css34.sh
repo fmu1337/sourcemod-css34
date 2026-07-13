@@ -144,10 +144,11 @@ PY
 # against our renamed legacy-layout ISmmAPI. GetApiVersion still returns PLAPI_VERSION (11)
 # from ISmmPlugin.h.
 if [ -f "$ext_h" ]; then
-  python3 - <<PY
+  python3 - <<'PY'
 from pathlib import Path
+import os
 import re
-path = Path("$ext_h")
+path = Path(os.environ['MMS_CORE_DIR']) / 'ISmmPluginExt.h'
 text = path.read_text()
 if re.search(r'^#define METAMOD_PLAPI_VERSION\s+11\b', text, re.M):
     print('==> ISmmPluginExt.h already has METAMOD_PLAPI_VERSION 11')

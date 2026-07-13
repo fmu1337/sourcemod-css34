@@ -109,7 +109,7 @@ fix_centos_vault() {
 
 install_rhel() {
   fix_centos_vault
-  local pkgs=(glibc.i686 libstdc++.i686 zlib.i686 ca-certificates unzip bzip2 file procps-ng)
+  local pkgs=(glibc.i686 libstdc++.i686 zlib.i686 ca-certificates unzip bzip2 file procps-ng expect)
   if command -v dnf >/dev/null 2>&1; then
     # Align x86_64 runtime with the i686 packages we are about to install.
     dnf -y update libstdc++ libgcc glibc zlib ca-certificates || true
