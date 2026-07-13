@@ -17,8 +17,9 @@ SMOKE_VERBOSE="${SMOKE_VERBOSE:-0}"
 SMOKE_CONDEBUG="${SMOKE_CONDEBUG:-1}"
 ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 
-# Expected versions (rom4s reference drops by default).
-MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.6}"
+# Expected versions. Defaults match our in-tree packages (MM 1.10.7 + SM 6572).
+# Override to 1.10.6 for rom4s reference legacy jobs.
+MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
 SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
 
 cd "${SERVER_DIR}"

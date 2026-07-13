@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke matrix: locally built Metamod + rom4s / myarena SourceMod packages.
+# Smoke matrix: our Metamod + SourceMod packages (and optional reference mixes).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -7,8 +7,15 @@ export SERVER_DIR="${SERVER_DIR:-${ROOT}/.ci-server}"
 export CACHE_DIR="${CACHE_DIR:-${ROOT}/.ci-cache}"
 RESULTS="${RESULTS:-${CACHE_DIR}/smoke-matrix-results.txt}"
 
+BUILT_SM="${BUILT_SM:-}"
+if [[ -z "${BUILT_SM}" ]]; then
+  BUILT_SM="$(ls "${ROOT}"/packages/sourcemod-*-css34-linux.tar.gz 2>/dev/null | head -n1 || true)"
+fi
+BUILT_MM="${BUILT_MM:-}"
+if [[ -z "${BUILT_MM}" ]]; then
+  BUILT_MM="$(ls "${ROOT}"/packages/mmsource-*-css34-linux.tar.gz 2>/dev/null | head -n1 || true)"
+fi
 ROM4S_SM="${ROM4S_SM:-${CACHE_DIR}/rom4s-sm.tar.gz}"
-MYARENA_ZIP="${MYARENA_ZIP:-${CACHE_DIR}/myarena-bundle.zip}"
 MYARENA_SM_DIR="${MYARENA_SM_DIR:-${CACHE_DIR}/extract/myarena}"
 
 chmod +x "${ROOT}/testing/scripts/"*.sh
@@ -16,7 +23,7 @@ chmod +x "${ROOT}/testing/scripts/"*.sh
 : >"${RESULTS}"
 
 run_case() {
-  local name="$1" sm_pkg="$2" sm_expect="$3" use_1ep1="${4:-auto}"
+  local name="$1" sm_pkg="$2" sm_expect="$3" mm_mode="${4:-built-dir}"
   echo ""
   echo "========== CASE: ${name} =========="
   {
@@ -34,11 +41,23 @@ run_case() {
   rm -rf "${SERVER_DIR}/cstrike/addons"
   mkdir -p "${SERVER_DIR}/cstrike/addons"
 
-  "${ROOT}/testing/scripts/install-built-metamod.sh"
+  case "${mm_mode}" in
+    package)
+      if [[ -z "${BUILT_MM}" || ! -f "${BUILT_MM}" ]]; then
+        echo "BUILT_MM package missing for package mode" >&2
+        return 1
+      fi
+      rm -rf "${SERVER_DIR}/cstrike/addons/metamod" "${SERVER_DIR}/cstrike/addons/metamod.vdf"
+      tar -xzf "${BUILT_MM}" -C "${SERVER_DIR}/cstrike"
+      echo "Installed Metamod from package ${BUILT_MM}"
+      ;;
+    built-dir|*)
+      "${ROOT}/testing/scripts/install-built-metamod.sh"
+      ;;
+  esac
 
   if [[ "${sm_pkg}" == myarena ]]; then
     SM_PACKAGE="${MYARENA_SM_DIR}" "${ROOT}/testing/scripts/install-sourcemod-package.sh"
-    # myarena ships 2.ep1 core only; ensure bridge can find it
     if [[ ! -f "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod.1.ep1.so" \
       && -f "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod.2.ep1.so" ]]; then
       echo "NOTE: myarena has sourcemod.2.ep1.so only (no 1.ep1)"
@@ -67,16 +86,26 @@ run_case() {
 "${ROOT}/testing/scripts/apply-srcds-patch.sh"
 
 fail=0
-run_case "built-MM + rom4s-SM-6572" "${ROM4S_SM}" "1.11.0.6572" || fail=1
+
+# Primary: our packaged MM + our packaged SM (same combo as CI test-built-*).
+if [[ -n "${BUILT_SM}" && -f "${BUILT_SM}" && -n "${BUILT_MM}" && -f "${BUILT_MM}" ]]; then
+  run_case "built-MM-package + built-SM-6572" "${BUILT_SM}" "1.11.0.6572" "package" || fail=1
+else
+  echo "NOTE: packages/*.tar.gz not found; skipping primary built-package case" | tee -a "${RESULTS}"
+fi
+
+# Mixed: build-dir Metamod + rom4s SM (compatibility check).
+if [[ -f "${ROM4S_SM}" ]]; then
+  run_case "built-MM + rom4s-SM-6572" "${ROM4S_SM}" "1.11.0.6572" || fail=1
+fi
 
 # myarena SM targets MM 1.11 / sourcemod.2.ep1 (no CreateInterface bridge, no 1.ep1 core).
-# On MM 1.10.x this typically hangs or never loads; documented in testing/README if needed.
-if [[ "${SKIP_MYARENA_SMOKE:-0}" != "1" ]]; then
+# On MM 1.10.x this typically hangs or never loads.
+if [[ "${SKIP_MYARENA_SMOKE:-0}" != "1" && -d "${MYARENA_SM_DIR}/addons/sourcemod" ]]; then
   if run_case "built-MM + myarena-SM-6522" "myarena" "1.11.0.6522"; then
     :
   else
     echo "NOTE: myarena SM failure is expected on MM 1.10.x (missing CreateInterface, 2.ep1-only layout)" | tee -a "${RESULTS}"
-    # Do not fail the matrix solely for myarena-on-MM10 unless MYARENA_REQUIRED=1
     if [[ "${MYARENA_REQUIRED:-0}" == "1" ]]; then
       fail=1
     fi

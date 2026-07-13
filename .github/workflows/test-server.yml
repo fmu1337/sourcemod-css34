@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       sm_url:
-        description: "Optional SourceMod tar.gz URL for the distro matrix (default: rom4s 6572 reference)"
+        description: "Optional SourceMod tar.gz URL for the reference legacy matrix (default: rom4s 6572)"
         required: false
         default: ""
       apply_srcds_patch:
@@ -22,6 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # rom4s reference drops — used only on legacy glibc distros (Debian 8–10 / CentOS 7).
   MM_URL: https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz
   SRCDS_PATCH_URL: https://github.com/fmu1337/sourcemod-css34/raw/bufferfix/srcds_patch%20(1).rar
   REFERENCE_SM_URL: https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz
@@ -127,19 +128,15 @@ jobs:
           path: css34-server.tar.gz
           retention-days: 3
 
-  # Distro matrix uses a known-good reference SM package so the harness
-  # (deps / srcds_patch / MM / boot) can be validated independently of the
-  # current in-tree build ABI status.
-  test-debian:
-    needs: [prepare-server]
+  # Primary gate: our built Metamod 1.10.7 + SourceMod 6572 on modern glibc.
+  # Packages are produced in debian:11 (legacy-build.sh), so Debian 11+ / Rocky 9.
+  test-built-debian:
+    needs: [build-linux, prepare-server, check-built-package]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         image:
-          - debian:8
-          - debian:9
-          - debian:10
           - debian:11
           - debian:12
           - debian:13
@@ -148,27 +145,45 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download SourceMod package
+        uses: actions/download-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download Metamod package
+        uses: actions/download-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
+          path: packages
+
       - name: Download server tree
         uses: actions/download-artifact@v4
         with:
           name: css34-server-tree
           path: server-art
 
-      - name: Smoke test in ${{ matrix.image }}
+      - name: Smoke test built SM+MM in ${{ matrix.image }}
         env:
           IMAGE: ${{ matrix.image }}
-          MM_URL: ${{ env.MM_URL }}
-          SM_URL: ${{ github.event.inputs.sm_url || env.REFERENCE_SM_URL }}
+          MM_VERSION_EXPECT: "1.10.7"
+          SM_VERSION_EXPECT: "1.11.0.6572"
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
+          SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
             -e CACHE_DIR=/workspace/.ci-cache \
-            -e SM_URL \
-            -e MM_URL \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
             -e TIMEOUT_SECS=120 \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
             -w /workspace \
             "${IMAGE}" \
             bash -lc '
@@ -180,18 +195,110 @@ jobs:
               testing/scripts/smoke-test.sh
             '
 
-  test-centos:
+      - name: Upload smoke logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-debian-smoke-logs-${{ strategy.job-index }}
+          path: |
+            .ci-server/smoke.log
+            .ci-server/console-probe.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  test-built-rhel:
+    needs: [build-linux, prepare-server, check-built-package]
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: rockylinux:9
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SourceMod package
+        uses: actions/download-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download Metamod package
+        uses: actions/download-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
+          path: packages
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Smoke test built SM+MM in ${{ matrix.image }}
+        env:
+          IMAGE: ${{ matrix.image }}
+          MM_VERSION_EXPECT: "1.10.7"
+          SM_VERSION_EXPECT: "1.11.0.6572"
+          SRCDS_BINARY: ${{ matrix.srcds_binary || './srcds_i686' }}
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SRCDS_BINARY \
+            -e TIMEOUT_SECS=120 \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/install-addons.sh
+              testing/scripts/smoke-test.sh
+            '
+
+      - name: Upload smoke logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-rhel-smoke-logs-${{ strategy.job-index }}
+          path: |
+            .ci-server/smoke.log
+            .ci-server/console-probe.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Legacy glibc harness: rom4s reference MM+SM so deps/srcds_patch/boot stay covered
+  # on Debian 8–10 / CentOS 7 (our debian:11-built packages need newer glibc).
+  test-reference-legacy:
     needs: [prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         include:
-          # RHEL span: el7 (old glibc) + el9 (new). el8 is a known srcds/pty
-          # footgun with this rom4s v34 server under expect — skip until we have
-          # a non-pty probe path for it.
+          - image: debian:8
+          - image: debian:9
+          - image: debian:10
           - image: centos:7
-          - image: rockylinux:9
+            srcds_binary: ./srcds_i686
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -202,12 +309,14 @@ jobs:
           name: css34-server-tree
           path: server-art
 
-      - name: Smoke test in ${{ matrix.image }}
+      - name: Smoke test reference MM+SM in ${{ matrix.image }}
         env:
           IMAGE: ${{ matrix.image }}
           MM_URL: ${{ env.MM_URL }}
           SM_URL: ${{ github.event.inputs.sm_url || env.REFERENCE_SM_URL }}
           SRCDS_BINARY: ${{ matrix.srcds_binary || './srcds_i686' }}
+          MM_VERSION_EXPECT: "1.10.6"
+          SM_VERSION_EXPECT: "1.11.0.6572"
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
@@ -218,6 +327,8 @@ jobs:
             -e SM_URL \
             -e MM_URL \
             -e SRCDS_BINARY \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
             -e TIMEOUT_SECS=120 \
             -w /workspace \
             "${IMAGE}" \
@@ -230,7 +341,7 @@ jobs:
               testing/scripts/smoke-test.sh
             '
 
-  # Boots freshly built Metamod + SourceMod (legacy-build packages) on the host.
+  # Boots freshly built Metamod + SourceMod on the GitHub Actions host runner.
   test-built-smoke:
     needs: [build-linux, prepare-server, check-built-package]
     runs-on: ubuntu-22.04
@@ -267,6 +378,7 @@ jobs:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
           MM_VERSION_EXPECT: "1.10.7"
+          SM_VERSION_EXPECT: "1.11.0.6572"
           TIMEOUT_SECS: 120
           SMOKE_CONDEBUG: "1"
           SMOKE_VERBOSE: "1"
