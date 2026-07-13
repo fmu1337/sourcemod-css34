@@ -134,8 +134,8 @@ ext_header_count="$(
     | tail -n1 || true
 )"
 listed_exts="$(
-  awk '/sm exts list/{show=1; next} /sm plugins list/{show=0} show && /^[[:space:]]*\[[0-9]+\]/{c++} END{print c+0}' \
-    "${CONSOLE_PROBE_LOG}" 2>/dev/null || true
+  sed -n '/sm exts list/,/sm plugins list/p' "${CONSOLE_PROBE_LOG}" 2>/dev/null \
+    | grep -Ec '^\[[0-9]+\]' || true
 )"
 echo "Extensions: header=${ext_header_count:-?} listed_lines=${listed_exts:-0}"
 if [[ -n "${ext_header_count}" && "${listed_exts}" -ne "${ext_header_count}" ]]; then
