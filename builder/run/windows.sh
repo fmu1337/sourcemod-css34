@@ -35,6 +35,13 @@ python -m pip install "$DEPS_DIR/ambuild"
 echo "==> Applying CS:S v34 compatibility patches"
 bash "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
 
+# RootConsoleMenu.cpp includes css34_build_stamp.h — must exist before ambuild.
+echo "==> Writing CSS34 build stamp headers"
+chmod +x "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
+WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
+  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}" \
+  bash "$BUILDER_DIR/write-build-stamps.sh"
+
 echo "==> Configuring SourceMod (ep1 + episode1, Windows)"
 cd "$SOURCEMOD_DIR"
 rm -rf build obj-*
