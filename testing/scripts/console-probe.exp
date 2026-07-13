@@ -68,5 +68,17 @@ expect {
     }
 }
 
+send "sm plugins list\r"
+expect {
+    -re {\[SM\] Listing [0-9]+ plugins:} {}
+    timeout {
+        puts stderr "timeout waiting for sm plugins list output"
+        exit 6
+    }
+}
+
+# Allow plugin lines to flush before shutdown.
+sleep 1
+
 send "quit\r"
 expect eof

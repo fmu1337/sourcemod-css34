@@ -10,6 +10,7 @@ TIMEOUT_SECS="${TIMEOUT_SECS:-120}"
 LOG_FILE="${LOG_FILE:-${SERVER_DIR}/smoke.log}"
 CONSOLE_PROBE_LOG="${CONSOLE_PROBE_LOG:-${SERVER_DIR}/console-probe.log}"
 SM_LOG_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/logs"
+SM_PLUGINS_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/plugins"
 SRCDS_BINARY="${SRCDS_BINARY:-./srcds_i686}"
 
 # Expected versions (rom4s reference drops by default).
@@ -78,6 +79,33 @@ require_grep "${CONSOLE_PROBE_LOG}" 'SourceMod|SM' "sm version command output"
 require_grep "${CONSOLE_PROBE_LOG}" "${MM_VERSION_EXPECT}" "Metamod version ${MM_VERSION_EXPECT}"
 require_grep "${CONSOLE_PROBE_LOG}" "${SM_VERSION_EXPECT}" "SourceMod version ${SM_VERSION_EXPECT}"
 
+# All enabled .smx plugins must be listed as running.
+expected_plugins="$(find "${SM_PLUGINS_DIR}" -maxdepth 1 -name '*.smx' 2>/dev/null | wc -l | tr -d ' ')"
+if [[ "${expected_plugins}" -lt 1 ]]; then
+  echo "FAIL: no enabled plugins found under ${SM_PLUGINS_DIR}" >&2
+  fail=1
+else
+  require_grep "${CONSOLE_PROBE_LOG}" "\\[SM\\] Listing ${expected_plugins} plugins:" \
+    "sm plugins list reports ${expected_plugins} running plugins"
+fi
+
+if grep -Eiq 'Error loading|Failed to load|could not be loaded|Encountered error' "${CONSOLE_PROBE_LOG}"; then
+  echo "FAIL: plugin load errors in console probe log" >&2
+  grep -Ei 'Error loading|Failed to load|could not be loaded|Encountered error' "${CONSOLE_PROBE_LOG}" >&2 || true
+  fail=1
+else
+  echo "OK: no plugin load errors in console probe log"
+fi
+
+# Each listed plugin entry should include a version string.
+listed_plugins="$(grep -Ec '^[[:space:]]*[0-9]+ "' "${CONSOLE_PROBE_LOG}" || true)"
+if [[ "${expected_plugins:-0}" -gt 0 && "${listed_plugins}" -ne "${expected_plugins}" ]]; then
+  echo "FAIL: expected ${expected_plugins} plugin lines in sm plugins list, saw ${listed_plugins}" >&2
+  fail=1
+else
+  echo "OK: sm plugins list enumerates ${listed_plugins} plugin(s)"
+fi
+
 require_grep_glob() {
   local glob="$1" pat="$2" label="$3"
   if compgen -G "${glob}" >/dev/null && grep -Eihq -- "${pat}" ${glob}; then
@@ -91,6 +119,11 @@ require_grep_glob() {
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'SourceMod log file session started' "SourceMod session started"
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'Version "' "SourceMod version recorded in log"
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'Mapchange to' "SourceMod saw mapchange"
+
+chmod +x "${ROOT}/testing/scripts/check-sm-logs.sh"
+if ! "${ROOT}/testing/scripts/check-sm-logs.sh" "${SM_LOG_DIR}"; then
+  fail=1
+fi
 
 if grep -Eiq 'Segmentation fault|SIGSEGV|Aborted|SIGABRT' "${CONSOLE_PROBE_LOG}"; then
   echo "FAIL: crash marker in console probe log" >&2
