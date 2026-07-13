@@ -11,6 +11,9 @@
 #     macros that break Valve IConCommandBaseAccessor::RegisterConCommandBase.
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="$script_dir/../py.sh"
+
 mms_dir="${1:?mmsource directory required}"
 core_dir="$mms_dir/core"
 legacy_dir="$mms_dir/core-legacy"
@@ -27,17 +30,21 @@ if [ -d "$legacy_dir/sourcehook" ]; then
   rm -rf "$core_dir/sourcehook"
   cp -a "$legacy_dir/sourcehook" "$core_dir/sourcehook"
   # loader/AMBuilder also looks for $mms_root/sourcehook
-  ln -sfn core/sourcehook "$mms_dir/sourcehook"
+  if [ "${BUILD_PLATFORM:-linux}" = "windows" ]; then
+    rm -rf "$mms_dir/sourcehook"
+    cp -a "$core_dir/sourcehook" "$mms_dir/sourcehook"
+  else
+    ln -sfn core/sourcehook "$mms_dir/sourcehook"
+  fi
   if ! grep -q 'SH_IFACE_VERSION 4' "$core_dir/sourcehook/sourcehook.h"; then
     echo "Expected SH_IFACE_VERSION 4 after core-legacy sourcehook install" >&2
     exit 1
   fi
   # SourceMod 1.11 uses SH_DECL_EXTERN* (modern-only). Emit v4-ABI equivalents
   # (AddHook has no AddHookMode; VP hooks use separate FHVPAdd).
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   export MMS_CSS34_SH_H="$core_dir/sourcehook/sourcehook.h"
   export MMS_CSS34_ROOT="$mms_dir"
-  python3 "$script_dir/gen-sh-decl-extern-v4.py"
+  "$PY" "$script_dir/gen-sh-decl-extern-v4.py"
 else
   echo "Missing $legacy_dir/sourcehook — cannot target css34 Metamod" >&2
   exit 1
@@ -56,7 +63,7 @@ curl -fsSL -o "$tmpdir/ISmmPlugin.h" \
 
 export MMS_CORE_DIR="$core_dir"
 export MMS_TMPDIR="$tmpdir"
-python3 - <<'PY'
+"$PY" - <<'PY'
 from pathlib import Path
 import os
 import re
@@ -144,7 +151,7 @@ PY
 # against our renamed legacy-layout ISmmAPI. GetApiVersion still returns PLAPI_VERSION (11)
 # from ISmmPlugin.h.
 if [ -f "$ext_h" ]; then
-  python3 - <<'PY'
+  "$PY" - <<'PY'
 from pathlib import Path
 import os
 import re

@@ -43,7 +43,19 @@ else
   tar -xzf "${SM_TGZ}" -C "${SERVER_DIR}/cstrike"
 fi
 
-# Ensure metamod loads sourcemod
+# Optional: keep rom4s reference logic with a host-built core (logic ABI still tracked).
+if [[ "${OVERLAY_ROM4S_LOGIC:-}" == "1" && -n "${SM_PACKAGE:-}" ]]; then
+  REF_URL="${REFERENCE_SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
+  REF_TGZ="${CACHE_DIR}/$(basename "${REF_URL}")"
+  download "${REF_URL}" "${REF_TGZ}"
+  tmp_overlay="$(mktemp -d)"
+  tar -xzf "${REF_TGZ}" -C "${tmp_overlay}" ./addons/sourcemod/bin/sourcemod.logic.so
+  cp -f "${tmp_overlay}/addons/sourcemod/bin/sourcemod.logic.so" \
+    "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod.logic.so"
+  rm -rf "${tmp_overlay}"
+  echo "Overlaid rom4s sourcemod.logic.so (OVERLAY_ROM4S_LOGIC=1)"
+fi
+
 mkdir -p "${SERVER_DIR}/cstrike/addons/metamod"
 if [[ ! -f "${SERVER_DIR}/cstrike/addons/metamod/sourcemod.vdf" ]]; then
   cat >"${SERVER_DIR}/cstrike/addons/metamod/sourcemod.vdf" <<'EOF'

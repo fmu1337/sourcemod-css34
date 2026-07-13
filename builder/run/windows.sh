@@ -27,6 +27,7 @@ git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
+chmod +x "$BUILDER_DIR/py.sh" 2>/dev/null || true
 
 python -m pip install --upgrade pip
 python -m pip install "$DEPS_DIR/ambuild"

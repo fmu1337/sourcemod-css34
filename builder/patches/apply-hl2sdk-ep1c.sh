@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="$script_dir/../py.sh"
+
 sdk_dir="${1:?hl2sdk directory required}"
 
 apply_sed() {
@@ -14,7 +17,7 @@ if [ ! -e "$sdk_dir/public/SoundEmitterSystem" ] && [ -d "$sdk_dir/public/sounde
 fi
 
 create_include_symlinks() {
-  python3 - <<'PY'
+  "$PY" - <<'PY'
 import os, re
 sdk = os.environ['SDK_DIR']
 public = os.path.join(sdk, 'public')
@@ -76,7 +79,7 @@ apply_sed public/tier0/wchartypes.h \
 apply_sed public/bitmap/imageformat.h \
   's/#pragma warning(disable : 4514)/#ifdef _MSC_VER\n#pragma warning(disable : 4514)\n#endif/'
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "$PY" - <<'PY'
 from pathlib import Path
 sdk = Path(__import__('os').environ['SDK_DIR'])
 
@@ -151,7 +154,7 @@ if [ ! -e "$sdk_dir/public/steamcommon.h" ]; then
   ln -sf ../common/steamcommon.h "$sdk_dir/public/steamcommon.h"
 fi
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "$PY" - <<'PY'
 from pathlib import Path
 path = Path(__import__('os').environ['SDK_DIR']) / 'public/tier0/memalloc.h'
 text = path.read_text(encoding='latin-1')
@@ -184,7 +187,7 @@ apply_sed public/tier1/utlmemory.h \
 apply_sed public/edict.h \
   's|"engine/ICollideable.h"|"engine/icollideable.h"|'
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "$PY" - <<'PY'
 from pathlib import Path
 path = Path(__import__('os').environ['SDK_DIR']) / 'public/tier0/threadtools.h'
 text = path.read_text(encoding='latin-1')
@@ -204,7 +207,7 @@ for old, new in replacements:
 path.write_text(text, encoding='latin-1')
 PY
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "$PY" - <<'PY'
 from pathlib import Path
 path = Path(__import__('os').environ['SDK_DIR']) / 'public/dt_common.h'
 text = path.read_text(encoding='latin-1')
@@ -217,7 +220,7 @@ if 'SPROP_VARINT' not in text:
     path.write_text(text, encoding='latin-1')
 PY
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "$PY" - <<'PY'
 from pathlib import Path
 path = Path(__import__('os').environ['SDK_DIR']) / 'public/tier0/platform.h'
 text = path.read_text(encoding='latin-1')
@@ -236,7 +239,7 @@ apply_sed public/engine/iserverplugin.h \
 apply_sed public/toolframework/itoolentity.h \
   's|"Color.h"|"color.h"|'
 
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "$PY" - <<'PY'
 from pathlib import Path
 import re
 
@@ -300,7 +303,7 @@ fi
 # omits them, so SE_EPISODEONE SourceHook decls fail to compile and SE_CSS
 # builds skip the hooks — both leave sourcemod.1.ep1.so ABI-mismatched vs
 # rom4s and crash metamod when engine extensions register hooks.
-SDK_DIR="$sdk_dir" python3 - <<'PY'
+SDK_DIR="$sdk_dir" "$PY" - <<'PY'
 from pathlib import Path
 import os
 

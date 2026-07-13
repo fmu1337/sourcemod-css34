@@ -190,10 +190,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image:
-          - centos:7
-          - rockylinux:8
-          - rockylinux:9
+        include:
+          - image: centos:7
+          - image: rockylinux:8
+            srcds_binary: ./srcds_i486
+          - image: rockylinux:9
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -209,6 +210,7 @@ jobs:
           IMAGE: ${{ matrix.image }}
           MM_URL: ${{ env.MM_URL }}
           SM_URL: ${{ github.event.inputs.sm_url || env.REFERENCE_SM_URL }}
+          SRCDS_BINARY: ${{ matrix.srcds_binary || './srcds_i686' }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
@@ -218,6 +220,7 @@ jobs:
             -e CACHE_DIR=/workspace/.ci-cache \
             -e SM_URL \
             -e MM_URL \
+            -e SRCDS_BINARY \
             -e TIMEOUT_SECS=120 \
             -w /workspace \
             "${IMAGE}" \
@@ -267,5 +270,6 @@ jobs:
           mkdir -p .ci-server
           tar -xzf server-art/css34-server.tar.gz -C .ci-server
           SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          export SM_PACKAGE
           testing/scripts/install-addons.sh
           testing/scripts/smoke-test.sh
