@@ -155,21 +155,22 @@ logic_max_glibc="$(
 )"
 echo "Highest GLIBC symbol version referenced: ${max_glibc:-unknown} (logic: ${logic_max_glibc:-unknown})"
 # Debian 10 = 2.28, Debian 9 = 2.24, CentOS 7 = 2.17. rom4s logic stays on 2.12-era symbols.
-glibc_too_new() {
+# jammy-built logic pulls GLIBC 2.34+; legacy docker (bullseye) stays <= 2.31.
+glibc_too_new_for_logic() {
   local ver="$1"
   [[ -z "${ver}" ]] && return 1
   local major="${ver%%.*}"
   local rest="${ver#*.}"
   local minor="${rest%%.*}"
-  [[ "${major}" -gt 2 || ( "${major}" -eq 2 && "${minor}" -ge 29 ) ]]
+  [[ "${major}" -gt 2 || ( "${major}" -eq 2 && "${minor}" -ge 34 ) ]]
 }
-if glibc_too_new "${logic_max_glibc}"; then
-  echo "FAIL: sourcemod.logic.so requires GLIBC_${logic_max_glibc} (>= 2.29); jammy-native logic hangs srcds" >&2
+if glibc_too_new_for_logic "${logic_max_glibc}"; then
+  echo "FAIL: sourcemod.logic.so requires GLIBC_${logic_max_glibc} (>= 2.34); jammy-native logic hangs srcds" >&2
   fail=1
 elif [[ -n "${logic_max_glibc}" ]]; then
   echo "OK: logic GLIBC_${logic_max_glibc} is within legacy-server range"
 fi
-if glibc_too_new "${max_glibc}"; then
+if glibc_too_new_for_logic "${max_glibc}"; then
   echo "WARN: package requires GLIBC_${max_glibc} (>= 2.29); too new for Debian 8-10 / CentOS 7"
   echo "      Use the rom4s reference package on legacy distros; host-built packages need newer glibc."
 else

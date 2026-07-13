@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IMAGE="${LEGACY_BUILD_IMAGE:-debian:10}"
+IMAGE="${LEGACY_BUILD_IMAGE:-debian:11}"
 PACKAGES_DIR="${PACKAGES_DIR:-$ROOT/packages}"
 
 mkdir -p "$PACKAGES_DIR"
@@ -49,10 +49,7 @@ EOF
     apt-get install -y -qq \
       curl git python3 python3-pip \
       lib32stdc++6 lib32z1-dev libc6-dev-i386 linux-libc-dev \
-      binutils ca-certificates gnupg2 software-properties-common
-
-  # gcc-9 multilib (rom4s CI used gcc-9 on Trusty; Debian 10 has it in archive).
-    apt-get install -y -qq \
+      binutils ca-certificates \
       g++-9-multilib gcc-9-multilib \
       lib32stdc++-9-dev libstdc++-9-dev
 
