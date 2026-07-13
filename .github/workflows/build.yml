@@ -66,9 +66,7 @@ jobs:
           path: packages/mmsource-*-css34-linux.tar.gz
 
   windows:
-    # Optional: MSVC/css34 Windows packaging is not required for Linux smoke/ABI gates.
     runs-on: windows-latest
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
