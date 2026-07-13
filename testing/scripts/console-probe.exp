@@ -8,10 +8,27 @@ if {![info exists env(CONSOLE_PROBE_LOG)]} {
 }
 log_file -noappend $env(CONSOLE_PROBE_LOG)
 
-set server_dir [expr {[info exists env(SERVER_DIR)] ? $env(SERVER_DIR) : "/workspace/.ci-server"}]
-set map [expr {[info exists env(MAP)] ? $env(MAP) : "de_dust2"}]
-set port [expr {[info exists env(PORT)] ? $env(PORT) : "27015"}]
-set binary [expr {[info exists env(SRCDS_BINARY)] ? $env(SRCDS_BINARY) : "./srcds_i686"}]
+# Avoid expr bareword pitfalls on older Tcl (RHEL 8 expect).
+if {[info exists env(SERVER_DIR)] && $env(SERVER_DIR) ne ""} {
+    set server_dir $env(SERVER_DIR)
+} else {
+    set server_dir "/workspace/.ci-server"
+}
+if {[info exists env(MAP)] && $env(MAP) ne ""} {
+    set map $env(MAP)
+} else {
+    set map "de_dust2"
+}
+if {[info exists env(PORT)] && $env(PORT) ne ""} {
+    set port $env(PORT)
+} else {
+    set port "27015"
+}
+if {[info exists env(SRCDS_BINARY)] && $env(SRCDS_BINARY) ne ""} {
+    set binary $env(SRCDS_BINARY)
+} else {
+    set binary "./srcds_i686"
+}
 
 cd $server_dir
 set env(LD_LIBRARY_PATH) ".:bin:$env(LD_LIBRARY_PATH)"
@@ -22,9 +39,12 @@ spawn $binary -game cstrike -console -nohltv \
     -nomaster -localcser -tickrate 66 \
     -ip 127.0.0.1 -port $port +ip 127.0.0.1 +sv_lan 1 +maxplayers 10 +map $map
 
+# Exact/glob match — some expect builds produced false -re hits before map load.
+set map_pat "Mapchange to ${map}"
 expect {
-    -re "-------- Mapchange to ${map} --------" {}
-    -re "Mapchange to ${map}" {}
+    -gl $map_pat {
+        puts stderr "OK: matched map load ($map_pat)"
+    }
     eof {
         puts stderr "srcds exited before map $map loaded"
         exit 1
