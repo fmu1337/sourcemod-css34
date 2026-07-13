@@ -12,6 +12,9 @@ CONSOLE_PROBE_LOG="${CONSOLE_PROBE_LOG:-${SERVER_DIR}/console-probe.log}"
 SM_LOG_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/logs"
 SM_PLUGINS_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/plugins"
 SRCDS_BINARY="${SRCDS_BINARY:-./srcds_i686}"
+SMOKE_VERBOSE="${SMOKE_VERBOSE:-0}"
+SMOKE_CONDEBUG="${SMOKE_CONDEBUG:-1}"
+ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 
 # Expected versions (rom4s reference drops by default).
 MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.6}"
@@ -39,15 +42,31 @@ if ! command -v expect >/dev/null 2>&1; then
 fi
 
 echo "Starting srcds (binary=${SRCDS_BINARY}, map=${MAP}, port=${PORT}, args=-nomaster -localcser -tickrate 66, timeout=${TIMEOUT_SECS}s)"
+echo "Smoke logging: SMOKE_VERBOSE=${SMOKE_VERBOSE} SMOKE_CONDEBUG=${SMOKE_CONDEBUG}"
+if [[ -f "${SERVER_DIR}/cstrike/mapcycle.txt" ]]; then
+  echo "----- mapcycle.txt -----"
+  cat "${SERVER_DIR}/cstrike/mapcycle.txt"
+fi
+ls -la "${SERVER_DIR}/cstrike/maps"/*.bsp 2>/dev/null || echo "(no .bsp maps found)"
 
 export SERVER_DIR MAP PORT SRCDS_BINARY CONSOLE_PROBE_LOG
 export CONSOLE_PROBE_TIMEOUT="${TIMEOUT_SECS}"
+export SMOKE_VERBOSE SMOKE_CONDEBUG
+rm -f "${ENGINE_CONSOLE_LOG}"
 /usr/bin/expect "${ROOT}/testing/scripts/console-probe.exp" >"${LOG_FILE}" 2>&1 || {
   echo "Console probe failed (see ${LOG_FILE})" >&2
-  echo "----- smoke.log (last 80) -----" >&2
-  tail -n 80 "${LOG_FILE}" >&2 || true
-  echo "----- console-probe.log (last 80) -----" >&2
-  tail -n 80 "${CONSOLE_PROBE_LOG}" >&2 || true
+  echo "----- smoke.log (last 120) -----" >&2
+  tail -n 120 "${LOG_FILE}" >&2 || true
+  echo "----- console-probe.log (last 120) -----" >&2
+  tail -n 120 "${CONSOLE_PROBE_LOG}" >&2 || true
+  if [[ -f "${ENGINE_CONSOLE_LOG}" ]]; then
+    echo "----- cstrike/console.log (last 120) -----" >&2
+    tail -n 120 "${ENGINE_CONSOLE_LOG}" >&2 || true
+  fi
+  if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
+    echo "----- SourceMod logs on failure -----" >&2
+    cat "${SM_LOG_DIR}"/L*.log >&2 || true
+  fi
   exit 1
 }
 
