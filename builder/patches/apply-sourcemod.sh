@@ -1130,7 +1130,6 @@ linux_block_new = """  if builder.target.platform == 'linux':
     binary.compiler.linkflags += [
       '-nodefaultlibs',
       '-Wl,-Bstatic', _stdcxx, _sup, '-Wl,-Bdynamic',
-      '-Wl,--exclude-libs,ALL',
       '-lc', '-lm',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]"""
