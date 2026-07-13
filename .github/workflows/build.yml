@@ -82,6 +82,7 @@ jobs:
           SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
         run: |
           export WDIR="$PWD"
+          chmod +x builder/run/windows.sh builder/checkout-deps.sh builder/prepare-package.sh builder/py.sh builder/patches/*.sh
           builder/run/windows.sh
 
       - name: Upload artifact
