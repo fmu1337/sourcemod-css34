@@ -120,7 +120,7 @@ else
 fi
 
 # Each listed plugin entry should include a version string.
-listed_plugins="$(grep -Ec '^[[:space:]]*[0-9]+ "' "${CONSOLE_PROBE_LOG}" || true)"
+listed_plugins="$(grep -Ec '^[[:space:]]*[0-9]+[[:space:]]+("|<Failed>)' "${CONSOLE_PROBE_LOG}" || true)"
 if [[ "${expected_plugins:-0}" -gt 0 && "${listed_plugins}" -ne "${expected_plugins}" ]]; then
   echo "FAIL: expected ${expected_plugins} plugin lines in sm plugins list, saw ${listed_plugins}" >&2
   fail=1
