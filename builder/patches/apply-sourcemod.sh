@@ -1096,7 +1096,7 @@ else:
 linux_block_new = """  if builder.target.platform == 'linux':
     # css34: gcc-8 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
     import os as _os
-    for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++'):
+    for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
     _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
@@ -1126,9 +1126,12 @@ linux_block_new = """  if builder.target.platform == 'linux':
       raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
+    # g++/clang++ drivers append -lstdc++ unless default libs are disabled.
     binary.compiler.linkflags += [
+      '-nodefaultlibs',
       '-Wl,-Bstatic', _stdcxx, _sup, '-Wl,-Bdynamic',
       '-Wl,--exclude-libs,ALL',
+      '-lc', '-lm',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]"""
 

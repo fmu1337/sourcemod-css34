@@ -69,6 +69,7 @@ EOF
       builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
       builder/install-clang9.sh builder/install-clang10.sh \
       builder/install-sysroot-i386.sh \
+      builder/patches/patch-ambuild-linker.sh \
       builder/splice-reference-logic.sh builder/splice-reference-extras.sh
     builder/install-sysroot-i386.sh /workspace/deps
     # shellcheck source=/dev/null
