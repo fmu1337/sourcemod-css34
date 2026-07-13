@@ -74,6 +74,14 @@ else
   echo "OK: logic.so has no __cxx11 ABI exports"
 fi
 
+logic_sized_delete="$(readelf -Ws "${LOGIC_SO}" 2>/dev/null | awk '$7=="UND" && ($8=="_ZdlPvj" || $8=="_ZdaPvj") {print $8}' || true)"
+if [[ -n "${logic_sized_delete}" ]]; then
+  echo "FAIL: logic.so has unresolved sized-delete imports (dlopen into srcds fails): ${logic_sized_delete}" >&2
+  fail=1
+else
+  echo "OK: logic.so has no UND _ZdlPvj/_ZdaPvj sized-delete imports"
+fi
+
 logic_t_count="$(printf '%s\n' "${logic_dynsyms}" | grep -c ' T ' || true)"
 if [[ "${logic_t_count}" -lt 100 ]]; then
   echo "FAIL: logic.so exports only ${logic_t_count} defined symbols (rom4s ~285; missing libstdc++ EH exports?)" >&2

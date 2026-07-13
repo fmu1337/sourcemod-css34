@@ -968,6 +968,7 @@ logic_loop_new = """for arch in SM.archs:
       '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
       '-Wno-stringop-truncation', '-Wno-unused-result',
       '-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0',
+      '-fno-sized-deallocation',  # css34: no UND _ZdlPvj/_ZdaPvj at dlopen
     ]
     binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
   else:
@@ -1049,6 +1050,16 @@ logic_loop_old_variants = [
 
 if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' in text:
     print('==> logic AMBuilder g++-9/sysroot already patched')
+    sized_flag = "'-fno-sized-deallocation',  # css34: no UND _ZdlPvj/_ZdaPvj at dlopen"
+    if sized_flag not in text:
+        anchor = "'-D_GLIBCXX_USE_CXX11_ABI=0',\n    ]"
+        replacement = "'-D_GLIBCXX_USE_CXX11_ABI=0',\n      '-fno-sized-deallocation',  # css34: no UND _ZdlPvj/_ZdaPvj at dlopen\n    ]"
+        if anchor in text:
+            text = text.replace(anchor, replacement, 1)
+            path.write_text(text)
+            print('==> logic AMBuilder: added -fno-sized-deallocation')
+        else:
+            raise SystemExit('Failed to add -fno-sized-deallocation to logic AMBuilder')
 else:
     replaced = False
     clang10_loop = """for arch in SM.archs:
