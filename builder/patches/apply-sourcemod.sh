@@ -1164,12 +1164,18 @@ linux_block_new = """  if builder.target.platform == 'linux':
           break
     if _stdcxx is None:
       raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
-    if '-static-libgcc' not in binary.compiler.linkflags:
-      binary.compiler.linkflags += ['-static-libgcc']
-    # g++/clang++ drivers append -lstdc++ unless default libs are disabled.
-    binary.compiler.linkflags += [
-      '-nodefaultlibs',
-      '-Wl,-Bstatic', _stdcxx, _sup, '-Wl,-Bdynamic',
+    _gcc = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc.a')
+    _gcc_eh = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc_eh.a')
+    for flag in ('-static-libgcc',):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx, _sup]
+    if _os.path.isfile(_gcc_eh):
+      _static.append(_gcc_eh)
+    if _os.path.isfile(_gcc):
+      _static.append(_gcc)
+    binary.compiler.linkflags += _static + [
+      '-Wl,-Bdynamic',
       '-lc', '-lm',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]"""
@@ -1247,10 +1253,52 @@ linux_block_old_variants = [
     ]""",
 ]
 
-if 'gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set' in text:
+if 'gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set' in text and '_gcc_eh' in text:
     print('==> logic AMBuilder link flags already patched')
 else:
     replaced = False
+    gcc49_prev = """  if builder.target.platform == 'linux':
+    # css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    _stdcxx = None
+    _sup = None
+    if _sysroot:
+      for _base in (
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
+      ):
+        _cand = _os.path.join(_base, 'libstdc++.a')
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_base, 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      for _cand in (
+          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+      ):
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    # g++/clang++ drivers append -lstdc++ unless default libs are disabled.
+    binary.compiler.linkflags += [
+      '-nodefaultlibs',
+      '-Wl,-Bstatic', _stdcxx, _sup, '-Wl,-Bdynamic',
+      '-lc', '-lm',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]"""
     gcc8_block = """  if builder.target.platform == 'linux':
     # css34: gcc-8 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
     import os as _os
@@ -1315,7 +1363,7 @@ else:
       '-Wl,--exclude-libs,ALL',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]"""
-    for old in linux_block_old_variants + [prev_static, gcc8_block]:
+    for old in linux_block_old_variants + [prev_static, gcc8_block, gcc49_prev]:
         if old in text:
             text = text.replace(old, linux_block_new, 1)
             replaced = True
