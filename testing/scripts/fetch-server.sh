@@ -45,8 +45,9 @@ chmod +x \
   "${SERVER_DIR}/srcds_run" \
   "${SERVER_DIR}/start.sh" 2>/dev/null || true
 
-# Minimal server.cfg for CI
+# Minimal server.cfg for CI (matches common v34 dedicated setup).
 mkdir -p "${SERVER_DIR}/cstrike/cfg"
+rm -f "${SERVER_DIR}/cstrike/cfg/server.cfg"
 cat >"${SERVER_DIR}/cstrike/cfg/server.cfg" <<'EOF'
 hostname sourcemod-css34-ci
 sv_lan 1
@@ -59,8 +60,14 @@ writeid
 writeip
 EOF
 
-# Debian 9+ valve.rc workaround (also applied explicitly by apply-valve-rc-fix.sh)
-cp -f "${ROOT}/testing/configs/valve.rc" "${SERVER_DIR}/cstrike/cfg/valve.rc"
+# Use stock valve.rc from the server zip by default. On modern glibc hosts the
+# original stuffcmds path can corrupt console input unless srcds_patch is applied;
+# valve-minimal.rc avoids that when running the unpatched binary.
+if [[ "${APPLY_VALVE_RC:-0}" == "1" ]]; then
+  cp -f "${ROOT}/testing/configs/valve.rc" "${SERVER_DIR}/cstrike/cfg/valve.rc"
+elif [[ "${USE_MINIMAL_VALVE_RC:-1}" == "1" ]]; then
+  cp -f "${ROOT}/testing/configs/valve-minimal.rc" "${SERVER_DIR}/cstrike/cfg/valve.rc"
+fi
 
 echo "Server tree ready at ${SERVER_DIR}"
 du -sh "${SERVER_DIR}"

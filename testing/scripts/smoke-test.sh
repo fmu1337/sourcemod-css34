@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
-# Smoke-test: boot CS:S v34 + MM + SM, assert load markers, then stop.
+# Smoke-test: boot CS:S v34 + MM + SM, run console probes, assert versions.
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SERVER_DIR="${SERVER_DIR:?SERVER_DIR is required}"
 MAP="${MAP:-de_dust2}"
 PORT="${PORT:-27015}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-120}"
 LOG_FILE="${LOG_FILE:-${SERVER_DIR}/smoke.log}"
+CONSOLE_PROBE_LOG="${CONSOLE_PROBE_LOG:-${SERVER_DIR}/console-probe.log}"
 SM_LOG_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/logs"
-# Prefer i686: auto "AMD Optimised" binary segfaults on some modern hosts (e.g. Rocky 8).
 SRCDS_BINARY="${SRCDS_BINARY:-./srcds_i686}"
+
+# Expected versions (rom4s reference drops by default).
+MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.6}"
+SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
 
 cd "${SERVER_DIR}"
 export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
 
-rm -f "${LOG_FILE}"
+rm -f "${LOG_FILE}" "${CONSOLE_PROBE_LOG}"
 rm -f "${SM_LOG_DIR}"/L*.log 2>/dev/null || true
 mkdir -p "${SM_LOG_DIR}"
 
@@ -27,136 +32,77 @@ if [[ ! -x "${SRCDS_BINARY}" ]]; then
   fi
 fi
 
-echo "Starting srcds (binary=${SRCDS_BINARY}, map=${MAP}, timeout=${TIMEOUT_SECS}s)"
-
-# Line-buffer console output so markers appear even without a TTY.
-stdbuf_cmd=()
-if command -v stdbuf >/dev/null 2>&1; then
-  stdbuf_cmd=(stdbuf -oL -eL)
+if ! command -v expect >/dev/null 2>&1; then
+  echo "expect is required for console command probes" >&2
+  exit 1
 fi
 
-"${stdbuf_cmd[@]}" ./srcds_run \
-  -game cstrike \
-  -console \
-  -norestart \
-  -nohltv \
-  -binary "${SRCDS_BINARY}" \
-  -ip 127.0.0.1 \
-  -port "${PORT}" \
-  +ip 127.0.0.1 \
-  +sv_lan 1 \
-  +maxplayers 10 \
-  +map "${MAP}" \
-  >"${LOG_FILE}" 2>&1 &
-srcds_pid=$!
+echo "Starting srcds (binary=${SRCDS_BINARY}, map=${MAP}, port=${PORT}, args=-nomaster -localcser, timeout=${TIMEOUT_SECS}s)"
 
-cleanup() {
-  if kill -0 "${srcds_pid}" 2>/dev/null; then
-    kill -TERM "${srcds_pid}" 2>/dev/null || true
-    pkill -TERM -P "${srcds_pid}" 2>/dev/null || true
-    sleep 2
-    kill -KILL "${srcds_pid}" 2>/dev/null || true
-    pkill -KILL -P "${srcds_pid}" 2>/dev/null || true
-  fi
+export SERVER_DIR MAP PORT SRCDS_BINARY CONSOLE_PROBE_LOG
+export CONSOLE_PROBE_TIMEOUT="${TIMEOUT_SECS}"
+/usr/bin/expect "${ROOT}/testing/scripts/console-probe.exp" >"${LOG_FILE}" 2>&1 || {
+  echo "Console probe failed (see ${LOG_FILE})" >&2
+  tail -n 60 "${LOG_FILE}" || true
+  exit 1
 }
-trap cleanup EXIT
 
-success=0
-srcds_alive=1
-for ((i=1; i<=TIMEOUT_SECS; i++)); do
-  if ! kill -0 "${srcds_pid}" 2>/dev/null; then
-    echo "srcds exited early at t=${i}s"
-    srcds_alive=0
-    break
-  fi
-  if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
-    if grep -Eiq 'SourceMod log file session started.*Version' "${SM_LOG_DIR}"/L*.log \
-      && grep -Eiq 'Mapchange to' "${SM_LOG_DIR}"/L*.log; then
-      # Extensions register hooks after SM session start; wait briefly and
-      # require the process to still be alive so post-load SIGSEGVs fail CI.
-      sleep 5
-      if ! kill -0 "${srcds_pid}" 2>/dev/null; then
-        echo "srcds died shortly after SM markers (likely extension-load crash)"
-        srcds_alive=0
-        break
-      fi
-      echo "Success markers found at t=${i}s (srcds still alive)"
-      success=1
-      break
-    fi
-  fi
-  sleep 1
-done
-
-cleanup
-trap - EXIT
-wait "${srcds_pid}" 2>/dev/null || true
-
-echo "----- first 40 console lines -----"
-head -n 40 "${LOG_FILE}" || true
-echo "----- last 40 console lines -----"
-tail -n 40 "${LOG_FILE}" || true
+echo "----- console probe log (first 40 lines) -----"
+head -n 40 "${CONSOLE_PROBE_LOG}" || true
+echo "----- console probe log (last 80 lines) -----"
+tail -n 80 "${CONSOLE_PROBE_LOG}" || true
 echo "----- SourceMod log -----"
 if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
   cat "${SM_LOG_DIR}"/L*.log
 else
   echo "(no SourceMod log files)"
 fi
-echo "----- sourcemod_mm exports -----"
-nm -D "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod_mm_i486.so" 2>/dev/null | grep CreateInterface || true
 
 fail=0
-require_grep_file() {
+require_grep() {
   local file="$1" pat="$2" label="$3"
   if [[ -f "${file}" ]] && grep -Eiq -- "${pat}" "${file}"; then
     echo "OK: ${label}"
   else
-    echo "WARN: missing console marker: ${label} (/${pat}/ in ${file})" >&2
+    echo "FAIL: ${label} (/${pat}/ in ${file})" >&2
+    fail=1
   fi
 }
+
+require_grep "${CONSOLE_PROBE_LOG}" 'Mapchange to de_dust2|Mapchange to '"${MAP}" "map loaded (${MAP})"
+require_grep "${CONSOLE_PROBE_LOG}" 'hostname|# [0-9]+' "status command output"
+require_grep "${CONSOLE_PROBE_LOG}" 'Protocol version|version' "version command output"
+require_grep "${CONSOLE_PROBE_LOG}" 'Metamod|metamod|MM:S' "meta version command output"
+require_grep "${CONSOLE_PROBE_LOG}" 'SourceMod|SM' "sm version command output"
+
+require_grep "${CONSOLE_PROBE_LOG}" "${MM_VERSION_EXPECT}" "Metamod version ${MM_VERSION_EXPECT}"
+require_grep "${CONSOLE_PROBE_LOG}" "${SM_VERSION_EXPECT}" "SourceMod version ${SM_VERSION_EXPECT}"
 
 require_grep_glob() {
   local glob="$1" pat="$2" label="$3"
   if compgen -G "${glob}" >/dev/null && grep -Eihq -- "${pat}" ${glob}; then
     echo "OK: ${label}"
   else
-    echo "FAIL: missing marker: ${label} (/${pat}/ in ${glob})" >&2
+    echo "FAIL: ${label} (/${pat}/ in ${glob})" >&2
     fail=1
   fi
 }
 
-# Soft console checks (stdout buffering / early crash can hide these).
-require_grep_file "${LOG_FILE}" 'Game\.dll loaded for "Counter-Strike: Source"|Using .* Optimised binary' "engine started"
-require_grep_file "${LOG_FILE}" 'Executing dedicated server config file|-------- Mapchange to' "map/config console line"
-
-# Hard checks via SourceMod log (proves MM + SM + map).
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'SourceMod log file session started' "SourceMod session started"
-require_grep_glob "${SM_LOG_DIR}/L*.log" 'Version "' "SourceMod version recorded"
+require_grep_glob "${SM_LOG_DIR}/L*.log" 'Version "' "SourceMod version recorded in log"
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'Mapchange to' "SourceMod saw mapchange"
 
-if [[ "${srcds_alive}" -ne 1 ]]; then
-  echo "FAIL: srcds was not alive after SM load markers" >&2
+if grep -Eiq 'Segmentation fault|SIGSEGV|Aborted|SIGABRT' "${CONSOLE_PROBE_LOG}"; then
+  echo "FAIL: crash marker in console probe log" >&2
   fail=1
 else
-  echo "OK: srcds stayed alive after SM load"
+  echo "OK: absent crash marker in console probe log"
 fi
 
-if grep -Eiq 'Segmentation fault|SIGSEGV|Aborted|SIGABRT' "${LOG_FILE}"; then
-  echo "FAIL: crash marker in console log" >&2
-  fail=1
-else
-  echo "OK: absent crash marker in console log"
-fi
-
-unknown_count="$(grep -c 'Unknown command' "${LOG_FILE}" || true)"
+unknown_count="$(grep -c 'Unknown command' "${CONSOLE_PROBE_LOG}" || true)"
 echo "Unknown command count: ${unknown_count}"
 if [[ "${unknown_count}" -gt 40 ]]; then
-  echo "FAIL: too many Unknown command lines (${unknown_count}) — likely buffer bug" >&2
-  fail=1
-fi
-
-if [[ "${success}" -ne 1 ]]; then
-  echo "FAIL: did not observe SourceMod success markers within ${TIMEOUT_SECS}s" >&2
+  echo "FAIL: too many Unknown command lines (${unknown_count})" >&2
   fail=1
 fi
 

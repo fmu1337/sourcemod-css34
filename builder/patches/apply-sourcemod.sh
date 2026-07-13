@@ -588,6 +588,30 @@ new_sym = (
 if old_sym in text and 'css34 EP1-era' not in text:
     path.write_text(text.replace(old_sym, new_sym, 1))
     print('==> SymbolsAreHidden: SE_CSS treated as visible (css34)')
+
+# css34 Metamod implements legacy ISmmPluginManager::Query which always writes
+# through the file/status/source outs (reference ABI). Upstream SM 1.11 passes
+# NULL for unused outs; that null-deref crashes metamod.1.ep1.so when loading
+# any SM extension via LoadMMSPlugin. rom4s passes stack locals — match that.
+text = path.read_text()
+query_old = '''\tPl_Status status;
+
+\tif (!id || (g_pMMPlugins->Query(id, NULL, &status, NULL) && status < Pl_Paused))
+'''
+query_new = '''\tPl_Status status;
+\tconst char *query_file = nullptr;
+\tPluginId query_source = 0;
+
+\t/* css34: never pass NULL outs — legacy Query always stores through them */
+\tif (!id || (g_pMMPlugins->Query(id, &query_file, &status, &query_source) && status < Pl_Paused))
+'''
+if 'css34: never pass NULL outs' in text:
+    print('==> LoadMMSPlugin Query NULL-out fix already present')
+elif query_old in text:
+    path.write_text(text.replace(query_old, query_new, 1))
+    print('==> Fixed LoadMMSPlugin Query for css34 legacy PluginManager ABI')
+else:
+    raise SystemExit('Failed to patch LoadMMSPlugin Query NULL outs for css34')
 PY
 fi
 

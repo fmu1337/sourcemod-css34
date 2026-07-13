@@ -5,8 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 export SERVER_DIR="${SERVER_DIR:-${ROOT}/.ci-server}"
 export CACHE_DIR="${CACHE_DIR:-${ROOT}/.ci-cache}"
-export APPLY_SRCDS_PATCH="${APPLY_SRCDS_PATCH:-1}"
-export APPLY_VALVE_RC="${APPLY_VALVE_RC:-1}"
+export APPLY_SRCDS_PATCH="${APPLY_SRCDS_PATCH:-0}"
+export APPLY_VALVE_RC="${APPLY_VALVE_RC:-0}"
 
 chmod +x "${ROOT}/testing/scripts/"*.sh
 

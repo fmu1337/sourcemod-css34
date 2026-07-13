@@ -15,7 +15,7 @@ on:
       apply_srcds_patch:
         description: "Apply bruno_args srcds_patch (1/0)"
         required: false
-        default: "1"
+        default: "0"
 
 concurrency:
   group: test-server-${{ github.workflow }}-${{ github.ref }}
@@ -104,16 +104,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl unzip unrar
 
-      - name: Fetch CS:S v34 server + extract srcds_patch
+      - name: Fetch CS:S v34 server
         env:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
-          APPLY_SRCDS_PATCH: ${{ github.event.inputs.apply_srcds_patch || '1' }}
+          APPLY_SRCDS_PATCH: ${{ github.event.inputs.apply_srcds_patch || '0' }}
+          APPLY_VALVE_RC: ${{ github.event.inputs.apply_srcds_patch || '0' }}
         run: |
           chmod +x testing/scripts/*.sh
           testing/scripts/fetch-server.sh
-          testing/scripts/apply-valve-rc-fix.sh
           if [[ "${APPLY_SRCDS_PATCH}" == "1" ]]; then
+            testing/scripts/apply-valve-rc-fix.sh
             testing/scripts/apply-srcds-patch.sh
           fi
           find .ci-server/cstrike/maps -type f ! -name 'de_dust2*' -delete || true

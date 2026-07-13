@@ -77,7 +77,7 @@ install_debian() {
   apt-get update -y || apt-get update -y --allow-unauthenticated || true
 
   local pkgs=(
-    ca-certificates curl wget unzip bzip2 file procps
+    ca-certificates curl wget unzip bzip2 file procps expect
     libstdc++6 libstdc++6:i386 zlib1g:i386
   )
   if apt-cache show libc6-i386 >/dev/null 2>&1; then
