@@ -1442,4 +1442,5 @@ else:
     raise SystemExit('Failed to patch configure_linux CXX11 ABI block')
 PY
 
+bash "$script_dir/apply-logger-mapchange-fix.sh" "$sourcemod_dir"
 bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"
