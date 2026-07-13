@@ -73,6 +73,8 @@ bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
 chmod +x "$BUILDER_DIR/py.sh" 2>/dev/null || true
 
 python3 -m pip install --upgrade pip --user
+chmod +x "$BUILDER_DIR/patches/patch-ambuild-linker.sh" 2>/dev/null || true
+bash "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$DEPS_DIR/ambuild"
 python3 -m pip install --user "$DEPS_DIR/ambuild" 2>/dev/null || true
 
 echo "==> Applying CS:S v34 compatibility patches"
