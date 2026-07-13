@@ -117,7 +117,7 @@ jobs:
             testing/scripts/apply-valve-rc-fix.sh
             testing/scripts/apply-srcds-patch.sh
           fi
-          find .ci-server/cstrike/maps -type f ! -name 'de_dust2*' -delete || true
+          KEEP_MAP=de_dust2 testing/scripts/trim-server-maps.sh
 
       - name: Pack server tree
         run: |
@@ -268,7 +268,9 @@ jobs:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
           MM_URL: ${{ env.MM_URL }}
-          TIMEOUT_SECS: 90
+          TIMEOUT_SECS: 120
+          SMOKE_CONDEBUG: "1"
+          SMOKE_VERBOSE: "1"
         run: |
           chmod +x testing/scripts/*.sh
           mkdir -p .ci-server
@@ -277,3 +279,16 @@ jobs:
           export SM_PACKAGE
           testing/scripts/install-addons.sh
           testing/scripts/smoke-test.sh
+
+      - name: Upload smoke logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-smoke-logs
+          path: |
+            .ci-server/smoke.log
+            .ci-server/console-probe.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 7

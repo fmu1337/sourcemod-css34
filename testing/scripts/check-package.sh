@@ -10,6 +10,7 @@ trap cleanup EXIT
 tar -xzf "${SM_PACKAGE}" -C "${TMP}"
 MM_SO="${TMP}/addons/sourcemod/bin/sourcemod_mm_i486.so"
 CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so"
+LOGIC_SO="${TMP}/addons/sourcemod/bin/sourcemod.logic.so"
 
 fail=0
 
@@ -19,6 +20,10 @@ if [[ ! -f "${MM_SO}" ]]; then
 fi
 if [[ ! -f "${CORE_SO}" ]]; then
   echo "FAIL: missing sourcemod.1.ep1.so" >&2
+  exit 1
+fi
+if [[ ! -f "${LOGIC_SO}" ]]; then
+  echo "FAIL: missing sourcemod.logic.so" >&2
   exit 1
 fi
 
@@ -37,6 +42,27 @@ if nm -D "${MM_SO}" 2>/dev/null | grep -q 'CreateInterface_MMS'; then
 else
   echo "FAIL: missing CreateInterface_MMS" >&2
   fail=1
+fi
+
+echo "==> Checking logic module exports"
+if nm -D "${LOGIC_SO}" 2>/dev/null | grep -q ' T logic_load$'; then
+  echo "OK: logic_load export present"
+else
+  echo "FAIL: sourcemod.logic.so missing logic_load" >&2
+  fail=1
+fi
+
+logic_needed="$(readelf -d "${LOGIC_SO}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]')"
+for lib in libpthread.so.0 librt.so.1; do
+  if printf '%s\n' "${logic_needed}" | grep -qx "${lib}"; then
+    echo "OK: sourcemod.logic.so NEEDED ${lib}"
+  else
+    echo "WARN: sourcemod.logic.so missing DT_NEEDED ${lib} (rom4s lists both)"
+  fi
+done
+logic_dynsyms="$(nm -D "${LOGIC_SO}" 2>/dev/null || true)"
+if printf '%s\n' "${logic_dynsyms}" | grep -q '__cxx11'; then
+  echo "WARN: logic.so exports C++11 std::string ABI symbols (rom4s logic has none)"
 fi
 
 echo "==> Checking DT_NEEDED for game libs (GetCVarIF / tier0)"

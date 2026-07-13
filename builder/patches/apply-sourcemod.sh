@@ -913,3 +913,74 @@ elif "css34: bintools needs modern ProtoInfo" in text:
 else:
     raise SystemExit('Failed to locate bintools AMBuilder entry')
 PY
+
+# css34: sourcemod.logic.so must match rom4s (old libstdc++ ABI, pthread/rt NEEDED,
+# no HL2 malloc hooks). A logic built with the default gcc-9 C++11 ABI hangs srcds
+# before the first mapchange in server smoke tests.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'core/logic/AMBuilder'
+text = path.read_text()
+
+defines_old = """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC'
+  ]"""
+defines_new = """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC',
+    '_GLIBCXX_USE_CXX11_ABI=0',
+    'NO_HOOK_MALLOC',
+    'NO_MALLOC_OVERRIDE',
+  ]"""
+
+if '_GLIBCXX_USE_CXX11_ABI=0' in text and 'NO_HOOK_MALLOC' in text:
+    print('==> logic AMBuilder css34 flags already present')
+else:
+    if defines_old not in text:
+        raise SystemExit('Failed to locate logic AMBuilder defines block')
+    text = text.replace(defines_old, defines_new, 1)
+    path.write_text(text)
+    print('==> Patched logic AMBuilder for rom4s-compatible logic.so')
+
+if 'css34: logic uses dynamic libstdc++' not in text:
+    text = path.read_text()
+    linux_block_old = """  if builder.target.platform == 'linux':
+    binary.compiler.postlink += ['-lpthread', '-lrt']"""
+    linux_block_new = """  if builder.target.platform == 'linux':
+    # css34: logic uses dynamic libstdc++ (rom4s-sized); static embed bloats/hangs on jammy.
+    for flag in ('-static-libstdc++', '-lgcc_eh'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    binary.compiler.linkflags += ['-Wl,--no-as-needed', '-lstdc++', '-lpthread', '-lrt', '-lgcc_s']"""
+    if 'css34: logic uses dynamic libstdc++' in text:
+        print('==> logic AMBuilder link flags already patched')
+    elif linux_block_old in text:
+        text = text.replace(linux_block_old, linux_block_new, 1)
+        path.write_text(text)
+        print('==> Patched logic AMBuilder link flags for dynamic libstdc++')
+    else:
+        raise SystemExit('Failed to locate logic AMBuilder linux link block')
+PY
+
+# css34: rom4s builds the whole tree with the legacy libstdc++ ABI.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+old = "    cxx.defines += ['_LINUX', 'POSIX', '_FILE_OFFSET_BITS=64']\n    cxx.linkflags += ['-lm']"
+new = "    cxx.defines += ['_LINUX', 'POSIX', '_FILE_OFFSET_BITS=64', '_GLIBCXX_USE_CXX11_ABI=0']\n    cxx.linkflags += ['-lm']"
+if "'_GLIBCXX_USE_CXX11_ABI=0']" in text and "configure_linux" in text:
+    print('==> configure_linux CXX11 ABI already patched')
+elif old in text:
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched configure_linux for legacy libstdc++ ABI')
+else:
+    raise SystemExit('Failed to patch configure_linux CXX11 ABI block')
+PY

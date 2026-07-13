@@ -35,9 +35,20 @@ set env(LD_LIBRARY_PATH) ".:bin:$env(LD_LIBRARY_PATH)"
 
 # Spawn the engine binary directly (not srcds_run). The shell wrapper has caused
 # early EOF / opaque failures on some RHEL 8 images under expect's pty.
-spawn $binary -game cstrike -console -nohltv \
+if {[info exists env(SMOKE_VERBOSE)] && $env(SMOKE_VERBOSE) ne "" && $env(SMOKE_VERBOSE) ne "0"} {
+    log_user 1
+}
+
+set spawn_args [list $binary -game cstrike -console -nohltv \
     -nomaster -localcser -tickrate 66 \
-    -ip 127.0.0.1 -port $port +ip 127.0.0.1 +sv_lan 1 +maxplayers 10 +map $map
+    -ip 127.0.0.1 -port $port +ip 127.0.0.1 +sv_lan 1 +maxplayers 10 +map $map]
+if {[info exists env(SMOKE_CONDEBUG)] && $env(SMOKE_CONDEBUG) ne "" && $env(SMOKE_CONDEBUG) ne "0"} {
+    lappend spawn_args -condebug
+}
+if {[info exists env(SMOKE_VERBOSE)] && $env(SMOKE_VERBOSE) ne "" && $env(SMOKE_VERBOSE) ne "0"} {
+    lappend spawn_args +log on +sv_logfile 1
+}
+eval spawn $spawn_args
 
 # Exact/glob match — some expect builds produced false -re hits before map load.
 set map_pat "Mapchange to ${map}"

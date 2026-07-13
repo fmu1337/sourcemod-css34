@@ -13,6 +13,17 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 
 Rocky Linux stands in for modern CentOS-stream/RHEL-family hosts (CentOS 8+ is EOL).
 
+When the CI server tree is trimmed to a single map (`de_dust2`), `testing/scripts/trim-server-maps.sh` also rewrites `mapcycle.txt` so the engine does not spam `Map_IsValid: No such map` for deleted BSPs.
+
+## Smoke logging
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SMOKE_CONDEBUG=1` | on | srcds `-condebug` → `cstrike/console.log` |
+| `SMOKE_VERBOSE=1` | off in local runs | expect `log_user 1`, `+log on +sv_logfile 1` |
+
+On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/console.log`, and SourceMod `L*.log`. CI uploads them as the `built-smoke-logs` artifact from `test-built-smoke`.
+
 The distro matrix uses the known-good rom4s package so OS/deps/`srcds_patch` stay covered on old glibc. Host-built packages need CreateInterface + real `tier0`/`vstdlib` link libs; they may require GLIBC 2.29+ (Debian 11+ / modern Rocky), while rom4s 6572 stays on ~2.4 for Debian 8–10 / CentOS 7.
 
 ## What the smoke test checks
