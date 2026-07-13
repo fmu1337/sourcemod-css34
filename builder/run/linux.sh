@@ -31,11 +31,35 @@ if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
     linux-libc-dev
 fi
 
-export CC="${CC:-gcc-9}"
-export CXX="${CXX:-g++-9}"
+# rom4s SM 1.11.0.6572 was built with clang-9; gcc-9 produces a core that
+# loads alone but SIGSEGVs inside css34 metamod when engine extensions
+# register SourceHook hooks (FastDelegate / HookMan ABI drift).
+USE_CLANG9="${USE_CLANG9:-1}"
+if [ "$USE_CLANG9" = "1" ]; then
+  echo "==> Installing/using clang-9 (rom4s-compatible toolchain)"
+  bash "$BUILDER_DIR/install-clang9.sh" "$DEPS_DIR"
+  bash "$BUILDER_DIR/install-clang10.sh" "$DEPS_DIR"
+  # shellcheck source=/dev/null
+  source "$DEPS_DIR/clang9.env"
+  # shellcheck source=/dev/null
+  source "$DEPS_DIR/clang10.env"
+  export CC="${CC:-clang-9}"
+  export CXX="${CXX:-clang++-9}"
+  # Prefer clang-9 wrappers even if a parent env exported gcc-9.
+  case "$CC" in
+    gcc*|g++*) export CC=clang-9 ;;
+  esac
+  case "$CXX" in
+    g++*|gcc*) export CXX=clang++-9 ;;
+  esac
+else
+  export CC="${CC:-gcc-9}"
+  export CXX="${CXX:-g++-9}"
+fi
 
 echo "==> Profile: ${SOURCEMOD_PROFILE:-stable} (SourceMod 1.11.0-git${SOURCEMOD_GIT_REV})"
 echo "==> Using compiler: $($CC --version | head -1)"
+echo "==> Using C++ compiler: $($CXX --version | head -1)"
 
 echo "==> Initializing SourceMod submodule"
 cd "$WDIR"
@@ -44,18 +68,19 @@ if [ ! -e "$SOURCEMOD_DIR/.git" ]; then
 fi
 git -C "$SOURCEMOD_DIR" fetch --depth=8192 origin "$SOURCEMOD_COMMIT"
 git -C "$SOURCEMOD_DIR" reset --hard "$SOURCEMOD_COMMIT"
-git -C "$SOURCEMOD_DIR" submodule foreach --recursive 'git reset --hard HEAD && git clean -fd'
 git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
+chmod +x "$BUILDER_DIR/py.sh" 2>/dev/null || true
 
 python3 -m pip install --upgrade pip --user
-python3 -m pip install --user "$DEPS_DIR/ambuild" 2>/dev/null || true
+chmod +x "$BUILDER_DIR/patches/patch-ambuild-linker.sh" 2>/dev/null || true
+bash "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$DEPS_DIR/ambuild"
+python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS_DIR/ambuild" 2>/dev/null || true
 
-echo "==> Applying CS:S v34 compatibility patches (rom4s baseline)"
+echo "==> Applying CS:S v34 compatibility patches"
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
-bash "$BUILDER_DIR/apply-upstream-patches.sh" "$SOURCEMOD_DIR" "$SOURCEMOD_GIT_REV"
 
 echo "==> Configuring SourceMod (ep1 + episode1, like original release)"
 cd "$SOURCEMOD_DIR"

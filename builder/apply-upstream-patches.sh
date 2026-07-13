@@ -4,7 +4,7 @@ set -euo pipefail
 
 sourcemod_dir="${1:?sourcemod directory required}"
 git_rev="${2:?git rev required}"
-builder_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+builder_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 need_toolchain=0
 need_api=0

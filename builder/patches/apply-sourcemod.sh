@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Always invoke via bash so a missing +x bit cannot break CI checkouts.
+PY=(bash "$script_dir/../py.sh")
+
 sourcemod_dir="${1:?sourcemod directory required}"
 ambuild_script="$sourcemod_dir/AMBuildScript"
 
@@ -43,7 +47,7 @@ SOURCEMOD_DIR="$sourcemod_dir" \
 SUPPORTS_WNO_DEPRECATED_NON_PROTOTYPE="$supports_deprecated_non_prototype" \
 SUPPORTS_WNO_REORDER_CTOR="$supports_reorder_ctor" \
 COMPILER_FLAVOR="$compiler_flavor" \
-python3 - <<'PY'
+"${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 
@@ -55,9 +59,16 @@ compiler_flavor = os.environ.get('COMPILER_FLAVOR', 'gcc')
 path = Path(sourcemod_dir) / 'AMBuildScript'
 text = path.read_text()
 
-ep1_marker = "'ep1':  SDK('HL2SDK', '1.ep1', '6', 'CSS', WinLinux, 'ep1'),"
+# css34: build sourcemod.1.ep1.so as SE_EPISODEONE (like rom4s), not SE_CSS.
+# SE_CSS=6 pulls Orange-Box-era assumptions that crash css34 MM when engine
+# extensions register SourceHook hooks. GAMEFIX must still be "1.ep1" (not the
+# stock EPISODEONE "2.ep1") so we inject SM_CSS34_GAMEFIX_1_EP1 below.
+ep1_marker_css = "'ep1':  SDK('HL2SDK', '1.ep1', '6', 'CSS', WinLinux, 'ep1'),"
+ep1_marker = "'ep1':  SDK('HL2SDK', '1.ep1', '1', 'EPISODEONE', WinLinux, 'ep1'),"
 episode1_anchor = "'episode1':  SDK('HL2SDK', '2.ep1', '1', 'EPISODEONE', WinLinux, 'episode1'),"
-if ep1_marker not in text:
+if ep1_marker_css in text:
+    text = text.replace(ep1_marker_css, ep1_marker, 1)
+elif ep1_marker not in text:
     if episode1_anchor not in text:
         raise SystemExit('Failed to locate episode1 SDK anchor in AMBuildScript')
     text = text.replace(episode1_anchor, episode1_anchor + "\n  " + ep1_marker, 1)
@@ -126,6 +137,15 @@ if needle not in text:
     raise SystemExit('Failed to locate compiler flags block in AMBuildScript')
 text = text.replace(needle, insert, 1)
 
+sp_script = Path(sourcemod_dir) / 'sourcepawn/AMBuildScript'
+sp_text = sp_script.read_text()
+if compiler_flavor == 'clang' and supports_deprecated_non_prototype and '-Wno-deprecated-non-prototype' not in sp_text:
+    sp_text = sp_text.replace(
+        "            '-Werror',\n            '-Wno-switch',",
+        "            '-Werror',\n            '-Wno-switch',\n            '-Wno-deprecated-non-prototype',  # CSS34 clang compatibility",
+    )
+    sp_script.write_text(sp_text)
+
 old_dynamic = (
     "      if sdk.name in ['css', 'hl2dm', 'dods', 'tf2', 'sdk2013', 'bms', 'nucleardawn', 'l4d2', 'insurgency', 'doi']:\n"
     "        dynamic_libs = ['libtier0_srv.so', 'libvstdlib_srv.so']"
@@ -136,14 +156,186 @@ new_dynamic = (
     "      elif sdk.name == 'css':\n"
     "        dynamic_libs = ['tier0_i486.so', 'vstdlib_i486.so']"
 )
-if "elif sdk.name == 'css':" in text and "tier0_i486.so" in text:
-    pass
+if new_dynamic in text or "elif sdk.name == 'css':" in text:
+    pass  # css34 dynamic_libs already patched
 elif old_dynamic in text:
     text = text.replace(old_dynamic, new_dynamic, 1)
 else:
     raise SystemExit('Failed to locate dynamic_libs block in AMBuildScript')
 
+# css34/ep1: embed ConVar from static tier1_i486.a (like rom4s). Shared
+# vstdlib_i486.so also exports ConVar; if it appears before tier1 on the link
+# line, SM imports the engine list and hangs in FindCommand (circular m_pNext).
+# Do NOT use --whole-archive on the stock tier1 archive: it embeds nested
+# libstdc++.a / libgcc_eh.a and breaks extension links.
+# Put tier1 at the front of linkflags (before prepended vstdlib/tier0); leave
+# only mathlib in postlink.
+old_tier1_variants = [
+    (
+        "      else:\n"
+        "        compiler.postlink += [\n"
+        "          compiler.Dep(os.path.join(lib_folder, 'tier1_i486.a')),\n"
+        "          compiler.Dep(os.path.join(lib_folder, 'mathlib_i486.a'))\n"
+        "        ]"
+    ),
+    (
+        "      else:\n"
+        "        # css34: whole-archive tier1 so ConVar/ConCommandBase are not taken from vstdlib\n"
+        "        compiler.postlink += [\n"
+        "          '-Wl,--whole-archive',\n"
+        "          compiler.Dep(os.path.join(lib_folder, 'tier1_i486.a')),\n"
+        "          '-Wl,--no-whole-archive',\n"
+        "          compiler.Dep(os.path.join(lib_folder, 'mathlib_i486.a'))\n"
+        "        ]"
+    ),
+    # AMBuild 2.2 / upstream 6970+ (no compiler.Dep on postlink archives)
+    (
+        "      else:\n"
+        "        compiler.postlink += [\n"
+        "          os.path.join(lib_folder, 'tier1_i486.a'),\n"
+        "          os.path.join(lib_folder, 'mathlib_i486.a')\n"
+        "        ]"
+    ),
+]
+new_tier1_variants = [
+    (
+        "      else:\n"
+        "        # css34: mathlib only here; tier1 is prepended before vstdlib below\n"
+        "        compiler.postlink += [\n"
+        "          compiler.Dep(os.path.join(lib_folder, 'mathlib_i486.a'))\n"
+        "        ]"
+    ),
+    (
+        "      else:\n"
+        "        # css34: mathlib only here; tier1 is prepended before vstdlib below\n"
+        "        compiler.postlink += [\n"
+        "          compiler.Dep(os.path.join(lib_folder, 'mathlib_i486.a'))\n"
+        "        ]"
+    ),
+    (
+        "      else:\n"
+        "        # css34: mathlib only here; tier1 is prepended before vstdlib below\n"
+        "        compiler.postlink += [\n"
+        "          os.path.join(lib_folder, 'mathlib_i486.a')\n"
+        "        ]"
+    ),
+]
+replaced_tier1 = False
+for old_tier1, new_tier1 in zip(old_tier1_variants, new_tier1_variants):
+    if old_tier1 in text:
+        text = text.replace(old_tier1, new_tier1, 1)
+        replaced_tier1 = True
+        break
+if not replaced_tier1:
+    if any(v in text for v in new_tier1_variants):
+        pass
+    else:
+        raise SystemExit('Failed to locate tier1_i486.a postlink block in AMBuildScript')
+
+tier1_before_vstdlib = (
+    "    for library in dynamic_libs:\n"
+    "      source_path = os.path.join(lib_folder, library)\n"
+    "      output_path = os.path.join(binary.localFolder, library)\n"
+    "\n"
+    "      def make_linker(source_path, output_path):\n"
+    "        def link(context, binary):\n"
+    "          cmd_node, (output,) = context.AddSymlink(source_path, output_path)\n"
+    "          return output\n"
+    "        return link\n"
+    "\n"
+    "      linker = make_linker(source_path, output_path)\n"
+    "      compiler.linkflags[0:0] = [compiler.Dep(library, linker)]\n"
+    "\n"
+    "    return binary\n"
+)
+tier1_before_vstdlib_new = (
+    "    for library in dynamic_libs:\n"
+    "      source_path = os.path.join(lib_folder, library)\n"
+    "      output_path = os.path.join(binary.localFolder, library)\n"
+    "\n"
+    "      def make_linker(source_path, output_path):\n"
+    "        def link(context, binary):\n"
+    "          cmd_node, (output,) = context.AddSymlink(source_path, output_path)\n"
+    "          return output\n"
+    "        return link\n"
+    "\n"
+    "      linker = make_linker(source_path, output_path)\n"
+    "      compiler.linkflags[0:0] = [compiler.Dep(library, linker)]\n"
+    "\n"
+    "    # css34: static tier1 BEFORE shared vstdlib so ConVar is embedded (T),\n"
+    "    # not imported from vstdlib (U). MM extensions only — core has PLUGIN_EXPOSE.\n"
+    "    if 'extensions' in getattr(binary, 'localFolder', ''):\n"
+    "      if builder.target.platform in ['linux', 'mac']:\n"
+    "        if not (sdk.name in ['sdk2013', 'bms'] or arch == 'x64'):\n"
+    "          compiler.linkflags[0:0] = [\n"
+    "            compiler.Dep(os.path.join(lib_folder, 'tier1_i486.a'))\n"
+    "          ]\n"
+    "\n"
+    "    return binary\n"
+)
+tier1_before_vstdlib_6970 = (
+    "    for library in dynamic_libs:\n"
+    "      source_path = os.path.join(lib_folder, library)\n"
+    "      output_path = os.path.join(binary.localFolder, library)\n"
+    "\n"
+    "      # Ensure the output path exists.\n"
+    "      context.AddFolder(binary.localFolder)\n"
+    "      output = context.AddSymlink(source_path, output_path)\n"
+    "\n"
+    "      compiler.weaklinkdeps += [output]\n"
+    "      compiler.linkflags[0:0] = [library]\n"
+    "\n"
+    "    return binary\n"
+)
+tier1_before_vstdlib_6970_new = (
+    "    for library in dynamic_libs:\n"
+    "      source_path = os.path.join(lib_folder, library)\n"
+    "      output_path = os.path.join(binary.localFolder, library)\n"
+    "\n"
+    "      # Ensure the output path exists.\n"
+    "      context.AddFolder(binary.localFolder)\n"
+    "      output = context.AddSymlink(source_path, output_path)\n"
+    "\n"
+    "      compiler.weaklinkdeps += [output]\n"
+    "      compiler.linkflags[0:0] = [library]\n"
+    "\n"
+    "    # css34: static tier1 BEFORE shared vstdlib so ConVar is embedded (T),\n"
+    "    # not imported from vstdlib (U). MM extensions only — core exports CreateInterface.\n"
+    "    _css34_src = context.currentSourcePath.replace('\\\\', '/')\n"
+    "    if '/extensions/' in _css34_src:\n"
+    "      if compiler.target.platform in ['linux', 'mac']:\n"
+    "        if not (sdk.name in ['sdk2013', 'bms'] or compiler.target.arch == 'x86_64'):\n"
+    "          compiler.linkflags[0:0] = [\n"
+    "            os.path.join(lib_folder, 'tier1_i486.a')\n"
+    "          ]\n"
+    "\n"
+    "    return binary\n"
+)
+if 'css34: static tier1 BEFORE shared vstdlib' not in text:
+    if tier1_before_vstdlib in text:
+        text = text.replace(tier1_before_vstdlib, tier1_before_vstdlib_new, 1)
+    elif tier1_before_vstdlib_6970 in text:
+        text = text.replace(tier1_before_vstdlib_6970, tier1_before_vstdlib_6970_new, 1)
+    else:
+        raise SystemExit('Failed to locate dynamic_libs linkflags prepend in AMBuildScript')
+
 path.write_text(text)
+
+# css34: force GAMEFIX "1.ep1" for the ep1 SDK binary (SE_EPISODEONE would
+# otherwise bake "2.ep1" and load the wrong engine extension set).
+text = path.read_text()
+marker = "    compiler.defines += ['SOURCE_ENGINE=' + sdk.code]"
+insert = """    compiler.defines += ['SOURCE_ENGINE=' + sdk.code]
+    # css34: sourcemod.1.ep1.so must advertise gamesuffix 1.ep1
+    if sdk.name == 'ep1':
+      compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']"""
+if 'SM_CSS34_GAMEFIX_1_EP1' in text:
+    print('==> SM_CSS34_GAMEFIX_1_EP1 already in AMBuildScript')
+elif marker in text:
+    path.write_text(text.replace(marker, insert, 1))
+    print('==> Added SM_CSS34_GAMEFIX_1_EP1 define for ep1 SDK')
+else:
+    raise SystemExit('Failed to locate SOURCE_ENGINE define in AMBuildScript')
 
 cstrike_ambuild = Path(sourcemod_dir) / 'extensions/cstrike/AMBuilder'
 if cstrike_ambuild.exists():
@@ -167,10 +359,204 @@ for rel in ('extensions/cstrike/forwards.cpp', 'extensions/cstrike/natives.cpp')
         cstrike_src.write_text(cstrike_code)
 PY
 
+# MM:S 1.10 for CS:S v34 loads the bridge via legacy CreateInterface (API V1),
+# which must open sourcemod.1.ep1.so. Upstream SM removed this export; restore it.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'loader' / 'loader.cpp'
+text = path.read_text()
+if 'DLL_EXPORT void *CreateInterface(const char *iface, int *ret)' in text:
+    print('==> loader CreateInterface already present')
+else:
+    if '#define FILENAME_1_4_EP1' not in text:
+        text = text.replace(
+            '#define METAMOD_API_MAJOR\t\t\t2\n',
+            '#define METAMOD_API_MAJOR\t\t\t2\n'
+            '#define FILENAME_1_4_EP1\t\t\t"sourcemod.1.ep1" PLATFORM_EXT\n',
+            1,
+        )
+        if '#define FILENAME_1_4_EP1' not in text:
+            text = text.replace(
+                '#define METAMOD_API_MAJOR\t\t\t2\r\n',
+                '#define METAMOD_API_MAJOR\t\t\t2\r\n'
+                '#define FILENAME_1_4_EP1\t\t\t"sourcemod.1.ep1" PLATFORM_EXT\r\n',
+                1,
+            )
+        if '#define FILENAME_1_4_EP1' not in text:
+            raise SystemExit('Failed to insert FILENAME_1_4_EP1 into loader.cpp')
+
+    win_sep = """\t#define PATH_SEP_CHAR\t\t\t"\\\\"
+\t#include <Windows.h>
+#else"""
+    win_sep_new = """\t#define PATH_SEP_CHAR\t\t\t"\\\\"
+\tinline bool IsPathSepChar(char c)
+\t{
+\t\treturn (c == '/' || c == '\\\\');
+\t}
+\t#include <Windows.h>
+#else"""
+    if win_sep in text:
+        text = text.replace(win_sep, win_sep_new, 1)
+
+    unix_sep = """\ttypedef void *\t\t\t\t\tHINSTANCE;
+\t#define PATH_SEP_CHAR\t\t\t"/"
+\t#include <dlfcn.h>
+#endif"""
+    unix_sep_new = """\ttypedef void *\t\t\t\t\tHINSTANCE;
+\t#define PATH_SEP_CHAR\t\t\t"/"
+\tinline bool IsPathSepChar(char c)
+\t{
+\t\treturn (c == '/');
+\t}
+\t#include <dlfcn.h>
+#endif"""
+    if unix_sep in text:
+        text = text.replace(unix_sep, unix_sep_new, 1)
+
+    # Must exist in both #if branches (Windows helper alone is invisible on Linux).
+    if text.count('inline bool IsPathSepChar(char c)') < 2:
+        raise SystemExit('Failed to insert IsPathSepChar into both loader.cpp branches')
+
+    getfile = r'''
+bool GetFileOfAddress(void *pAddr, char *buffer, size_t maxlength)
+{
+#if defined _MSC_VER
+	MEMORY_BASIC_INFORMATION mem;
+	if (!VirtualQuery(pAddr, &mem, sizeof(mem)))
+		return false;
+	if (mem.AllocationBase == NULL)
+		return false;
+	HMODULE dll = (HMODULE)mem.AllocationBase;
+	GetModuleFileName(dll, (LPTSTR)buffer, maxlength);
+#else
+	Dl_info info;
+	if (!dladdr(pAddr, &info))
+		return false;
+	if (!info.dli_fbase || !info.dli_fname)
+		return false;
+	const char *dllpath = info.dli_fname;
+	snprintf(buffer, maxlength, "%s", dllpath);
+#endif
+	return true;
+}
+
+'''
+    if 'bool GetFileOfAddress(' not in text:
+        anchor = 'DLL_EXPORT METAMOD_PLUGIN *CreateInterface_MMS('
+        if anchor not in text:
+            raise SystemExit('Failed to locate CreateInterface_MMS in loader.cpp')
+        text = text.replace(anchor, getfile + anchor, 1)
+
+    create = r'''
+DLL_EXPORT void *CreateInterface(const char *iface, int *ret)
+{
+	/**
+	 * If a load has already been attempted, bail out immediately.
+	 */
+	if (load_attempted)
+	{
+		return NULL;
+	}
+
+	if (strcmp(iface, METAMOD_PLAPI_NAME) == 0)
+	{
+		char thisfile[256];
+		char targetfile[256];
+
+		if (!GetFileOfAddress((void *)CreateInterface_MMS, thisfile, sizeof(thisfile)))
+		{
+			return NULL;
+		}
+
+		size_t len = strlen(thisfile);
+		for (size_t iter = len - 1; iter < len; iter--)
+		{
+			if (IsPathSepChar(thisfile[iter]))
+			{
+				thisfile[iter] = '\0';
+				break;
+			}
+		}
+
+		UTIL_Format(targetfile, sizeof(targetfile), "%s" PATH_SEP_CHAR FILENAME_1_4_EP1, thisfile);
+
+		return _GetPluginPtr(targetfile, METAMOD_FAIL_API_V1);
+	}
+
+	return NULL;
+}
+
+'''
+    unload_anchor = 'DLL_EXPORT void UnloadInterface_MMS()'
+    if unload_anchor not in text:
+        raise SystemExit('Failed to locate UnloadInterface_MMS in loader.cpp')
+    # Insert CreateInterface after UnloadInterface_MMS body.
+    end_marker = 'DLL_EXPORT void UnloadInterface_MMS()\n{\n\tif (g_hCore)\n\t{\n\t\tcloselib(g_hCore);\n\t\tg_hCore = NULL;\n\t}\n}\n'
+    if end_marker not in text:
+        raise SystemExit('Failed to locate UnloadInterface_MMS body in loader.cpp')
+    text = text.replace(end_marker, end_marker + create, 1)
+    path.write_text(text)
+    print('==> Restored legacy CreateInterface in loader.cpp for MM:S 1.10 / EP1')
+PY
+
 # Normalize line endings from the upstream SourceMod checkout.
 while IFS= read -r -d '' file; do
   sed -i 's/\r$//' "$file"
 done < <(find "$sourcemod_dir" -type f \( -name '*.h' -o -name '*.cpp' -o -name 'AMBuildScript' \) -print0)
+
+# CS:S v34 / hl2sdk-ep1 only has VEngineServer021. Upstream SE_CSS shim probes 023/022 first
+# and is meant for Orange Box CS:S — drop SE_CSS from that branch for css34 (core + extensions).
+for f in \
+  "$sourcemod_dir/core/sourcemm_api.cpp" \
+  "$sourcemod_dir/public/smsdk_ext.cpp"
+do
+  if [ -f "$f" ]; then
+    sed -i \
+      's/#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_SDK2013$/#if SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_SDK2013/' \
+      "$f"
+  fi
+done
+
+# Legacy ISmmAPI has no Format(); upstream 6970+ still calls it in OB engine shims.
+for f in \
+  "$sourcemod_dir/public/smsdk_ext.cpp" \
+  "$sourcemod_dir/core/sourcemm_api.cpp"
+do
+  if [ -f "$f" ]; then
+    sed -i 's/ismm->Format(error, maxlen,/ke::SafeSprintf(error, maxlen,/g' "$f"
+  fi
+done
+
+# css34: ISmmAPI already uses modern method names with legacy vtable order.
+# Disable metamod_wrappers factory renames (they would map GetEngineFactory→engineFactory
+# and break compilation). Keep the file for CVAR_INTERFACE_VERSION if included.
+wrappers="$sourcemod_dir/public/metamod_wrappers.h"
+if [ -f "$wrappers" ] && ! grep -q 'CSS34_NO_FACTORY_RENAME' "$wrappers"; then
+  cat > "$wrappers" <<'EOF'
+/**
+ * css34: Metamod headers use legacy ISmmAPI *vtable order* with modern method
+ * names, so factory renames are unnecessary. CSS34_NO_FACTORY_RENAME
+ */
+#ifndef _INCLUDE_METAMOD_WRAPPERS_H_
+#define _INCLUDE_METAMOD_WRAPPERS_H_
+
+#define CVAR_INTERFACE_VERSION	VENGINE_CVAR_INTERFACE_VERSION
+
+#ifndef METAMOD_PLAPI_NAME
+#define METAMOD_PLAPI_NAME		PLAPI_NAME
+#endif
+
+#endif //_INCLUDE_METAMOD_WRAPPERS_H_
+EOF
+fi
+
+# Ensure sourcemm_api can see PLAPI helpers; wrappers are now no-op renames.
+sourcemm_h="$sourcemod_dir/core/sourcemm_api.h"
+if [ -f "$sourcemm_h" ] && ! grep -q 'metamod_wrappers.h' "$sourcemm_h"; then
+  sed -i 's|#include <ISmmPlugin.h>|#include <ISmmPlugin.h>\n#include <metamod_wrappers.h>|' "$sourcemm_h"
+fi
 
 # CS:S v34 is pre-Orange Box (Episode One SDK). Disable Orange Box-only code paths.
 while IFS= read -r -d '' file; do
@@ -205,6 +591,110 @@ if ! grep -q 'SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS' "$compat_wrappers"; the
   sed -i 's/#if SOURCE_ENGINE == SE_DARKMESSIAH$/#if SOURCE_ENGINE == SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS/' "$compat_wrappers"
 fi
 
+# css34: ep1 binary is SE_EPISODEONE with SM_CSS34_GAMEFIX_1_EP1 so gamesuffix
+# is "1.ep1" while engine name stays "original". Keep SE_CSS GAMEFIX/name
+# shims as well for any residual SE_CSS compile units.
+logic_bridge="$sourcemod_dir/core/logic_bridge.cpp"
+if [ -f "$logic_bridge" ]; then
+  LOGIC_BRIDGE="$logic_bridge" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+path = Path(os.environ['LOGIC_BRIDGE'])
+text = path.read_text()
+changed = False
+
+# Prefer an explicit css34 override ahead of the SOURCE_ENGINE GAMEFIX ladder.
+force_old = '#if SOURCE_ENGINE == SE_LEFT4DEAD\n#define GAMEFIX "2.l4d"'
+force_new = '''#if defined(SM_CSS34_GAMEFIX_1_EP1)
+#define GAMEFIX "1.ep1"
+#elif SOURCE_ENGINE == SE_LEFT4DEAD
+#define GAMEFIX "2.l4d"'''
+if 'SM_CSS34_GAMEFIX_1_EP1' not in text and force_old in text:
+    text = text.replace(force_old, force_new, 1)
+    changed = True
+
+# Only the SE_CSS GAMEFIX branch (do not touch the #else "2.ep1" default).
+for old, new in (
+    ('#elif SOURCE_ENGINE == SE_CSS\n#define GAMEFIX "2.css"',
+     '#elif SOURCE_ENGINE == SE_CSS\n#define GAMEFIX "1.ep1"'),
+    ('#elif SOURCE_ENGINE == SE_CSS\n#define GAMEFIX "2.ep1"',
+     '#elif SOURCE_ENGINE == SE_CSS\n#define GAMEFIX "1.ep1"'),
+):
+    if old in text:
+        text = text.replace(old, new, 1)
+        changed = True
+        break
+
+old_name = '''#elif SOURCE_ENGINE == SE_CSS
+	return "css";
+'''
+new_name = '''#elif SOURCE_ENGINE == SE_CSS
+	/* css34: if compiled as SE_CSS, still report as original EP1 */
+	return "original";
+'''
+if old_name in text:
+    text = text.replace(old_name, new_name, 1)
+    changed = True
+
+# Repair accidental replacement of the #else EPISODEONE default.
+else_bad = '''#else
+#define GAMEFIX "1.ep1"
+#endif
+'''
+else_good = '''#else
+#define GAMEFIX "2.ep1"
+#endif
+'''
+if else_bad in text and 'SM_CSS34_GAMEFIX_1_EP1' in text:
+    text = text.replace(else_bad, else_good, 1)
+    changed = True
+elif '#elif SOURCE_ENGINE == SE_CSS\n#define GAMEFIX "1.ep1"' in text and else_bad in text:
+    text = text.replace(else_bad, else_good, 1)
+    changed = True
+
+if changed:
+    path.write_text(text)
+print('==> GAMEFIX css34 1.ep1 override; GetSourceEngineName original')
+
+# css34: SE_CSS binaries are EP1-era; symbols are exported (like SE_EPISODEONE),
+# not hidden like modern OB CSS. Hidden=true makes @gEntList etc. fail.
+text = path.read_text()
+old_sym = (
+    "#if (SOURCE_ENGINE == SE_CSS)            \\\n"
+)
+new_sym = (
+    "#if /* css34 EP1-era */ (0) && (SOURCE_ENGINE == SE_CSS)            \\\n"
+)
+if old_sym in text and 'css34 EP1-era' not in text:
+    path.write_text(text.replace(old_sym, new_sym, 1))
+    print('==> SymbolsAreHidden: SE_CSS treated as visible (css34)')
+
+# css34 Metamod implements legacy ISmmPluginManager::Query which always writes
+# through the file/status/source outs (reference ABI). Upstream SM 1.11 passes
+# NULL for unused outs; that null-deref crashes metamod.1.ep1.so when loading
+# any SM extension via LoadMMSPlugin. rom4s passes stack locals — match that.
+text = path.read_text()
+query_old = '''\tPl_Status status;
+
+\tif (!id || (g_pMMPlugins->Query(id, NULL, &status, NULL) && status < Pl_Paused))
+'''
+query_new = '''\tPl_Status status;
+\tconst char *query_file = nullptr;
+\tPluginId query_source = 0;
+
+\t/* css34: never pass NULL outs — legacy Query always stores through them */
+\tif (!id || (g_pMMPlugins->Query(id, &query_file, &status, &query_source) && status < Pl_Paused))
+'''
+if 'css34: never pass NULL outs' in text:
+    print('==> LoadMMSPlugin Query NULL-out fix already present')
+elif query_old in text:
+    path.write_text(text.replace(query_old, query_new, 1))
+    print('==> Fixed LoadMMSPlugin Query for css34 legacy PluginManager ABI')
+else:
+    raise SystemExit('Failed to patch LoadMMSPlugin Query NULL outs for css34')
+PY
+fi
+
 # Episode One SDK uses legacy CON_COMMAND macros without a CCommand parameter.
 while IFS= read -r -d '' file; do
   sed -i 's/#if SOURCE_ENGINE <= SE_DARKMESSIAH$/#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS/g' "$file"
@@ -218,7 +708,7 @@ while IFS= read -r -d '' file; do
   sed -i 's/#if SOURCE_ENGINE <= SE_DARKMESSIAH$/#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS/g' "$file"
 done < <(find "$sourcemod_dir/extensions/sdktools" -type f \( -name 'vhelpers.cpp' -o -name 'tempents.cpp' \) -print0)
 
-SOURCEMOD_DIR="$sourcemod_dir" python3 - <<'PY'
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 import os
 from pathlib import Path
 
@@ -272,6 +762,71 @@ text = text.replace(
 )
 text = text.replace('SOURCE_ENGINE == SE_CSS || ', '')
 path.write_text(text)
+
+# css34 Metamod SH v4 has no SH_DECL_MANUALEXTERN*; guard 6970+ sdkhooks natives.
+natives = Path(sourcemod_dir) / 'extensions/sdkhooks/natives.cpp'
+ntext = natives.read_text()
+if '#if defined SH_DECL_MANUALEXTERN1\nSH_DECL_MANUALEXTERN1' not in ntext:
+    ntext = ntext.replace(
+        'SH_DECL_MANUALEXTERN1(OnTakeDamage, int, CTakeDamageInfoHack &);\n'
+        'SH_DECL_MANUALEXTERN3_void(Weapon_Drop, CBaseCombatWeapon *, const Vector *, const Vector *);',
+        '#if defined SH_DECL_MANUALEXTERN1\n'
+        'SH_DECL_MANUALEXTERN1(OnTakeDamage, int, CTakeDamageInfoHack &);\n'
+        'SH_DECL_MANUALEXTERN3_void(Weapon_Drop, CBaseCombatWeapon *, const Vector *, const Vector *);\n'
+        '#endif',
+        1,
+    )
+    ntext = ntext.replace(
+        '\tif (params[0] < 9 || params[9] != 0)\n'
+        '\t{\n'
+        '\t\tSH_MCALL(pVictim, OnTakeDamage)((CTakeDamageInfoHack&)info);\n'
+        '\t}\n'
+        '\telse\n',
+        '#if defined SH_DECL_MANUALEXTERN1\n'
+        '\tif (params[0] < 9 || params[9] != 0)\n'
+        '\t{\n'
+        '\t\tSH_MCALL(pVictim, OnTakeDamage)((CTakeDamageInfoHack&)info);\n'
+        '\t}\n'
+        '\telse\n'
+        '#endif\n'
+        '\tif (1)\n',
+        1,
+    )
+    ntext = ntext.replace(
+        '\telse\n'
+        '\t{\n'
+        '\t\tSH_MCALL(pPlayer, Weapon_Drop)((CBaseCombatWeapon *)pWeapon, NULL, NULL);\n'
+        '\t\treturn 0;\n'
+        '\t}\n',
+        '\telse\n'
+        '\t{\n'
+        '#if defined SH_DECL_MANUALEXTERN1\n'
+        '\t\tSH_MCALL(pPlayer, Weapon_Drop)((CBaseCombatWeapon *)pWeapon, NULL, NULL);\n'
+        '\t\treturn 0;\n'
+        '#else\n'
+        '\t\treturn pContext->ThrowNativeError("SDKHooks_DropWeapon is not supported on this engine.");\n'
+        '#endif\n'
+        '\t}\n',
+        1,
+    )
+    ntext = ntext.replace(
+        '\tif (params[0] < 5 || params[5] != 0)\n'
+        '\t{\n'
+        '\t\tSH_MCALL(pPlayer, Weapon_Drop)((CBaseCombatWeapon*)pWeapon, &vecTarget, pVecVelocity);\n'
+        '\t}\n'
+        '\telse\n',
+        '#if defined SH_DECL_MANUALEXTERN1\n'
+        '\tif (params[0] < 5 || params[5] != 0)\n'
+        '\t{\n'
+        '\t\tSH_MCALL(pPlayer, Weapon_Drop)((CBaseCombatWeapon*)pWeapon, &vecTarget, pVecVelocity);\n'
+        '\t}\n'
+        '\telse\n'
+        '#endif\n'
+        '\tif (1)\n',
+        1,
+    )
+    natives.write_text(ntext)
+    print('==> sdkhooks/natives.cpp: SH_DECL_MANUALEXTERN guards for css34')
 
 path = Path(sourcemod_dir) / 'extensions/cstrike/natives.cpp'
 text = path.read_text()
@@ -429,3 +984,779 @@ with open(git_head_path) as fp:
             raise SystemExit('Failed to patch tools/buildbot/Versioning for submodule git metadata')
         versioning.write_text(text.replace(old, new, 1))
 PY
+
+
+# css34: match rom4s DT_NEEDED — keep static libstdc++, dynamic libgcc_s +
+# pthread/rt, and disable HL2 malloc overrides (NO_HOOK_MALLOC).
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYLINK'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+# Drop any prior mistaken "remove static-libstdc++" css34 block.
+if "css34: match rom4s link" in text:
+    import re
+    text = re.sub(
+        r"\n      # css34: match rom4s link.*?(?=\n    for path in paths:)",
+        "\n",
+        text,
+        count=1,
+        flags=re.S,
+    )
+    path.write_text(text)
+    text = path.read_text()
+
+old = """    if builder.target.platform == 'linux':
+      if sdk.name in ['csgo', 'blade']:
+        compiler.linkflags.remove('-static-libstdc++')
+        compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']
+"""
+old_6970 = """    if compiler.target.platform == 'linux':
+      if sdk.name in ['csgo', 'blade']:
+        compiler.linkflags.remove('-static-libstdc++')
+        compiler.linkflags += ['-lstdc++']
+        compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']
+"""
+new = """    if builder.target.platform == 'linux':
+      if sdk.name in ['csgo', 'blade']:
+        compiler.linkflags.remove('-static-libstdc++')
+        compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']
+      # css34: match rom4s (static libstdc++, dynamic libgcc_s/pthread/rt)
+      if sdk.name in ['ep1', 'episode1']:
+        if '-static-libgcc' in compiler.linkflags:
+          compiler.linkflags.remove('-static-libgcc')
+        compiler.defines += ['NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE']
+        for lib in ('-lpthread', '-lrt', '-lgcc_s'):
+          if lib not in compiler.linkflags:
+            compiler.linkflags += [lib]
+"""
+new_6970 = """    if compiler.target.platform == 'linux':
+      if sdk.name in ['csgo', 'blade']:
+        compiler.linkflags.remove('-static-libstdc++')
+        compiler.linkflags += ['-lstdc++']
+        compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']
+      # css34: match rom4s (static libstdc++, dynamic libgcc_s/pthread/rt)
+      if sdk.name in ['ep1', 'episode1']:
+        if '-static-libgcc' in compiler.linkflags:
+          compiler.linkflags.remove('-static-libgcc')
+        compiler.defines += ['NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE']
+        for lib in ('-lpthread', '-lrt', '-lgcc_s'):
+          if lib not in compiler.linkflags:
+            compiler.linkflags += [lib]
+"""
+if 'css34: match rom4s (static libstdc++' in text:
+    print('==> rom4s link flags already in AMBuildScript')
+elif old in text:
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched AMBuildScript for rom4s-like link flags')
+elif old_6970 in text:
+    path.write_text(text.replace(old_6970, new_6970, 1))
+    print('==> Patched AMBuildScript (6970) for rom4s-like link flags')
+else:
+    raise SystemExit('Failed to patch static-libstdc++ block for css34')
+PYLINK
+
+# bintools needs modern SourceHook ProtoInfo/CProtoInfoBuilder; css34 MM requires SH v4
+# ISourceHook ABI. Skip bintools until a dual ProtoInfo shim lands — core smoke does not need it.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+old = "  'extensions/bintools/AMBuilder',\n"
+new = (
+    "  # css34: bintools needs modern ProtoInfo; SH v4 headers omit sourcehook_pibuilder.h\n"
+    "  # 'extensions/bintools/AMBuilder',\n"
+)
+if old in text:
+    path.write_text(text.replace(old, new, 1))
+    print('==> Skipping bintools extension under css34 SourceHook v4 headers')
+elif "css34: bintools needs modern ProtoInfo" in text:
+    print('==> bintools already skipped for css34')
+else:
+    raise SystemExit('Failed to locate bintools AMBuilder entry')
+
+# DHooks (6970+) pulls HL2 SDK paths inconsistently under css34; skip for v34 smoke builds.
+old_dhooks = "  'extensions/dhooks/AMBuilder',\n"
+new_dhooks = (
+    "  # css34: DHooks needs full HL2SDK include paths not wired for ep1-only v34 builds\n"
+    "  # 'extensions/dhooks/AMBuilder',\n"
+)
+if old_dhooks in text:
+    path.write_text(text.replace(old_dhooks, new_dhooks, 1))
+    print('==> Skipping dhooks extension for css34 smoke builds')
+elif "css34: DHooks needs full HL2SDK" in text:
+    print('==> dhooks already skipped for css34')
+elif "extensions/dhooks/AMBuilder" not in text:
+    print('==> dhooks not in BuildScripts (upstream < 6970)')
+PY
+
+# css34: sourcemod.logic.so must match rom4s (old libstdc++ ABI, pthread/rt NEEDED,
+# no HL2 malloc hooks). rom4s built logic with clang 10 (hlmod #588406); clang-9
+# logic hangs srcds before the first mapchange in smoke tests.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'core/logic/AMBuilder'
+text = path.read_text()
+
+logic_loop_new = """for arch in SM.archs:
+  if builder.target.platform == 'linux':
+    # css34: SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9 logic toolchain.
+    import shutil as _shutil
+    import os as _os
+    logic_cxx = builder.cxx.clone()
+    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    _gcc9 = _shutil.which('gcc-9') or '/usr/bin/gcc-9'
+    logic_cxx.cxx_argv = [_gpp9]
+    logic_cxx.cc_argv = [_gcc9]
+    logic_cxx.linker_argv = [_gpp9]
+    if arch == 'x86':
+      logic_cxx.cflags += ['-m32']
+      logic_cxx.linkflags += ['-m32']
+    _clang_only = [
+      '-Wno-nonportable-include-path', '-Wno-macro-redefined', '-Wno-writable-strings',
+      '-Wno-sometimes-uninitialized', '-Wno-inconsistent-missing-override',
+      '-Wno-implicit-exception-spec-mismatch', '-Wno-deprecated-register',
+    ]
+    for _attr in ('cflags', 'cxxflags'):
+      _flags = getattr(logic_cxx, _attr)
+      setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
+      ]
+    for _flag in ('-lgcc_eh',):
+      if _flag in logic_cxx.linkflags:
+        logic_cxx.linkflags.remove(_flag)
+    if '-static-libgcc' not in logic_cxx.linkflags:
+      logic_cxx.linkflags += ['-static-libgcc']
+    logic_cxx.cxxflags += [
+      '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
+      '-Wno-stringop-truncation', '-Wno-unused-result',
+      '-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0',
+      '-fno-sized-deallocation',
+    ]
+    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
+  else:
+    binary = SM.Library(builder, 'sourcemod.logic', arch)"""
+
+logic_loop_new_6970 = """for cxx in builder.targets:
+  if cxx.target.platform == 'linux':
+    # css34: SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9 logic toolchain (AMBuild 2.2).
+    import shutil as _shutil
+    import os as _os
+    logic_cxx = cxx.clone()
+    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    _gcc9 = _shutil.which('gcc-9') or '/usr/bin/gcc-9'
+    logic_cxx.cxx_argv = [_gpp9]
+    logic_cxx.cc_argv = [_gcc9]
+    logic_cxx.linker_argv = [_gpp9]
+    if cxx.target.arch == 'x86':
+      logic_cxx.cflags += ['-m32']
+      logic_cxx.linkflags += ['-m32']
+    _clang_only = [
+      '-Wno-nonportable-include-path', '-Wno-macro-redefined', '-Wno-writable-strings',
+      '-Wno-sometimes-uninitialized', '-Wno-inconsistent-missing-override',
+      '-Wno-implicit-exception-spec-mismatch', '-Wno-deprecated-register',
+    ]
+    for _attr in ('cflags', 'cxxflags'):
+      _flags = getattr(logic_cxx, _attr)
+      setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and cxx.target.arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
+      ]
+    for _flag in ('-lgcc_eh',):
+      if _flag in logic_cxx.linkflags:
+        logic_cxx.linkflags.remove(_flag)
+    if '-static-libgcc' not in logic_cxx.linkflags:
+      logic_cxx.linkflags += ['-static-libgcc']
+    logic_cxx.cxxflags += [
+      '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
+      '-Wno-stringop-truncation', '-Wno-unused-result',
+      '-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0',
+      '-fno-sized-deallocation',
+    ]
+    binary = SM.Library(builder, logic_cxx, 'sourcemod.logic')
+  else:
+    binary = SM.Library(builder, cxx, 'sourcemod.logic')"""
+
+logic_loop_old_variants = [
+    """for cxx in builder.targets:
+  binary = SM.Library(builder, cxx, 'sourcemod.logic')""",
+    """for arch in SM.archs:
+  binary = SM.Library(builder, 'sourcemod.logic', arch)""",
+    """for arch in SM.archs:
+  if builder.target.platform == 'linux':
+    # css34: logic must be built with g++-9 (clang-9 object code hangs in srcds).
+    import shutil as _shutil
+    logic_cxx = builder.cxx.clone()
+    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    _gcc9 = _shutil.which('gcc-9') or '/usr/bin/gcc-9'
+    logic_cxx.cxx_argv = [_gpp9]
+    logic_cxx.cc_argv = [_gcc9]
+    if arch == 'x86':
+      logic_cxx.cflags += ['-m32']
+      logic_cxx.linkflags += ['-m32']
+    _clang_only = [
+      '-Wno-nonportable-include-path', '-Wno-macro-redefined', '-Wno-writable-strings',
+      '-Wno-sometimes-uninitialized', '-Wno-inconsistent-missing-override',
+      '-Wno-implicit-exception-spec-mismatch', '-Wno-deprecated-register',
+    ]
+    for _attr in ('cflags', 'cxxflags'):
+      _flags = getattr(logic_cxx, _attr)
+      setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
+    logic_cxx.cxxflags += [
+      '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
+      '-Wno-stringop-truncation', '-Wno-unused-result',
+    ]
+    for _flag in ('-lgcc_eh',):
+      if _flag in logic_cxx.linkflags:
+        logic_cxx.linkflags.remove(_flag)
+    if '-static-libgcc' not in logic_cxx.linkflags:
+      logic_cxx.linkflags += ['-static-libgcc']
+    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
+  else:
+    binary = SM.Library(builder, 'sourcemod.logic', arch)""",
+    """for arch in SM.archs:
+  if builder.target.platform == 'linux':
+    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT trusty libstdc++4.8.
+    import shutil as _shutil
+    import os as _os
+    logic_cxx = builder.cxx.clone()
+    _deps = _os.environ.get('DEPS_DIR', '')
+    _clangpp = _os.path.join(_deps, 'clang-10/usrbin/clang++-10') if _deps else ''
+    _clang = _os.path.join(_deps, 'clang-10/usrbin/clang-10') if _deps else ''
+    if not _os.path.isfile(_clangpp):
+      _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
+      _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
+    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    logic_cxx.cxx_argv = [_clangpp]
+    logic_cxx.cc_argv = [_clang]
+    logic_cxx.linker_argv = [_gpp9]
+    if arch == 'x86':
+      logic_cxx.cflags += ['-m32']
+      logic_cxx.linkflags += ['-m32']
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8/backward'),
+      ]
+    for _flag in ('-lgcc_eh',):
+      if _flag in logic_cxx.linkflags:
+        logic_cxx.linkflags.remove(_flag)
+    if '-static-libgcc' not in logic_cxx.linkflags:
+      logic_cxx.linkflags += ['-static-libgcc']
+    logic_cxx.cxxflags += ['-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0']
+    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
+  else:
+    binary = SM.Library(builder, 'sourcemod.logic', arch)""",
+]
+
+if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' in text:
+    print('==> logic AMBuilder g++-9/sysroot already patched')
+else:
+    replaced = False
+    clang10_loop = """for arch in SM.archs:
+  if builder.target.platform == 'linux':
+    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT gcc-4.9 libstdc++.
+    import shutil as _shutil
+    import os as _os
+    logic_cxx = builder.cxx.clone()
+    _deps = _os.environ.get('DEPS_DIR', '')
+    _clangpp = _os.path.join(_deps, 'clang-10/usrbin/clang++-10') if _deps else ''
+    _clang = _os.path.join(_deps, 'clang-10/usrbin/clang-10') if _deps else ''
+    if not _os.path.isfile(_clangpp):
+      _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
+      _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
+    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    logic_cxx.cxx_argv = [_clangpp]
+    logic_cxx.cc_argv = [_clang]
+    logic_cxx.linker_argv = [_gpp9]
+    if arch == 'x86':
+      logic_cxx.cflags += ['-m32']
+      logic_cxx.linkflags += ['-m32']
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
+      ]
+    for _flag in ('-lgcc_eh',):
+      if _flag in logic_cxx.linkflags:
+        logic_cxx.linkflags.remove(_flag)
+    if '-static-libgcc' not in logic_cxx.linkflags:
+      logic_cxx.linkflags += ['-static-libgcc']
+    logic_cxx.cxxflags += ['-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0']
+    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
+  else:
+    binary = SM.Library(builder, 'sourcemod.logic', arch)"""
+    gcc8_loop = """for arch in SM.archs:
+  if builder.target.platform == 'linux':
+    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT gcc-8 libstdc++.
+    import shutil as _shutil
+    import os as _os
+    logic_cxx = builder.cxx.clone()
+    _deps = _os.environ.get('DEPS_DIR', '')
+    _clangpp = _os.path.join(_deps, 'clang-10/usrbin/clang++-10') if _deps else ''
+    _clang = _os.path.join(_deps, 'clang-10/usrbin/clang-10') if _deps else ''
+    if not _os.path.isfile(_clangpp):
+      _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
+      _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
+    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    logic_cxx.cxx_argv = [_clangpp]
+    logic_cxx.cc_argv = [_clang]
+    logic_cxx.linker_argv = [_gpp9]
+    if arch == 'x86':
+      logic_cxx.cflags += ['-m32']
+      logic_cxx.linkflags += ['-m32']
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/8/32'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/8/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/8/backward'),
+      ]
+    for _flag in ('-lgcc_eh',):
+      if _flag in logic_cxx.linkflags:
+        logic_cxx.linkflags.remove(_flag)
+    if '-static-libgcc' not in logic_cxx.linkflags:
+      logic_cxx.linkflags += ['-static-libgcc']
+    logic_cxx.cxxflags += ['-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0']
+    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
+  else:
+    binary = SM.Library(builder, 'sourcemod.logic', arch)"""
+    for old in logic_loop_old_variants + [gcc8_loop, clang10_loop]:
+        if old in text:
+            new_loop = logic_loop_new_6970 if old.startswith('for cxx in builder.targets') else logic_loop_new
+            text = text.replace(old, new_loop, 1)
+            replaced = True
+            break
+    if not replaced:
+        raise SystemExit('Failed to locate logic AMBuilder library loop')
+    print('==> Patched logic AMBuilder to compile with g++-9 + gcc-4.9 sysroot')
+
+defines_old = """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC'
+  ]"""
+defines_new = """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC',
+    '_GLIBCXX_USE_CXX11_ABI=0',
+    'NO_HOOK_MALLOC',
+    'NO_MALLOC_OVERRIDE',
+    'SM_BOOT_TRACE',
+  ]"""
+
+defines_old_variants = [
+    defines_old,
+    """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC'
+  ]""",
+    """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC',
+    '_GLIBCXX_USE_CXX11_ABI=0',
+    'NO_HOOK_MALLOC',
+    'NO_MALLOC_OVERRIDE',
+  ]""",
+]
+
+if '_GLIBCXX_USE_CXX11_ABI=0' in text and 'NO_HOOK_MALLOC' in text:
+    print('==> logic AMBuilder css34 defines already present')
+    if "'SM_BOOT_TRACE'" not in text:
+        text = text.replace("'NO_MALLOC_OVERRIDE',", "'NO_MALLOC_OVERRIDE',\n    'SM_BOOT_TRACE',", 1)
+        print('==> logic AMBuilder: added SM_BOOT_TRACE to defines')
+else:
+    replaced = False
+    for old in defines_old_variants:
+        if old in text:
+            text = text.replace(old, defines_new, 1)
+            replaced = True
+            break
+    if not replaced:
+        raise SystemExit('Failed to locate logic AMBuilder defines block')
+    print('==> Patched logic AMBuilder for rom4s-compatible logic.so')
+
+linux_block_new = """  if builder.target.platform == 'linux':
+    # css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    _stdcxx = None
+    _sup = None
+    if _sysroot:
+      for _base in (
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
+      ):
+        _cand = _os.path.join(_base, 'libstdc++.a')
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_base, 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      for _cand in (
+          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+      ):
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+    _gcc = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc.a')
+    _gcc_eh = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc_eh.a')
+    for flag in ('-static-libgcc',):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx, _sup]
+    if _os.path.isfile(_gcc_eh):
+      _static.append(_gcc_eh)
+    if _os.path.isfile(_gcc):
+      _static.append(_gcc)
+    binary.compiler.linkflags += _static + [
+      '-Wl,-Bdynamic',
+      '-lc', '-lm',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-ldl', '-lgcc_s',
+      '-Wl,--no-undefined',
+    ]"""
+
+linux_block_new_6970 = linux_block_new.replace(
+    'if builder.target.platform ==', 'if binary.compiler.target.platform ==')
+
+linux_block_old_variants = [
+    """  if builder.target.platform == 'linux':
+    binary.compiler.postlink += ['-lpthread', '-lrt']""",
+    """  if binary.compiler.target.platform == 'linux':
+    binary.compiler.postlink += ['-lpthread', '-lrt']""",
+    """  if builder.target.platform == 'linux':
+    # css34: rom4s embeds static libstdc++; keep pthread/rt in DT_NEEDED.
+    for flag in ('-lgcc_eh',):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    binary.compiler.linkflags += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']""",
+    """  if builder.target.platform == 'linux':
+    # css34: logic uses dynamic libstdc++ (rom4s-sized); static embed bloats/hangs on jammy.
+    for flag in ('-static-libstdc++', '-lgcc_eh'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    binary.compiler.linkflags += ['-Wl,--no-as-needed', '-lstdc++', '-lpthread', '-lrt', '-lgcc_s']""",
+    """  if builder.target.platform == 'linux':
+    # css34: rom4s embeds static libstdc++; linking logic against host libstdc++.so.6 hangs srcds.
+    for flag in ('-lgcc_eh',):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    binary.compiler.linkflags += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']""",
+    """  if builder.target.platform == 'linux':
+    # css34: rom4s embeds gcc-9 static libstdc++; clang -static-libstdc++ pulls jammy's libcxx.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _gcc9_stdcxx = None
+    for _cand in (
+        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+    ):
+      if _os.path.isfile(_cand):
+        _gcc9_stdcxx = _cand
+        break
+    if _gcc9_stdcxx is None:
+      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
+    _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    binary.compiler.linkflags += [
+      '-Wl,-Bstatic', _gcc9_stdcxx, _gcc9_sup, '-Wl,-Bdynamic',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]""",
+    """  if builder.target.platform == 'linux':
+    # css34: jammy -static-libstdc++ embeds GCC 13; rom4s used gcc-9 static + pthread/rt NEEDED.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _gcc9_stdcxx = None
+    for _cand in (
+        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+    ):
+      if _os.path.isfile(_cand):
+        _gcc9_stdcxx = _cand
+        break
+    if _gcc9_stdcxx is None:
+      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
+    _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    binary.compiler.linkflags += [
+      '-Wl,-Bstatic', _gcc9_stdcxx, _gcc9_sup, '-Wl,-Bdynamic',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]""",
+]
+
+if 'gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set' in text and '_gcc_eh' in text:
+    print('==> logic AMBuilder link flags already patched')
+else:
+    replaced = False
+    gcc49_prev = """  if builder.target.platform == 'linux':
+    # css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    _stdcxx = None
+    _sup = None
+    if _sysroot:
+      for _base in (
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
+      ):
+        _cand = _os.path.join(_base, 'libstdc++.a')
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_base, 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      for _cand in (
+          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+      ):
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    # g++/clang++ drivers append -lstdc++ unless default libs are disabled.
+    binary.compiler.linkflags += [
+      '-nodefaultlibs',
+      '-Wl,-Bstatic', _stdcxx, _sup, '-Wl,-Bdynamic',
+      '-lc', '-lm',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]"""
+    gcc8_block = """  if builder.target.platform == 'linux':
+    # css34: gcc-8 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    _stdcxx = None
+    _sup = None
+    if _sysroot:
+      for _base in (
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
+      ):
+        _cand = _os.path.join(_base, 'libstdc++.a')
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_base, 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      for _cand in (
+          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+      ):
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    # g++/clang++ drivers append -lstdc++ unless default libs are disabled.
+    binary.compiler.linkflags += [
+      '-nodefaultlibs',
+      '-Wl,-Bstatic', _stdcxx, _sup, '-Wl,-Bdynamic',
+      '-lc', '-lm',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]"""
+    prev_static = """  if builder.target.platform == 'linux':
+    # css34: explicit gcc-9 libstdc++.a; hide static archive symbols from dynamic table.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _gcc9_stdcxx = None
+    for _cand in (
+        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+    ):
+      if _os.path.isfile(_cand):
+        _gcc9_stdcxx = _cand
+        break
+    if _gcc9_stdcxx is None:
+      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
+    _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
+    if '-static-libgcc' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-static-libgcc']
+    binary.compiler.linkflags += [
+      '-Wl,-Bstatic', _gcc9_stdcxx, _gcc9_sup, '-Wl,-Bdynamic',
+      '-Wl,--exclude-libs,ALL',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]"""
+    for old in linux_block_old_variants + [prev_static, gcc8_block, gcc49_prev]:
+        if old in text:
+            new_block = linux_block_new_6970 if 'binary.compiler.target.platform' in old.split('\n')[0] else linux_block_new
+            text = text.replace(old, new_block, 1)
+            replaced = True
+            break
+    if not replaced:
+        raise SystemExit('Failed to locate logic AMBuilder linux link block')
+    print('==> Patched logic AMBuilder link flags (static libstdc++, pthread/rt)')
+
+path.write_text(text)
+PY
+
+# css34: g++-9 may emit sized delete(_ZdlPvj); gcc-4.9 static libstdc++ has no such symbol.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'core/logic/AMBuilder'
+text = path.read_text()
+changed = False
+
+if '-fno-sized-deallocation' not in text:
+    needle = "'-D_GLIBCXX_USE_CXX11_ABI=0',"
+    if needle in text:
+        text = text.replace(needle, needle + "\n      '-fno-sized-deallocation',", 1)
+        changed = True
+    else:
+        raise SystemExit('Failed to add -fno-sized-deallocation to logic AMBuilder')
+
+if '-Wl,--no-undefined' not in text:
+    needle = "'-lgcc_s',"
+    if needle in text:
+        text = text.replace(
+            needle,
+            "'-ldl', '-lgcc_s',\n      '-Wl,--no-undefined',",
+            1,
+        )
+        changed = True
+    else:
+        raise SystemExit('Failed to add -Wl,--no-undefined to logic AMBuilder')
+elif "'-ldl'," not in text and "'-ldl'" not in text:
+    needle = "'-lrt',"
+    if needle in text:
+        text = text.replace(needle, "'-lrt', '-ldl',", 1)
+        changed = True
+    else:
+        raise SystemExit('Failed to add -ldl to logic AMBuilder')
+
+if changed:
+    path.write_text(text)
+    print('==> logic AMBuilder: sized-deallocation + no-undefined link guard')
+else:
+    print('==> logic AMBuilder sized-deallocation guard already present')
+PY
+
+# css34: rom4s builds the whole tree with the legacy libstdc++ ABI.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+old = "    cxx.defines += ['_LINUX', 'POSIX', '_FILE_OFFSET_BITS=64']\n    cxx.linkflags += ['-lm']"
+new = "    cxx.defines += ['_LINUX', 'POSIX', '_FILE_OFFSET_BITS=64', '_GLIBCXX_USE_CXX11_ABI=0']\n    cxx.linkflags += ['-lm']"
+if "'_GLIBCXX_USE_CXX11_ABI=0']" in text and "configure_linux" in text:
+    print('==> configure_linux CXX11 ABI already patched')
+elif old in text:
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched configure_linux for legacy libstdc++ ABI')
+else:
+    raise SystemExit('Failed to patch configure_linux CXX11 ABI block')
+
+# binutils 2.40+ rejects -static-libstdc++ when AMBuild invokes ld directly; use g++-9 as linker.
+_static_patch = """    elif cxx.family == 'clang':
+      cxx.linkflags += ['-lgcc_eh']
+    import shutil as _shutil
+    _gxx = _shutil.which('g++-9') or _shutil.which('g++') or 'g++'
+    _arch = getattr(getattr(cxx, 'target', None), 'arch', 'x86')
+    cxx.linker_argv = [_gxx, '-m32'] if _arch == 'x86' else [_gxx]
+    cxx.linkflags += ['-static-libstdc++']"""
+_old_tail = """    elif cxx.family == 'clang':
+      cxx.linkflags += ['-lgcc_eh']
+    cxx.linkflags += ['-static-libstdc++']"""
+_old_tail_bstatic = """    elif cxx.family == 'clang':
+      cxx.linkflags += ['-lgcc_eh']
+    cxx.linkflags += ['-Bstatic', '-lstdc++', '-Bdynamic']"""
+_old_tail_wl = """    elif cxx.family == 'clang':
+      cxx.linkflags += ['-lgcc_eh']
+    cxx.linkflags += ['-Wl,-Bstatic', '-lstdc++', '-Wl,-Bdynamic']"""
+if '_gxx = _shutil.which' in text and 'cxx.linker_argv = [_gxx]' in text:
+    if 'cxx.target.arch' in text:
+        text = text.replace(
+            "cxx.linker_argv = [_gxx, '-m32'] if cxx.target.arch == 'x86' else [_gxx]",
+            "_arch = getattr(getattr(cxx, 'target', None), 'arch', 'x86')\n    cxx.linker_argv = [_gxx, '-m32'] if _arch == 'x86' else [_gxx]",
+            1,
+        )
+        path.write_text(text)
+        print('==> configure_linux: fixed AMBuild 2.1 cxx.target guard')
+    else:
+        print('==> configure_linux g++-9 linker already patched')
+elif _old_tail in text:
+    text = text.replace(_old_tail, _static_patch, 1)
+    path.write_text(text)
+    print('==> configure_linux: g++-9 linker + -static-libstdc++')
+elif _old_tail_bstatic in text:
+    text = text.replace(_old_tail_bstatic, _static_patch, 1)
+    path.write_text(text)
+    print('==> configure_linux: g++-9 linker + -static-libstdc++')
+elif _old_tail_wl in text:
+    text = text.replace(_old_tail_wl, _static_patch, 1)
+    path.write_text(text)
+    print('==> configure_linux: g++-9 linker + -static-libstdc++')
+PY
+
+bash "$script_dir/apply-logger-mapchange-fix.sh" "$sourcemod_dir"
+bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"

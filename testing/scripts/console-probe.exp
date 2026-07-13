@@ -1,0 +1,144 @@
+#!/usr/bin/expect -f
+# Send srcds console commands after map load; log full session to CONSOLE_PROBE_LOG.
+set timeout [expr {[info exists env(CONSOLE_PROBE_TIMEOUT)] ? $env(CONSOLE_PROBE_TIMEOUT) : 90}]
+
+if {![info exists env(CONSOLE_PROBE_LOG)]} {
+    puts stderr "CONSOLE_PROBE_LOG is required"
+    exit 1
+}
+log_file -noappend $env(CONSOLE_PROBE_LOG)
+
+# Avoid expr bareword pitfalls on older Tcl (RHEL 8 expect).
+if {[info exists env(SERVER_DIR)] && $env(SERVER_DIR) ne ""} {
+    set server_dir $env(SERVER_DIR)
+} else {
+    set server_dir "/workspace/.ci-server"
+}
+if {[info exists env(MAP)] && $env(MAP) ne ""} {
+    set map $env(MAP)
+} else {
+    set map "de_dust2"
+}
+if {[info exists env(PORT)] && $env(PORT) ne ""} {
+    set port $env(PORT)
+} else {
+    set port "27015"
+}
+if {[info exists env(SRCDS_BINARY)] && $env(SRCDS_BINARY) ne ""} {
+    set binary $env(SRCDS_BINARY)
+} else {
+    set binary "./srcds_i686"
+}
+
+cd $server_dir
+set env(LD_LIBRARY_PATH) ".:bin:$env(LD_LIBRARY_PATH)"
+
+# Spawn the engine binary directly (not srcds_run). The shell wrapper has caused
+# early EOF / opaque failures on some RHEL 8 images under expect's pty.
+if {[info exists env(SMOKE_VERBOSE)] && $env(SMOKE_VERBOSE) ne "" && $env(SMOKE_VERBOSE) ne "0"} {
+    log_user 1
+}
+
+set spawn_args [list $binary -game cstrike -console -nohltv \
+    -nomaster -localcser -tickrate 66 \
+    -ip 127.0.0.1 -port $port +ip 127.0.0.1 +sv_lan 1 +maxplayers 10 +map $map]
+if {[info exists env(SMOKE_CONDEBUG)] && $env(SMOKE_CONDEBUG) ne "" && $env(SMOKE_CONDEBUG) ne "0"} {
+    lappend spawn_args -condebug
+}
+if {[info exists env(SMOKE_VERBOSE)] && $env(SMOKE_VERBOSE) ne "" && $env(SMOKE_VERBOSE) ne "0"} {
+    lappend spawn_args +log on +sv_logfile 1
+}
+eval spawn $spawn_args
+
+# Exact/glob match — some expect builds produced false -re hits before map load.
+set map_pat "Mapchange to ${map}"
+expect {
+    -gl $map_pat {
+        puts stderr "OK: matched map load ($map_pat)"
+    }
+    eof {
+        puts stderr "srcds exited before map $map loaded"
+        exit 1
+    }
+    timeout {
+        puts stderr "timeout waiting for map $map"
+        exit 1
+    }
+}
+
+# Give MM/SM a moment after mapchange.
+sleep 3
+
+send "status\r"
+expect {
+    -re {hostname|# [0-9]+} {}
+    eof {
+        puts stderr "srcds exited while waiting for status output"
+        exit 2
+    }
+    timeout {
+        puts stderr "timeout waiting for status output"
+        exit 2
+    }
+}
+
+send "version\r"
+expect {
+    -re {Protocol version|Exe version|version} {}
+    eof {
+        puts stderr "srcds exited while waiting for version output"
+        exit 3
+    }
+    timeout {
+        puts stderr "timeout waiting for version output"
+        exit 3
+    }
+}
+
+send "meta version\r"
+expect {
+    -re {Metamod|metamod|MM:S} {}
+    eof {
+        puts stderr "srcds exited while waiting for meta version output"
+        exit 4
+    }
+    timeout {
+        puts stderr "timeout waiting for meta version output"
+        exit 4
+    }
+}
+
+send "sm version\r"
+expect {
+    -re {SourceMod Version|SourceMod} {}
+    eof {
+        puts stderr "srcds exited while waiting for sm version output"
+        exit 5
+    }
+    timeout {
+        puts stderr "timeout waiting for sm version output"
+        exit 5
+    }
+}
+
+send "sm plugins list\r"
+expect {
+    -re {\[SM\] Listing [0-9]+ plugins:} {}
+    eof {
+        puts stderr "srcds exited while waiting for sm plugins list output"
+        exit 6
+    }
+    timeout {
+        puts stderr "timeout waiting for sm plugins list output"
+        exit 6
+    }
+}
+
+# Allow plugin lines to flush before shutdown.
+sleep 1
+
+send "quit\r"
+expect {
+    eof {}
+    timeout {}
+}

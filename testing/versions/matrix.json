@@ -1,0 +1,19 @@
+{
+  "metamod": {
+    "1.10.6": "https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz"
+  },
+  "sourcemod": {
+    "1.6.4-git4626": "https://bitbucket.org/_4/smdrop-1.6/downloads/sourcemod-1.6.4-stable-git4626-css34-linux.tar.gz",
+    "1.9.0-git6224": "https://bitbucket.org/_4/smdrop-1.9/downloads/sourcemod-1.9.0-git6224-linux.tar.gz",
+    "1.11.0-git6490": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6490/sourcemod-1.11.0-git6490-css34-linux.tar.gz",
+    "1.11.0-git6541": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6541/sourcemod-1.11.0-git6541-css34-linux.tar.gz",
+    "1.11.0-git6572": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz",
+    "1.9.0-myarena": "https://bitbucket.org/fmu1337/danyas_dl/downloads/SourceMod_1.9.0.6189_css_v34_1.zip",
+    "1.11-myarena-bundle": "https://bitbucket.org/fmu1337/danyas_dl/downloads/mms-1.11.0-1130_sourcemod-1.11.0-6522-css_v34-linux-up-git6541-10.05.2020-fix-gamedata-12.10.2020_1.zip"
+  },
+  "notes": [
+    "Primary CI uses the freshly built package from this repo plus MM 1.10.6.",
+    "Reference matrix jobs may pull the URLs above.",
+    "myarena bundles are zip overlays; install-addons.sh currently expects tar.gz for SM_URL/SM_PACKAGE."
+  ]
+}
