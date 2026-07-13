@@ -223,12 +223,9 @@ jobs:
             '
 
   # Boots the freshly built package on the build host OS (Ubuntu 22.04 / modern glibc).
-  # continue-on-error: in-tree sourcemod.logic.so still blocks SM session; harness
-  # itself is validated by the rom4s reference matrix above.
   test-built-smoke:
     needs: [build-linux, prepare-server, check-built-package]
     runs-on: ubuntu-22.04
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
