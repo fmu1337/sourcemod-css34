@@ -10,6 +10,7 @@ trap cleanup EXIT
 tar -xzf "${SM_PACKAGE}" -C "${TMP}"
 MM_SO="${TMP}/addons/sourcemod/bin/sourcemod_mm_i486.so"
 CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so"
+LOGIC_SO="${TMP}/addons/sourcemod/bin/sourcemod.logic.so"
 
 fail=0
 
@@ -19,6 +20,10 @@ if [[ ! -f "${MM_SO}" ]]; then
 fi
 if [[ ! -f "${CORE_SO}" ]]; then
   echo "FAIL: missing sourcemod.1.ep1.so" >&2
+  exit 1
+fi
+if [[ ! -f "${LOGIC_SO}" ]]; then
+  echo "FAIL: missing sourcemod.logic.so" >&2
   exit 1
 fi
 
@@ -38,6 +43,71 @@ else
   echo "FAIL: missing CreateInterface_MMS" >&2
   fail=1
 fi
+
+echo "==> Checking logic module exports"
+logic_dynsyms="$(nm -D "${LOGIC_SO}" 2>/dev/null || true)"
+if printf '%s\n' "${logic_dynsyms}" | grep -F ' T logic_load' >/dev/null; then
+  echo "OK: logic_load export present"
+else
+  echo "FAIL: sourcemod.logic.so missing logic_load" >&2
+  fail=1
+fi
+
+logic_needed="$(readelf -d "${LOGIC_SO}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]')"
+for lib in libpthread.so.0 librt.so.1; do
+  if printf '%s\n' "${logic_needed}" | grep -qx "${lib}"; then
+    echo "OK: sourcemod.logic.so NEEDED ${lib}"
+  else
+    echo "WARN: sourcemod.logic.so missing DT_NEEDED ${lib} (rom4s lists both)"
+  fi
+done
+if printf '%s\n' "${logic_needed}" | grep -qx 'libstdc++.so.6'; then
+  echo "WARN: sourcemod.logic.so links libstdc++.so.6 dynamically (rom4s embeds static libstdc++; hang risk)"
+else
+  echo "OK: sourcemod.logic.so does not DT_NEEDED libstdc++.so.6 (static embed like rom4s)"
+fi
+logic_cxx11="$(printf '%s\n' "${logic_dynsyms}" | grep -c '__cxx11' || true)"
+if [[ "${logic_cxx11}" -gt 0 ]]; then
+  echo "FAIL: logic.so exports ${logic_cxx11} C++11 std::string ABI symbols (rom4s logic has none)" >&2
+  fail=1
+else
+  echo "OK: logic.so has no __cxx11 ABI exports"
+fi
+
+logic_sized_delete="$(readelf -Ws "${LOGIC_SO}" 2>/dev/null | awk '$7=="UND" && ($8=="_ZdlPvj" || $8=="_ZdaPvj") {print $8}' || true)"
+if [[ -n "${logic_sized_delete}" ]]; then
+  echo "FAIL: logic.so has unresolved sized-delete imports (dlopen into srcds fails): ${logic_sized_delete}" >&2
+  fail=1
+else
+  echo "OK: logic.so has no UND _ZdlPvj/_ZdaPvj sized-delete imports"
+fi
+
+logic_t_count="$(printf '%s\n' "${logic_dynsyms}" | grep -c ' T ' || true)"
+if [[ "${logic_t_count}" -lt 100 ]]; then
+  echo "FAIL: logic.so exports only ${logic_t_count} defined symbols (rom4s ~285; missing libstdc++ EH exports?)" >&2
+  fail=1
+else
+  echo "OK: logic.so exports ${logic_t_count} defined symbols (libstdc++ EH visible)"
+fi
+
+# Guard against rom4s logic splice masking in-tree build regressions.
+REF_URL="${REFERENCE_SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
+ref_tmp="$(mktemp -d)"
+if curl -fsSL -o "${ref_tmp}/ref.tar.gz" "${REF_URL}" \
+  && tar -xzf "${ref_tmp}/ref.tar.gz" -C "${ref_tmp}" addons/sourcemod/bin/sourcemod.logic.so 2>/dev/null; then
+  ref_logic="${ref_tmp}/addons/sourcemod/bin/sourcemod.logic.so"
+  pkg_logic="${TMP}/logic-cmp.so"
+  cp -f "${LOGIC_SO}" "${pkg_logic}"
+  strip --strip-unneeded "${ref_logic}" 2>/dev/null || true
+  strip --strip-unneeded "${pkg_logic}" 2>/dev/null || true
+  if cmp -s "${pkg_logic}" "${ref_logic}"; then
+    echo "FAIL: sourcemod.logic.so is byte-identical to stripped rom4s reference (logic splice mask)" >&2
+    fail=1
+  else
+    echo "OK: logic.so is not a rom4s splice copy"
+  fi
+fi
+rm -rf "${ref_tmp}"
 
 echo "==> Checking DT_NEEDED for game libs (GetCVarIF / tier0)"
 needed="$(readelf -d "${CORE_SO}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]')"
@@ -104,26 +174,41 @@ fi
 
 echo "==> Checking GLIBC requirements (css34 targets old distros)"
 max_glibc="$(
-  objdump -T "${MM_SO}" "${CORE_SO}" 2>/dev/null \
+  objdump -T "${MM_SO}" "${CORE_SO}" "${LOGIC_SO}" 2>/dev/null \
     | grep -oE 'GLIBC_[0-9.]+' \
     | sed 's/GLIBC_//' \
     | sort -t. -k1,1n -k2,2n -k3,3n \
     | tail -n1 || true
 )"
-echo "Highest GLIBC symbol version referenced: ${max_glibc:-unknown}"
-# Debian 10 = 2.28, Debian 9 = 2.24, CentOS 7 = 2.17. rom4s builds stay on 2.4-era symbols.
-# Ubuntu 22.04 host builds typically pull 2.33/2.34 from system libc; that still loads on
-# Debian 12+ / modern Rocky. Soft-warn so CreateInterface/DT_NEEDED stay the hard gates.
-if [[ -n "${max_glibc}" ]]; then
-  major="${max_glibc%%.*}"
-  rest="${max_glibc#*.}"
-  minor="${rest%%.*}"
-  if [[ "${major}" -gt 2 || ( "${major}" -eq 2 && "${minor}" -ge 29 ) ]]; then
-    echo "WARN: package requires GLIBC_${max_glibc} (>= 2.29); too new for Debian 8-10 / CentOS 7"
-    echo "      Use the rom4s reference package on legacy distros; host-built packages need newer glibc."
-  else
-    echo "OK: GLIBC_${max_glibc} is within legacy-server range"
-  fi
+logic_max_glibc="$(
+  objdump -T "${LOGIC_SO}" 2>/dev/null \
+    | grep -oE 'GLIBC_[0-9.]+' \
+    | sed 's/GLIBC_//' \
+    | sort -t. -k1,1n -k2,2n -k3,3n \
+    | tail -n1 || true
+)"
+echo "Highest GLIBC symbol version referenced: ${max_glibc:-unknown} (logic: ${logic_max_glibc:-unknown})"
+# Debian 10 = 2.28, Debian 9 = 2.24, CentOS 7 = 2.17. rom4s logic stays on 2.12-era symbols.
+# jammy-built logic pulls GLIBC 2.34+; legacy docker (bullseye) stays <= 2.31.
+glibc_too_new_for_logic() {
+  local ver="$1"
+  [[ -z "${ver}" ]] && return 1
+  local major="${ver%%.*}"
+  local rest="${ver#*.}"
+  local minor="${rest%%.*}"
+  [[ "${major}" -gt 2 || ( "${major}" -eq 2 && "${minor}" -ge 34 ) ]]
+}
+if glibc_too_new_for_logic "${logic_max_glibc}"; then
+  echo "FAIL: sourcemod.logic.so requires GLIBC_${logic_max_glibc} (>= 2.34); jammy-native logic hangs srcds" >&2
+  fail=1
+elif [[ -n "${logic_max_glibc}" ]]; then
+  echo "OK: logic GLIBC_${logic_max_glibc} is within legacy-server range"
+fi
+if glibc_too_new_for_logic "${max_glibc}"; then
+  echo "WARN: package requires GLIBC_${max_glibc} (>= 2.29); too new for Debian 8-10 / CentOS 7"
+  echo "      Use the rom4s reference package on legacy distros; host-built packages need newer glibc."
+else
+  echo "OK: GLIBC_${max_glibc} is within legacy-server range"
 fi
 
 if [[ "${fail}" -ne 0 ]]; then

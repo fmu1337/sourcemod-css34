@@ -37,8 +37,11 @@ USE_CLANG9="${USE_CLANG9:-1}"
 if [ "$USE_CLANG9" = "1" ]; then
   echo "==> Installing/using clang-9 (rom4s-compatible toolchain)"
   bash "$BUILDER_DIR/install-clang9.sh" "$DEPS_DIR"
+  bash "$BUILDER_DIR/install-clang10.sh" "$DEPS_DIR"
   # shellcheck source=/dev/null
   source "$DEPS_DIR/clang9.env"
+  # shellcheck source=/dev/null
+  source "$DEPS_DIR/clang10.env"
   export CC="${CC:-clang-9}"
   export CXX="${CXX:-clang++-9}"
   # Prefer clang-9 wrappers even if a parent env exported gcc-9.
@@ -70,7 +73,9 @@ bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
 chmod +x "$BUILDER_DIR/py.sh" 2>/dev/null || true
 
 python3 -m pip install --upgrade pip --user
-python3 -m pip install --user "$DEPS_DIR/ambuild" 2>/dev/null || true
+chmod +x "$BUILDER_DIR/patches/patch-ambuild-linker.sh" 2>/dev/null || true
+bash "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$DEPS_DIR/ambuild"
+python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS_DIR/ambuild" 2>/dev/null || true
 
 echo "==> Applying CS:S v34 compatibility patches"
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"

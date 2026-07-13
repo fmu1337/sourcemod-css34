@@ -35,28 +35,16 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install build dependencies
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y \
-            curl g++-9-multilib gcc-9-multilib git \
-            lib32stdc++-9-dev lib32stdc++6 lib32z1-dev \
-            libc6-dev-i386 libstdc++-9-dev linux-libc-dev \
-            python3 python3-pip binutils
-
       - name: Build SourceMod for CS:S v34
         env:
-          SKIP_APT_INSTALL: 1
-          CC: gcc-9
-          CXX: g++-9
           SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
           SOURCEMOD_GIT_REV: "6572"
         run: |
-          export WDIR="$PWD"
-          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
-            builder/prepare-package.sh builder/py.sh builder/patches/*.sh
-          builder/run/linux.sh
+          chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
+            builder/checkout-deps.sh builder/package.sh builder/prepare-package.sh \
+            builder/py.sh builder/patches/*.sh \
+            builder/install-clang9.sh builder/install-clang10.sh
+          builder/docker/legacy-build.sh
 
       - name: Upload SourceMod package
         uses: actions/upload-artifact@v4
@@ -117,7 +105,7 @@ jobs:
             testing/scripts/apply-valve-rc-fix.sh
             testing/scripts/apply-srcds-patch.sh
           fi
-          find .ci-server/cstrike/maps -type f ! -name 'de_dust2*' -delete || true
+          KEEP_MAP=de_dust2 testing/scripts/trim-server-maps.sh
 
       - name: Pack server tree
         run: |
@@ -235,12 +223,9 @@ jobs:
             '
 
   # Boots the freshly built package on the build host OS (Ubuntu 22.04 / modern glibc).
-  # continue-on-error: in-tree sourcemod.logic.so still blocks SM session; harness
-  # itself is validated by the rom4s reference matrix above.
   test-built-smoke:
     needs: [build-linux, prepare-server, check-built-package]
     runs-on: ubuntu-22.04
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -268,7 +253,9 @@ jobs:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
           MM_URL: ${{ env.MM_URL }}
-          TIMEOUT_SECS: 90
+          TIMEOUT_SECS: 120
+          SMOKE_CONDEBUG: "1"
+          SMOKE_VERBOSE: "1"
         run: |
           chmod +x testing/scripts/*.sh
           mkdir -p .ci-server
@@ -277,3 +264,16 @@ jobs:
           export SM_PACKAGE
           testing/scripts/install-addons.sh
           testing/scripts/smoke-test.sh
+
+      - name: Upload smoke logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-smoke-logs
+          path: |
+            .ci-server/smoke.log
+            .ci-server/console-probe.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 7

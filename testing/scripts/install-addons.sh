@@ -49,7 +49,7 @@ if [[ "${OVERLAY_ROM4S_LOGIC:-}" == "1" && -n "${SM_PACKAGE:-}" ]]; then
   REF_TGZ="${CACHE_DIR}/$(basename "${REF_URL}")"
   download "${REF_URL}" "${REF_TGZ}"
   tmp_overlay="$(mktemp -d)"
-  tar -xzf "${REF_TGZ}" -C "${tmp_overlay}" ./addons/sourcemod/bin/sourcemod.logic.so
+  tar -xzf "${REF_TGZ}" -C "${tmp_overlay}" addons/sourcemod/bin/sourcemod.logic.so
   cp -f "${tmp_overlay}/addons/sourcemod/bin/sourcemod.logic.so" \
     "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod.logic.so"
   rm -rf "${tmp_overlay}"
