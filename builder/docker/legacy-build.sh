@@ -25,6 +25,8 @@ docker run --rm --platform linux/amd64 \
   bash -lc '
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
+    # Volume mount is owned by the host UID; git 2.35+ blocks submodule ops otherwise.
+    git config --global --add safe.directory '*'
     dpkg --add-architecture i386
     # buster is EOL; deb.debian.org no longer serves Release files.
     if [[ -f /etc/os-release ]]; then
