@@ -146,6 +146,53 @@ if compiler_flavor == 'clang' and supports_deprecated_non_prototype and '-Wno-de
     )
     sp_script.write_text(sp_text)
 
+# css34: keep DT_NEEDED libpthread/librt on sourcepawn.jit.x86.so.
+# Configure()'s cxx.postlink is NOT applied to Root.Library() clones when SM
+# embeds sourcepawn (link line has -lm/-static-libstdc++ but no -lpthread).
+# Without libpthread, Metamod fails on glibc < 2.34 (Debian 11):
+#   undefined symbol: pthread_key_create
+jit_ambuilder = Path(sourcemod_dir) / 'sourcepawn/vm/AMBuilder'
+jit_text = jit_ambuilder.read_text()
+jit_old = """dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
+dll.compiler.includes += Includes
+dll.compiler.linkflags[0:0] = [
+  libsourcepawn_a.binary,
+  SP.zlib[arch],
+]
+"""
+jit_new = """dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
+dll.compiler.includes += Includes
+dll.compiler.linkflags[0:0] = [
+  libsourcepawn_a.binary,
+  SP.zlib[arch],
+]
+# css34: force pthread/rt NEEDED (postlink from Configure does not reach this dll)
+if builder.target.platform == 'linux':
+  dll.compiler.linkflags += ['-Wl,--no-as-needed', '-lpthread', '-lrt']
+"""
+if "css34: force pthread/rt NEEDED (postlink from Configure" in jit_text:
+    print('==> sourcepawn.jit pthread/rt already patched')
+elif jit_old in jit_text:
+    jit_ambuilder.write_text(jit_text.replace(jit_old, jit_new, 1))
+    print('==> Patched sourcepawn vm/AMBuilder for pthread/rt DT_NEEDED on jit dll')
+else:
+    raise SystemExit('Failed to locate sourcepawn.jit.x86 Library block in vm/AMBuilder')
+
+# Keep Configure postlink patched too (shell/tools binaries).
+sp_text = sp_script.read_text()
+sp_old_pthread = "        cxx.postlink += ['-lpthread', '-lrt']"
+sp_new_pthread = (
+    "        # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
+    "        cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
+)
+if "css34: force pthread/rt NEEDED for Debian 11" in sp_text:
+    print('==> sourcepawn Configure pthread/rt no-as-needed already patched')
+elif sp_old_pthread in sp_text:
+    sp_script.write_text(sp_text.replace(sp_old_pthread, sp_new_pthread, 1))
+    print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt DT_NEEDED')
+else:
+    raise SystemExit('Failed to locate sourcepawn linux pthread postlink block')
+
 old_dynamic = (
     "      if sdk.name in ['css', 'hl2dm', 'dods', 'tf2', 'sdk2013', 'bms', 'nucleardawn', 'l4d2', 'insurgency', 'doi']:\n"
     "        dynamic_libs = ['libtier0_srv.so', 'libvstdlib_srv.so']"
@@ -849,6 +896,37 @@ with open(git_head_path) as fp:
 PY
 
 
+# css34: ExtLibrary (clientprefs etc.) also needs pthread/rt DT_NEEDED on
+# pre-2.34 glibc; HL2Library already gets it via the ep1 linkflags patch.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYEXT'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+old = """  def ExtLibrary(self, context, name, arch):
+    binary = self.Library(context, name, arch)
+    self.ConfigureForExtension(context, binary.compiler)
+    return binary
+"""
+new = """  def ExtLibrary(self, context, name, arch):
+    binary = self.Library(context, name, arch)
+    self.ConfigureForExtension(context, binary.compiler)
+    # css34: match rom4s clientprefs DT_NEEDED on Debian 11 / old glibc
+    if builder.target.platform == 'linux':
+      for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
+        if flag not in binary.compiler.linkflags:
+          binary.compiler.linkflags += [flag]
+    return binary
+"""
+if "css34: match rom4s clientprefs DT_NEEDED" in text:
+    print('==> ExtLibrary pthread/rt already patched')
+elif old in text:
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched ExtLibrary for pthread/rt DT_NEEDED')
+else:
+    raise SystemExit('Failed to patch ExtLibrary for css34 pthread/rt')
+PYEXT
+
 # css34: match rom4s DT_NEEDED — keep static libstdc++, dynamic libgcc_s +
 # pthread/rt, and disable HL2 malloc overrides (NO_HOOK_MALLOC).
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYLINK'
@@ -1454,3 +1532,64 @@ PY
 
 bash "$script_dir/apply-logger-mapchange-fix.sh" "$sourcemod_dir"
 bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"
+
+# css34: full upstream SHA in sourcemod_version_auto.h + CSS34 pack line in `sm version`.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYHDR'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'tools/buildbot/generate_headers.py'
+text = path.read_text()
+old = '    """.format(tag, shorthash, major, minor, release, fullstring, count))'
+# There are two format() calls (h + inc); replace both to use longhash for CSET.
+if 'css34: full commit SHA' in text:
+    print('==> SM generate_headers already uses full SHA')
+else:
+    if text.count(old) < 1:
+        # tolerate slight formatting diffs
+        old2 = '.format(tag, shorthash, major, minor, release, fullstring, count)'
+        if old2 not in text:
+            raise SystemExit('Failed to locate SM generate_headers format(shorthash) call')
+        text = text.replace(old2, '.format(tag, longhash, major, minor, release, fullstring, count)')
+    else:
+        text = text.replace(old, '    """.format(tag, longhash, major, minor, release, fullstring, count))')
+    # Annotate once
+    text = text.replace(
+        'def output_version_headers():\n',
+        'def output_version_headers():\n  # css34: full commit SHA for sm version Built from\n',
+        1,
+    )
+    path.write_text(text)
+    print('==> Patched SM generate_headers.py to emit full commit SHA')
+PYHDR
+
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYVER'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'core/logic/RootConsoleMenu.cpp'
+text = path.read_text()
+if 'CSS34 pack:' in text:
+    print('==> sm version already prints CSS34 pack commit')
+else:
+    if '#include <sourcemod_version.h>' not in text:
+        raise SystemExit('Failed to locate sourcemod_version.h include in RootConsoleMenu.cpp')
+    text = text.replace(
+        '#include <sourcemod_version.h>',
+        '#include <sourcemod_version.h>\n#include <css34_build_stamp.h>',
+        1,
+    )
+    old = '''#if defined(SM_GENERATED_BUILD)
+\t\tConsolePrint("    Built from: https://github.com/alliedmodders/sourcemod/commit/%s", SOURCEMOD_SHA);
+\t\tConsolePrint("    Build ID: %s:%s", SOURCEMOD_LOCAL_REV, SOURCEMOD_SHA);
+#endif
+'''
+    new = '''#if defined(SM_GENERATED_BUILD)
+\t\tConsolePrint("    Built from: https://github.com/alliedmodders/sourcemod/commit/%s", SOURCEMOD_SHA);
+\t\tConsolePrint("    CSS34 pack: https://github.com/fmu1337/sourcemod-css34/commit/%s", CSS34_PACK_COMMIT);
+\t\tConsolePrint("    Build ID: %s:%s", SOURCEMOD_LOCAL_REV, SOURCEMOD_SHA);
+#endif
+'''
+    if old not in text:
+        raise SystemExit('Failed to locate Built from block in RootConsoleMenu.cpp')
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched sm version to print CSS34 pack commit')
+PYVER

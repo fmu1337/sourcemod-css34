@@ -12,12 +12,22 @@ clone_repo() {
   local name="$1"
   local url="$2"
   local branch="${3:-}"
+  local commit="${4:-}"
 
   if [ -d "$DEPS/$name/.git" ]; then
+    if [ -n "$commit" ]; then
+      echo "==> Pinning $name to $commit"
+      git -C "$DEPS/$name" fetch --depth 1 origin "$commit"
+      git -C "$DEPS/$name" checkout --force "$commit"
+    fi
     return 0
   fi
 
-  if [ -n "$branch" ]; then
+  if [ -n "$commit" ]; then
+    git clone --depth 1 "$url" "$DEPS/$name"
+    git -C "$DEPS/$name" fetch --depth 1 origin "$commit"
+    git -C "$DEPS/$name" checkout --force "$commit"
+  elif [ -n "$branch" ]; then
     git clone --depth 1 --branch "$branch" "$url" "$DEPS/$name"
   else
     git clone --depth 1 "$url" "$DEPS/$name"
@@ -70,7 +80,10 @@ else
 fi
 
 echo "==> Fetching Metamod:Source"
-clone_repo "mmsource-1.10" "https://github.com/alliedmodders/metamod-source" "1.10-dev"
+# Pin to a known-good 1.10-dev commit (shown in `meta version` Built from).
+MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
+clone_repo "mmsource-1.10" "https://github.com/alliedmodders/metamod-source" "1.10-dev" "$MMS_COMMIT"
+echo "==> Metamod:Source at $(git -C "$DEPS/mmsource-1.10" rev-parse HEAD)"
 MMS_DIR="$DEPS/mmsource-1.10" "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/mmsource-1.10"
 
 echo "==> Fetching HL2SDK episode1"

@@ -230,3 +230,99 @@ else:
     print('==> Pinned METAMOD_PLAPI_VERSION to 11 in ISmmPluginExt.h')
 PY
 fi
+
+# css34: stamp full upstream SHA into metamod_version_auto.h and print CSS34 pack
+# commit from `meta version`.
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYHDR'
+from pathlib import Path
+import os
+path = Path(os.environ['MMS_DIR']) / 'support/buildbot/generate_headers.py'
+text = path.read_text()
+# Use full 40-char SHA for Built from / Build ID.
+old = '""".format(tag, shorthash, major, minor, release, count))'
+new = '""".format(tag, longhash, major, minor, release, count))'
+if 'css34: full commit SHA' in text:
+    print('==> MM generate_headers already uses full SHA')
+elif old in text:
+    text = text.replace(
+        '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
+        '  # css34: full commit SHA for meta version Built from\n'
+        '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
+        1,
+    )
+    text = text.replace(old, new, 1)
+    path.write_text(text)
+    print('==> Patched MM generate_headers.py to emit full commit SHA')
+else:
+    raise SystemExit('Failed to patch MM generate_headers.py for full SHA')
+PYHDR
+
+# Detached MMS_COMMIT checkout stores a raw SHA in .git/HEAD (no "ref: ...").
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYVER'
+from pathlib import Path
+import os
+path = Path(os.environ['MMS_DIR']) / 'support/buildbot/Versioning'
+text = path.read_text()
+if 'css34: detached HEAD' in text:
+    print('==> MM Versioning already handles detached HEAD')
+else:
+    old = """with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
+ git_state = fp.read().strip().split(':')[1].strip()
+
+git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
+if not os.path.exists(git_head_path):
+  git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
+"""
+    new = """# css34: detached HEAD / MMS_COMMIT pin stores raw SHA in .git/HEAD
+import re
+with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
+  head_contents = fp.read().strip()
+if re.search('^[a-fA-F0-9]{40}$', head_contents):
+  git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
+else:
+  git_state = head_contents.split(':')[1].strip()
+  git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
+  if not os.path.exists(git_head_path):
+    git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
+"""
+    if old not in text:
+        raise SystemExit('Failed to patch MM support/buildbot/Versioning for detached HEAD')
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched MM Versioning for detached MMS_COMMIT checkouts')
+PYVER
+
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYCONS'
+from pathlib import Path
+import os
+
+def patch_console(rel: str) -> None:
+    path = Path(os.environ['MMS_DIR']) / rel
+    text = path.read_text()
+    if 'CSS34 pack:' in text:
+        print(f'==> {rel}: meta version already prints CSS34 pack commit')
+        return
+    if '#include <versionlib.h>' not in text:
+        raise SystemExit(f'Failed to locate versionlib.h include in {rel}')
+    text = text.replace(
+        '#include <versionlib.h>',
+        '#include <versionlib.h>\n#include <css34_build_stamp.h>',
+        1,
+    )
+    old = '''\t\t\tCONMSG("Built from: https://github.com/alliedmodders/metamod-source/commit/%s\\n", METAMOD_BUILD_SHA);
+#endif
+\t\t\tCONMSG("Build ID: %s:%s\\n", METAMOD_BUILD_LOCAL_REV, METAMOD_BUILD_SHA);
+'''
+    new = '''\t\t\tCONMSG("Built from: https://github.com/alliedmodders/metamod-source/commit/%s\\n", METAMOD_BUILD_SHA);
+#endif
+\t\t\tCONMSG("CSS34 pack: https://github.com/fmu1337/sourcemod-css34/commit/%s\\n", CSS34_PACK_COMMIT);
+\t\t\tCONMSG("Build ID: %s:%s\\n", METAMOD_BUILD_LOCAL_REV, METAMOD_BUILD_SHA);
+'''
+    if old not in text:
+        raise SystemExit(f'Failed to locate Built from block in {rel}')
+    path.write_text(text.replace(old, new, 1))
+    print(f'==> Patched {rel} to print CSS34 pack commit')
+
+# metamod.1.ep1.so is built from core-legacy; core/ is the modern EP2 tree.
+patch_console('core-legacy/concommands.cpp')
+patch_console('core/metamod_console.cpp')
+PYCONS
