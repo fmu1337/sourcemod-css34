@@ -257,6 +257,40 @@ else:
     raise SystemExit('Failed to patch MM generate_headers.py for full SHA')
 PYHDR
 
+# Detached MMS_COMMIT checkout stores a raw SHA in .git/HEAD (no "ref: ...").
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYVER'
+from pathlib import Path
+import os
+path = Path(os.environ['MMS_DIR']) / 'support/buildbot/Versioning'
+text = path.read_text()
+if 'css34: detached HEAD' in text:
+    print('==> MM Versioning already handles detached HEAD')
+else:
+    old = """with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
+ git_state = fp.read().strip().split(':')[1].strip()
+
+git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
+if not os.path.exists(git_head_path):
+  git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
+"""
+    new = """# css34: detached HEAD / MMS_COMMIT pin stores raw SHA in .git/HEAD
+import re
+with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
+  head_contents = fp.read().strip()
+if re.search('^[a-fA-F0-9]{40}$', head_contents):
+  git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
+else:
+  git_state = head_contents.split(':')[1].strip()
+  git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
+  if not os.path.exists(git_head_path):
+    git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
+"""
+    if old not in text:
+        raise SystemExit('Failed to patch MM support/buildbot/Versioning for detached HEAD')
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched MM Versioning for detached MMS_COMMIT checkouts')
+PYVER
+
 MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYCONS'
 from pathlib import Path
 import os
