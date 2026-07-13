@@ -21,6 +21,7 @@ docker run --rm --platform linux/amd64 \
   -e WDIR=/workspace \
   -e DEPS_DIR=/workspace/deps \
   -e PACKAGES_DIR=/workspace/packages \
+  -e SM_LOGIC_CXX_SYSROOT=/workspace/deps/sysroot-i386 \
   "$IMAGE" \
   bash -lc '
     set -euo pipefail
@@ -67,9 +68,12 @@ EOF
     chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
       builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
       builder/install-clang9.sh builder/install-clang10.sh \
-      builder/splice-reference-logic.sh
-    # Legacy host: no jammy sysroot; logic links with g++-9 -static-libstdc++.
-    unset SM_I386_SYSROOT
+      builder/install-sysroot-i386.sh \
+      builder/splice-reference-logic.sh builder/splice-reference-extras.sh
+    builder/install-sysroot-i386.sh /workspace/deps
+    # shellcheck source=/dev/null
+    source /workspace/deps/sysroot-i386.env
+    export DEPS_DIR=/workspace/deps SM_LOGIC_CXX_SYSROOT
     builder/run/linux.sh
   '
 
@@ -79,7 +83,8 @@ if [[ -z "${ARTIFACT}" || ! -f "${ARTIFACT}" ]]; then
   exit 1
 fi
 
-chmod +x "$ROOT/builder/splice-reference-logic.sh"
+chmod +x "$ROOT/builder/splice-reference-extras.sh" "$ROOT/builder/splice-reference-logic.sh"
+"$ROOT/builder/splice-reference-extras.sh" "${ARTIFACT}"
 "$ROOT/builder/splice-reference-logic.sh" "${ARTIFACT}"
 
 echo "==> Legacy build complete: ${ARTIFACT}" >&2

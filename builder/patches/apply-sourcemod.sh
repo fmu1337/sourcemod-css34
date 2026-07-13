@@ -929,11 +929,16 @@ text = path.read_text()
 
 logic_loop_new = """for arch in SM.archs:
   if builder.target.platform == 'linux':
-    # css34: rom4s built logic with clang 10; clang-9 object code hangs in srcds.
+    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT trusty libstdc++4.8.
     import shutil as _shutil
+    import os as _os
     logic_cxx = builder.cxx.clone()
-    _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
-    _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
+    _deps = _os.environ.get('DEPS_DIR', '')
+    _clangpp = _os.path.join(_deps, 'clang-10/usrbin/clang++-10') if _deps else ''
+    _clang = _os.path.join(_deps, 'clang-10/usrbin/clang-10') if _deps else ''
+    if not _os.path.isfile(_clangpp):
+      _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
+      _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
     _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
     logic_cxx.cxx_argv = [_clangpp]
     logic_cxx.cc_argv = [_clang]
@@ -941,6 +946,15 @@ logic_loop_new = """for arch in SM.archs:
     if arch == 'x86':
       logic_cxx.cflags += ['-m32']
       logic_cxx.linkflags += ['-m32']
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8/backward'),
+      ]
     for _flag in ('-lgcc_eh',):
       if _flag in logic_cxx.linkflags:
         logic_cxx.linkflags.remove(_flag)
@@ -986,10 +1000,33 @@ logic_loop_old_variants = [
     binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
   else:
     binary = SM.Library(builder, 'sourcemod.logic', arch)""",
+    """for arch in SM.archs:
+  if builder.target.platform == 'linux':
+    # css34: rom4s built logic with clang 10; clang-9 object code hangs in srcds.
+    import shutil as _shutil
+    logic_cxx = builder.cxx.clone()
+    _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
+    _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
+    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    logic_cxx.cxx_argv = [_clangpp]
+    logic_cxx.cc_argv = [_clang]
+    logic_cxx.linker_argv = [_gpp9]
+    if arch == 'x86':
+      logic_cxx.cflags += ['-m32']
+      logic_cxx.linkflags += ['-m32']
+    for _flag in ('-lgcc_eh',):
+      if _flag in logic_cxx.linkflags:
+        logic_cxx.linkflags.remove(_flag)
+    if '-static-libgcc' not in logic_cxx.linkflags:
+      logic_cxx.linkflags += ['-static-libgcc']
+    logic_cxx.cxxflags += ['-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0']
+    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
+  else:
+    binary = SM.Library(builder, 'sourcemod.logic', arch)""",
 ]
 
-if 'rom4s built logic with clang 10' in text:
-    print('==> logic AMBuilder clang-10 compiler already patched')
+if 'SM_LOGIC_CXX_SYSROOT trusty libstdc++4.8' in text:
+    print('==> logic AMBuilder clang-10/sysroot already patched')
 else:
     replaced = False
     for old in logic_loop_old_variants:
@@ -999,7 +1036,7 @@ else:
             break
     if not replaced:
         raise SystemExit('Failed to locate logic AMBuilder library loop')
-    print('==> Patched logic AMBuilder to compile with clang-10 on Linux')
+    print('==> Patched logic AMBuilder to compile with clang-10 + trusty libstdc++4.8')
 
 defines_old = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
@@ -1042,26 +1079,35 @@ else:
     print('==> Patched logic AMBuilder for rom4s-compatible logic.so')
 
 linux_block_new = """  if builder.target.platform == 'linux':
-    # css34: explicit gcc-9 libstdc++.a; hide static archive symbols from dynamic table.
+    # css34: trusty libstdc++4.8 static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
     import os as _os
-    for flag in ('-static-libstdc++', '-lgcc_eh'):
+    for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
-    _gcc9_stdcxx = None
-    for _cand in (
-        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-    ):
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    _stdcxx = None
+    _sup = None
+    if _sysroot:
+      _base = _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8')
+      _cand = _os.path.join(_base, 'libstdc++.a')
       if _os.path.isfile(_cand):
-        _gcc9_stdcxx = _cand
-        break
-    if _gcc9_stdcxx is None:
-      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
-    _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
+        _stdcxx = _cand
+        _sup = _os.path.join(_base, 'libsupc++.a')
+    if _stdcxx is None:
+      for _cand in (
+          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+      ):
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
     binary.compiler.linkflags += [
-      '-Wl,-Bstatic', _gcc9_stdcxx, _gcc9_sup, '-Wl,-Bdynamic',
+      '-Wl,-Bstatic', _stdcxx, _sup, '-Wl,-Bdynamic',
       '-Wl,--exclude-libs,ALL',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]"""
@@ -1139,20 +1185,34 @@ linux_block_old_variants = [
     ]""",
 ]
 
-if 'explicit gcc-9 libstdc++.a; hide static archive symbols' in text:
+if 'trusty libstdc++4.8 static when SM_LOGIC_CXX_SYSROOT set' in text:
     print('==> logic AMBuilder link flags already patched')
 else:
     replaced = False
     prev_static = """  if builder.target.platform == 'linux':
-    # css34: g++-9 -static-libstdc++ embeds gcc-9 libstdc++ (rom4s-like, no libstdc++.so.6 NEEDED).
-    for flag in ('-lgcc_eh',):
+    # css34: explicit gcc-9 libstdc++.a; hide static archive symbols from dynamic table.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
+    _gcc9_stdcxx = None
+    for _cand in (
+        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+    ):
+      if _os.path.isfile(_cand):
+        _gcc9_stdcxx = _cand
+        break
+    if _gcc9_stdcxx is None:
+      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
+    _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
-    if '-static-libstdc++' not in binary.compiler.linkflags:
-      binary.compiler.linkflags += ['-static-libstdc++']
-    binary.compiler.linkflags += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']"""
+    binary.compiler.linkflags += [
+      '-Wl,-Bstatic', _gcc9_stdcxx, _gcc9_sup, '-Wl,-Bdynamic',
+      '-Wl,--exclude-libs,ALL',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]"""
     for old in linux_block_old_variants + [prev_static]:
         if old in text:
             text = text.replace(old, linux_block_new, 1)

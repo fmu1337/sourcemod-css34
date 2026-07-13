@@ -49,27 +49,10 @@ trap 'rm -rf "${tmp_pkg}" "${tmp_ref}"' EXIT
 
 tar -xzf "${ARTIFACT}" -C "${tmp_pkg}"
 curl -fsSL -o "${ref_tgz}" "${REF_URL}"
-tar -xzf "${ref_tgz}" -C "${tmp_ref}" \
-  addons/sourcemod/bin/sourcemod.logic.so \
-  addons/sourcemod/extensions/bintools.ext.so \
-  addons/sourcemod/extensions/sdktools.ext.1.ep1.so \
-  addons/sourcemod/extensions/sdktools.ext.2.ep1.so
+tar -xzf "${ref_tgz}" -C "${tmp_ref}" addons/sourcemod/bin/sourcemod.logic.so
 cp -f "${tmp_ref}/addons/sourcemod/bin/sourcemod.logic.so" \
   "${tmp_pkg}/addons/sourcemod/bin/sourcemod.logic.so"
-for rel in \
-  addons/sourcemod/extensions/bintools.ext.so \
-  addons/sourcemod/extensions/sdktools.ext.1.ep1.so \
-  addons/sourcemod/extensions/sdktools.ext.2.ep1.so; do
-  if [[ -f "${tmp_ref}/${rel}" ]]; then
-    cp -f "${tmp_ref}/${rel}" "${tmp_pkg}/${rel}"
-  fi
-done
 strip --strip-unneeded "${tmp_pkg}/addons/sourcemod/bin/sourcemod.logic.so" 2>/dev/null || true
-for rel in addons/sourcemod/extensions/bintools.ext.so \
-  addons/sourcemod/extensions/sdktools.ext.1.ep1.so \
-  addons/sourcemod/extensions/sdktools.ext.2.ep1.so; do
-  [[ -f "${tmp_pkg}/${rel}" ]] && strip --strip-unneeded "${tmp_pkg}/${rel}" 2>/dev/null || true
-done
 
 rm -f "${ARTIFACT}"
 tar -C "${tmp_pkg}" -czf "${ARTIFACT}" addons cfg
