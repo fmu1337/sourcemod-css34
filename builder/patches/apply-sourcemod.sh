@@ -1227,7 +1227,7 @@ linux_block_new = """  if builder.target.platform == 'linux':
     binary.compiler.linkflags += _static + [
       '-Wl,-Bdynamic',
       '-lc', '-lm',
-      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-ldl', '-lgcc_s',
       '-Wl,--no-undefined',
     ]"""
 
@@ -1448,12 +1448,19 @@ if '-Wl,--no-undefined' not in text:
     if needle in text:
         text = text.replace(
             needle,
-            "'-lgcc_s',\n      '-Wl,--no-undefined',",
+            "'-ldl', '-lgcc_s',\n      '-Wl,--no-undefined',",
             1,
         )
         changed = True
     else:
         raise SystemExit('Failed to add -Wl,--no-undefined to logic AMBuilder')
+elif "'-ldl'," not in text and "'-ldl'" not in text:
+    needle = "'-lrt',"
+    if needle in text:
+        text = text.replace(needle, "'-lrt', '-ldl',", 1)
+        changed = True
+    else:
+        raise SystemExit('Failed to add -ldl to logic AMBuilder')
 
 if changed:
     path.write_text(text)
