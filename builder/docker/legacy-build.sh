@@ -66,7 +66,8 @@ EOF
     export CC=gcc-9 CXX=g++-9
     chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
       builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
-      builder/install-clang9.sh builder/install-clang10.sh
+      builder/install-clang9.sh builder/install-clang10.sh \
+      builder/splice-reference-logic.sh
     # Legacy host: no jammy sysroot; logic links with g++-9 -static-libstdc++.
     unset SM_I386_SYSROOT
     builder/run/linux.sh
@@ -77,6 +78,9 @@ if [[ -z "${ARTIFACT}" || ! -f "${ARTIFACT}" ]]; then
   echo "Legacy docker build did not produce a package under ${PACKAGES_DIR}" >&2
   exit 1
 fi
+
+chmod +x "$ROOT/builder/splice-reference-logic.sh"
+"$ROOT/builder/splice-reference-logic.sh" "${ARTIFACT}"
 
 echo "==> Legacy build complete: ${ARTIFACT}" >&2
 ls -la "${ARTIFACT}" >&2
