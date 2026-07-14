@@ -69,11 +69,15 @@ if not path.exists():
     print('==> WARN: generate_headers.py missing')
     raise SystemExit(0)
 text = path.read_text()
-if 'css34: full commit SHA' in text or 'longhash' in text:
-    print('==> MM generate_headers already prefers full SHA or uses longhash')
+if 'css34: full commit SHA' in text:
+    print('==> MM generate_headers already prefers full SHA')
 else:
-    old = '""".format(tag, shorthash, major, minor, release, count))'
-    new = '""".format(tag, longhash, major, minor, release, count))'
+    # Note: file already mentions longhash in get_git_version(); only CSET format matters.
+    old = '""".format(tag, shorthash, major, minor, release, fullstring, count))'
+    new = '""".format(tag, longhash, major, minor, release, fullstring, count))'
+    # MM 1.12 may omit fullstring in the format call:
+    old_alt = '""".format(tag, shorthash, major, minor, release, count))'
+    new_alt = '""".format(tag, longhash, major, minor, release, count))'
     if old in text:
         text = text.replace(
             '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
@@ -81,9 +85,17 @@ else:
             '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
             1,
         )
-        text = text.replace(old, new, 1)
-        path.write_text(text)
+        path.write_text(text.replace(old, new, 1))
         print('==> Patched MM generate_headers.py to emit full commit SHA')
+    elif old_alt in text:
+        text = text.replace(
+            '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
+            '  # css34: full commit SHA for meta version Built from\n'
+            '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
+            1,
+        )
+        path.write_text(text.replace(old_alt, new_alt, 1))
+        print('==> Patched MM generate_headers.py to emit full commit SHA (alt)')
     else:
         print('==> WARN: generate_headers.py SHA format unchanged (continuing)')
 PYHDR
