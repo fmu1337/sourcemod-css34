@@ -166,4 +166,46 @@ else:
     print('==> MM episode1.json linux defines already ok')
 PYSDK
 
+# Force link via C++ driver (AMBuild tip detects raw `ld` into linker_argv).
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYLINK'
+from pathlib import Path
+import os
+path = Path(os.environ['MMS_DIR']) / 'AMBuildScript'
+text = path.read_text()
+if 'css34: link via C++ driver' in text:
+    print('==> MM linker_argv already forced to C++ driver')
+else:
+    detect_anchor = "    if not self.all_targets:\n        raise Exception('No suitable C/C++ compiler was found.')\n"
+    detect_insert = detect_anchor + """
+    # css34: link via C++ driver (AMBuild tip detects raw ld into linker_argv)
+    for _cxx in self.all_targets:
+      _cxx.linker_argv = list(_cxx.cxx_argv)
+"""
+    if detect_anchor not in text:
+        raise SystemExit('Failed to locate DetectCxx all_targets guard in MM AMBuildScript')
+    path.write_text(text.replace(detect_anchor, detect_insert, 1))
+    print('==> Forced MM linker_argv to C++ driver')
+PYLINK
+
+# episode1 SDK: MemAllocScratch lives in tier0/mem.h but provider_ep2.cpp never includes it
+# (newer SDKS pull it transitively). Without the include, metamod.2.ep1 fails to compile.
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYMEM'
+from pathlib import Path
+import os
+path = Path(os.environ['MMS_DIR']) / 'core/provider/provider_ep2.cpp'
+text = path.read_text()
+if 'tier0/mem.h' in text:
+    print('==> provider_ep2.cpp already includes tier0/mem.h')
+else:
+    needle = '#include <tier1/KeyValues.h>\n'
+    if needle not in text:
+        raise SystemExit('Failed to locate KeyValues include in provider_ep2.cpp')
+    path.write_text(text.replace(
+        needle,
+        needle + '#include <tier0/mem.h>  /* css34 episode1: MemAllocScratch */\n',
+        1,
+    ))
+    print('==> Patched provider_ep2.cpp to include tier0/mem.h for episode1')
+PYMEM
+
 echo "==> Metamod 1.12+ css34 light patches applied"
