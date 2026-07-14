@@ -37,13 +37,7 @@
             "-fpermissive",
             "-Wno-write-strings",
             "-Wno-sign-compare",
-            "-Wno-ignored-attributes",
-            "-Wno-stringop-overflow",
-            "-Wno-error=stringop-overflow",
-            "-Wno-stringop-truncation",
-            "-Wno-error=stringop-truncation",
-            "-Wno-format-truncation",
-            "-Wno-error=format-truncation"
+            "-Wno-ignored-attributes"
         ],
         "x86": {
             "postlink_libs": [

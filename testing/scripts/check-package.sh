@@ -9,7 +9,10 @@ trap cleanup EXIT
 
 tar -xzf "${SM_PACKAGE}" -C "${TMP}"
 MM_SO="${TMP}/addons/sourcemod/bin/sourcemod_mm_i486.so"
-CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so"
+CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.2.ep1.so"
+if [[ ! -f "${CORE_SO}" ]]; then
+  CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so"
+fi
 LOGIC_SO="${TMP}/addons/sourcemod/bin/sourcemod.logic.so"
 JIT_SO="${TMP}/addons/sourcemod/bin/sourcepawn.jit.x86.so"
 
@@ -20,7 +23,7 @@ if [[ ! -f "${MM_SO}" ]]; then
   exit 1
 fi
 if [[ ! -f "${CORE_SO}" ]]; then
-  echo "FAIL: missing sourcemod.1.ep1.so" >&2
+  echo "FAIL: missing sourcemod.2.ep1.so / sourcemod.1.ep1.so" >&2
   exit 1
 fi
 if [[ ! -f "${LOGIC_SO}" ]]; then
@@ -34,9 +37,11 @@ fi
 
 echo "==> Checking Metamod bridge exports"
 if nm -D "${MM_SO}" 2>/dev/null | grep -q ' T CreateInterface$'; then
-  echo "OK: CreateInterface export present (needed by MM:S 1.10 / EP1)"
+  echo "OK: CreateInterface export present (MM:S 1.10 V1 bridge)"
+elif nm -D "${MM_SO}" 2>/dev/null | grep -q 'CreateInterface_MMS'; then
+  echo "OK: CreateInterface_MMS present (MM:S 1.12 modern load path; no V1 CreateInterface needed)"
 else
-  echo "FAIL: sourcemod_mm_i486.so missing CreateInterface (MM:S 1.10 cannot load it)" >&2
+  echo "FAIL: sourcemod_mm_i486.so missing CreateInterface / CreateInterface_MMS" >&2
   echo "      present symbols:" >&2
   nm -D "${MM_SO}" 2>/dev/null | grep CreateInterface || true
   fail=1
@@ -172,11 +177,11 @@ iface_strings="$(strings "${CORE_SO}" 2>/dev/null || true)"
 if printf '%s\n' "${iface_strings}" | grep -F 'ServerGameDLL006' >/dev/null; then
   echo "OK: ServerGameDLL006 present"
 else
-  echo "FAIL: sourcemod.1.ep1.so missing ServerGameDLL006 (ep1c/SDK mismatch)" >&2
+  echo "FAIL: ${CORE_SO##*/} missing ServerGameDLL006 (ep1c/SDK mismatch)" >&2
   fail=1
 fi
 if printf '%s\n' "${iface_strings}" | grep -F 'VEngineServer023' >/dev/null; then
-  echo "FAIL: sourcemod.1.ep1.so still embeds VEngineServer023 (SE_CSS shim; css34 MM needs EP1 path)" >&2
+  echo "FAIL: ${CORE_SO##*/} still embeds VEngineServer023 (SE_CSS shim; css34 needs EP1 path)" >&2
   fail=1
 else
   echo "OK: no VEngineServer023 shim"

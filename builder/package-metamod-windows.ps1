@@ -10,9 +10,20 @@ $version = (Get-Content -Raw "$MmsDir/product.version").Trim()
 $filename = "mmsource-$version-css34-windows.zip"
 $archive = Join-Path (Resolve-Path $OutputDir) $filename
 
+$mmCore = $null
+foreach ($cand in @('metamod.2.ep1.dll', 'metamod.1.ep1.dll')) {
+    if (Test-Path (Join-Path $PackageDir "addons/metamod/bin/$cand")) {
+        $mmCore = $cand
+        break
+    }
+}
+if (-not $mmCore) {
+    throw "Missing metamod.2.ep1.dll / metamod.1.ep1.dll in Metamod package"
+}
+
 $required = @(
     'addons/metamod.vdf',
-    'addons/metamod/bin/metamod.1.ep1.dll',
+    "addons/metamod/bin/$mmCore",
     'addons/metamod/bin/server.dll'
 )
 

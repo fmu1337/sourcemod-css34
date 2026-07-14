@@ -9,7 +9,13 @@ SOURCEMOD_DIR="$WDIR/sourcemod"
 SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-b951843d42f7b9204615c14885468ea131a24002}"
 SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-7239}"
 SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-12}"
-MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
+if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
+  MMS_COMMIT="${MMS_COMMIT:-364cb6c26f66f7d9254d95a2fc533eac3557166b}"
+  MMS_DIR="${MMS_DIR:-$DEPS_DIR/mmsource-1.12}"
+else
+  MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
+  MMS_DIR="${MMS_DIR:-$DEPS_DIR/mmsource-1.10}"
+fi
 
 export BUILD_PLATFORM=windows
 export SOURCEMOD_MAJOR
@@ -39,21 +45,21 @@ python -m pip install "$DEPS_DIR/ambuild"
 # RootConsoleMenu.cpp / Metamod versioning include css34_build_stamp.h.
 echo "==> Writing CSS34 build stamp headers (pre-Metamod)"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
-  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" \
+  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" MMS_DIR="$MMS_DIR" \
   bash "$BUILDER_DIR/write-build-stamps.sh"
 
-echo "==> Building Metamod:Source (css34 metamod.1.ep1, Windows)"
+echo "==> Building Metamod:Source (css34 episode1, Windows)"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
-  BUILD_PLATFORM=windows \
+  BUILD_PLATFORM=windows SOURCEMOD_MAJOR="$SOURCEMOD_MAJOR" MMS_DIR="$MMS_DIR" \
   bash "$BUILDER_DIR/build-metamod.sh"
 
 mkdir -p "$PACKAGES_DIR"
 MM_ARTIFACT="$(
   powershell -NoProfile -ExecutionPolicy Bypass \
     -File "$BUILDER_DIR/package-metamod-windows.ps1" \
-    -PackageDir "$DEPS_DIR/mmsource-1.10/build/package" \
+    -PackageDir "$MMS_DIR/build/package" \
     -OutputDir "$PACKAGES_DIR" \
-    -MmsDir "$DEPS_DIR/mmsource-1.10"
+    -MmsDir "$MMS_DIR"
 )"
 cp -f "$MM_ARTIFACT" "$WDIR/$(basename "$MM_ARTIFACT")"
 echo "==> Metamod package: $MM_ARTIFACT"
@@ -63,10 +69,10 @@ bash "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
 
 echo "==> Writing CSS34 build stamp headers (pre-SourceMod)"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
-  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" \
+  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" MMS_DIR="$MMS_DIR" \
   bash "$BUILDER_DIR/write-build-stamps.sh"
 
-echo "==> Configuring SourceMod (ep1 + episode1, Windows)"
+echo "==> Configuring SourceMod (episode1 / 2.ep1 with Metamod 1.12, Windows)"
 cd "$SOURCEMOD_DIR"
 rm -rf build obj-*
 mkdir -p build
@@ -75,12 +81,20 @@ cd build
 CONFIGURE_ARGS=(
   --enable-optimize
   --hl2sdk-root="$DEPS_DIR"
-  --mms-path="$DEPS_DIR/mmsource-1.10"
+  --mms-path="$MMS_DIR"
   --mysql-path="$DEPS_DIR/mysql-5.5"
-  --sdks=ep1,episode1
+  --sdks=episode1
 )
 if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
   CONFIGURE_ARGS+=(--targets=x86)
+elif [ "$SOURCEMOD_MAJOR" -lt 12 ]; then
+  CONFIGURE_ARGS=(
+    --enable-optimize
+    --hl2sdk-root="$DEPS_DIR"
+    --mms-path="$MMS_DIR"
+    --mysql-path="$DEPS_DIR/mysql-5.5"
+    --sdks=ep1,episode1
+  )
 fi
 
 python ../configure.py "${CONFIGURE_ARGS[@]}"

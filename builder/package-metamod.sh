@@ -27,9 +27,22 @@ while IFS= read -r -d '' binary; do
   strip --strip-unneeded "$binary"
 done < <(find "$staging/addons/metamod/bin" -type f -name '*.so' -print0)
 
+# Prefer modern 2.ep1 (MM 1.12); fall back to legacy 1.ep1 (MM 1.10 css34).
+mm_core=""
+for cand in metamod.2.ep1.so metamod.1.ep1.so; do
+  if [[ -e "$staging/addons/metamod/bin/$cand" ]]; then
+    mm_core="$cand"
+    break
+  fi
+done
+if [[ -z "$mm_core" ]]; then
+  echo "Missing metamod.2.ep1.so / metamod.1.ep1.so in Metamod package" >&2
+  exit 1
+fi
+
 required=(
   "addons/metamod.vdf"
-  "addons/metamod/bin/metamod.1.ep1.so"
+  "addons/metamod/bin/${mm_core}"
   "addons/metamod/bin/server_i486.so"
   "addons/metamod/bin/server.so"
 )

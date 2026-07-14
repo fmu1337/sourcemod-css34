@@ -31,9 +31,10 @@ jobs:
 
       - name: Build SourceMod for CS:S v34
         env:
-          SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
-          SOURCEMOD_GIT_REV: "6572"
-          MMS_COMMIT: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
+          SOURCEMOD_COMMIT: b951843d42f7b9204615c14885468ea131a24002
+          SOURCEMOD_GIT_REV: "7239"
+          SOURCEMOD_MAJOR: "12"
+          MMS_COMMIT: 364cb6c26f66f7d9254d95a2fc533eac3557166b
         run: |
           chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
@@ -122,7 +123,7 @@ jobs:
           path: css34-server.tar.gz
           retention-days: 3
 
-  # Primary gate: our built Metamod 1.10.7 + SourceMod 6572 on modern glibc.
+  # Primary gate: built Metamod 1.12 + SourceMod 1.12.0.7239 on modern glibc.
   # Packages are produced in debian:11 (legacy-build.sh), so Debian 11+ / Rocky 9.
   test-built-debian:
     needs: [build-linux, prepare-server, check-built-package]
@@ -160,10 +161,10 @@ jobs:
       - name: Smoke test built SM+MM in ${{ matrix.image }}
         env:
           IMAGE: ${{ matrix.image }}
-          MM_VERSION_EXPECT: "1.10.7"
-          SM_VERSION_EXPECT: "1.11.0.6572"
-          MM_COMMIT_EXPECT: "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2"
-          SM_COMMIT_EXPECT: "832519ab647cdecb85763918dbfed1cb5e79c6cb"
+          MM_VERSION_EXPECT: "1.12.0"
+          SM_VERSION_EXPECT: "1.12.0.7239"
+          MM_COMMIT_EXPECT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
+          SM_COMMIT_EXPECT: "b951843d42f7b9204615c14885468ea131a24002"
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -241,10 +242,10 @@ jobs:
       - name: Smoke test built SM+MM in ${{ matrix.image }}
         env:
           IMAGE: ${{ matrix.image }}
-          MM_VERSION_EXPECT: "1.10.7"
-          SM_VERSION_EXPECT: "1.11.0.6572"
-          MM_COMMIT_EXPECT: "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2"
-          SM_COMMIT_EXPECT: "832519ab647cdecb85763918dbfed1cb5e79c6cb"
+          MM_VERSION_EXPECT: "1.12.0"
+          SM_VERSION_EXPECT: "1.12.0.7239"
+          MM_COMMIT_EXPECT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
+          SM_COMMIT_EXPECT: "b951843d42f7b9204615c14885468ea131a24002"
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
           SRCDS_BINARY: ${{ matrix.srcds_binary || './srcds_i686' }}
         run: |
@@ -327,10 +328,10 @@ jobs:
         env:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
-          MM_VERSION_EXPECT: "1.10.7"
-          SM_VERSION_EXPECT: "1.11.0.6572"
-          MM_COMMIT_EXPECT: "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2"
-          SM_COMMIT_EXPECT: "832519ab647cdecb85763918dbfed1cb5e79c6cb"
+          MM_VERSION_EXPECT: "1.12.0"
+          SM_VERSION_EXPECT: "1.12.0.7239"
+          MM_COMMIT_EXPECT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
+          SM_COMMIT_EXPECT: "b951843d42f7b9204615c14885468ea131a24002"
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
           TIMEOUT_SECS: 120
           SMOKE_CONDEBUG: "1"

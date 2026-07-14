@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # CS:S v34 compatibility for SourceMod 1.12+ (hl2sdk-manifests / AMBuild 2.2).
-# Keeps MMS 1.10.7 css34 ABI; ep1 binary is SE_EPISODEONE + gamesuffix 1.ep1.
+# Pairs with Metamod:Source 1.12 (PLAPI 16 / modern Core / metamod.2.ep1).
+# Primary binary: sourcemod.2.ep1.so (SE_EPISODEONE / gamesuffix 2.ep1).
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,7 +10,7 @@ PY=(bash "$script_dir/../py.sh")
 sourcemod_dir="${1:?sourcemod directory required}"
 builder_dir="$(cd "$script_dir/.." && pwd)"
 
-echo "==> Applying SourceMod 1.12+ css34 patches"
+echo "==> Applying SourceMod 1.12+ css34 patches (Metamod 1.12 / 2.ep1)"
 
 # --- manifests ---
 manifests_dir="$sourcemod_dir/hl2sdk-manifests/manifests"
@@ -17,8 +18,26 @@ if [ ! -d "$manifests_dir" ]; then
   echo "hl2sdk-manifests missing; is this SourceMod 1.12+?" >&2
   exit 1
 fi
-cp -f "$builder_dir/assets/hl2sdk-manifests/ep1.json" "$manifests_dir/ep1.json"
-echo "==> Installed ep1.json (SE_EPISODEONE / extension 1.ep1)"
+
+# Ensure episode1 linux defines match css34 (ABI0 + no HL2 malloc hooks).
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMAN'
+from pathlib import Path
+import json, os
+man = Path(os.environ['SOURCEMOD_DIR']) / 'hl2sdk-manifests/manifests/episode1.json'
+data = json.loads(man.read_text())
+linux = data.setdefault('linux', {})
+defs = linux.setdefault('defines', [])
+changed = False
+for d in ('NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE', '_GLIBCXX_USE_CXX11_ABI=0'):
+    if d not in defs:
+        defs.append(d)
+        changed = True
+if changed:
+    man.write_text(json.dumps(data, indent=4) + '\n')
+    print('==> Patched SM episode1.json linux defines for css34')
+else:
+    print('==> SM episode1.json linux defines already ok')
+PYMAN
 
 # --- AMBuildScript / SdkHelpers (1.12 structure) ---
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
@@ -29,13 +48,15 @@ sm = Path(os.environ['SOURCEMOD_DIR'])
 ambuild = sm / 'AMBuildScript'
 text = ambuild.read_text()
 
-# SM_CSS34_GAMEFIX_1_EP1 for ep1 sdk binaries
+# css34: for episode1 (and optional ep1) embed ConVar from static tier1 before
+# shared vstdlib, and record pthread/rt DT_NEEDED on older glibc.
 needle = "    SdkHelpers.configureCxx(context, binary, sdk)\n\n    return binary"
 insert = """    SdkHelpers.configureCxx(context, binary, sdk)
 
-    # css34: sourcemod.1.ep1.so / extensions must advertise gamesuffix 1.ep1
-    if sdk.get('name') == 'ep1':
-      compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']
+    # css34: episode1 → sourcemod.2.ep1.so (Metamod 1.12); optional ep1 → 1.ep1
+    if sdk.get('name') in ('ep1', 'episode1'):
+      if sdk.get('name') == 'ep1':
+        compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']
       # Static tier1 BEFORE shared vstdlib so ConVar is embedded, not imported.
       if compiler.target.platform == 'linux':
         tier1 = os.path.join(sdk['path'], 'linux_sdk', 'tier1_i486.a')
@@ -46,15 +67,31 @@ insert = """    SdkHelpers.configureCxx(context, binary, sdk)
             compiler.linkflags += [flag]
 
     return binary"""
-if 'SM_CSS34_GAMEFIX_1_EP1' not in text:
+if 'css34: episode1 → sourcemod.2.ep1.so' not in text and 'SM_CSS34_GAMEFIX_1_EP1' not in text:
     if needle not in text:
         raise SystemExit('Failed to locate ConfigureForHL2 SdkHelpers.configureCxx return')
     text = text.replace(needle, insert, 1)
-    print('==> Patched ConfigureForHL2 for GAMEFIX + tier1-before-vstdlib')
+    print('==> Patched ConfigureForHL2 for episode1 tier1-before-vstdlib')
+elif 'css34: episode1 → sourcemod.2.ep1.so' in text:
+    print('==> ConfigureForHL2 episode1 css34 link already patched')
 else:
-    print('==> ConfigureForHL2 already has SM_CSS34_GAMEFIX_1_EP1')
+    # Older patch only covered ep1 — widen to episode1.
+    if "if sdk.get('name') == 'ep1':" in text and "in ('ep1', 'episode1')" not in text:
+        text = text.replace(
+            "    # css34: sourcemod.1.ep1.so / extensions must advertise gamesuffix 1.ep1\n"
+            "    if sdk.get('name') == 'ep1':\n"
+            "      compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']\n",
+            "    # css34: episode1 → sourcemod.2.ep1.so (Metamod 1.12); optional ep1 → 1.ep1\n"
+            "    if sdk.get('name') in ('ep1', 'episode1'):\n"
+            "      if sdk.get('name') == 'ep1':\n"
+            "        compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']\n",
+            1,
+        )
+        print('==> Widened ConfigureForHL2 css34 link patch to episode1')
+    else:
+        print('==> ConfigureForHL2 css34 link patch present')
 
-# ExtLibrary pthread/rt
+# ExtLibrary pthread/rt + leave META_NO_HL2SDK happy against Metamod 1.12 headers
 old_ext = """  def ExtLibrary(self, context, compiler, name):
     binary = self.Library(context, compiler, name)
     SetArchFlags(compiler)
@@ -74,30 +111,43 @@ new_ext = """  def ExtLibrary(self, context, compiler, name):
 """
 if 'css34: pthread/rt DT_NEEDED on pre-2.34' not in text:
     if old_ext not in text:
-        raise SystemExit('Failed to locate ExtLibrary in AMBuildScript')
-    text = text.replace(old_ext, new_ext, 1)
-    print('==> Patched ExtLibrary for pthread/rt')
+        print('==> WARN: ExtLibrary pattern not found (continuing)')
+    else:
+        text = text.replace(old_ext, new_ext, 1)
+        print('==> Patched ExtLibrary for pthread/rt')
 else:
     print('==> ExtLibrary already patched')
 
-# Global CXX11 ABI + SDK warning suppressions for clang/gcc on ep1c
-cfg = """  def configure_gcc(self, cxx):
+# Force link via C++ driver (AMBuild master defaults to raw `ld`, which rejects
+# -static-libstdc++ and other gcc/clang driver flags used by SourceMod).
+if "css34: link via C++ driver" not in text:
+    detect_anchor = "    if not self.all_targets:\n        raise Exception('No suitable C/C++ compiler was found.')\n"
+    detect_insert = detect_anchor + """
+    # css34: link via C++ driver (AMBuild tip uses raw ld by default)
+    for _cxx in self.all_targets:
+      _cxx.linker_argv = list(_cxx.cxx_argv)
 """
-# inject after cflags list creation in configure_gcc
+    if detect_anchor not in text:
+        raise SystemExit('Failed to locate DetectCxx all_targets guard')
+    text = text.replace(detect_anchor, detect_insert, 1)
+    print('==> Forced linker_argv to C++ driver')
+else:
+    print('==> linker_argv already forced to C++ driver')
+
+# Global CXX11 ABI + SDK warning suppressions for clang/gcc on episode1
 if "CSS34 SDK compatibility" not in text:
     marker = "    if have_gcc:\n      cxx.cflags += ['-mfpmath=sse']\n      cxx.cflags += ['-Wno-maybe-uninitialized']\n"
     extra = marker + """    # CSS34 SDK compatibility
     cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes']
-    cxx.cflags += [
-      '-Wno-stringop-overflow', '-Wno-error=stringop-overflow',
-      '-Wno-stringop-truncation', '-Wno-error=stringop-truncation',
-      '-Wno-format-truncation', '-Wno-error=format-truncation',
-      '-Wno-ignored-attributes',
-    ]
+    if have_gcc:
+      cxx.cflags += [
+        '-Wno-stringop-overflow', '-Wno-error=stringop-overflow',
+        '-Wno-stringop-truncation', '-Wno-error=stringop-truncation',
+        '-Wno-format-truncation', '-Wno-error=format-truncation',
+      ]
     cxx.defines += ['_GLIBCXX_USE_CXX11_ABI=0']
 """
     if marker not in text:
-        # clang-only path may differ; insert before "have_gcc = "
         alt = "    have_gcc = cxx.family == 'gcc'\n"
         if alt not in text:
             raise SystemExit('Failed to locate configure_gcc warning block')
@@ -105,7 +155,8 @@ if "CSS34 SDK compatibility" not in text:
             alt,
             alt + "    # CSS34 SDK compatibility (early)\n"
                  "    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes']\n"
-                 "    cxx.cflags += ['-Wno-stringop-overflow', '-Wno-error=stringop-overflow', '-Wno-stringop-truncation', '-Wno-error=stringop-truncation', '-Wno-format-truncation', '-Wno-error=format-truncation', '-Wno-ignored-attributes']\n"
+                 "    if cxx.family == 'gcc':\n"
+                 "      cxx.cflags += ['-Wno-stringop-overflow', '-Wno-error=stringop-overflow', '-Wno-stringop-truncation', '-Wno-error=stringop-truncation', '-Wno-format-truncation', '-Wno-error=format-truncation']\n"
                  "    if '_GLIBCXX_USE_CXX11_ABI=0' not in cxx.defines:\n"
                  "      cxx.defines += ['_GLIBCXX_USE_CXX11_ABI=0']\n",
             1,
@@ -138,18 +189,20 @@ if sp.exists():
         sp.write_text(sp_text)
         print('==> Patched sourcepawn AMBuildScript for sign-compare')
 
-# cstrike: build for ep1 + episode1
+# cstrike: build for episode1 (Metamod 1.12 path)
 cstrike = sm / 'extensions/cstrike/AMBuilder'
 if cstrike.exists():
     ct = cstrike.read_text()
-    if "['ep1', 'episode1'" not in ct:
+    if "['episode1', 'css', 'csgo']" not in ct and "['ep1', 'episode1'" not in ct:
         ct = ct.replace(
             "for sdk_name in ['css', 'csgo']:",
-            "for sdk_name in ['ep1', 'episode1', 'css', 'csgo']:",
+            "for sdk_name in ['episode1', 'css', 'csgo']:",
             1,
         )
         cstrike.write_text(ct)
-        print('==> cstrike AMBuilder includes ep1, episode1')
+        print('==> cstrike AMBuilder includes episode1')
+    else:
+        print('==> cstrike AMBuilder already includes episode1')
 
 for rel in ('extensions/cstrike/forwards.cpp', 'extensions/cstrike/natives.cpp'):
     p = sm / rel
@@ -159,18 +212,47 @@ for rel in ('extensions/cstrike/forwards.cpp', 'extensions/cstrike/natives.cpp')
             '#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE',
         ))
 
-# bundled curl fortify noise on gcc-9
+# cstrike GetPlayerVarAddressOrError: FindInDataMap returns incomplete typedescription_t on EP1
+natives = sm / 'extensions/cstrike/natives.cpp'
+if natives.exists():
+    text = natives.read_text()
+    old_block = """\t\tdatamap_t *pMap = gamehelpers->GetDataMap(pPlayerEntity);
+\t\ttypedescription_t *td = gamehelpers->FindInDataMap(pMap, pszBaseVar);
+\t\tif (td)
+\t\t{
+#if SOURCE_ENGINE >= SE_LEFT4DEAD
+\t\t\tinterimOffset = td->fieldOffset;
+#else
+\t\t\tinterimOffset = td->fieldOffset[TD_OFFSET_NORMAL];
+#endif
+\t\t}"""
+    new_block = """\t\tdatamap_t *pMap = gamehelpers->GetDataMap(pPlayerEntity);
+\t\tsm_datatable_info_t datamapInfo;
+\t\tif (gamehelpers->FindDataMapInfo(pMap, pszBaseVar, &datamapInfo))
+\t\t{
+\t\t\tinterimOffset = datamapInfo.actual_offset;
+\t\t}"""
+    if old_block in text:
+        natives.write_text(text.replace(old_block, new_block, 1))
+        print('==> Patched cstrike natives FindDataMapInfo')
+    elif 'FindDataMapInfo(pMap, pszBaseVar' in text:
+        print('==> cstrike natives FindDataMapInfo already patched')
+    else:
+        print('==> WARN: cstrike natives FindInDataMap block not found')
+
+# bundled curl fortify noise on gcc only (clang-9 rejects -Wno-stringop-*)
 curl_ambuild = sm / 'extensions/curl/curl-src/lib/AMBuilder'
 if curl_ambuild.exists() and 'stringop-truncation' not in curl_ambuild.read_text():
     ct = curl_ambuild.read_text()
     ct = ct.replace(
         "binary.compiler.defines += ['_GNU_SOURCE']",
         "binary.compiler.defines += ['_GNU_SOURCE']\n"
-        "    binary.compiler.cflags += ['-Wno-stringop-truncation', '-Wno-error=stringop-truncation']",
+        "    if binary.compiler.family == 'gcc':\n"
+        "      binary.compiler.cflags += ['-Wno-stringop-truncation', '-Wno-error=stringop-truncation']",
         1,
     )
     curl_ambuild.write_text(ct)
-    print('==> Patched bundled libcurl for stringop-truncation')
+    print('==> Patched bundled libcurl for stringop-truncation (gcc)')
 
 # shell.cpp sign-compare
 shell = sm / 'sourcepawn/vm/shell/shell.cpp'
@@ -180,7 +262,7 @@ if shell.exists() and 'if (index > params[0])' in shell.read_text():
         'if (index > (size_t)params[0])',
     ))
 
-# MMS headers used by SM 1.12 may lack PVKII/MCV constants
+# MMS headers used by SM 1.12 may lack PVKII/MCV constants when building against older trees
 for rel in ('core/smn_halflife.cpp', 'loader/loader.cpp'):
     p = sm / rel
     if p.exists() and 'ifndef SOURCE_ENGINE_PVKII' not in p.read_text():
@@ -196,201 +278,10 @@ for rel in ('core/smn_halflife.cpp', 'loader/loader.cpp'):
         print(f'==> Added PVKII/MCV defines to {rel}')
 PY
 
-# --- CreateInterface for MMS 1.10 V1 load path (same as 1.11 css34) ---
-SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
-from pathlib import Path
-import os
-
-path = Path(os.environ['SOURCEMOD_DIR']) / 'loader' / 'loader.cpp'
-text = path.read_text()
-if 'DLL_EXPORT void *CreateInterface(const char *iface, int *ret)' in text:
-    print('==> loader CreateInterface already present')
-else:
-    if '#define FILENAME_1_4_EP1' not in text:
-        text = text.replace(
-            '#define METAMOD_API_MAJOR\t\t\t2\n',
-            '#define METAMOD_API_MAJOR\t\t\t2\n'
-            '#define FILENAME_1_4_EP1\t\t\t"sourcemod.1.ep1" PLATFORM_EXT\n',
-            1,
-        )
-        if '#define FILENAME_1_4_EP1' not in text:
-            raise SystemExit('Failed to insert FILENAME_1_4_EP1 into loader.cpp')
-
-    win_sep = """\t#define PATH_SEP_CHAR\t\t\t"\\\\"
-\t#include <Windows.h>
-#else"""
-    win_sep_new = """\t#define PATH_SEP_CHAR\t\t\t"\\\\"
-\tinline bool IsPathSepChar(char c)
-\t{
-\t\treturn (c == '/' || c == '\\\\');
-\t}
-\t#include <Windows.h>
-#else"""
-    if win_sep in text:
-        text = text.replace(win_sep, win_sep_new, 1)
-
-    unix_sep = """\ttypedef void *\t\t\t\t\tHINSTANCE;
-\t#define PATH_SEP_CHAR\t\t\t"/"
-\t#include <dlfcn.h>
-#endif"""
-    unix_sep_new = """\ttypedef void *\t\t\t\t\tHINSTANCE;
-\t#define PATH_SEP_CHAR\t\t\t"/"
-\tinline bool IsPathSepChar(char c)
-\t{
-\t\treturn (c == '/');
-\t}
-\t#include <dlfcn.h>
-#endif"""
-    if unix_sep in text:
-        text = text.replace(unix_sep, unix_sep_new, 1)
-
-    if text.count('inline bool IsPathSepChar(char c)') < 2:
-        raise SystemExit('Failed to insert IsPathSepChar into both loader.cpp branches')
-
-    getfile = r'''
-bool GetFileOfAddress(void *pAddr, char *buffer, size_t maxlength)
-{
-#if defined _MSC_VER
-	MEMORY_BASIC_INFORMATION mem;
-	if (!VirtualQuery(pAddr, &mem, sizeof(mem)))
-		return false;
-	if (mem.AllocationBase == NULL)
-		return false;
-	HMODULE dll = (HMODULE)mem.AllocationBase;
-	GetModuleFileName(dll, (LPTSTR)buffer, maxlength);
-#else
-	Dl_info info;
-	if (!dladdr(pAddr, &info))
-		return false;
-	if (!info.dli_fbase || !info.dli_fname)
-		return false;
-	const char *dllpath = info.dli_fname;
-	snprintf(buffer, maxlength, "%s", dllpath);
-#endif
-	return true;
-}
-
-'''
-    if 'bool GetFileOfAddress(' not in text:
-        anchor = 'DLL_EXPORT METAMOD_PLUGIN *CreateInterface_MMS('
-        if anchor not in text:
-            raise SystemExit('Failed to locate CreateInterface_MMS in loader.cpp')
-        text = text.replace(anchor, getfile + anchor, 1)
-
-    create = r'''
-DLL_EXPORT void *CreateInterface(const char *iface, int *ret)
-{
-	if (load_attempted)
-	{
-		return NULL;
-	}
-
-	if (strcmp(iface, METAMOD_PLAPI_NAME) == 0)
-	{
-		char thisfile[256];
-		char targetfile[256];
-
-		if (!GetFileOfAddress((void *)CreateInterface_MMS, thisfile, sizeof(thisfile)))
-		{
-			return NULL;
-		}
-
-		size_t len = strlen(thisfile);
-		for (size_t iter = len - 1; iter < len; iter--)
-		{
-			if (IsPathSepChar(thisfile[iter]))
-			{
-				thisfile[iter] = '\0';
-				break;
-			}
-		}
-
-		UTIL_Format(targetfile, sizeof(targetfile), "%s" PATH_SEP_CHAR FILENAME_1_4_EP1, thisfile);
-
-		return _GetPluginPtr(targetfile, METAMOD_FAIL_API_V1);
-	}
-
-	return NULL;
-}
-
-'''
-    end_marker = 'DLL_EXPORT void UnloadInterface_MMS()\n{\n\tif (g_hCore)\n\t{\n\t\tcloselib(g_hCore);\n\t\tg_hCore = NULL;\n\t}\n}\n'
-    if end_marker not in text:
-        raise SystemExit('Failed to locate UnloadInterface_MMS body in loader.cpp')
-    text = text.replace(end_marker, end_marker + create, 1)
-    path.write_text(text)
-    print('==> Restored CreateInterface for MMS 1.10 V1 load')
-PY
-
-# --- Source-level patches (shared with 1.11 spirit; ep1 is SE_EPISODEONE) ---
+# --- Source-level patches ---
 while IFS= read -r -d '' file; do
   sed -i 's/\r$//' "$file"
 done < <(find "$sourcemod_dir" -type f \( -name '*.h' -o -name '*.cpp' -o -name 'AMBuildScript' -o -name 'AMBuilder' \) -print0)
-
-# GAMEFIX / logic_bridge css34 overrides
-logic_bridge="$sourcemod_dir/core/logic_bridge.cpp"
-if [ -f "$logic_bridge" ]; then
-  LOGIC_BRIDGE="$logic_bridge" "${PY[@]}" - <<'PY'
-from pathlib import Path
-import os
-path = Path(os.environ['LOGIC_BRIDGE'])
-text = path.read_text()
-changed = False
-force_old = '#if SOURCE_ENGINE == SE_LEFT4DEAD\n#define GAMEFIX "2.l4d"'
-force_new = '''#if defined(SM_CSS34_GAMEFIX_1_EP1)
-#define GAMEFIX "1.ep1"
-#elif SOURCE_ENGINE == SE_LEFT4DEAD
-#define GAMEFIX "2.l4d"'''
-if 'SM_CSS34_GAMEFIX_1_EP1' not in text and force_old in text:
-    text = text.replace(force_old, force_new, 1)
-    changed = True
-if changed:
-    path.write_text(text)
-    print('==> GAMEFIX SM_CSS34_GAMEFIX_1_EP1 override')
-else:
-    print('==> GAMEFIX patch skipped or already applied')
-PY
-fi
-
-# LoadMMSPlugin Query null-out fix (MMS 1.10 css34)
-if [ -f "$logic_bridge" ]; then
-  LOGIC_BRIDGE="$logic_bridge" "${PY[@]}" - <<'PY'
-from pathlib import Path
-import os
-path = Path(os.environ['LOGIC_BRIDGE'])
-text = path.read_text()
-query_old = '''\tPl_Status status;
-
-\tif (!id || (g_pMMPlugins->Query(id, NULL, &status, NULL) && status < Pl_Paused))
-'''
-query_new = '''\tPl_Status status;
-\tconst char *query_file = nullptr;
-\tPluginId query_source = 0;
-
-\tif (!id || (g_pMMPlugins->Query(id, &query_file, &status, &query_source) && status < Pl_Paused))
-'''
-if query_old in text:
-    path.write_text(text.replace(query_old, query_new, 1))
-    print('==> Patched LoadMMSPlugin Query for css34 MMS')
-elif 'query_file' in text:
-    print('==> LoadMMSPlugin Query already patched')
-else:
-    # try alternate formatting from 1.12
-    alt_old = 'g_pMMPlugins->Query(id, NULL, &status, NULL)'
-    alt_new = 'g_pMMPlugins->Query(id, &query_file, &status, &query_source)'
-    if alt_old in text and 'query_file' not in text:
-        text = text.replace(
-            '\tPl_Status status;\n',
-            '\tPl_Status status;\n\tconst char *query_file = nullptr;\n\tPluginId query_source = 0;\n',
-            1,
-        )
-        text = text.replace(alt_old, alt_new, 1)
-        path.write_text(text)
-        print('==> Patched LoadMMSPlugin Query (alt)')
-    else:
-        print('==> WARN: LoadMMSPlugin Query pattern not found')
-PY
-fi
 
 # Episode One CON_COMMAND / pre-OB guards (SE_CSS leftovers still matter for some units)
 while IFS= read -r -d '' file; do
@@ -507,4 +398,4 @@ else:
             print('==> WARN: Built from block not found for CSS34 pack')
 PYVER
 
-echo "==> SourceMod 1.12+ css34 patches applied"
+echo "==> SourceMod 1.12+ css34 patches applied (Metamod 1.12 / 2.ep1)"

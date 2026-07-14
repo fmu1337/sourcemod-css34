@@ -80,11 +80,20 @@ else
 fi
 
 echo "==> Fetching Metamod:Source"
-# Pin to a known-good 1.10-dev commit (shown in `meta version` Built from).
-MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-clone_repo "mmsource-1.10" "https://github.com/alliedmodders/metamod-source" "1.10-dev" "$MMS_COMMIT"
-echo "==> Metamod:Source at $(git -C "$DEPS/mmsource-1.10" rev-parse HEAD)"
-MMS_DIR="$DEPS/mmsource-1.10" "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/mmsource-1.10"
+if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
+  # SourceMod 1.12 expects Metamod 1.12 (PLAPI 16 / modern Core / metamod.2.ep1).
+  MMS_COMMIT="${MMS_COMMIT:-364cb6c26f66f7d9254d95a2fc533eac3557166b}"
+  clone_repo "mmsource-1.12" "https://github.com/alliedmodders/metamod-source" "1.12-dev" "$MMS_COMMIT"
+  echo "==> Metamod:Source at $(git -C "$DEPS/mmsource-1.12" rev-parse HEAD)"
+  git -C "$DEPS/mmsource-1.12" submodule update --init --recursive
+  bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/mmsource-1.12"
+else
+  # SourceMod 1.11 css34: keep legacy metamod.1.ep1 / SH v4 / PLAPI 11.
+  MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
+  clone_repo "mmsource-1.10" "https://github.com/alliedmodders/metamod-source" "1.10-dev" "$MMS_COMMIT"
+  echo "==> Metamod:Source at $(git -C "$DEPS/mmsource-1.10" rev-parse HEAD)"
+  bash "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/mmsource-1.10"
+fi
 
 echo "==> Fetching HL2SDK episode1"
 rm -rf "$DEPS/hl2sdk-episode1"
@@ -100,17 +109,28 @@ export HL2SDK_EPISODE1_LINUX_SDK="$DEPS/hl2sdk-episode1/linux_sdk"
 
 echo "==> Fetching AMBuild"
 AMBUILD_TAG="${AMBUILD_TAG:-}"
+AMBUILD_REF="${AMBUILD_REF:-}"
 if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
-  AMBUILD_TAG="2.2"
+  # Tag 2.2 is too old for current hl2sdk-manifests (addConfigureFile); use main tip.
+  AMBUILD_REF="${AMBUILD_REF:-master}"
 fi
-if [ -n "$AMBUILD_TAG" ]; then
+if [ -n "$AMBUILD_REF" ]; then
+  echo "==> Pinning AMBuild to $AMBUILD_REF (SourceMod ${SOURCEMOD_MAJOR})"
+  rm -rf "$DEPS/ambuild"
+  git clone --depth 1 --branch "$AMBUILD_REF" https://github.com/alliedmodders/ambuild "$DEPS/ambuild"
+  if [ "$BUILD_PLATFORM" = "windows" ]; then
+    python -m pip install --force-reinstall --no-cache-dir "$DEPS/ambuild"
+  else
+    python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS/ambuild"
+  fi
+elif [ -n "$AMBUILD_TAG" ]; then
   echo "==> Pinning AMBuild to tag $AMBUILD_TAG (SourceMod ${SOURCEMOD_MAJOR})"
   rm -rf "$DEPS/ambuild"
   git clone --depth 1 --branch "$AMBUILD_TAG" https://github.com/alliedmodders/ambuild "$DEPS/ambuild"
   if [ "$BUILD_PLATFORM" = "windows" ]; then
     python -m pip install --force-reinstall --no-cache-dir "$DEPS/ambuild"
   else
-    python3 -m pip install --user --force-reinstall --no-cache-dir "$DEPS/ambuild"
+    python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS/ambuild"
   fi
 elif [ ! -d "$DEPS/ambuild/.git" ]; then
   clone_repo "ambuild" "https://github.com/alliedmodders/ambuild"
