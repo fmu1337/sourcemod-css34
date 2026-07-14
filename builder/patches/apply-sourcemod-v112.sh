@@ -381,8 +381,8 @@ if logic_am.exists():
     binary.compiler.postlink += ['-lpthread', '-lrt']
   elif binary.compiler.target.platform == 'mac':""",
         ]
-        linux_new = """  if binary.compiler.target.platform == 'linux':
-    # css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
+        linux_new = f"""  if binary.compiler.target.platform == 'linux':
+    # css34: gcc-4.9 libstdc++ when SM_LOGIC_CXX_SYSROOT (SM < 1.13); gcc-9 for 1.13+ static SP.
     import os as _os
     for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
       if flag in binary.compiler.linkflags:
@@ -393,7 +393,8 @@ if logic_am.exists():
     _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
     _stdcxx = None
     _sup = None
-    if _sysroot:
+    # SM 1.13+ static SourcePawn needs gcc-9 libstdc++ (std::thread unique_ptr ABI)
+    if _sysroot and {sm_minor} < 13:
       for _base in (
           _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
           _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
@@ -456,6 +457,24 @@ if logic_am.exists():
             print('==> WARN: logic linux postlink block not found for static link patch')
     else:
         print('==> logic AMBuilder static libstdc++ already patched')
+
+    # SM 1.13+ legacy-build sets SM_LOGIC_CXX_SYSROOT but must link gcc-9 libstdc++.a
+    # (gcc-4.9 lacks std::thread::_M_start_thread(unique_ptr<...>)).
+    if 'SM 1.13+ static SourcePawn needs gcc-9 libstdc++' not in lt:
+        sysroot_link_old = """    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    _stdcxx = None
+    _sup = None
+    if _sysroot:
+      for _base in ("""
+        sysroot_link_new = f"""    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    _stdcxx = None
+    _sup = None
+    # SM 1.13+ static SourcePawn needs gcc-9 libstdc++ (std::thread unique_ptr ABI)
+    if _sysroot and {sm_minor} < 13:
+      for _base in ("""
+        if sysroot_link_old in lt:
+            lt = lt.replace(sysroot_link_old, sysroot_link_new, 1)
+            print('==> logic AMBuilder: gcc-9 libstdc++ for SM 1.13+ (skip sysroot 4.9 link)')
 
     # SM 1.13+: static SourcePawn was appended after libstdc++.a; reorder so std::thread resolves.
     if 'css34: static SP before libstdc++ for std::thread' not in lt:
