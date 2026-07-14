@@ -249,12 +249,11 @@ if logic_am.exists():
     lt = logic_am.read_text()
     if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in lt:
         loop_old = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
-        # SM 1.12 uses C++17 (std::get_time etc.); gcc-4.9 sysroot headers cannot
-        # compile it. Use g++-9 with ABI0 + static gcc-9 libstdc++ instead.
+        # SM 1.12 uses C++17 APIs (std::get_time); keep gcc-4.9 sysroot for ABI
+        # and patch ParseTime to strptime (see below).
         loop_new = """for cxx in builder.targets:
   if cxx.target.platform == 'linux':
     # css34: SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9 logic toolchain.
-    # (1.12: compile with g++-9 headers/ABI0; static-link gcc-9 or sysroot libstdc++.)
     import shutil as _shutil
     import os as _os
     logic_cxx = cxx.clone()
@@ -277,6 +276,16 @@ if logic_am.exists():
     for _attr in ('cflags', 'cxxflags'):
       _flags = getattr(logic_cxx, _attr)
       setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and logic_cxx.target.arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
+      ]
     for _flag in ('-lgcc_eh', '-static-libstdc++'):
       if _flag in logic_cxx.linkflags:
         logic_cxx.linkflags.remove(_flag)
@@ -357,17 +366,7 @@ if logic_am.exists():
     _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
     _stdcxx = None
     _sup = None
-    # Prefer gcc-9 multilib (matches g++-9 / C++17 headers). Sysroot 4.9 is
-    # only a fallback for hosts without gcc-9-multilib.
-    for _cand in (
-        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-    ):
-      if _os.path.isfile(_cand):
-        _stdcxx = _cand
-        _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
-        break
-    if _stdcxx is None and _sysroot:
+    if _sysroot:
       for _base in (
           _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
           _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
@@ -381,7 +380,16 @@ if logic_am.exists():
           _sup = _os.path.join(_base, 'libsupc++.a')
           break
     if _stdcxx is None:
-      raise Exception('logic libstdc++.a not found (install gcc-9-multilib or sysroot-i386)')
+      for _cand in (
+          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+      ):
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
     _gcc = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc.a')
     _gcc_eh = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc_eh.a')
     for flag in ('-static-libgcc',):
@@ -464,6 +472,54 @@ if natives.exists():
         print('==> cstrike natives FindDataMapInfo already patched')
     else:
         print('==> WARN: cstrike natives FindInDataMap block not found')
+
+# ParseTime uses std::get_time (C++11 <iomanip>); gcc-4.9 sysroot headers lack it.
+# Replace with strptime so logic can keep the rom4s-compatible old libstdc++ ABI.
+smn_core = sm / 'core/logic/smn_core.cpp'
+if smn_core.exists():
+    sc = smn_core.read_text()
+    if 'css34: ParseTime via strptime' in sc:
+        print('==> ParseTime strptime already patched')
+    elif 'std::get_time' in sc:
+        old_pt = """\t// https://stackoverflow.com/a/33542189
+\tstd::tm t{};
+\tstd::istringstream input(datetime);
+
+\tauto previousLocale = input.imbue(std::locale::classic());
+\tinput >> std::get_time(&t, format);
+\tbool failed = input.fail();
+\tinput.imbue(previousLocale);
+
+\tif (failed)
+\t{
+\t\treturn pContext->ThrowNativeError("Invalid date/time string or time format.");
+\t}
+"""
+        new_pt = """\t/* css34: ParseTime via strptime (gcc-4.9 sysroot has no std::get_time) */
+\tstd::tm t{};
+#if defined PLATFORM_WINDOWS
+\tstd::istringstream input(datetime);
+\tauto previousLocale = input.imbue(std::locale::classic());
+\tinput >> std::get_time(&t, format);
+\tbool failed = input.fail();
+\tinput.imbue(previousLocale);
+\tif (failed)
+#else
+\tif (strptime(datetime, format, &t) == NULL)
+#endif
+\t{
+\t\treturn pContext->ThrowNativeError("Invalid date/time string or time format.");
+\t}
+"""
+        if old_pt not in sc:
+            print('==> WARN: ParseTime get_time block not found')
+        else:
+            sc = sc.replace(old_pt, new_pt, 1)
+            # Drop unused iostream helpers when possible (keep if used elsewhere).
+            smn_core.write_text(sc)
+            print('==> Patched ParseTime to use strptime for gcc-4.9 sysroot')
+    else:
+        print('==> ParseTime has no std::get_time (ok)')
 
 # bundled curl fortify noise on gcc only (clang-9 rejects -Wno-stringop-*)
 curl_ambuild = sm / 'extensions/curl/curl-src/lib/AMBuilder'
