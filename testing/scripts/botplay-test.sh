@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Rom4s reference packages + SMAC + botplay recording session.
+# Rom4s or built packages + SMAC + botplay recording session.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SERVER_DIR="${SERVER_DIR:?SERVER_DIR is required}"
 
+BOTPLAY_PROFILE="${BOTPLAY_PROFILE:-rom4s}"
 MAP="${MAP:-de_dust2}"
 PORT="${PORT:-27015}"
 RECORD_SECS="${RECORD_SECS:-600}"
@@ -19,13 +20,23 @@ SMOKE_CONDEBUG="${SMOKE_CONDEBUG:-1}"
 ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 SM_LOG_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/logs"
 
-# Rom4s reference drops (same defaults as install-addons.sh when no local package).
-MM_URL="${MM_URL:-https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz}"
-SM_URL="${SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
-MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.6}"
-SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
+case "${BOTPLAY_PROFILE}" in
+  built)
+    MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
+    SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
+    ;;
+  rom4s)
+    MM_URL="${MM_URL:-https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz}"
+    SM_URL="${SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
+    MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.6}"
+    SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
+    ;;
+  *)
+    echo "Unknown BOTPLAY_PROFILE=${BOTPLAY_PROFILE} (use rom4s or built)" >&2
+    exit 1
+    ;;
+esac
 
-# Baseline thresholds for a full 600s rom4s capture (~4-6 rounds at mp_roundtime 2).
 MIN_ROUND_START="${MIN_ROUND_START:-3}"
 MIN_ROUND_END="${MIN_ROUND_END:-3}"
 MIN_PLAYER_DEATH="${MIN_PLAYER_DEATH:-8}"
@@ -52,22 +63,31 @@ if ! command -v expect >/dev/null 2>&1; then
   exit 1
 fi
 
-# Install rom4s MM+SM unless caller already installed addons.
 if [[ "${SKIP_INSTALL_ADDONS:-0}" != "1" ]]; then
-  unset MM_PACKAGE SM_PACKAGE USE_BUILT_MM BUILT_MM_DIR BUILT_MM_PACKAGE || true
-  export MM_URL SM_URL SERVER_DIR
-  "${ROOT}/testing/scripts/install-addons.sh"
+  case "${BOTPLAY_PROFILE}" in
+    built)
+      if [[ -z "${SM_PACKAGE:-}" || -z "${MM_PACKAGE:-}" ]]; then
+        echo "built profile requires SM_PACKAGE and MM_PACKAGE" >&2
+        exit 1
+      fi
+      export SM_PACKAGE MM_PACKAGE SERVER_DIR
+      "${ROOT}/testing/scripts/install-addons.sh"
+      ;;
+    rom4s)
+      unset MM_PACKAGE SM_PACKAGE USE_BUILT_MM BUILT_MM_DIR BUILT_MM_PACKAGE || true
+      export MM_URL SM_URL SERVER_DIR
+      "${ROOT}/testing/scripts/install-addons.sh"
+      ;;
+  esac
 fi
 
-# Ship botplay cfg into the server tree.
 mkdir -p "${SERVER_DIR}/cstrike/cfg"
 cp -f "${ROOT}/testing/cfg/botplay-server.cfg" "${SERVER_DIR}/cstrike/cfg/botplay-server.cfg"
 
-# Compile + install SMAC against the rom4s SM tree now on disk.
-export SERVER_DIR
+export SERVER_DIR BOTPLAY_PROFILE MM_VERSION_EXPECT SM_VERSION_EXPECT
 "${ROOT}/testing/scripts/install-smac.sh"
 
-echo "Starting rom4s botplay recording (binary=${SRCDS_BINARY}, map=${MAP}, record=${RECORD_SECS}s)"
+echo "Starting ${BOTPLAY_PROFILE} botplay recording (binary=${SRCDS_BINARY}, map=${MAP}, record=${RECORD_SECS}s)"
 export SERVER_DIR MAP PORT SRCDS_BINARY BOTPLAY_LOG RECORD_SECS
 export CONSOLE_PROBE_TIMEOUT="${TIMEOUT_SECS}"
 export SMOKE_VERBOSE SMOKE_CONDEBUG
@@ -87,7 +107,7 @@ rm -f "${ENGINE_CONSOLE_LOG}"
   exit 1
 }
 
-export RECORD_SECS MAP
+export RECORD_SECS MAP BOTPLAY_PROFILE MM_VERSION_EXPECT SM_VERSION_EXPECT
 chmod +x "${ROOT}/testing/scripts/parse-botplay-logs.sh"
 "${ROOT}/testing/scripts/parse-botplay-logs.sh" "${SERVER_DIR}" "${REPORT_JSON}" "${REPORT_TXT}"
 
@@ -154,7 +174,6 @@ else
   echo "OK: no crash marker"
 fi
 
-# Version sanity from the expect session log.
 if grep -Fq "${MM_VERSION_EXPECT}" "${BOTPLAY_LOG}" 2>/dev/null; then
   echo "OK: Metamod version ${MM_VERSION_EXPECT}"
 else

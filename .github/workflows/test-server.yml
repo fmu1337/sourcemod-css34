@@ -382,6 +382,7 @@ jobs:
         env:
           IMAGE: debian:11
           RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
+          BOTPLAY_PROFILE: rom4s
           MM_VERSION_EXPECT: "1.10.6"
           SM_VERSION_EXPECT: "1.11.0.6572"
         run: |
@@ -392,6 +393,7 @@ jobs:
             -e SERVER_DIR=/workspace/.ci-server \
             -e CACHE_DIR=/workspace/.ci-cache \
             -e RECORD_SECS \
+            -e BOTPLAY_PROFILE \
             -e MM_VERSION_EXPECT \
             -e SM_VERSION_EXPECT \
             -e SMOKE_CONDEBUG=1 \
@@ -414,6 +416,89 @@ jobs:
           path: |
             .ci-server/botplay-report.json
             .ci-server/botplay-report.txt
+            .ci-server/botplay.log
+            .ci-server/botplay-run.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Same botplay session on in-tree MM 1.10.7 + SM 6572, compared to rom4s baseline.
+  test-built-botplay:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    needs: [build-linux, prepare-server]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SourceMod package
+        uses: actions/download-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download Metamod package
+        uses: actions/download-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
+          path: packages
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Built botplay recording + compare (debian:11)
+        env:
+          IMAGE: debian:11
+          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
+          BOTPLAY_PROFILE: built
+          MM_VERSION_EXPECT: "1.10.7"
+          SM_VERSION_EXPECT: "1.11.0.6572"
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e RECORD_SECS \
+            -e BOTPLAY_PROFILE \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e REPORT_JSON=/workspace/.ci-server/built-botplay-report.json \
+            -e REPORT_TXT=/workspace/.ci-server/built-botplay-report.txt \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-test.sh
+              testing/scripts/compare-botplay-reports.sh \
+                /workspace/testing/botplay/rom4s-baseline.json \
+                /workspace/.ci-server/built-botplay-report.json \
+                /workspace/.ci-server/botplay-compare.txt
+            '
+
+      - name: Upload built botplay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-botplay-report
+          path: |
+            .ci-server/built-botplay-report.json
+            .ci-server/built-botplay-report.txt
+            .ci-server/botplay-compare.txt
             .ci-server/botplay.log
             .ci-server/botplay-run.log
             .ci-server/cstrike/console.log

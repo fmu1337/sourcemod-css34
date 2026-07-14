@@ -101,10 +101,18 @@ fi
 
 record_secs="${RECORD_SECS:-600}"
 map_name="${MAP:-de_dust2}"
+profile_name="${BOTPLAY_PROFILE:-rom4s}"
+mm_version="${MM_VERSION_EXPECT:-}"
+sm_version="${SM_VERSION_EXPECT:-}"
 
 mkdir -p "$(dirname "${OUT_JSON}")"
 cat >"${OUT_JSON}" <<EOF
 {
+  "profile": "${profile_name}",
+  "packages": {
+    "metamod": "${mm_version}",
+    "sourcemod": "${sm_version}"
+  },
   "map": "${map_name}",
   "record_secs": ${record_secs},
   "sources": {
@@ -144,6 +152,8 @@ EOF
 {
   echo "Botplay parse report"
   echo "===================="
+  echo "Profile:          ${profile_name}"
+  echo "Packages:         MM ${mm_version:-?} + SM ${sm_version:-?}"
   echo "Map:              ${map_name}"
   echo "Record duration:  ${record_secs}s"
   echo ""
