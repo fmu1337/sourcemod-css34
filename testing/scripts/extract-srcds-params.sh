@@ -64,6 +64,8 @@ watched = [
     "-dev", "-dev2", "-nodev", "-allowdebug", "-debug", "-dumplongticks",
     "-notrap", "-norestart", "-tickrate", "-condebug", "-nomaster",
     "-localcser", "-insecure", "-nobots", "-textmode", "-pidfile",
+    "-console", "-usercon", "-reader", "-pcmdscpmrc", "-sfwb", "-wsb",
+    "-vcforce", "-sesb",
 ]
 
 bins = [
