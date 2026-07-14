@@ -1,7 +1,8 @@
 name: Release
 
-# Tag format (short): 1.11.0.6572-mm1.10.7
+# Tag format (short): 1.12.0.7239-mm1.12.0
 # Pushing a matching tag builds SM+MM for Linux and Windows and publishes a GitHub Release.
+# Tag the tip of this version line (not master / not another SM major).
 on:
   push:
     tags:
@@ -12,8 +13,9 @@ permissions:
   contents: write
 
 env:
-  SOURCEMOD_COMMIT: "832519ab647cdecb85763918dbfed1cb5e79c6cb"
-  SOURCEMOD_GIT_REV: "6572"
+  SOURCEMOD_COMMIT: "b951843d42f7b9204615c14885468ea131a24002"
+  SOURCEMOD_GIT_REV: "7239"
+  SOURCEMOD_MAJOR: "12"
   MMS_COMMIT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
 
 jobs:
@@ -50,6 +52,7 @@ jobs:
           CXX: g++-9
           SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
           SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+          SOURCEMOD_MAJOR: ${{ env.SOURCEMOD_MAJOR }}
           MMS_COMMIT: ${{ env.MMS_COMMIT }}
         run: |
           export WDIR="$PWD"
@@ -96,6 +99,7 @@ jobs:
         env:
           SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
           SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+          SOURCEMOD_MAJOR: ${{ env.SOURCEMOD_MAJOR }}
           MMS_COMMIT: ${{ env.MMS_COMMIT }}
         run: |
           export WDIR="$PWD"
