@@ -120,20 +120,37 @@ Upstream 1.12 тянет Orange Box / x64 CSS offsets. Для v34:
 5. logic: g++-9 + gcc-4.9 sysroot, без rom4s-splice
 6. `libsourcepawn` / ExtLibrary: `--no-as-needed -lpthread -lrt`
 7. Windows: только ASCII в генерируемых комментариях патчей (cp1252)
+8. MM ConVar link order: `tier1` before `vstdlib` (иначе сломанные FindVar)
+9. `blacklist.plugins.txt` в пакете; full Built-from SHAs в `generate_headers`
 
-## Остаётся проверить на реальном сервере
+## Критический runtime-баг (smoke SIGSEGV) и фикс
 
-- Загрузка MM 1.12 + SM 1.12 на v34 dedicated
-- Smoke natives cstrike / sdktools / sdkhooks
-- Совместимость существующих `.smx`
+**Симптом:** после `Network:` — `srcds exited before map de_dust2 loaded`. SIGSEGV в `vstdlib` `ConCommandBase::FindCommand` ← `CCvar::FindVar("sv_logecho")`.
+
+**Bisect:** MM 1.12 alone OK; MM 1.12 + rom4s SM 1.11 OK; MM 1.12 + наш SM 1.12 — crash.
+
+**Причина:** `GameConfigManager::CacheGameBinaryInfo` делал `dlopen(…/engine_i486.so, RTLD_NOW)`, пока srcds уже держал `engine_i686.so`. Временная копия engine регистрировала ConVar static ctors в общий `s_pConCommandBases`; после `dlclose` головы списка оставались dangling → crash при первом FindVar.
+
+**Фикс (в `apply-sourcemod-v112.sh`):** `RTLD_NOW | RTLD_NOLOAD` + sibling `_i686`/`_i486`; то же для `@`-symbol path. Вторая копия engine для `CreateInterface` не грузится.
+
+## CI статус (после фикса)
+
+Все checks PR #23 зелёные: Build linux/windows, `check-built-package`, `test-built-smoke`, debian 11/12/13/latest, rocky9.
+
+## Опционально перед merge
+
+- Live CSS34 dedicated вне CI (если нужен ручной sanity)
+- Совместимость прод-плагинов `.smx` на реальной карте
+- В логах может мелькать `utlmemory.h IsIdxValid` assertion — smoke не валит
 
 ## Рекомендация
 
 | Сценарий | Рекомендация |
 |---|---|
-| Продакшн v34 стабилен | Оставаться на **1.11.0.6572 + MM 1.10.7** до зелёного smoke |
-| Нужны фичи/фиксы 1.12 | Идти через **PR #23**; не мержить до live CSS34 smoke |
+| Продакшн v34 | Пока стабилен на **1.11.0.6572 + MM 1.10.7**; апгрейд — через merge **PR #23** |
+| Нужны фичи/фиксы 1.12 | **PR #23** готов по CI smoke; merge после вашего live-check (если нужен) |
 | Закрытие #6 | #6 supersed'ится #23 (этот документ перенесён сюда) |
+| SM 1.13 | Не начинать до merge #23 (см. docs / PR #29) |
 
 ## Ссылки
 
