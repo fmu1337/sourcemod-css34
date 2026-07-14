@@ -22,7 +22,7 @@ if [[ -f "$vdf" ]]; then
   sed -i 's|"file"[[:space:]]*"addons/metamod/bin/server"|"file"\t"../cstrike/addons/metamod/bin/server"|' "$vdf"
 fi
 
-echo "==> Stripping Metamod Linux binaries"
+echo "==> Stripping Metamod Linux binaries" >&2
 while IFS= read -r -d '' binary; do
   strip --strip-unneeded "$binary"
 done < <(find "$staging/addons/metamod/bin" -type f -name '*.so' -print0)

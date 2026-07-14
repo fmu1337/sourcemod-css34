@@ -180,7 +180,7 @@ if sp.exists():
             "'-Werror',\n            '-Wno-sign-compare',  # CSS34 sign-compare\n",
             1,
         )
-        if "cxx.cxxflags += ['-std=c++17']" in sp_text and "CSS34 sign-compare" not in sp_text.split("cxx.cxxflags")[1][:200]:
+        if "cxx.cxxflags += ['-std=c++17']" in sp_text and "CSS34 sign-compare" not in "".join(sp_text.split("cxx.cxxflags")[1:2]):
             sp_text = sp_text.replace(
                 "cxx.cxxflags += ['-std=c++17']\n",
                 "cxx.cxxflags += ['-std=c++17']\n        cxx.cxxflags += ['-Wno-sign-compare']  # CSS34 sign-compare\n",
@@ -188,6 +188,39 @@ if sp.exists():
             )
         sp.write_text(sp_text)
         print('==> Patched sourcepawn AMBuildScript for sign-compare')
+        sp_text = sp.read_text()
+
+    # Force pthread/rt DT_NEEDED (glibc < 2.34 / Debian 11) — bare -lpthread is
+    # dropped by --as-needed when nothing in the .o files references it directly.
+    old_pl = "                cxx.postlink += ['-lpthread', '-lrt']"
+    new_pl = (
+        "                # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
+        "                cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
+    )
+    if 'css34: force pthread/rt NEEDED for Debian 11' in sp_text:
+        print('==> sourcepawn pthread/rt no-as-needed already patched')
+    elif old_pl in sp_text:
+        sp.write_text(sp_text.replace(old_pl, new_pl, 1))
+        print('==> Patched sourcepawn AMBuildScript for pthread/rt DT_NEEDED')
+    else:
+        print('==> WARN: sourcepawn linux pthread postlink not found')
+
+# sourcemod.logic.so likewise needs --no-as-needed pthread/rt
+logic_am = sm / 'core/logic/AMBuilder'
+if logic_am.exists():
+    lt = logic_am.read_text()
+    old = "    binary.compiler.postlink += ['-lpthread', '-lrt']"
+    new = (
+        "    # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
+        "    binary.compiler.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
+    )
+    if 'css34: force pthread/rt NEEDED for Debian 11' in lt:
+        print('==> logic pthread/rt already patched')
+    elif old in lt:
+        logic_am.write_text(lt.replace(old, new, 1))
+        print('==> Patched core/logic/AMBuilder for pthread/rt DT_NEEDED')
+    else:
+        print('==> WARN: logic pthread postlink not found')
 
 # cstrike: build for episode1 (Metamod 1.12 path)
 cstrike = sm / 'extensions/cstrike/AMBuilder'
@@ -261,21 +294,6 @@ if shell.exists() and 'if (index > params[0])' in shell.read_text():
         'if (index > params[0])',
         'if (index > (size_t)params[0])',
     ))
-
-# MMS headers used by SM 1.12 may lack PVKII/MCV constants when building against older trees
-for rel in ('core/smn_halflife.cpp', 'loader/loader.cpp'):
-    p = sm / rel
-    if p.exists() and 'ifndef SOURCE_ENGINE_PVKII' not in p.read_text():
-        p.write_text(
-            '#ifndef SOURCE_ENGINE_PVKII\n'
-            '#define SOURCE_ENGINE_PVKII 25\n'
-            '#endif\n'
-            '#ifndef SOURCE_ENGINE_MCV\n'
-            '#define SOURCE_ENGINE_MCV 26\n'
-            '#endif\n'
-            + p.read_text()
-        )
-        print(f'==> Added PVKII/MCV defines to {rel}')
 PY
 
 # --- Source-level patches ---
