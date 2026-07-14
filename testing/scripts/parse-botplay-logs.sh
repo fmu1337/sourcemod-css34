@@ -173,7 +173,8 @@ cat >"${OUT_JSON}" <<EOF
   "stress": {
     "map_rotations": ${map_rotations},
     "abi_probe_rounds": ${probe_ok},
-    "abi_probe_fail_lines": ${probe_fail}
+    "abi_probe_clean_rounds": ${probe_clean},
+    "abi_probe_fail_rounds": ${probe_fail}
   }
 }
 EOF
@@ -204,7 +205,8 @@ EOF
   echo "Stress:"
   echo "  map rotations: ${map_rotations}"
   echo "  abi_probe rounds logged: ${probe_ok}"
-  echo "  abi_probe fail lines: ${probe_fail}"
+  echo "  abi_probe clean (fail=0): ${probe_clean}"
+  echo "  abi_probe fail rounds: ${probe_fail}"
   echo ""
   echo "Sample round_start lines:"
   first_matches "${ENGINE_CONSOLE_LOG}" "${ROUND_START_PAT}" 3 | sed 's/^/  /'

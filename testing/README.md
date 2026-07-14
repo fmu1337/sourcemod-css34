@@ -49,7 +49,9 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 
 `test-built-botplay` runs the same session with **built** MM 1.10.7 + SM 6572 and compares against `testing/botplay/rom4s-baseline.json` (candidate must reach ≥75% of baseline event counts).
 
-**Stress profile (default):** `botplay-stress.cfg` execs `botplay-server.cfg` (fast 1‑minute rounds) then raises `bot_quota` to 8. Plugin `css34_botplay_stress.smx` rotates maps every 3 rounds (`de_dust2` → `de_inferno` → `de_nuke`) and logs sdkhooks/sdktools ABI probe results each round. CI botplay jobs run on `debian:11`, `debian:12`, and `rockylinux:9`.
+**Stress profile (default):** `botplay-stress.cfg` execs `botplay-server.cfg` (fast 1‑minute rounds) then raises `bot_quota` to 8. Plugin `css34_botplay_stress.smx` rotates maps every 3 rounds (`de_dust2` → `de_inferno` → `de_nuke`) and logs sdkhooks/sdktools ABI probe results each round.
+
+**CI distro default:** `test-rom4s-botplay` and `test-built-botplay` run on **`debian:latest` only** (~20 min total on `cursor/**` pushes). Extra images (`debian:11`, `debian:12`, `rockylinux:9`) are optional via workflow_dispatch input `botplay_extra_distros`.
 
 | File | Role |
 |------|------|
@@ -91,7 +93,7 @@ Artifacts: `botplay-report.json`, `built-botplay-report.json`, `botplay-compare.
 
 ### Botplay bisect (built crash)
 
-`test-botplay-bisect` runs short (90s) cases via `testing/scripts/botplay-bisect.sh` on `cursor/**` branches.
+`test-botplay-bisect` is **off by default** (workflow_dispatch + `run_botplay_bisect`). It runs short (90s) cases via `testing/scripts/botplay-bisect.sh` on `debian:latest`. Set `BISECT_SET=quick` (5 cases, ~15 min) or `BISECT_SET=full` (19 cases, ~50 min).
 
 **Root cause (2026-07):** built SM binaries are fine on CS:S v34; the crash (`Bad entity in IndexOfEdict()`) comes from **upstream `sdkhooks.games` gamedata** shipped in the package (wrong vtable offsets for ep1/CSS). Overlaying rom4s `gamedata/sdkhooks.games` onto a built install fixes botplay; `prepare-package.sh` now copies css34-specific sdkhooks gamedata from `builder/assets/gamedata/sdkhooks.games/`.
 
