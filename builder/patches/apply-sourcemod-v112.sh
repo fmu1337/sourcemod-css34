@@ -450,6 +450,28 @@ if logic_am.exists():
     else:
         print('==> logic AMBuilder static libstdc++ already patched')
 
+    if 'css34: logic postlink pthread after static SP' not in lt:
+        sp_libs_anchor = """  binary.compiler.linkflags += [
+    SP.static_libsp[arch],
+    SP.libamtl[arch],
+    SP.zlib[arch],
+  ]"""
+        sp_libs_new = sp_libs_anchor + """
+  if binary.compiler.target.platform == 'linux':
+    # css34: logic postlink pthread after static SP archives (DT_NEEDED on glibc < 2.34)
+    for flag in list(binary.compiler.linkflags):
+      if flag in ('-lpthread', '-lrt', '-Wl,--no-as-needed'):
+        binary.compiler.linkflags.remove(flag)
+    for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
+      if flag not in binary.compiler.postlink:
+        binary.compiler.postlink += [flag]
+"""
+        if sp_libs_anchor not in lt:
+            print('==> WARN: logic AMBuilder SP static libs anchor not found')
+        else:
+            lt = lt.replace(sp_libs_anchor, sp_libs_new, 1)
+            print('==> Patched logic AMBuilder postlink pthread after static SP')
+
     logic_am.write_text(lt)
 
 # cstrike: build for episode1 (Metamod 1.12 path)
@@ -652,6 +674,57 @@ if smn_core.exists():
             print('==> Patched ParseTime to use strptime for gcc-4.9 sysroot')
     else:
         print('==> ParseTime has no std::get_time (ok)')
+
+# css34: LogToOpenFileEx must not call FindConVar(sv_logecho) on first mapchange.
+# icvar->FindVar can infinite-loop when vstdlib's ConVar list is corrupted (engine_i486 dlopen).
+logger_cpp = sm / 'core/logic/Logger.cpp'
+if logger_cpp.exists():
+    lt = logger_cpp.read_text()
+    if 'CSS34 LOG_ECHO_SAFE' not in lt:
+        old_lte = """void Logger::LogToOpenFileEx(FILE *fp, const char *msg, va_list ap)
+{
+\tstatic ConVar *sv_logecho = bridge->FindConVar("sv_logecho");
+
+\tchar buffer[3072];
+\tke::SafeVsprintf(buffer, sizeof(buffer), msg, ap);
+
+\tconst char* date = GetFormattedDate();
+\tfprintf(fp, "L %s: %s\\n", date, buffer);
+
+\tif (!sv_logecho || bridge->GetCvarBool(sv_logecho))
+\t{
+\t\tstatic char conBuffer[4096];
+\t\tke::SafeSprintf(conBuffer, sizeof(conBuffer), "L %s: %s\\n", date, buffer);
+\t\tbridge->ConPrint(conBuffer);
+\t}
+
+\tfflush(fp);
+}"""
+        new_lte = """void Logger::LogToOpenFileEx(FILE *fp, const char *msg, va_list ap)
+{
+\tchar buffer[3072];
+\tke::SafeVsprintf(buffer, sizeof(buffer), msg, ap);
+
+\tconst char* date = GetFormattedDate();
+\tfprintf(fp, "L %s: %s\\n", date, buffer);
+
+\t/* CSS34 LOG_ECHO_SAFE: skip FindConVar(sv_logecho) - icvar->FindVar can hang
+\t * on corrupted vstdlib ConVar lists after engine_i486 dlopen side-effects. */
+\t{
+\t\tstatic char conBuffer[4096];
+\t\tke::SafeSprintf(conBuffer, sizeof(conBuffer), "L %s: %s\\n", date, buffer);
+\t\tbridge->ConPrint(conBuffer);
+\t}
+
+\tfflush(fp);
+}"""
+        if old_lte not in lt:
+            print('==> WARN: Logger LogToOpenFileEx block not found')
+        else:
+            logger_cpp.write_text(lt.replace(old_lte, new_lte, 1))
+            print('==> Patched Logger LogToOpenFileEx (skip sv_logecho FindConVar)')
+    else:
+        print('==> Logger LOG_ECHO_SAFE already patched')
 
 # bundled curl fortify noise on gcc only (clang-9 rejects -Wno-stringop-*)
 curl_ambuild = sm / 'extensions/curl/curl-src/lib/AMBuilder'
