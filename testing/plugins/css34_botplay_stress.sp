@@ -5,6 +5,8 @@
 
 #define PLUGIN_TAG "[css34_botplay]"
 #define MAP_COUNT 3
+#define PROBE_RETRY_MAX 8
+#define PROBE_RETRY_DELAY 1.5
 
 new Handle:g_CvarRotateEvery;
 new g_MapIndex;
@@ -25,7 +27,7 @@ public Plugin:myinfo =
     name = "CSS34 Botplay Stress",
     author = "sourcemod-css34 CI",
     description = "Map rotation + sdkhooks/sdktools ABI probe for botplay",
-    version = "1.0",
+    version = "1.1",
     url = "https://github.com/fmu1337/sourcemod-css34"
 };
 
@@ -58,14 +60,21 @@ SyncMapIndexToCurrent()
 
 public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 {
-    CreateTimer(1.0, Timer_RunAbiProbe, _, TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(PROBE_RETRY_DELAY, Timer_RunAbiProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-public Action:Timer_RunAbiProbe(Handle:timer)
+public Action:Timer_RunAbiProbe(Handle:timer, any:retry)
 {
-    RunAbiProbe();
-    LogMessage("%s probe round=%d ok=%d fail=%d map=%s",
-        PLUGIN_TAG, g_RoundCount + 1, g_ProbeOk, g_ProbeFail, g_Maps[g_MapIndex]);
+    new bots = CountBotsInGame();
+    if (bots < 1 && retry < PROBE_RETRY_MAX)
+    {
+        CreateTimer(PROBE_RETRY_DELAY, Timer_RunAbiProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
+        return Plugin_Stop;
+    }
+
+    RunAbiProbe(bots);
+    LogMessage("%s probe round=%d ok=%d fail=%d bots=%d map=%s",
+        PLUGIN_TAG, g_RoundCount + 1, g_ProbeOk, g_ProbeFail, bots, g_Maps[g_MapIndex]);
     return Plugin_Stop;
 }
 
@@ -95,78 +104,90 @@ public Action:Timer_ChangeMap(Handle:timer)
     return Plugin_Stop;
 }
 
-RunAbiProbe()
+CountBotsInGame()
+{
+    new bots = 0;
+    for (new client = 1; client <= MaxClients; client++)
+    {
+        if (IsClientInGame(client) && IsFakeClient(client))
+        {
+            bots++;
+        }
+    }
+    return bots;
+}
+
+ProbePass(bool:pass)
+{
+    if (pass)
+    {
+        g_ProbeOk++;
+    }
+    else
+    {
+        g_ProbeFail++;
+    }
+}
+
+ProbeEntityClass(const String:classname[])
+{
+    new ent = FindEntityByClassname(-1, classname);
+    ProbePass(ent != -1 && IsValidEntity(ent));
+}
+
+RunAbiProbe(bots)
 {
     g_ProbeOk = 0;
     g_ProbeFail = 0;
 
-    new ent = FindEntityByClassname(-1, "worldspawn");
-    if (ent != -1 && IsValidEntity(ent))
-    {
-        g_ProbeOk++;
-    }
-    else
-    {
-        g_ProbeFail++;
-    }
+    ProbeEntityClass("worldspawn");
+    ProbeEntityClass("info_player_terrorist");
+    ProbeEntityClass("info_player_counterterrorist");
 
-    ent = FindEntityByClassname(-1, "info_player_start");
-    if (ent != -1 && IsValidEntity(ent))
+    if (bots < 1)
     {
-        g_ProbeOk++;
-    }
-    else
-    {
-        g_ProbeFail++;
+        ProbePass(false);
+        LogMessage("%s abi_probe ok=%d fail=%d (no bots yet)", PLUGIN_TAG, g_ProbeOk, g_ProbeFail);
+        return;
     }
 
     for (new client = 1; client <= MaxClients; client++)
     {
-        if (!IsClientInGame(client) || IsFakeClient(client))
+        if (!IsClientInGame(client) || !IsFakeClient(client))
         {
             continue;
         }
 
-        AttachClientHooksOnce(client);
-
-        new team = GetClientTeam(client);
-        new health = GetClientHealth(client);
-        new alive = IsPlayerAlive(client);
-
-        if (team >= 0 && health >= 0)
-        {
-            g_ProbeOk++;
-        }
-        else
-        {
-            g_ProbeFail++;
-        }
-
-        if (alive)
-        {
-            new weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
-            if (weapon == -1 || IsValidEntity(weapon))
-            {
-                g_ProbeOk++;
-            }
-            else
-            {
-                g_ProbeFail++;
-            }
-        }
-
-        new String:model[PLATFORM_MAX_PATH];
-        if (GetEntPropString(client, Prop_Data, "m_ModelName", model, sizeof(model)) >= 0)
-        {
-            g_ProbeOk++;
-        }
-        else
-        {
-            g_ProbeFail++;
-        }
+        ProbeClient(client);
     }
 
     LogMessage("%s abi_probe ok=%d fail=%d", PLUGIN_TAG, g_ProbeOk, g_ProbeFail);
+}
+
+ProbeClient(client)
+{
+    AttachClientHooksOnce(client);
+
+    new team = GetClientTeam(client);
+    ProbePass(team == 2 || team == 3);
+
+    if (!IsPlayerAlive(client))
+    {
+        return;
+    }
+
+    ProbePass(GetClientHealth(client) > 0);
+
+    new weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+    ProbePass(weapon == -1 || IsValidEntity(weapon));
+
+    new String:model[PLATFORM_MAX_PATH];
+    GetClientModel(client, model, sizeof(model));
+    ProbePass(model[0] != '\0');
+
+    new Float:origin[3];
+    GetClientAbsOrigin(client, origin);
+    ProbePass(origin[0] != 0.0 || origin[1] != 0.0 || origin[2] != 0.0);
 }
 
 AttachClientHooksOnce(client)
@@ -178,7 +199,7 @@ AttachClientHooksOnce(client)
 
     SDKHook(client, SDKHook_PreThink, Probe_PreThink);
     g_ClientHooked[client] = true;
-    g_ProbeOk++;
+    ProbePass(true);
 }
 
 public Action:Probe_PreThink(client)

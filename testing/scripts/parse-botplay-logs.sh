@@ -102,10 +102,13 @@ if [[ -d "${SM_LOG_DIR}" ]]; then
     sm_log_errors="${sm_log_errors:-0}"
     probe_ok=0
     probe_fail=0
+    probe_clean=0
     map_rotations=0
     for f in "${sm_logs[@]}"; do
       n="$(grep -c '\[css34_botplay\] abi_probe ok=' "${f}" 2>/dev/null || true)"
       probe_ok=$((probe_ok + n))
+      n="$(grep -Ec '\[css34_botplay\] abi_probe ok=[0-9]+ fail=0($|[^0-9])' "${f}" 2>/dev/null || true)"
+      probe_clean=$((probe_clean + n))
       n="$(grep -Ec '\[css34_botplay\] abi_probe ok=[0-9]+ fail=[1-9]' "${f}" 2>/dev/null || true)"
       probe_fail=$((probe_fail + n))
       n="$(grep -c '\[css34_botplay\] map_rotate' "${f}" 2>/dev/null || true)"
