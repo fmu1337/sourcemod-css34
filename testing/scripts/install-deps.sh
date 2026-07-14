@@ -77,7 +77,7 @@ install_debian() {
   apt-get update -y || apt-get update -y --allow-unauthenticated || true
 
   local pkgs=(
-    ca-certificates curl wget unzip bzip2 file procps expect
+    ca-certificates curl wget unzip bzip2 file procps expect git
     libstdc++6 libstdc++6:i386 zlib1g:i386
   )
   if apt-cache show libc6-i386 >/dev/null 2>&1; then
@@ -109,7 +109,7 @@ fix_centos_vault() {
 
 install_rhel() {
   fix_centos_vault
-  local pkgs=(glibc.i686 libstdc++.i686 zlib.i686 ca-certificates unzip bzip2 file procps-ng expect)
+  local pkgs=(glibc.i686 libstdc++.i686 zlib.i686 ca-certificates unzip bzip2 file procps-ng expect git)
   if command -v dnf >/dev/null 2>&1; then
     # Align x86_64 runtime with the i686 packages we are about to install.
     dnf -y update libstdc++ libgcc glibc zlib ca-certificates || true
