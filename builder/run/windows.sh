@@ -6,11 +6,13 @@ DEPS_DIR="${DEPS_DIR:-$WDIR/deps}"
 PACKAGES_DIR="${PACKAGES_DIR:-$WDIR/packages}"
 BUILDER_DIR="$WDIR/builder"
 SOURCEMOD_DIR="$WDIR/sourcemod"
-SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
-SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}"
+SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-b951843d42f7b9204615c14885468ea131a24002}"
+SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-7239}"
+SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-12}"
 MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
 
 export BUILD_PLATFORM=windows
+export SOURCEMOD_MAJOR
 
 if ! command -v cl >/dev/null 2>&1; then
   echo "MSVC compiler (cl.exe) not found. Run inside a Visual Studio Developer shell." >&2
@@ -70,12 +72,18 @@ rm -rf build obj-*
 mkdir -p build
 cd build
 
-python ../configure.py \
-  --enable-optimize \
-  --hl2sdk-root="$DEPS_DIR" \
-  --mms-path="$DEPS_DIR/mmsource-1.10" \
-  --mysql-path="$DEPS_DIR/mysql-5.5" \
+CONFIGURE_ARGS=(
+  --enable-optimize
+  --hl2sdk-root="$DEPS_DIR"
+  --mms-path="$DEPS_DIR/mmsource-1.10"
+  --mysql-path="$DEPS_DIR/mysql-5.5"
   --sdks=ep1,episode1
+)
+if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
+  CONFIGURE_ARGS+=(--targets=x86)
+fi
+
+python ../configure.py "${CONFIGURE_ARGS[@]}"
 
 echo "==> Building SourceMod"
 ambuild

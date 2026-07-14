@@ -99,7 +99,20 @@ export HL2SDK_EPISODE1_LINUX_SDK="$DEPS/hl2sdk-episode1/linux_sdk"
 "$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS/hl2sdk-ep1"
 
 echo "==> Fetching AMBuild"
-if [ ! -d "$DEPS/ambuild/.git" ]; then
+AMBUILD_TAG="${AMBUILD_TAG:-}"
+if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
+  AMBUILD_TAG="2.2"
+fi
+if [ -n "$AMBUILD_TAG" ]; then
+  echo "==> Pinning AMBuild to tag $AMBUILD_TAG (SourceMod ${SOURCEMOD_MAJOR})"
+  rm -rf "$DEPS/ambuild"
+  git clone --depth 1 --branch "$AMBUILD_TAG" https://github.com/alliedmodders/ambuild "$DEPS/ambuild"
+  if [ "$BUILD_PLATFORM" = "windows" ]; then
+    python -m pip install --force-reinstall --no-cache-dir "$DEPS/ambuild"
+  else
+    python3 -m pip install --user --force-reinstall --no-cache-dir "$DEPS/ambuild"
+  fi
+elif [ ! -d "$DEPS/ambuild/.git" ]; then
   clone_repo "ambuild" "https://github.com/alliedmodders/ambuild"
 fi
 if ! python -c "import ambuild2" 2>/dev/null && ! python3 -c "import ambuild2" 2>/dev/null; then

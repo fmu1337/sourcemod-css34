@@ -6,6 +6,16 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PY=(bash "$script_dir/../py.sh")
 
 sourcemod_dir="${1:?sourcemod directory required}"
+
+# Route SourceMod 1.12+ (hl2sdk-manifests / AMBuild 2.2) to a dedicated patcher.
+product_version="$(tr -d '\r\n' < "$sourcemod_dir/product.version" 2>/dev/null || echo '1.11.0')"
+major="${product_version%%.*}"
+rest="${product_version#*.}"
+minor="${rest%%.*}"
+if [ "$major" -gt 1 ] || { [ "$major" -eq 1 ] && [ "$minor" -ge 12 ]; }; then
+  exec bash "$script_dir/apply-sourcemod-v112.sh" "$sourcemod_dir"
+fi
+
 ambuild_script="$sourcemod_dir/AMBuildScript"
 
 if grep -q "CSS34 SDK compatibility" "$ambuild_script"; then

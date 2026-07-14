@@ -6,10 +6,12 @@ DEPS_DIR="${DEPS_DIR:-$WDIR/deps}"
 PACKAGES_DIR="${PACKAGES_DIR:-$WDIR/packages}"
 BUILDER_DIR="$WDIR/builder"
 SOURCEMOD_DIR="$WDIR/sourcemod"
-SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
-SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}"
+SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-b951843d42f7b9204615c14885468ea131a24002}"
+SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-7239}"
+SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-12}"
 
 export PATH="$HOME/.local/bin:$PATH"
+export SOURCEMOD_MAJOR
 
 if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
   echo "==> Installing Linux build dependencies"
@@ -111,12 +113,18 @@ rm -rf build obj-*
 mkdir -p build
 cd build
 
-python3 ../configure.py \
-  --enable-optimize \
-  --hl2sdk-root="$DEPS_DIR" \
-  --mms-path="$DEPS_DIR/mmsource-1.10" \
-  --mysql-path="$DEPS_DIR/mysql-5.5" \
+CONFIGURE_ARGS=(
+  --enable-optimize
+  --hl2sdk-root="$DEPS_DIR"
+  --mms-path="$DEPS_DIR/mmsource-1.10"
+  --mysql-path="$DEPS_DIR/mysql-5.5"
   --sdks=ep1,episode1
+)
+if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
+  CONFIGURE_ARGS+=(--targets=x86)
+fi
+
+python3 ../configure.py "${CONFIGURE_ARGS[@]}"
 
 echo "==> Building SourceMod"
 ambuild

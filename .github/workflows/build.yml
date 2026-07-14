@@ -9,8 +9,9 @@ on:
   workflow_dispatch:
 
 env:
-  SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
-  SOURCEMOD_GIT_REV: "6572"
+  SOURCEMOD_COMMIT: b951843d42f7b9204615c14885468ea131a24002
+  SOURCEMOD_GIT_REV: "7239"
+  SOURCEMOD_MAJOR: "12"
   MMS_COMMIT: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
 
 jobs:
@@ -47,6 +48,7 @@ jobs:
           CXX: g++-9
           SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
           SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+          SOURCEMOD_MAJOR: ${{ env.SOURCEMOD_MAJOR }}
           MMS_COMMIT: ${{ env.MMS_COMMIT }}
         run: |
           export WDIR="$PWD"
@@ -92,6 +94,7 @@ jobs:
         env:
           SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
           SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
+          SOURCEMOD_MAJOR: ${{ env.SOURCEMOD_MAJOR }}
           MMS_COMMIT: ${{ env.MMS_COMMIT }}
         run: |
           export WDIR="$PWD"

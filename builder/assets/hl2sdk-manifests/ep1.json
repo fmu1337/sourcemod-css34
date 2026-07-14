@@ -1,0 +1,69 @@
+{
+    "name": "ep1",
+    "env_var": "HL2SDK",
+    "extension": "1.ep1",
+    "code": 1,
+    "define": "EPISODEONE",
+    "platforms": {
+        "windows": ["x86"],
+        "linux": ["x86"]
+    },
+    "source2": false,
+    "include_paths": [
+        "public",
+        "public/engine",
+        "public/mathlib",
+        "public/vstdlib",
+        "public/tier0",
+        "public/tier1",
+        "public/toolframework",
+        "public/game/server",
+        "game/shared",
+        "common"
+    ],
+    "linux": {
+        "defines": [
+            "NO_HOOK_MALLOC",
+            "NO_MALLOC_OVERRIDE",
+            "_GLIBCXX_USE_CXX11_ABI=0"
+        ],
+        "cflags": [
+            "-Wno-overloaded-virtual",
+            "-Wno-unused-function",
+            "-Wno-unknown-pragmas",
+            "-Wno-dangling-else",
+            "-Wno-unused-variable",
+            "-Wno-reorder",
+            "-fpermissive",
+            "-Wno-write-strings",
+            "-Wno-sign-compare",
+            "-Wno-ignored-attributes",
+            "-Wno-stringop-overflow",
+            "-Wno-error=stringop-overflow",
+            "-Wno-stringop-truncation",
+            "-Wno-error=stringop-truncation",
+            "-Wno-format-truncation",
+            "-Wno-error=format-truncation"
+        ],
+        "x86": {
+            "postlink_libs": [
+                "linux_sdk/mathlib_i486.a"
+            ],
+            "dynamic_libs": [
+                "linux_sdk/tier0_i486.so",
+                "linux_sdk/vstdlib_i486.so"
+            ]
+        },
+        "uses_system_cxxlib": false
+    },
+    "windows": {
+        "x86": {
+            "libs": [
+                "lib/public/mathlib.lib",
+                "lib/public/tier0.lib",
+                "lib/public/tier1.lib",
+                "lib/public/vstdlib.lib"
+            ]
+        }
+    }
+}
