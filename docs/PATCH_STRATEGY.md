@@ -158,6 +158,54 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 - Отдельные `apply-api-compat.sh` / `apply-toolchain.sh` как постоянный «слой ≥6800» в master.
 - При апгрейде — править текущий `apply-sourcemod.sh` (и соседние патчи) **in place** на ветке апгрейда.
 
+## Сравнение пакетов MM/SM и myarena (из PR #17)
+
+[PR #17](https://github.com/fmu1337/sourcemod-css34/pull/17) добавил tooling для built Metamod + binary compare + smoke matrix vs rom4s/myarena.
+**Код уже в master** (через [#19](https://github.com/fmu1337/sourcemod-css34/pull/19) / коммит `29c5d88`: `compare-binaries.sh`, `install-built-metamod.sh`, `install-sourcemod-package.sh`, `run-built-mm-matrix.sh`). Сам draft #17 мержить не нужно — закрыть как landed.
+
+Ниже — совместимость, которую выявили прогоны; CI сейчас дымит **только наш** MM 1.10.7 + SM 6572, но локально matrix всё ещё полезен.
+
+### Что проходило / не проходило
+
+| Пара | Smoke |
+|------|--------|
+| **Built MM 1.10.7** + **rom4s SM 6572** | **PASS** |
+| **Built MM 1.10.x** + **myarena SM 6522** | **FAIL** (ожидаемо) |
+| **myarena MM 1.11** + **rom4s SM 6572** | **PASS** (на том же srcds) |
+
+### Почему myarena SM ломается на нашем MM 1.10
+
+| Ожидание MM 1.10 / rom4s layout | myarena 6522 / MM 1.11 bundle |
+|--------------------------------|-------------------------------|
+| Core **`sourcemod.1.ep1.so`** (+ часто `2.ep1`) | Только **`sourcemod.2.ep1.so`** (нет `1.ep1`) |
+| Bridge `sourcemod_mm_i486.so`: **`CreateInterface` + `CreateInterface_MMS`** | Только **`CreateInterface_MMS`** |
+| MM load: `metamod.1.ep1.so` | Bundle: **`metamod.2.ep1.so`**, MM **1.11** |
+
+Итог: myarena-SM заточен под **Metamod 1.11 / 2.ep1 path**. Наш/rom4s путь — **MM 1.10 + CreateInterface + 1.ep1**. Смешивать built/rom4s MM 1.10 с myarena SM не надо.
+
+Доп. наблюдение из compare: `myarena sourcemod.logic.so` + rom4s `sourcemod.1.ep1.so` → hang до mapchange (не наш текущий CI-путь, но ловушка при ручных миксах).
+
+### Ориентиры размеров (на момент #17)
+
+| Бинарник | Заметка |
+|----------|---------|
+| rom4s MM 1.10.6 | ~214 KB, stripped, старый GLIBC |
+| Built MM 1.10.7-dev | крупнее (debug symbols), GLIBC хозяина/контейнера |
+| myarena MM 1.11 | `metamod.2.ep1.so` only |
+
+Актуальные наши артефакты — тег `1.11.0.6572-mm1.10.7` (in-tree SM+MM), не myarena.
+
+### Скрипты на master
+
+```bash
+# NEEDED / GLIBC / CreateInterface / strings
+bash testing/scripts/compare-binaries.sh
+
+# Local matrix (built MM + rom4s SM; myarena optional, failure expected on MM 1.10)
+sudo bash testing/scripts/run-built-mm-matrix.sh
+# SKIP_MYARENA_SMOKE=1 — пропустить myarena-кейс
+```
+
 ## Связанные артефакты
 
 | Что | Статус |
@@ -165,6 +213,7 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 | [PR #7](https://github.com/fmu1337/sourcemod-css34/pull/7) | Развилка слоёв → этот документ; закрыть как superseded |
 | [PR #10](https://github.com/fmu1337/sourcemod-css34/pull/10) | Dual-track 6572/6970 отвергнут; грабли ≥6800 сохранены выше |
 | [PR #15](https://github.com/fmu1337/sourcemod-css34/pull/15) | Mid 6588 отвергнут как merge; pin/ancestry/headers сохранены в секции «Mid-шаг 6588» |
+| [PR #17](https://github.com/fmu1337/sourcemod-css34/pull/17) | Tooling landed via #19; myarena/MM compatibility notes выше |
 | `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
 | Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |
 | Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Эксперимент major-апгрейда поверх модели B |
