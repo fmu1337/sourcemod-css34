@@ -249,9 +249,12 @@ if logic_am.exists():
     lt = logic_am.read_text()
     if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in lt:
         loop_old = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
+        # SM 1.12 uses C++17 (std::get_time etc.); gcc-4.9 sysroot headers cannot
+        # compile it. Use g++-9 with ABI0 + static gcc-9 libstdc++ instead.
         loop_new = """for cxx in builder.targets:
   if cxx.target.platform == 'linux':
     # css34: SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9 logic toolchain.
+    # (1.12: compile with g++-9 headers/ABI0; static-link gcc-9 or sysroot libstdc++.)
     import shutil as _shutil
     import os as _os
     logic_cxx = cxx.clone()
@@ -269,20 +272,11 @@ if logic_am.exists():
       '-Wno-nonportable-include-path', '-Wno-macro-redefined', '-Wno-writable-strings',
       '-Wno-sometimes-uninitialized', '-Wno-inconsistent-missing-override',
       '-Wno-implicit-exception-spec-mismatch', '-Wno-deprecated-register',
+      '-Wno-tautological-overlap-compare',
     ]
     for _attr in ('cflags', 'cxxflags'):
       _flags = getattr(logic_cxx, _attr)
       setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    if _sysroot and logic_cxx.target.arch == 'x86':
-      logic_cxx.cxxflags += [
-        '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
-      ]
     for _flag in ('-lgcc_eh', '-static-libstdc++'):
       if _flag in logic_cxx.linkflags:
         logic_cxx.linkflags.remove(_flag)
@@ -291,7 +285,7 @@ if logic_am.exists():
     logic_cxx.cxxflags += [
       '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
       '-Wno-stringop-truncation', '-Wno-unused-result',
-      '-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0',
+      '-D_GLIBCXX_USE_CXX11_ABI=0',
       '-fno-sized-deallocation',  # css34: no UND _ZdlPvj/_ZdaPvj at dlopen
     ]
     binary = SM.Library(builder, logic_cxx, 'sourcemod.logic')
@@ -363,7 +357,17 @@ if logic_am.exists():
     _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
     _stdcxx = None
     _sup = None
-    if _sysroot:
+    # Prefer gcc-9 multilib (matches g++-9 / C++17 headers). Sysroot 4.9 is
+    # only a fallback for hosts without gcc-9-multilib.
+    for _cand in (
+        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+    ):
+      if _os.path.isfile(_cand):
+        _stdcxx = _cand
+        _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
+        break
+    if _stdcxx is None and _sysroot:
       for _base in (
           _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
           _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
@@ -377,16 +381,7 @@ if logic_am.exists():
           _sup = _os.path.join(_base, 'libsupc++.a')
           break
     if _stdcxx is None:
-      for _cand in (
-          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-      ):
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
-          break
-    if _stdcxx is None:
-      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+      raise Exception('logic libstdc++.a not found (install gcc-9-multilib or sysroot-i386)')
     _gcc = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc.a')
     _gcc_eh = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc_eh.a')
     for flag in ('-static-libgcc',):
