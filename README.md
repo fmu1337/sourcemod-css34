@@ -53,22 +53,22 @@ GitHub Actions workflow `.github/workflows/build.yml` runs the Linux and Windows
 Release builds publish from **tags** only. Short tag format for this branch:
 
 ```text
-1.12.0.7239-mm1.12.0
+1.13.0.7394-mm1.12.0
 ```
 
 Push a matching tag on **this branch tip** (not `master`) to run `.github/workflows/release.yml`, which builds SM + MM for Linux and Windows and attaches the four packages to a GitHub Release.
 
 ```bash
-git tag 1.12.0.7239-mm1.12.0
-git push origin 1.12.0.7239-mm1.12.0
+git tag 1.13.0.7394-mm1.12.0
+git push origin 1.13.0.7394-mm1.12.0
 ```
 
 Other version lines (tags point at their own branch tips):
 
 - master / sm11: `1.11.0.6572-mm1.10.7` (already released)
-- sm13 PR branch: `1.13.0.7394-mm1.12.0`
+- sm12 PR branch: `1.12.0.7239-mm1.12.0`
 
-`.github/workflows/test-server.yml` builds **our** Metamod 1.12 + SourceMod 7239 packages and smoke-tests them on a real CS:S v34 dedicated server under Debian 11 / 12 / 13 / Latest, Rocky Linux 9, and the Ubuntu 22.04 host runner.
+`.github/workflows/test-server.yml` builds **our** Metamod 1.12 + SourceMod 7394 packages and smoke-tests them on a real CS:S v34 dedicated server under Debian 11 / 12 / 13 / Latest, Rocky Linux 9, and the Ubuntu 22.04 host runner.
 
 It applies the modern-OS buffer fix (`srcds_patch` + `valve.rc`), loads our Metamod + SourceMod, and asserts console markers. Details: [`testing/README.md`](testing/README.md), buffer-fix notes: [`testing/docs/bufferfix.md`](testing/docs/bufferfix.md).
 
