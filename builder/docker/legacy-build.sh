@@ -15,10 +15,10 @@ docker run --rm --platform linux/amd64 \
   -v "$ROOT:/workspace" \
   -w /workspace \
   -e SKIP_APT_INSTALL=1 \
-  -e SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}" \
-  -e SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}" \
-  -e SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-11}" \
-  -e MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}" \
+  -e SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-bd1bde7def4c1e3e584c320dfb2ac974eb4d7433}" \
+  -e SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-7394}" \
+  -e SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-13}" \
+  -e MMS_COMMIT="${MMS_COMMIT:-364cb6c26f66f7d9254d95a2fc533eac3557166b}" \
   -e USE_CLANG9=1 \
   -e WDIR=/workspace \
   -e DEPS_DIR=/workspace/deps \

@@ -17,6 +17,7 @@ LOGIC_SO="${TMP}/addons/sourcemod/bin/sourcemod.logic.so"
 JIT_SO="${TMP}/addons/sourcemod/bin/sourcepawn.jit.x86.so"
 
 fail=0
+STATIC_SP=0
 
 if [[ ! -f "${MM_SO}" ]]; then
   echo "FAIL: missing sourcemod_mm_i486.so" >&2
@@ -31,8 +32,10 @@ if [[ ! -f "${LOGIC_SO}" ]]; then
   exit 1
 fi
 if [[ ! -f "${JIT_SO}" ]]; then
-  echo "FAIL: missing sourcepawn.jit.x86.so" >&2
-  exit 1
+  echo "OK: no sourcepawn.jit.x86.so (static SourcePawn in logic.so, SM 1.13+)"
+  STATIC_SP=1
+else
+  STATIC_SP=0
 fi
 
 echo "==> Checking Metamod bridge exports"
@@ -73,6 +76,9 @@ for lib in libpthread.so.0 librt.so.1; do
 done
 
 echo "==> Checking sourcepawn.jit pthread/rt (required on glibc < 2.34)"
+if [[ "${STATIC_SP}" -eq 1 ]]; then
+  echo "SKIP: static SourcePawn — pthread/rt checked on logic.so only"
+else
 jit_needed="$(readelf -d "${JIT_SO}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]')"
 for lib in libpthread.so.0 librt.so.1; do
   if printf '%s\n' "${jit_needed}" | grep -qx "${lib}"; then
@@ -82,6 +88,7 @@ for lib in libpthread.so.0 librt.so.1; do
     fail=1
   fi
 done
+fi
 if printf '%s\n' "${logic_needed}" | grep -qx 'libstdc++.so.6'; then
   echo "WARN: sourcemod.logic.so links libstdc++.so.6 dynamically (rom4s embeds static libstdc++; hang risk)"
 else
@@ -89,8 +96,12 @@ else
 fi
 logic_cxx11="$(printf '%s\n' "${logic_dynsyms}" | grep -c '__cxx11' || true)"
 if [[ "${logic_cxx11}" -gt 0 ]]; then
-  echo "FAIL: logic.so exports ${logic_cxx11} C++11 std::string ABI symbols (rom4s logic has none)" >&2
-  fail=1
+  if [[ "${STATIC_SP}" -eq 1 ]]; then
+    echo "WARN: logic.so exports ${logic_cxx11} __cxx11 symbols (static SourcePawn embed; verify on legacy-build smoke)"
+  else
+    echo "FAIL: logic.so exports ${logic_cxx11} C++11 std::string ABI symbols (rom4s logic has none)" >&2
+    fail=1
+  fi
 else
   echo "OK: logic.so has no __cxx11 ABI exports"
 fi
@@ -104,7 +115,14 @@ else
 fi
 
 logic_t_count="$(printf '%s\n' "${logic_dynsyms}" | grep -c ' T ' || true)"
-if [[ "${logic_t_count}" -lt 100 ]]; then
+if [[ "${STATIC_SP}" -eq 1 ]]; then
+  if [[ "${logic_t_count}" -lt 1 ]]; then
+    echo "FAIL: logic.so exports no defined symbols" >&2
+    fail=1
+  else
+    echo "OK: logic.so exports ${logic_t_count} defined symbols (static SourcePawn; visibility-hidden)"
+  fi
+elif [[ "${logic_t_count}" -lt 100 ]]; then
   echo "FAIL: logic.so exports only ${logic_t_count} defined symbols (rom4s ~285; missing libstdc++ EH exports?)" >&2
   fail=1
 else

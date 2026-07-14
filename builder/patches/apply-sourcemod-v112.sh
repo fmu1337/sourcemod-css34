@@ -241,19 +241,53 @@ if sp.exists():
     else:
         print('==> BuildDynamicCoreLib pthread/rt already patched')
 
+    # css34: static libsourcepawn is linked into logic.so — must use ABI0.
+    if 'CSS34 ABI0 for static libsourcepawn' not in sp_text:
+        sp_text = sp_text.replace(
+            "    def SetupBinForArch(self, binary, builder):\n        if binary.compiler.like('gcc'):",
+            "    def SetupBinForArch(self, binary, builder):\n"
+            "        # CSS34 ABI0 for static libsourcepawn (embedded in logic.so)\n"
+            "        if '_GLIBCXX_USE_CXX11_ABI=0' not in binary.compiler.defines:\n"
+            "            binary.compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']\n"
+            "        if binary.compiler.like('gcc'):",
+            1,
+        )
+        sp.write_text(sp_text)
+        print('==> Patched sourcepawn SetupBinForArch for ABI0 static lib')
+        sp_text = sp.read_text()
+    else:
+        print('==> sourcepawn ABI0 static lib patch already present')
+
 # sourcemod.logic.so must match rom4s link profile (old libstdc++ ABI, pthread/rt
 # NEEDED, static embed). SM 1.12 uses `for cxx in builder.targets` - adapt the
 # g++-9 + SM_LOGIC_CXX_SYSROOT toolchain from the 1.11 apply-sourcemod.sh path.
 logic_am = sm / 'core/logic/AMBuilder'
 if logic_am.exists():
     lt = logic_am.read_text()
-    if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in lt:
+    pv_parts = (sm / 'product.version').read_text().strip().split('.')
+    sm_minor = int(pv_parts[1]) if len(pv_parts) > 1 else 11
+    if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in lt and 'SM_LOGIC_CXX_SYSROOT gcc-9 g++-9' not in lt:
         loop_old = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
-        # SM 1.12 uses C++17 APIs (std::get_time); keep gcc-4.9 sysroot for ABI
-        # and patch ParseTime to strptime (see below).
-        loop_new = """for cxx in builder.targets:
+        # SM 1.12: gcc-4.9 sysroot + strptime ParseTime shim.
+        # SM 1.13+: static SourcePawn headers need C++17 (<string_view>); use host
+        # g++-9 headers with ABI0 + static gcc-9 libstdc++.a at link time.
+        sysroot_inc = ""
+        if sm_minor < 13:
+            sysroot_inc = """
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and logic_cxx.target.arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
+      ]"""
+        logic_toolchain = "gcc-4.9 g++-9" if sm_minor < 13 else "gcc-9 g++-9"
+        loop_new = f"""for cxx in builder.targets:
   if cxx.target.platform == 'linux':
-    # css34: SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9 logic toolchain.
+    # css34: SM_LOGIC_CXX_SYSROOT {logic_toolchain} logic toolchain.
     import shutil as _shutil
     import os as _os
     logic_cxx = cxx.clone()
@@ -275,17 +309,7 @@ if logic_am.exists():
     ]
     for _attr in ('cflags', 'cxxflags'):
       _flags = getattr(logic_cxx, _attr)
-      setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    if _sysroot and logic_cxx.target.arch == 'x86':
-      logic_cxx.cxxflags += [
-        '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
-      ]
+      setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only]){sysroot_inc}
     for _flag in ('-lgcc_eh', '-static-libstdc++'):
       if _flag in logic_cxx.linkflags:
         logic_cxx.linkflags.remove(_flag)
@@ -305,7 +329,7 @@ if logic_am.exists():
             print('==> WARN: logic AMBuilder for-cxx loop not found (layout changed?)')
         else:
             lt = lt.replace(loop_old, loop_new, 1)
-            print('==> Patched logic AMBuilder to compile with g++-9 + gcc-4.9 sysroot')
+            print(f'==> Patched logic AMBuilder ({logic_toolchain})')
 
     # Defines: old ABI + no HL2 malloc hooks (rom4s logic profile).
     if '_GLIBCXX_USE_CXX11_ABI=0' not in lt or 'NO_HOOK_MALLOC' not in lt:
@@ -346,6 +370,9 @@ if logic_am.exists():
     # Linux link: static sysroot/gcc-9 libstdc++ + forced pthread/rt DT_NEEDED.
     if 'css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT' not in lt:
         linux_old_variants = [
+            """  if binary.compiler.target.platform == 'linux':
+    binary.compiler.postlink += ['-lpthread', '-lrt', '-lm']
+  elif binary.compiler.target.platform == 'mac':""",
             """  if binary.compiler.target.platform == 'linux':
     # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc
     binary.compiler.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']
@@ -407,6 +434,9 @@ if logic_am.exists():
       '-lc', '-lm',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]
+    # css34: hide static archive symbols from the dynamic export table (libsourcepawn_static)
+    if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
   elif binary.compiler.target.platform == 'mac':"""
         replaced = False
         for linux_old in linux_old_variants:
@@ -572,11 +602,15 @@ if gc.exists():
             print('==> Patched GameConfigs CacheGameBinaryInfo for css34 RTLD_NOLOAD')
 
 # ParseTime uses std::get_time (C++11 <iomanip>); gcc-4.9 sysroot headers lack it.
-# Replace with strptime so logic can keep the rom4s-compatible old libstdc++ ABI.
+# SM 1.13+ uses host g++-9 headers — keep upstream std::get_time.
 smn_core = sm / 'core/logic/smn_core.cpp'
 if smn_core.exists():
     sc = smn_core.read_text()
-    if 'css34: ParseTime via strptime' in sc:
+    pv_parts = (sm / 'product.version').read_text().strip().split('.')
+    sm_minor = int(pv_parts[1]) if len(pv_parts) > 1 else 11
+    if sm_minor >= 13:
+        print('==> ParseTime strptime shim skipped (SM 1.13+ uses g++-9 headers)')
+    elif 'css34: ParseTime via strptime' in sc:
         print('==> ParseTime strptime already patched')
     elif 'std::get_time' in sc:
         old_pt = """\t// https://stackoverflow.com/a/33542189
