@@ -14,7 +14,7 @@ if [ ! -f "$mms_dir/core/ISmmAPI.h" ]; then
 fi
 
 if [ ! -f "$mms_dir/hl2sdk-manifests/SdkHelpers.ambuild" ]; then
-  echo "hl2sdk-manifests missing in $mms_dir — run git submodule update --init --recursive" >&2
+  echo "hl2sdk-manifests missing in $mms_dir - run git submodule update --init --recursive" >&2
   exit 1
 fi
 

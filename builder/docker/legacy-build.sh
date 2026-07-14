@@ -17,6 +17,7 @@ docker run --rm --platform linux/amd64 \
   -e SKIP_APT_INSTALL=1 \
   -e SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}" \
   -e SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}" \
+  -e SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-11}" \
   -e MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}" \
   -e USE_CLANG9=1 \
   -e WDIR=/workspace \
@@ -86,9 +87,15 @@ if [[ -z "${ARTIFACT}" || ! -f "${ARTIFACT}" ]]; then
   exit 1
 fi
 
-chmod +x "$ROOT/builder/splice-reference-extras.sh" "$ROOT/builder/splice-reference-logic.sh"
-"$ROOT/builder/splice-reference-extras.sh" "${ARTIFACT}"
-"$ROOT/builder/splice-reference-logic.sh" "${ARTIFACT}"
+# SM 1.12 packs its own logic/extensions; splicing rom4s 1.11.0.6572 binaries
+# would mask regressions and fail the logic splice-identity ABI check.
+if [[ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]]; then
+  echo "==> Skipping rom4s logic/extras splice (SOURCEMOD_MAJOR=${SOURCEMOD_MAJOR})" >&2
+else
+  chmod +x "$ROOT/builder/splice-reference-extras.sh" "$ROOT/builder/splice-reference-logic.sh"
+  "$ROOT/builder/splice-reference-extras.sh" "${ARTIFACT}"
+  "$ROOT/builder/splice-reference-logic.sh" "${ARTIFACT}"
+fi
 
 echo "==> Legacy build complete: ${ARTIFACT}" >&2
 ls -la "${ARTIFACT}" >&2
