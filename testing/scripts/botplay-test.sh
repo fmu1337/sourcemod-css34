@@ -93,9 +93,10 @@ export CONSOLE_PROBE_TIMEOUT="${TIMEOUT_SECS}"
 export SMOKE_VERBOSE SMOKE_CONDEBUG
 rm -f "${ENGINE_CONSOLE_LOG}"
 
+record_rc=0
 /usr/bin/expect "${ROOT}/testing/scripts/botplay-record.exp" >"${LOG_FILE}" 2>&1 || {
-  rc=$?
-  echo "Botplay recording failed (exit=${rc}, see ${LOG_FILE})" >&2
+  record_rc=$?
+  echo "Botplay recording failed (exit=${record_rc}, see ${LOG_FILE})" >&2
   tail -n 120 "${LOG_FILE}" >&2 || true
   if [[ -f "${BOTPLAY_LOG}" ]]; then
     echo "----- botplay.log (last 120) -----" >&2
@@ -105,24 +106,22 @@ rm -f "${ENGINE_CONSOLE_LOG}"
     echo "----- cstrike/console.log (last 120) -----" >&2
     tail -n 120 "${ENGINE_CONSOLE_LOG}" >&2 || true
   fi
-  if [[ -f "${ENGINE_CONSOLE_LOG}" ]] && grep -Eiq 'Bad entity in IndexOfEdict|Segmentation fault|SIGSEGV' "${ENGINE_CONSOLE_LOG}"; then
-    echo "FAIL: engine crash detected in console.log" >&2
-  fi
-  exit "${rc}"
 }
 
 export RECORD_SECS MAP BOTPLAY_PROFILE MM_VERSION_EXPECT SM_VERSION_EXPECT
 chmod +x "${ROOT}/testing/scripts/parse-botplay-logs.sh"
-"${ROOT}/testing/scripts/parse-botplay-logs.sh" "${SERVER_DIR}" "${REPORT_JSON}" "${REPORT_TXT}"
+if [[ -f "${ENGINE_CONSOLE_LOG}" || -f "${BOTPLAY_LOG}" ]]; then
+  "${ROOT}/testing/scripts/parse-botplay-logs.sh" "${SERVER_DIR}" "${REPORT_JSON}" "${REPORT_TXT}" || true
+fi
 
-fail=0
+record_failed=0
 require_min() {
   local label="$1" actual="$2" min="$3"
   if [[ "${actual}" -ge "${min}" ]]; then
     echo "OK: ${label} (${actual} >= ${min})"
   else
     echo "FAIL: ${label} (${actual} < ${min})" >&2
-    fail=1
+    record_failed=1
   fi
 }
 
@@ -166,6 +165,16 @@ player_death="$(json_events_field "${REPORT_JSON}" player_death)"
 smac_running="$(json_nested_field "${REPORT_JSON}" smac running_plugins)"
 crash="$(json_nested_field "${REPORT_JSON}" stability crash)"
 
+round_start="${round_start:-0}"
+round_end="${round_end:-0}"
+player_death="${player_death:-0}"
+smac_running="${smac_running:-0}"
+
+if [[ "${record_rc}" -ne 0 ]]; then
+  echo "FAIL: botplay recording exited with status ${record_rc}" >&2
+  record_failed=1
+fi
+
 require_min "round_start events" "${round_start}" "${MIN_ROUND_START}"
 require_min "round_end events" "${round_end}" "${MIN_ROUND_END}"
 require_min "player_death events" "${player_death}" "${MIN_PLAYER_DEATH}"
@@ -173,7 +182,7 @@ require_min "SMAC running plugins" "${smac_running}" "${MIN_SMAC_RUNNING}"
 
 if [[ "${crash}" == "True" || "${crash}" == "true" ]]; then
   echo "FAIL: crash marker in botplay logs" >&2
-  fail=1
+  record_failed=1
 else
   echo "OK: no crash marker"
 fi
@@ -182,16 +191,16 @@ if grep -Fq "${MM_VERSION_EXPECT}" "${BOTPLAY_LOG}" 2>/dev/null; then
   echo "OK: Metamod version ${MM_VERSION_EXPECT}"
 else
   echo "FAIL: Metamod version ${MM_VERSION_EXPECT} not found in botplay log" >&2
-  fail=1
+  record_failed=1
 fi
 if grep -Fq "${SM_VERSION_EXPECT}" "${BOTPLAY_LOG}" 2>/dev/null; then
   echo "OK: SourceMod version ${SM_VERSION_EXPECT}"
 else
   echo "FAIL: SourceMod version ${SM_VERSION_EXPECT} not found in botplay log" >&2
-  fail=1
+  record_failed=1
 fi
 
-if [[ "${fail}" -ne 0 ]]; then
+if [[ "${record_failed}" -ne 0 ]]; then
   echo "Botplay test FAILED"
   exit 1
 fi

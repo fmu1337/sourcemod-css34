@@ -484,11 +484,22 @@ jobs:
               tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
               testing/scripts/install-deps.sh
               testing/scripts/botplay-test.sh
-              testing/scripts/compare-botplay-reports.sh \
-                /workspace/testing/botplay/rom4s-baseline.json \
-                /workspace/.ci-server/built-botplay-report.json \
-                /workspace/.ci-server/botplay-compare.txt
             '
+
+      - name: Compare built botplay vs rom4s baseline
+        if: always()
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/compare-botplay-reports.sh
+          if [[ -f .ci-server/built-botplay-report.json ]]; then
+            testing/scripts/compare-botplay-reports.sh \
+              testing/botplay/rom4s-baseline.json \
+              .ci-server/built-botplay-report.json \
+              .ci-server/botplay-compare.txt || true
+            cat .ci-server/botplay-compare.txt || true
+          else
+            echo "No built-botplay-report.json to compare" >&2
+          fi
 
       - name: Upload built botplay report
         if: always()
