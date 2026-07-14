@@ -1,0 +1,136 @@
+#!/usr/bin/expect -f
+# Boot srcds, spawn bots, record console output for RECORD_SECS, then quit.
+set timeout [expr {
+  [info exists env(RECORD_SECS)] && $env(RECORD_SECS) ne "" ? $env(RECORD_SECS) + 120 : 720
+}]
+
+if {![info exists env(BOTPLAY_LOG)]} {
+    puts stderr "BOTPLAY_LOG is required"
+    exit 1
+}
+log_file -noappend $env(BOTPLAY_LOG)
+
+if {[info exists env(SERVER_DIR)] && $env(SERVER_DIR) ne ""} {
+    set server_dir $env(SERVER_DIR)
+} else {
+    set server_dir "/workspace/.ci-server"
+}
+if {[info exists env(MAP)] && $env(MAP) ne ""} {
+    set map $env(MAP)
+} else {
+    set map "de_dust2"
+}
+if {[info exists env(PORT)] && $env(PORT) ne ""} {
+    set port $env(PORT)
+} else {
+    set port "27015"
+}
+if {[info exists env(SRCDS_BINARY)] && $env(SRCDS_BINARY) ne ""} {
+    set binary $env(SRCDS_BINARY)
+} else {
+    set binary "./srcds_i686"
+}
+if {[info exists env(RECORD_SECS)] && $env(RECORD_SECS) ne ""} {
+    set record_secs $env(RECORD_SECS)
+} else {
+    set record_secs 600
+}
+
+cd $server_dir
+set env(LD_LIBRARY_PATH) ".:bin:$env(LD_LIBRARY_PATH)"
+
+if {[info exists env(SMOKE_VERBOSE)] && $env(SMOKE_VERBOSE) ne "" && $env(SMOKE_VERBOSE) ne "0"} {
+    log_user 1
+} else {
+    log_user 0
+}
+
+set spawn_args [list $binary -game cstrike -console -nohltv \
+    -nomaster -localcser -tickrate 66 \
+    -ip 127.0.0.1 -port $port +ip 127.0.0.1 +sv_lan 1 +maxplayers 10 +map $map]
+if {[info exists env(SMOKE_CONDEBUG)] && $env(SMOKE_CONDEBUG) ne "" && $env(SMOKE_CONDEBUG) ne "0"} {
+    lappend spawn_args -condebug
+}
+if {[info exists env(SMOKE_VERBOSE)] && $env(SMOKE_VERBOSE) ne "" && $env(SMOKE_VERBOSE) ne "0"} {
+    lappend spawn_args +log on +sv_logfile 1
+}
+eval spawn $spawn_args
+
+set map_pat "Mapchange to ${map}"
+expect {
+    -gl $map_pat {
+        puts stderr "OK: matched map load ($map_pat)"
+    }
+    eof {
+        puts stderr "srcds exited before map $map loaded"
+        exit 1
+    }
+    timeout {
+        puts stderr "timeout waiting for map $map"
+        exit 1
+    }
+}
+
+# Let MM/SM finish loading before botplay cfg.
+sleep 5
+
+send "status\r"
+expect {
+    -re {hostname|# [0-9]+} {}
+    eof { puts stderr "srcds exited during status"; exit 2 }
+    timeout { puts stderr "timeout waiting for status"; exit 2 }
+}
+
+send "meta version\r"
+expect {
+    -re {Metamod|metamod|MM:S} {}
+    eof { puts stderr "srcds exited during meta version"; exit 3 }
+    timeout { puts stderr "timeout waiting for meta version"; exit 3 }
+}
+
+send "sm version\r"
+expect {
+    -re {SourceMod Version|SourceMod} {}
+    eof { puts stderr "srcds exited during sm version"; exit 4 }
+    timeout { puts stderr "timeout waiting for sm version"; exit 4 }
+}
+
+send "sm exts list\r"
+expect {
+    -re {\[SM\] Displaying [0-9]+ extensions:|\[SM\] No extensions are loaded\.} {}
+    eof { puts stderr "srcds exited during sm exts list"; exit 5 }
+    timeout { puts stderr "timeout waiting for sm exts list"; exit 5 }
+}
+
+sleep 1
+send "sm plugins list\r"
+expect {
+    -re {\[SM\] Listing [0-9]+ plugins:} {}
+    eof { puts stderr "srcds exited during sm plugins list"; exit 6 }
+    timeout { puts stderr "timeout waiting for sm plugins list"; exit 6 }
+}
+
+sleep 1
+
+# Apply botplay settings (cfg is copied into cstrike/cfg by botplay-test.sh).
+send "exec botplay-server.cfg\r"
+sleep 3
+
+puts stderr "Recording botplay session for ${record_secs}s..."
+sleep $record_secs
+
+send "status\r"
+expect {
+    -re {hostname|# [0-9]+} {}
+    eof {}
+    timeout {}
+}
+
+send "quit\r"
+expect {
+    eof {}
+    timeout {}
+}
+
+puts stderr "OK: botplay recording finished (${record_secs}s)"
+exit 0

@@ -12,6 +12,10 @@ on:
         description: "Apply bruno_args srcds_patch (1/0)"
         required: false
         default: "1"
+      record_secs:
+        description: "Botplay recording length in seconds (rom4s job)"
+        required: false
+        default: "600"
 
 concurrency:
   group: test-server-${{ github.workflow }}-${{ github.ref }}
@@ -357,3 +361,62 @@ jobs:
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
           retention-days: 7
+
+  # Baseline capture: rom4s MM 1.10.6 + SM 6572 + SMAC + 4 bots for ~10 minutes.
+  # Parses round_start / round_end / player_death from engine console.log.
+  test-rom4s-botplay:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    needs: [prepare-server]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Rom4s botplay recording (debian:11)
+        env:
+          IMAGE: debian:11
+          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
+          MM_VERSION_EXPECT: "1.10.6"
+          SM_VERSION_EXPECT: "1.11.0.6572"
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e RECORD_SECS \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-test.sh
+            '
+
+      - name: Upload botplay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rom4s-botplay-report
+          path: |
+            .ci-server/botplay-report.json
+            .ci-server/botplay-report.txt
+            .ci-server/botplay.log
+            .ci-server/botplay-run.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 14

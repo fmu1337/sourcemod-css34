@@ -43,6 +43,25 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 - minimal `cstrike/cfg/valve.rc`
 - **srcds_patch** (bruno_args) — verified memcpy→memmove rewrite
 
+## Botplay baseline (rom4s + SMAC)
+
+`test-rom4s-botplay` boots the css34 server with **rom4s** Metamod 1.10.6 + SourceMod 6572, compiles [smac_v34](https://github.com/fmu1337/smac_v34), spawns 4 bots (`botplay-server.cfg`), records **600s** by default, then parses `cstrike/console.log` for `round_start`, `round_end`, and `player_death`.
+
+Local short run:
+
+```bash
+chmod +x testing/scripts/*.sh
+SERVER_DIR=$PWD/.ci-server CACHE_DIR=$PWD/.ci-cache RECORD_SECS=120 \
+  testing/scripts/fetch-server.sh
+APPLY_VALVE_RC=1 APPLY_SRCDS_PATCH=1 testing/scripts/apply-valve-rc-fix.sh
+APPLY_SRCDS_PATCH=1 testing/scripts/apply-srcds-patch.sh
+KEEP_MAP=de_dust2 testing/scripts/trim-server-maps.sh
+RECORD_SECS=120 testing/scripts/botplay-test.sh
+cat .ci-server/botplay-report.txt
+```
+
+Artifacts: `botplay-report.json`, `botplay-report.txt`, `botplay.log`, `cstrike/console.log`.
+
 ## Local run
 
 ```bash
