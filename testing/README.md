@@ -36,6 +36,10 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 6. SourceMod session log (`addons/sourcemod/logs/L*.log`) — no error markers
 7. No segfault; not flooded with `Unknown command` (buffer bug signature)
 
+## `srcds_run` / engine launch flags
+
+String-audited notes for CSS v34 (`-dev`, `-debug`, `-norestart`, `-notrap`, `-tickrate`, why hangs ignore `-norestart`, absence of `-dumplongticks` / `-dev2`): [docs/srcds-params.md](docs/srcds-params.md). Re-scrape stock binaries with `testing/scripts/extract-srcds-params.sh`.
+
 ## Buffer / modern-OS fixes
 
 See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
