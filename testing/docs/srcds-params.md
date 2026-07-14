@@ -202,3 +202,91 @@ Not present in `engine_i686.so` strings; changing tickrate requires game DLL tha
 ## CI note
 
 Smoke tests intentionally bypass `srcds_run` (`console-probe.exp` spawns `./srcds_i686` directly) so wrapper restart/gdb logic cannot mask hangs or double-start under timeout.
+
+---
+
+## Case study: MyArena-style `srcds_i686` cmdline
+
+Observed host launch (direct binary, **not** `srcds_run`):
+
+```bash
+./srcds_i686 -game cstrike -ip 0.0.0.0 -port 27015 +map de_dust2_unlimited \
+  -maxplayers 62 -tickrate 66 -console -condebug -norestart -usercon \
+  -reader 512 -insecure +sv_pure 0 +tv_port 27020 +mp_dynamicpricing 0 \
+  -localcser -nomaster -debug -pcmdscpmrc -sfwb -wsb 2 -vcforce -sesb \
+  -pidfile ../game.pid
+```
+
+Corpus for this pass (in addition to stock):
+
+| Layer | Source | Same flags as stock? |
+|---|---|---|
+| eSTEAM `engine` / `dedicated` | `srcds_css34_l_eSTEAMATiON.zip` | Yes for Valve flags; auth libs add `-debug_steamapi` only |
+| `srcds_patch` (`engine`/`server`/`steamclient`) | bruno_args BufferFix rar | **273** byte diffs in `engine_i686.so`, **zero** new cmdline strings (memcpy→memmove only) |
+| myarena MM+SM 6522 zip | bitbucket `danyas_dl` bundle | No hits for proprietary tokens below |
+
+### Token-by-token
+
+| Token | Layer that owns it | Effect on **this** launch path (`./srcds_i686`) |
+|---|---|---|
+| `-game cstrike` | dedicated / engine | Required mod dir |
+| `-ip 0.0.0.0` | engine (`NET_Init`) | Bind all interfaces |
+| `-port 27015` | engine (`NET_Init`) | Game port |
+| `+map …` | engine (`+` → Cbuf) | Start map |
+| `-maxplayers 62` | engine | Slot cap at launch |
+| `-tickrate 66` | **server** `GetTickInterval` | interval = `1/66` (v34 still honors this) |
+| `-console` | **nowhere** in Linux ELFs | No-op (Windows `srcds.exe` GUI switch; not a NUL-terminated string in dedicated/engine/server) |
+| `-condebug` | **dedicated** `CTextConsoleUnix::Init` | Write `cstrike/console.log` |
+| `-norestart` | **`srcds_run` only** | **No-op** — binary launch ignores it (and would not help hangs anyway) |
+| `-usercon` | engine (`NET_Config`) | Present / checked; enables remote console path on builds that use it |
+| `-reader 512` | **not found** in any public layer | See proprietary block below |
+| `-insecure` | engine (`CSteam3::Init`) | Skip VAC |
+| `+sv_pure 0` | engine convar `sv_pure` | Pure mode off |
+| `+tv_port 27020` | engine convar `tv_port` | SourceTV port (still need `tv_enable 1` separately if TV is used) |
+| `+mp_dynamicpricing 0` | **server** convar | Avoids “Incorrect price blob / couldn't download price list” spam when left at 1 |
+| `-localcser` | engine | Local CSER / stats path |
+| `-nomaster` | engine | No Valve master advertise |
+| `-debug` | **`srcds_run` only** (engine has no `-debug`) | **No-op** on direct `srcds_i686`. Hits like `-debug_steamapi` / `suid-debug` in steam libs are unrelated substrings |
+| `-pcmdscpmrc` | **not found** | Proprietary — name echoes MyArena **ProcessCmds** (`GoDtm666`), but the public SM bundle has no such argv string |
+| `-sfwb` | **not found** | Proprietary / no-op on stock |
+| `-wsb 2` | **not found** (byte `wsb` in eSTEAM SCI is unrelated garbage) | Proprietary / no-op on stock |
+| `-vcforce` | **not found** | Proprietary / no-op on stock |
+| `-sesb` | **not found** | Proprietary / no-op on stock |
+| `-pidfile ../game.pid` | engine (`Sys_Init`) | Writes PID for the **panel** supervisor (this is the engine-side pidfile, unlike the unused wrapper path) |
+
+### Proprietary cluster (`-reader`, `-pcmdscpmrc`, `-sfwb`, `-wsb`, `-vcforce`, `-sesb`)
+
+Absent from every public binary we scanned:
+
+- stock `srcds_*` / `dedicated` / `engine` / `server` / `tier0` / `vstdlib` / `steamclient`
+- eSTEAM overlay (`libeST_*`, `valve_api`, patched steam_api)
+- BufferFix `srcds_patch`
+- myarena SourceMod/Metamod package (all `.so`)
+
+So on a **stock / rom4s / our CI tree**, those six tokens are ignored argv noise. On MyArena game nodes they may still do something if the host injects:
+
+- a **custom** `srcds_i686` / `engine_*.so` not published in the community zips, or
+- an `LD_PRELOAD` / panel helper that wraps `main`/`CommandLine`, or
+- a license/feature cookie consumed only by private ProcessCmds/host tooling
+
+Do **not** treat them as documented Valve flags. If reproducing a MyArena bug outside their panel, drop them first and retest.
+
+### What is actually useful to copy from that line
+
+Keep for vanilla v34:
+
+```text
+-game cstrike -ip 0.0.0.0 -port 27015 -maxplayers N -tickrate 66
+-condebug -usercon -insecure -localcser -nomaster -pidfile <path>
++map <map> +sv_pure 0 +tv_port <port> +mp_dynamicpricing 0
+```
+
+Drop or replace:
+
+| Drop | Why |
+|---|---|
+| `-console` | No Linux consumer |
+| `-norestart` / `-debug` | Only `srcds_run`; meaningless on `srcds_i686` |
+| `-reader` / `-pcmdscpmrc` / `-sfwb` / `-wsb` / `-vcforce` / `-sesb` | Not in public game tree |
+
+Related panel plugins sometimes seen next to such launches (not cmdline flags): Metamod `addons/daf/bin/dosattackfix`, `nativetools`, SM extension **ProcessCmds** (`processcmds.ext`) by GoDtm666 / MyArena — those load via `addons/`, not via argv.
