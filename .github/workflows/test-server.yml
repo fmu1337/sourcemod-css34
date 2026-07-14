@@ -516,3 +516,68 @@ jobs:
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
           retention-days: 14
+
+  # Short botplay matrix to isolate built-package + SMAC crash.
+  test-botplay-bisect:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    needs: [build-linux, prepare-server]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SourceMod package
+        uses: actions/download-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download Metamod package
+        uses: actions/download-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
+          path: packages
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Botplay bisect matrix (debian:11, 90s/case)
+        env:
+          IMAGE: debian:11
+          RECORD_SECS: "90"
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e RECORD_SECS \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e BISECT_OUT=/workspace/.ci-bisect/results.tsv \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server-seed /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server-seed
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-bisect.sh
+              cat /workspace/.ci-bisect/results.tsv
+            '
+
+      - name: Upload bisect results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: botplay-bisect-results
+          path: |
+            .ci-bisect/results.tsv
+            .ci-bisect/*/botplay-report.txt
+            .ci-bisect/*/cstrike/console.log
+          if-no-files-found: ignore
+          retention-days: 14

@@ -106,6 +106,7 @@ sleep 1
 send "sm plugins list\r"
 expect {
     -re {\[SM\] Listing [0-9]+ plugins:} {}
+    -re {\[SM\] No plugins loaded} {}
     eof { puts stderr "srcds exited during sm plugins list"; exit 6 }
     timeout { puts stderr "timeout waiting for sm plugins list"; exit 6 }
 }

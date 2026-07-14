@@ -79,6 +79,14 @@ cat .ci-server/botplay-report.txt
 
 Artifacts: `botplay-report.json`, `built-botplay-report.json`, `botplay-compare.txt`, `cstrike/console.log`.
 
+### Botplay bisect (built crash)
+
+`test-botplay-bisect` runs short (90s) cases via `testing/scripts/botplay-bisect.sh` on `cursor/**` branches.
+
+**Root cause (2026-07):** built SM binaries are fine on CS:S v34; the crash (`Bad entity in IndexOfEdict()`) comes from **upstream `sdkhooks.games` gamedata** shipped in the package (wrong vtable offsets for ep1/CSS). Overlaying rom4s `gamedata/sdkhooks.games` onto a built install fixes botplay; `prepare-package.sh` now copies css34-specific sdkhooks gamedata from `builder/assets/gamedata/sdkhooks.games/`.
+
+Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary; `rom4s` gamedata + built binaries also passes.
+
 ## Local run
 
 ```bash

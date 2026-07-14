@@ -73,6 +73,11 @@ if [ -d "$GAMEDATA_ROOT" ]; then
     cp -f "$BUILDER_DIR/assets/gamedata/sdktools.games/engine.ep1.txt" \
       "$GAMEDATA_ROOT/sdktools.games/engine.ep1.txt"
   fi
+  if [ -d "$BUILDER_DIR/assets/gamedata/sdkhooks.games" ]; then
+    mkdir -p "$GAMEDATA_ROOT/sdkhooks.games"
+    cp -f "$BUILDER_DIR/assets/gamedata/sdkhooks.games/"*.txt \
+      "$GAMEDATA_ROOT/sdkhooks.games/"
+  fi
 fi
 
 echo "==> Patching core.cfg for CS:S v34 release layout"

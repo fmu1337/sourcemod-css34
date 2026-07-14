@@ -85,7 +85,19 @@ mkdir -p "${SERVER_DIR}/cstrike/cfg"
 cp -f "${ROOT}/testing/cfg/botplay-server.cfg" "${SERVER_DIR}/cstrike/cfg/botplay-server.cfg"
 
 export SERVER_DIR BOTPLAY_PROFILE MM_VERSION_EXPECT SM_VERSION_EXPECT
-"${ROOT}/testing/scripts/install-smac.sh"
+if [[ "${INSTALL_SMAC:-1}" == "1" ]]; then
+  "${ROOT}/testing/scripts/install-smac.sh"
+  if [[ "${SMAC_SET:-all}" != "all" || "${DISABLE_STOCK_PLUGINS:-0}" == "1" ]]; then
+    "${ROOT}/testing/scripts/prepare-botplay-plugins.sh"
+  fi
+elif [[ "${DISABLE_STOCK_PLUGINS:-0}" == "1" ]]; then
+  SM_DISABLED="${SERVER_DIR}/cstrike/addons/sourcemod/plugins-disabled"
+  SM_PLUGINS="${SERVER_DIR}/cstrike/addons/sourcemod/plugins"
+  mkdir -p "${SM_DISABLED}"
+  shopt -s nullglob
+  for smx in "${SM_PLUGINS}"/*.smx; do mv -f "${smx}" "${SM_DISABLED}/"; done
+  shopt -u nullglob
+fi
 
 echo "Starting ${BOTPLAY_PROFILE} botplay recording (binary=${SRCDS_BINARY}, map=${MAP}, record=${RECORD_SECS}s)"
 export SERVER_DIR MAP PORT SRCDS_BINARY BOTPLAY_LOG RECORD_SECS
