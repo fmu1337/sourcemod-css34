@@ -158,6 +158,51 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 - Отдельные `apply-api-compat.sh` / `apply-toolchain.sh` как постоянный «слой ≥6800» в master.
 - При апгрейде — править текущий `apply-sourcemod.sh` (и соседние патчи) **in place** на ветке апгрейда.
 
+## SM 1.13.7394 — **заблокирован** до рабочего 1.12
+
+**Статус: не начинаем**, пока не зелёный [PR #23](https://github.com/fmu1337/sourcemod-css34/pull/23) (SM **1.12.0.7239** + MM 1.12 на css ep1).
+
+1.12 переносится в отдельной ветке (`cursor/upgrade-sm-1.12-7239-5b81`). После merge #23 и зелёного smoke — возвращаемся к оценке 1.13.
+
+### Испробованный pin (для справки, не для сборки сейчас)
+
+| | |
+|--|--|
+| Rev | **7394** |
+| Commit | `bd1bde7def4c1e3e584c320dfb2ac974eb4d7433` |
+| Tag | `1.13.0.7394` |
+| Статус | **BLOCKED** — ждём 1.12 |
+
+### Почему 1.13 нельзя брать до 1.12
+
+1.12 — обязательная ступенька: первый переход на **AMBuild 2.2**, **hl2sdk-manifests**, static SourcePawn, MM 1.12. Без рабочего 1.12 на v34 прыжок на 1.13 = двойной репорт build system.
+
+### Критические блокеры 1.13 для css ep1 (когда вернёмся)
+
+| Блокер | Суть | Куда смотреть |
+|--------|------|---------------|
+| Нет manifest `1.ep1` | Только `episode1` (2.ep1) и `css` (SE_CSS=6) | `hl2sdk-manifests/manifests/`, custom `ep1.json` |
+| `SE_CSS` vs `SE_EPISODEONE` | css manifest тянет OB-ассумпции → краш engine ext на v34 MM | `apply-sourcemod.sh` (ep1_marker, `SM_CSS34_GAMEFIX_1_EP1`) |
+| cstrike ext | upstream собирает только `css`/`csgo`, не ep1 | `extensions/cstrike/AMBuilder` |
+| Static SourcePawn (#2459) | нет `sourcepawn.jit.x86.so`; VM в `logic.so` | `core/logic/AMBuilder`, linker/splice патчи |
+| MM 1.10 vs 1.12 | upstream pin MM 1.12; production — MM 1.10.7 | `apply-mmsource-css34.sh`, MM matrix |
+| Gamedata cstrike | upstream offsets под современный CSS, **не v34** | `builder/assets/gamedata/sm-cstrike.games/` |
+
+**Нельзя** слепо мержить upstream `game.css.txt` — linux offsets расходятся (напр. CTTeamScore 27 vs наш 23).
+
+### Полезное из 1.13 (тащить после порта, не раньше)
+
+- HookConVarChange stale pointer (`a327a80fc`), forward re-entrancy, SDKCall int64
+- KeyValues.Merge, AutoExecConfig, SP format fixes (`%li`, `%lu`, …)
+- GeoIP / MySQL 5.7.44 / SQLite 3.47 — packaging
+
+### Чек-лист «разблокировать 1.13»
+
+1. [ ] [PR #23](https://github.com/fmu1337/sourcemod-css34/pull/23) merged, smoke green на v34
+2. [ ] Документирован pin 1.12 в master (commit, `SOURCEMOD_GIT_REV`, MM branch)
+3. [ ] `apply-sourcemod.sh` (или преемник) стабильно собирает 1.12 ep1
+4. [ ] Только тогда — ветка `cursor/upgrade-sourcemod-1.13-089b` от актуального master
+
 ## Сравнение пакетов MM/SM и myarena (из PR #17)
 
 [PR #17](https://github.com/fmu1337/sourcemod-css34/pull/17) добавил tooling для built Metamod + binary compare + smoke matrix vs rom4s/myarena.
@@ -218,3 +263,5 @@ sudo bash testing/scripts/run-built-mm-matrix.sh
 | `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
 | Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |
 | Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Эксперимент major-апгрейда поверх модели B |
+| [PR #23](https://github.com/fmu1337/sourcemod-css34/pull/23) (1.12.7239) | **Активный** апгрейд 1.12; блокирует любую работу над 1.13 |
+| SM 1.13.7394 | **BLOCKED** — см. секцию выше; pin `bd1bde7de` только для справки |
