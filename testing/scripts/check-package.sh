@@ -114,6 +114,15 @@ else
   echo "OK: logic.so has no UND _ZdlPvj/_ZdaPvj sized-delete imports"
 fi
 
+logic_thread_und="$(readelf -Ws "${LOGIC_SO}" 2>/dev/null | awk '$7=="UND" && $8 ~ /^_ZNSt6thread/' || true)"
+if [[ -n "${logic_thread_und}" ]]; then
+  echo "FAIL: logic.so has unresolved libstdc++ std::thread symbols (static SP link order)" >&2
+  printf '%s\n' "${logic_thread_und}" | head -5 | sed 's/^/        /' >&2
+  fail=1
+else
+  echo "OK: logic.so has no UND std::thread symbols"
+fi
+
 logic_t_count="$(printf '%s\n' "${logic_dynsyms}" | grep -c ' T ' || true)"
 if [[ "${STATIC_SP}" -eq 1 ]]; then
   if [[ "${logic_t_count}" -lt 1 ]]; then

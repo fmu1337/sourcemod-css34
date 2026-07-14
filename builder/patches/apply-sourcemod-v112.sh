@@ -422,6 +422,13 @@ if logic_am.exists():
     for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
+    arch = binary.compiler.target.arch
+    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
+    binary.compiler.linkflags += [
+      SP.static_libsp[arch],
+      SP.libamtl[arch],
+      SP.zlib[arch],
+    ]
     _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
     if _sup and _os.path.isfile(_sup):
       _static.append(_sup)
@@ -450,13 +457,76 @@ if logic_am.exists():
     else:
         print('==> logic AMBuilder static libstdc++ already patched')
 
+    # SM 1.13+: static SourcePawn was appended after libstdc++.a; reorder so std::thread resolves.
+    if 'css34: static SP before libstdc++ for std::thread' not in lt:
+        sp_before_old = """    for flag in ('-static-libgcc',):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
+    if _sup and _os.path.isfile(_sup):
+      _static.append(_sup)
+    if _os.path.isfile(_gcc_eh):"""
+        sp_before_new = """    arch = binary.compiler.target.arch
+    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
+    binary.compiler.linkflags += [
+      SP.static_libsp[arch],
+      SP.libamtl[arch],
+      SP.zlib[arch],
+    ]
+    for flag in ('-static-libgcc',):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
+    if _sup and _os.path.isfile(_sup):
+      _static.append(_sup)
+    if _os.path.isfile(_gcc_eh):"""
+        sp_before_old_wa = """    for flag in ('-static-libgcc',):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _static = ['-nodefaultlibs', '-Wl,-Bstatic', '-Wl,--whole-archive', _stdcxx]
+    if _sup and _os.path.isfile(_sup):
+      _static.append(_sup)
+    _static.append('-Wl,-no-whole-archive')  # css34: static SP needs full libstdc++ (std::thread)
+    if _os.path.isfile(_gcc_eh):"""
+        if sp_before_old_wa in lt:
+            lt = lt.replace(sp_before_old_wa, sp_before_new, 1)
+            print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
+        elif sp_before_old in lt:
+            lt = lt.replace(sp_before_old, sp_before_new, 1)
+            print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
+        sp_tail_old = """  arch = binary.compiler.target.arch
+  binary.compiler.linkflags += [
+    SP.static_libsp[arch],
+    SP.libamtl[arch],
+    SP.zlib[arch],
+  ]
+  if binary.compiler.target.platform == 'linux':"""
+        sp_tail_new = """  arch = binary.compiler.target.arch
+  if binary.compiler.target.platform != 'linux':
+    binary.compiler.linkflags += [
+      SP.static_libsp[arch],
+      SP.libamtl[arch],
+      SP.zlib[arch],
+    ]
+  if binary.compiler.target.platform == 'linux':"""
+        if sp_tail_old in lt:
+            lt = lt.replace(sp_tail_old, sp_tail_new, 1)
+            print('==> logic AMBuilder: skip duplicate static SP on linux')
+
     if 'css34: logic postlink pthread after static SP' not in lt:
-        sp_libs_anchor = """  binary.compiler.linkflags += [
+        sp_libs_anchor = """  arch = binary.compiler.target.arch
+  binary.compiler.linkflags += [
     SP.static_libsp[arch],
     SP.libamtl[arch],
     SP.zlib[arch],
   ]"""
-        sp_libs_new = sp_libs_anchor + """
+        sp_libs_new = """  arch = binary.compiler.target.arch
+  if binary.compiler.target.platform != 'linux':
+    binary.compiler.linkflags += [
+      SP.static_libsp[arch],
+      SP.libamtl[arch],
+      SP.zlib[arch],
+    ]
   if binary.compiler.target.platform == 'linux':
     # css34: logic postlink pthread after static SP archives (DT_NEEDED on glibc < 2.34)
     for flag in list(binary.compiler.linkflags):
@@ -466,7 +536,31 @@ if logic_am.exists():
       if flag not in binary.compiler.postlink:
         binary.compiler.postlink += [flag]
 """
-        if sp_libs_anchor not in lt:
+        sp_libs_anchor_linux = """  arch = binary.compiler.target.arch
+  if binary.compiler.target.platform != 'linux':
+    binary.compiler.linkflags += [
+      SP.static_libsp[arch],
+      SP.libamtl[arch],
+      SP.zlib[arch],
+    ]
+  if binary.compiler.target.platform == 'linux':"""
+        if sp_libs_anchor_linux in lt:
+            if 'binary.compiler.postlink += [flag]' not in lt:
+                lt = lt.replace(
+                    sp_libs_anchor_linux,
+                    sp_libs_anchor_linux + """
+    # css34: logic postlink pthread after static SP archives (DT_NEEDED on glibc < 2.34)
+    for flag in list(binary.compiler.linkflags):
+      if flag in ('-lpthread', '-lrt', '-Wl,--no-as-needed'):
+        binary.compiler.linkflags.remove(flag)
+    for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
+      if flag not in binary.compiler.postlink:
+        binary.compiler.postlink += [flag]
+""",
+                    1,
+                )
+                print('==> Patched logic AMBuilder postlink pthread after static SP')
+        elif sp_libs_anchor not in lt:
             print('==> WARN: logic AMBuilder SP static libs anchor not found')
         else:
             lt = lt.replace(sp_libs_anchor, sp_libs_new, 1)
