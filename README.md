@@ -2,6 +2,8 @@
 
 Patched [SourceMod](https://www.sourcemod.net/) builds for **Counter-Strike: Source v34** (non-Steam / legacy builds).
 
+How we patch and upgrade SourceMod versions (one pin at a time vs layered patches) is documented in [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md).
+
 The repository tracks upstream SourceMod as a git submodule and produces packages matching the original [v1.11.0.6572 release](https://github.com/rom4s/sourcemod-css34/releases/tag/v1.11.0.6572) layout:
 
 - `sourcemod-1.11.0-git6572-css34-linux.tar.gz`
