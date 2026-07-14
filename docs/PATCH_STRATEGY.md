@@ -214,6 +214,7 @@ sudo bash testing/scripts/run-built-mm-matrix.sh
 | [PR #10](https://github.com/fmu1337/sourcemod-css34/pull/10) | Dual-track 6572/6970 отвергнут; грабли ≥6800 сохранены выше |
 | [PR #15](https://github.com/fmu1337/sourcemod-css34/pull/15) | Mid 6588 отвергнут как merge; pin/ancestry/headers сохранены в секции «Mid-шаг 6588» |
 | [PR #17](https://github.com/fmu1337/sourcemod-css34/pull/17) | Tooling landed via #19; myarena/MM compatibility notes выше |
+| [PR #4](https://github.com/fmu1337/sourcemod-css34/pull/4), [PR #9](https://github.com/fmu1337/sourcemod-css34/pull/9) | Byte-identical vs rom4s — **не преследуем**; вердикт в [BYTE_MATCH.md](BYTE_MATCH.md) |
 | `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
 | Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |
 | Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Эксперимент major-апгрейда поверх модели B |
