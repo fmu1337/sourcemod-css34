@@ -48,8 +48,24 @@ Acquire::AllowDowngradeToInsecureRepositories "true";
 EOF
       fi
     fi
-    apt-get update -qq
-    apt-get install -y -qq \
+    apt_retry() {
+      local attempt=1 max=5 delay=4
+      while true; do
+        if "$@"; then
+          return 0
+        fi
+        if (( attempt >= max )); then
+          echo "==> apt command failed after ${max} attempts: $*" >&2
+          return 1
+        fi
+        echo "==> apt failed (attempt ${attempt}/${max}), retrying in ${delay}s..." >&2
+        sleep "${delay}"
+        delay=$((delay * 2))
+        attempt=$((attempt + 1))
+      done
+    }
+    apt_retry apt-get update -qq
+    apt_retry apt-get install -y -qq \
       curl git python3 python3-pip \
       lib32stdc++6 lib32z1-dev libc6-dev-i386 linux-libc-dev \
       binutils ca-certificates \
