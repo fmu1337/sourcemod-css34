@@ -17,8 +17,9 @@ run_case() {
   shift
   echo "===== CASE ${name} ====="
   line="$(
-    CASE_NAME="${name}" RECORD_SECS="${RECORD_SECS}" SM_PACKAGE="${SM_PACKAGE}" MM_PACKAGE="${MM_PACKAGE}" \
-      "$@" "${ROOT}/testing/scripts/botplay-bisect-case.sh"
+    env CASE_NAME="${name}" RECORD_SECS="${RECORD_SECS}" SM_PACKAGE="${SM_PACKAGE}" MM_PACKAGE="${MM_PACKAGE}" \
+      "$@" \
+      "${ROOT}/testing/scripts/botplay-bisect-case.sh"
   )"
   echo "${line}"
   IFS='|' read -r c result _rs rs _re re _kd kd _crash crash _rc rc <<<"${line}"
