@@ -208,4 +208,38 @@ else:
     print('==> Patched provider_ep2.cpp to include tier0/mem.h for episode1')
 PYMEM
 
+# css34: SdkHelpers puts dynamic vstdlib/tier0 BEFORE static tier1_i486.a (postlink).
+# That imports ConVar from vstdlib and hangs srcds during GameDLLInit (same fix as SM core).
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYTIER1'
+from pathlib import Path
+import os
+
+path = Path(os.environ['MMS_DIR']) / 'AMBuildScript'
+text = path.read_text()
+if 'css34: episode1 tier1 before vstdlib' in text:
+    print('==> MM HL2Library tier1-before-vstdlib already patched')
+else:
+    needle = "    SdkHelpers.configureCxx(context, binary, sdk)\n\n    return binary"
+    insert = """    SdkHelpers.configureCxx(context, binary, sdk)
+
+    # css34: episode1 tier1 before vstdlib so ConVar is embedded, not imported
+    if sdk.get('name') == 'episode1' and cxx.target.platform == 'linux':
+      import os as _os
+      tier1 = _os.path.join(sdk['path'], 'linux_sdk', 'tier1_i486.a')
+      if _os.path.isfile(tier1):
+        # Drop copy that configureCxx placed in postlink; put it first in linkflags.
+        cxx.postlink = [x for x in cxx.postlink if x != tier1]
+        if tier1 not in cxx.linkflags:
+          cxx.linkflags[0:0] = [tier1]
+      for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):
+        if flag not in cxx.linkflags:
+          cxx.linkflags += [flag]
+
+    return binary"""
+    if needle not in text:
+        raise SystemExit('Failed to locate HL2Library configureCxx return in MM AMBuildScript')
+    path.write_text(text.replace(needle, insert, 1), encoding='utf-8')
+    print('==> Patched MM HL2Library for episode1 tier1-before-vstdlib')
+PYTIER1
+
 echo "==> Metamod 1.12+ css34 light patches applied"

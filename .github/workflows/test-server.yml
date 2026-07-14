@@ -70,6 +70,12 @@ jobs:
           name: sourcemod-css34-linux-for-test
           path: packages
 
+      - name: Download Metamod package
+        uses: actions/download-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
+          path: packages
+
       - name: ABI / export checks
         run: |
           chmod +x testing/scripts/*.sh
@@ -77,13 +83,20 @@ jobs:
           sudo apt-get install -y binutils
           ls -la packages || true
           SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
           if [[ -z "${SM_PACKAGE}" || ! -f "${SM_PACKAGE}" ]]; then
             echo "No SourceMod package found under packages/" >&2
             exit 1
           fi
-          export SM_PACKAGE
+          if [[ -z "${MM_PACKAGE}" || ! -f "${MM_PACKAGE}" ]]; then
+            echo "No Metamod package found under packages/" >&2
+            exit 1
+          fi
+          export SM_PACKAGE MM_PACKAGE
           echo "Checking ${SM_PACKAGE}"
           testing/scripts/check-package.sh
+          echo "Checking ${MM_PACKAGE}"
+          testing/scripts/check-metamod-package.sh
 
   prepare-server:
     runs-on: ubuntu-22.04
@@ -205,6 +218,10 @@ jobs:
             .ci-server/smoke.log
             .ci-server/console-probe.log
             .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
+            .ci-server/addons/metamod/bin/metamod-fatal.log
+            .ci-server/metamod-fatal.log
+            .ci-server/cstrike/metamod-fatal.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
           retention-days: 7
@@ -288,6 +305,10 @@ jobs:
             .ci-server/smoke.log
             .ci-server/console-probe.log
             .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
+            .ci-server/addons/metamod/bin/metamod-fatal.log
+            .ci-server/metamod-fatal.log
+            .ci-server/cstrike/metamod-fatal.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
           retention-days: 7
@@ -355,6 +376,10 @@ jobs:
             .ci-server/smoke.log
             .ci-server/console-probe.log
             .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
+            .ci-server/addons/metamod/bin/metamod-fatal.log
+            .ci-server/metamod-fatal.log
+            .ci-server/cstrike/metamod-fatal.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
           retention-days: 7
