@@ -66,10 +66,54 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 
 Черновики апгрейдов (#6 = 1.12, #15 = 6588) остаются экспериментами поверх этой модели, а не поверх слоёв из #7.
 
+## Грабли апгрейда ≥6800 / pin 6970 (из PR #10)
+
+[PR #10](https://github.com/fmu1337/sourcemod-css34/pull/10) пробовал dual-track (**stable 6572** + **experimental 6970**) и оверлеи API/toolchain.
+Саму архитектуру dual-CI **не берём** (см. решение B выше). Ниже — только фактура, на которую натыкались при прыжке к 6970; при следующем mid-апгрейде сверяться с этим чек-листом.
+
+### Испробованный pin
+
+| | |
+|--|--|
+| Rev | **6970** |
+| Commit | `f53cb134ef83b580c83e1f4bf35f60d11c4571dd` |
+| Статус | Сборка **не довели** дозеленого (DHooks / udis86); notes ниже всё равно полезны |
+
+Ориентир «ждали сюрпризы»: upstream **≥ ~6800**.
+
+### API / includes
+
+| Симптом | Фикс, который пробовали |
+|---------|-------------------------|
+| `CS_OnCSWeaponDrop` — старые плагины без `donated` | В `cstrike.inc`: `bool donated=false` в forward |
+| `SetCollisionGroup` убрали / переименовали | Deprecated `stock SetCollisionGroup` → `SetEntityCollisionGroup` в `sdktools_functions.inc` |
+
+### Toolchain (gcc-9 multilib)
+
+| Симптом | Фикс |
+|---------|------|
+| SourcePawn / AMBuild шумит на gcc-9 | `-Wno-sign-compare`, `-Wno-ignored-attributes` |
+| Bundled DHooks: `-Wno-invalid-offsetof` на **C**-файлах | Флаг только в **cxxflags**, не в `cflags` |
+
+### Упаковка / зависимости
+
+| Тема | Заметка |
+|------|---------|
+| GeoIP | На более новом SM может понадобиться `GeoLite2-Country.mmdb` при packaging (в #10 — `download-geolite2.sh` с P3TERX mirror) |
+| DHooks | Конфликт **bundled vs standalone** на 6970 — открытый риск, в том PR не закрыт |
+
+### Как НЕ делать (отвергнуто вместе с #10)
+
+- Параллельные CI jobs `linux-stable` + `linux-experimental` в одном workflow.
+- Отдельные `apply-api-compat.sh` / `apply-toolchain.sh` как постоянный «слой ≥6800» в master.
+- При апгрейде — править текущий `apply-sourcemod.sh` (и соседние патчи) **in place** на ветке апгрейда.
+
 ## Связанные артефакты
 
 | Что | Статус |
 |-----|--------|
-| [PR #7](https://github.com/fmu1337/sourcemod-css34/pull/7) | Развилка зафиксирована здесь; PR можно закрыть как docs-only superseded |
+| [PR #7](https://github.com/fmu1337/sourcemod-css34/pull/7) | Развилка слоёв → этот документ; закрыть как superseded |
+| [PR #10](https://github.com/fmu1337/sourcemod-css34/pull/10) | Dual-track 6572/6970 отвергнут; грабли сохранены в секции выше |
 | `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
 | Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |
+| Draft [#15](https://github.com/fmu1337/sourcemod-css34/pull/15) (6588), [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Живые эксперименты апгрейда поверх модели B |
