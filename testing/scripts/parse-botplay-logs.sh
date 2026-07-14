@@ -87,6 +87,9 @@ done
 
 sm_log_files=0
 sm_log_errors=0
+probe_ok=0
+probe_fail=0
+map_rotations=0
 if [[ -d "${SM_LOG_DIR}" ]]; then
   shopt -s nullglob
   sm_logs=("${SM_LOG_DIR}"/*.log)
@@ -97,12 +100,28 @@ if [[ -d "${SM_LOG_DIR}" ]]; then
       '(\[SM\][[:space:]]+(Encountered error|Fatal|Exception|Error))|(Failed to (load|open|create|initialize))|(Native error)|(Parse error)' \
       "${sm_logs[@]}" 2>/dev/null || true)"
     sm_log_errors="${sm_log_errors:-0}"
+    probe_ok=0
+    probe_fail=0
+    map_rotations=0
+    for f in "${sm_logs[@]}"; do
+      n="$(grep -c '\[css34_botplay\] abi_probe ok=' "${f}" 2>/dev/null || true)"
+      probe_ok=$((probe_ok + n))
+      n="$(grep -Ec '\[css34_botplay\] abi_probe ok=[0-9]+ fail=[1-9]' "${f}" 2>/dev/null || true)"
+      probe_fail=$((probe_fail + n))
+      n="$(grep -c '\[css34_botplay\] map_rotate' "${f}" 2>/dev/null || true)"
+      map_rotations=$((map_rotations + n))
+    done
   fi
+fi
+
+if [[ "${map_rotations}" -eq 0 ]]; then
+  map_rotations="$(count_pattern "${ENGINE_CONSOLE_LOG}" 'Started map|changelevel|Loading map')"
 fi
 
 record_secs="${RECORD_SECS:-600}"
 map_name="${MAP:-de_dust2}"
 profile_name="${BOTPLAY_PROFILE:-rom4s}"
+botplay_cfg_name="${BOTPLAY_CFG:-botplay-stress.cfg}"
 mm_version="${MM_VERSION_EXPECT:-}"
 sm_version="${SM_VERSION_EXPECT:-}"
 
@@ -116,6 +135,7 @@ cat >"${OUT_JSON}" <<EOF
   },
   "map": "${map_name}",
   "record_secs": ${record_secs},
+  "botplay_cfg": "${botplay_cfg_name}",
   "sources": {
     "botplay_log": "$(basename "${BOTPLAY_LOG}")",
     "engine_console_log": "$(basename "${ENGINE_CONSOLE_LOG}")",
@@ -146,6 +166,11 @@ cat >"${OUT_JSON}" <<EOF
     "crash": $( [[ "${crash}" -eq 1 ]] && echo true || echo false ),
     "sm_log_files": ${sm_log_files},
     "sm_log_errors": ${sm_log_errors}
+  },
+  "stress": {
+    "map_rotations": ${map_rotations},
+    "abi_probe_rounds": ${probe_ok},
+    "abi_probe_fail_lines": ${probe_fail}
   }
 }
 EOF
@@ -156,6 +181,7 @@ EOF
   echo "Profile:          ${profile_name}"
   echo "Packages:         MM ${mm_version:-?} + SM ${sm_version:-?}"
   echo "Map:              ${map_name}"
+  echo "Botplay cfg:      ${botplay_cfg_name}"
   echo "Record duration:  ${record_secs}s"
   echo ""
   echo "Game events (engine console preferred):"
@@ -171,6 +197,11 @@ EOF
   echo "  crash markers: $( [[ "${crash}" -eq 1 ]] && echo yes || echo no )"
   echo "  SM log files:  ${sm_log_files}"
   echo "  SM log errors: ${sm_log_errors}"
+  echo ""
+  echo "Stress:"
+  echo "  map rotations: ${map_rotations}"
+  echo "  abi_probe rounds logged: ${probe_ok}"
+  echo "  abi_probe fail lines: ${probe_fail}"
   echo ""
   echo "Sample round_start lines:"
   first_matches "${ENGINE_CONSOLE_LOG}" "${ROUND_START_PAT}" 3 | sed 's/^/  /'

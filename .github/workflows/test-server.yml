@@ -112,7 +112,7 @@ jobs:
             testing/scripts/apply-valve-rc-fix.sh
             testing/scripts/apply-srcds-patch.sh
           fi
-          KEEP_MAP=de_dust2 testing/scripts/trim-server-maps.sh
+          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
 
       - name: Pack server tree
         run: |
@@ -368,6 +368,16 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
     needs: [prepare-server]
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:11
+            image_id: debian11
+          - image: debian:12
+            image_id: debian12
+          - image: rockylinux:9
+            image_id: rocky9
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -378,11 +388,13 @@ jobs:
           name: css34-server-tree
           path: server-art
 
-      - name: Rom4s botplay recording (debian:11)
+      - name: Rom4s botplay stress (${{ matrix.image }})
         env:
-          IMAGE: debian:11
+          IMAGE: ${{ matrix.image }}
           RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
           BOTPLAY_PROFILE: rom4s
+          BOTPLAY_CFG: botplay-stress.cfg
+          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
           MM_VERSION_EXPECT: "1.10.6"
           SM_VERSION_EXPECT: "1.11.0.6572"
         run: |
@@ -394,6 +406,8 @@ jobs:
             -e CACHE_DIR=/workspace/.ci-cache \
             -e RECORD_SECS \
             -e BOTPLAY_PROFILE \
+            -e BOTPLAY_CFG \
+            -e BOTPLAY_MAPS \
             -e MM_VERSION_EXPECT \
             -e SM_VERSION_EXPECT \
             -e SMOKE_CONDEBUG=1 \
@@ -412,7 +426,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rom4s-botplay-report
+          name: rom4s-botplay-report-${{ matrix.image_id }}
           path: |
             .ci-server/botplay-report.json
             .ci-server/botplay-report.txt
@@ -428,6 +442,16 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
     needs: [build-linux, prepare-server]
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:11
+            image_id: debian11
+          - image: debian:12
+            image_id: debian12
+          - image: rockylinux:9
+            image_id: rocky9
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -450,11 +474,13 @@ jobs:
           name: css34-server-tree
           path: server-art
 
-      - name: Built botplay recording + compare (debian:11)
+      - name: Built botplay stress + compare (${{ matrix.image }})
         env:
-          IMAGE: debian:11
+          IMAGE: ${{ matrix.image }}
           RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
           BOTPLAY_PROFILE: built
+          BOTPLAY_CFG: botplay-stress.cfg
+          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
           MM_VERSION_EXPECT: "1.10.7"
           SM_VERSION_EXPECT: "1.11.0.6572"
         run: |
@@ -468,6 +494,8 @@ jobs:
             -e CACHE_DIR=/workspace/.ci-cache \
             -e RECORD_SECS \
             -e BOTPLAY_PROFILE \
+            -e BOTPLAY_CFG \
+            -e BOTPLAY_MAPS \
             -e MM_VERSION_EXPECT \
             -e SM_VERSION_EXPECT \
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
@@ -505,7 +533,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: built-botplay-report
+          name: built-botplay-report-${{ matrix.image_id }}
           path: |
             .ci-server/built-botplay-report.json
             .ci-server/built-botplay-report.txt

@@ -30,6 +30,11 @@ if {[info exists env(SRCDS_BINARY)] && $env(SRCDS_BINARY) ne ""} {
 } else {
     set binary "./srcds_i686"
 }
+if {[info exists env(BOTPLAY_CFG)] && $env(BOTPLAY_CFG) ne ""} {
+    set botplay_cfg $env(BOTPLAY_CFG)
+} else {
+    set botplay_cfg "botplay-stress.cfg"
+}
 if {[info exists env(RECORD_SECS)] && $env(RECORD_SECS) ne ""} {
     set record_secs $env(RECORD_SECS)
 } else {
@@ -47,7 +52,7 @@ if {[info exists env(SMOKE_VERBOSE)] && $env(SMOKE_VERBOSE) ne "" && $env(SMOKE_
 
 set spawn_args [list $binary -game cstrike -console -nohltv \
     -nomaster -localcser -tickrate 66 \
-    -ip 127.0.0.1 -port $port +ip 127.0.0.1 +sv_lan 1 +maxplayers 10 +map $map]
+    -ip 127.0.0.1 -port $port +ip 127.0.0.1 +sv_lan 1 +maxplayers 16 +map $map]
 if {[info exists env(SMOKE_CONDEBUG)] && $env(SMOKE_CONDEBUG) ne "" && $env(SMOKE_CONDEBUG) ne "0"} {
     lappend spawn_args -condebug
 }
@@ -114,7 +119,7 @@ expect {
 sleep 1
 
 # Apply botplay settings (cfg is copied into cstrike/cfg by botplay-test.sh).
-send "exec botplay-server.cfg\r"
+send "exec ${botplay_cfg}\r"
 sleep 8
 
 send "mp_restartgame 1\r"

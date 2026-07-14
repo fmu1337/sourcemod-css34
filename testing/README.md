@@ -49,6 +49,16 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 
 `test-built-botplay` runs the same session with **built** MM 1.10.7 + SM 6572 and compares against `testing/botplay/rom4s-baseline.json` (candidate must reach ≥75% of baseline event counts).
 
+**Stress profile (default):** `botplay-stress.cfg` execs `botplay-server.cfg` (fast 1‑minute rounds) then raises `bot_quota` to 8. Plugin `css34_botplay_stress.smx` rotates maps every 3 rounds (`de_dust2` → `de_inferno` → `de_nuke`) and logs sdkhooks/sdktools ABI probe results each round. CI botplay jobs run on `debian:11`, `debian:12`, and `rockylinux:9`.
+
+| File | Role |
+|------|------|
+| `testing/cfg/botplay-server.cfg` | Base bots + fast rounds |
+| `testing/cfg/botplay-stress.cfg` | Stress overlay (more bots, map/plugin cvars) |
+| `testing/plugins/css34_botplay_stress.sp` | Map rotation + ABI probe |
+
+Override: `BOTPLAY_CFG=botplay-server.cfg` for the lighter profile without extra bots / plugin cvars.
+
 Local short run (built):
 
 ```bash

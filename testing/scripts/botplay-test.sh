@@ -10,6 +10,9 @@ MAP="${MAP:-de_dust2}"
 PORT="${PORT:-27015}"
 RECORD_SECS="${RECORD_SECS:-600}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-$((RECORD_SECS + 180))}"
+BOTPLAY_CFG="${BOTPLAY_CFG:-botplay-stress.cfg}"
+BOTPLAY_MAPS="${BOTPLAY_MAPS:-de_dust2,de_inferno,de_nuke}"
+INSTALL_BOTPLAY_PLUGINS="${INSTALL_BOTPLAY_PLUGINS:-1}"
 LOG_FILE="${LOG_FILE:-${SERVER_DIR}/botplay-run.log}"
 BOTPLAY_LOG="${BOTPLAY_LOG:-${SERVER_DIR}/botplay.log}"
 REPORT_JSON="${REPORT_JSON:-${SERVER_DIR}/botplay-report.json}"
@@ -83,8 +86,18 @@ fi
 
 mkdir -p "${SERVER_DIR}/cstrike/cfg"
 cp -f "${ROOT}/testing/cfg/botplay-server.cfg" "${SERVER_DIR}/cstrike/cfg/botplay-server.cfg"
+if [[ -f "${ROOT}/testing/cfg/${BOTPLAY_CFG}" ]]; then
+  cp -f "${ROOT}/testing/cfg/${BOTPLAY_CFG}" "${SERVER_DIR}/cstrike/cfg/${BOTPLAY_CFG}"
+fi
+
+if [[ -n "${BOTPLAY_MAPS}" ]]; then
+  KEEP_MAPS="${BOTPLAY_MAPS}" SERVER_DIR="${SERVER_DIR}" "${ROOT}/testing/scripts/trim-server-maps.sh"
+fi
 
 export SERVER_DIR BOTPLAY_PROFILE MM_VERSION_EXPECT SM_VERSION_EXPECT
+if [[ "${INSTALL_BOTPLAY_PLUGINS}" == "1" ]]; then
+  "${ROOT}/testing/scripts/install-botplay-plugins.sh"
+fi
 if [[ "${INSTALL_SMAC:-1}" == "1" ]]; then
   "${ROOT}/testing/scripts/install-smac.sh"
   if [[ "${SMAC_SET:-all}" != "all" || "${DISABLE_STOCK_PLUGINS:-0}" == "1" ]]; then
@@ -99,8 +112,8 @@ elif [[ "${DISABLE_STOCK_PLUGINS:-0}" == "1" ]]; then
   shopt -u nullglob
 fi
 
-echo "Starting ${BOTPLAY_PROFILE} botplay recording (binary=${SRCDS_BINARY}, map=${MAP}, record=${RECORD_SECS}s)"
-export SERVER_DIR MAP PORT SRCDS_BINARY BOTPLAY_LOG RECORD_SECS
+echo "Starting ${BOTPLAY_PROFILE} botplay recording (binary=${SRCDS_BINARY}, map=${MAP}, cfg=${BOTPLAY_CFG}, record=${RECORD_SECS}s)"
+export SERVER_DIR MAP PORT SRCDS_BINARY BOTPLAY_LOG RECORD_SECS BOTPLAY_CFG
 export CONSOLE_PROBE_TIMEOUT="${TIMEOUT_SECS}"
 export SMOKE_VERBOSE SMOKE_CONDEBUG
 rm -f "${ENGINE_CONSOLE_LOG}"
@@ -120,7 +133,7 @@ record_rc=0
   fi
 }
 
-export RECORD_SECS MAP BOTPLAY_PROFILE MM_VERSION_EXPECT SM_VERSION_EXPECT
+export RECORD_SECS MAP BOTPLAY_PROFILE MM_VERSION_EXPECT SM_VERSION_EXPECT BOTPLAY_CFG
 chmod +x "${ROOT}/testing/scripts/parse-botplay-logs.sh"
 if [[ -f "${ENGINE_CONSOLE_LOG}" || -f "${BOTPLAY_LOG}" ]]; then
   "${ROOT}/testing/scripts/parse-botplay-logs.sh" "${SERVER_DIR}" "${REPORT_JSON}" "${REPORT_TXT}" || true
