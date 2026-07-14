@@ -33,6 +33,7 @@ first_matches() {
 ROUND_START_PAT='(World triggered "Round_Start"|GameEvent "round_start"|"round_start")'
 ROUND_END_PAT='(World triggered "Round_End"|GameEvent "round_end"|"round_end")'
 PLAYER_DEATH_PAT='(triggered "player_death"|GameEvent "player_death"|"player_death"|[[:space:]]killed[[:space:]]+)'
+CRASH_PAT='(Bad entity in IndexOfEdict|Segmentation fault|SIGSEGV|Aborted|SIGABRT)'
 
 round_start_console=0
 round_end_console=0
@@ -79,7 +80,7 @@ fi
 
 crash=0
 for f in "${BOTPLAY_LOG}" "${ENGINE_CONSOLE_LOG}"; do
-  if [[ -f "${f}" ]] && grep -Eiq 'Segmentation fault|SIGSEGV|Aborted|SIGABRT' "${f}"; then
+  if [[ -f "${f}" ]] && grep -Eiq "${CRASH_PAT}" "${f}"; then
     crash=1
   fi
 done

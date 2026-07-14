@@ -94,7 +94,8 @@ export SMOKE_VERBOSE SMOKE_CONDEBUG
 rm -f "${ENGINE_CONSOLE_LOG}"
 
 /usr/bin/expect "${ROOT}/testing/scripts/botplay-record.exp" >"${LOG_FILE}" 2>&1 || {
-  echo "Botplay recording failed (see ${LOG_FILE})" >&2
+  rc=$?
+  echo "Botplay recording failed (exit=${rc}, see ${LOG_FILE})" >&2
   tail -n 120 "${LOG_FILE}" >&2 || true
   if [[ -f "${BOTPLAY_LOG}" ]]; then
     echo "----- botplay.log (last 120) -----" >&2
@@ -104,7 +105,10 @@ rm -f "${ENGINE_CONSOLE_LOG}"
     echo "----- cstrike/console.log (last 120) -----" >&2
     tail -n 120 "${ENGINE_CONSOLE_LOG}" >&2 || true
   fi
-  exit 1
+  if [[ -f "${ENGINE_CONSOLE_LOG}" ]] && grep -Eiq 'Bad entity in IndexOfEdict|Segmentation fault|SIGSEGV' "${ENGINE_CONSOLE_LOG}"; then
+    echo "FAIL: engine crash detected in console.log" >&2
+  fi
+  exit "${rc}"
 }
 
 export RECORD_SECS MAP BOTPLAY_PROFILE MM_VERSION_EXPECT SM_VERSION_EXPECT

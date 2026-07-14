@@ -114,10 +114,25 @@ sleep 1
 
 # Apply botplay settings (cfg is copied into cstrike/cfg by botplay-test.sh).
 send "exec botplay-server.cfg\r"
-sleep 3
+sleep 8
+
+send "mp_restartgame 1\r"
+sleep 5
 
 puts stderr "Recording botplay session for ${record_secs}s..."
-sleep $record_secs
+set end_at [expr {[clock seconds] + $record_secs}]
+while {[clock seconds] < $end_at} {
+    set remaining [expr {$end_at - [clock seconds]}]
+    if {$remaining < 1} { set remaining 1 }
+    if {$remaining > 30} { set remaining 30 }
+    expect {
+        eof {
+            puts stderr "srcds exited during botplay recording"
+            exit 8
+        }
+        timeout {}
+    }
+}
 
 send "status\r"
 expect {
