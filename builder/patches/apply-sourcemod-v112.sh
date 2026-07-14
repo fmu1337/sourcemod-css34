@@ -473,6 +473,81 @@ if natives.exists():
     else:
         print('==> WARN: cstrike natives FindInDataMap block not found')
 
+# css34: CacheGameBinaryInfo dlopen(engine_i486.so)+dlclose leaves dangling
+# ConVars on vstdlib's s_pConCommandBases (srcds loads engine_i686.so). Prefer
+# RTLD_NOLOAD and the already-loaded _i686 sibling; never RTLD_NOW a second copy.
+gc = sm / 'core/logic/GameConfigs.cpp'
+if gc.exists():
+    gt = gc.read_text()
+    if 'css34: RTLD_NOLOAD game binary' in gt:
+        print('==> GameConfigs CacheGameBinaryInfo already RTLD_NOLOAD patched')
+    else:
+        old_cache = """#else
+\t\tvoid *pHandle = dlopen(binary_path, RTLD_NOW);
+\t\tif (pHandle)
+\t\t{
+\t\t\tinfo.m_pAddr = dlsym(pHandle, "CreateInterface");
+\t\t\tdlclose(pHandle);
+\t\t}
+#endif"""
+        new_cache = """#else
+\t\t/* css34: RTLD_NOLOAD game binary - avoid loading engine_i486.so while
+\t\t * engine_i686.so is already mapped. A temporary RTLD_NOW copy runs
+\t\t * ConVar static ctors into vstdlib's list; dlclose then dangling-pointer
+\t\t * crashes FindVar (sv_logecho) during SM init. */
+\t\tvoid *pHandle = dlopen(binary_path, RTLD_NOW | RTLD_NOLOAD);
+\t\tif (!pHandle)
+\t\t{
+\t\t\tchar alt_path[PLATFORM_MAX_PATH];
+\t\t\tke::SafeStrcpy(alt_path, sizeof(alt_path), binary_path);
+\t\t\tchar *suf = strstr(alt_path, "_i486.so");
+\t\t\tif (suf)
+\t\t\t{
+\t\t\t\tmemcpy(suf, "_i686.so", 8);
+\t\t\t\tpHandle = dlopen(alt_path, RTLD_NOW | RTLD_NOLOAD);
+\t\t\t}
+\t\t\telse if ((suf = strstr(alt_path, "_i686.so")) != nullptr)
+\t\t\t{
+\t\t\t\tmemcpy(suf, "_i486.so", 8);
+\t\t\t\tpHandle = dlopen(alt_path, RTLD_NOW | RTLD_NOLOAD);
+\t\t\t}
+\t\t}
+\t\tif (pHandle)
+\t\t{
+\t\t\tinfo.m_pAddr = dlsym(pHandle, "CreateInterface");
+\t\t\tdlclose(pHandle);
+\t\t}
+#endif"""
+        if old_cache not in gt:
+            print('==> WARN: CacheGameBinaryInfo dlopen block not found')
+        else:
+            gt = gt.replace(old_cache, new_cache, 1)
+            # Symbol '@' lookups: also use NOLOAD on dli_fname (already mapped).
+            old_sym = """\t\t\t\t\t\tvoid *handle = dlopen(info.dli_fname, RTLD_NOW);
+\t\t\t\t\t\tif (handle)
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\tif (bridge->SymbolsAreHidden())
+\t\t\t\t\t\t\t\tfinal_addr = g_MemUtils.ResolveSymbol(handle, &s_TempSig.sig[1]);
+\t\t\t\t\t\t\telse
+\t\t\t\t\t\t\t\tfinal_addr = dlsym(handle, &s_TempSig.sig[1]);
+\t\t\t\t\t\t\tdlclose(handle);"""
+            new_sym = """\t\t\t\t\t\t/* css34: RTLD_NOLOAD - dli_fname is an already-mapped module */
+\t\t\t\t\t\tvoid *handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD);
+\t\t\t\t\t\tif (handle)
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\tif (bridge->SymbolsAreHidden())
+\t\t\t\t\t\t\t\tfinal_addr = g_MemUtils.ResolveSymbol(handle, &s_TempSig.sig[1]);
+\t\t\t\t\t\t\telse
+\t\t\t\t\t\t\t\tfinal_addr = dlsym(handle, &s_TempSig.sig[1]);
+\t\t\t\t\t\t\tdlclose(handle);"""
+            if old_sym in gt:
+                gt = gt.replace(old_sym, new_sym, 1)
+                print('==> Patched GameConfigs @-sig dlopen to RTLD_NOLOAD')
+            else:
+                print('==> WARN: @-sig dlopen block not found (continuing)')
+            gc.write_text(gt)
+            print('==> Patched GameConfigs CacheGameBinaryInfo for css34 RTLD_NOLOAD')
+
 # ParseTime uses std::get_time (C++11 <iomanip>); gcc-4.9 sysroot headers lack it.
 # Replace with strptime so logic can keep the rom4s-compatible old libstdc++ ABI.
 smn_core = sm / 'core/logic/smn_core.cpp'
