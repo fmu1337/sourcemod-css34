@@ -64,7 +64,57 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 3. Править патчи **in place** (тот же `apply-sourcemod.sh` и соседние `builder/patches/*`).
 4. Не заводить отдельный `apply-sourcemod-common.sh`, пока не понадобится параллельная сборка двух версий.
 
-Черновики апгрейдов (#6 = 1.12, #15 = 6588) остаются экспериментами поверх этой модели, а не поверх слоёв из #7.
+Черновики апгрейдов (#6 = 1.12) — отдельные эксперименты поверх этой модели, а не поверх слоёв из #7.
+
+Рекомендуемый порядок пробных апгрейдов: **6572 → 6588 (mid) → 6970+**, а не сразу к 6970.
+
+## Mid-шаг 6588 (из PR #15)
+
+[PR #15](https://github.com/fmu1337/sourcemod-css34/pull/15) натягивал тот же css34-патчсет на **6588** (`SOURCEMOD_PROFILE=mid`) как ступеньку между rom4s 6572 и experimental 6970.
+Профильную схему / dual-CI **не берём** (модель B). Ниже — pin и грабли fetch/headers/AMBuild, плюс заявленный smoke.
+
+### Испробованный pin
+
+| | |
+|--|--|
+| Rev | **6588** (Jul 2020) |
+| Commit | `4a4b9ce7f0c9f93a8380e680420900cd0c39dde9` |
+| Статус по отчёту #15 | `sourcemod-1.11.0-git6588-css34-linux.tar.gz` — **smoke PASS** (17 plugins); 6572 на той же ветке тоже PASS |
+
+Имеет смысл пробовать **6588 раньше 6970**: маленький шаг над golden, без пакета проблем ≥6800 / DHooks.
+
+### Fetch / checkout
+
+| Симптом | Что делать |
+|---------|------------|
+| Shallow `git fetch` только mid-пина | Дерево **отрывается** от истории 6572 (не тот source tree) |
+| Проверка | Pin должен быть предком/потомком stable: `merge-base --is-ancestor <stable> HEAD` |
+| Depth | Считать depth от delta `(mid_rev − 6572) + запас`, иначе deepen / unshallow |
+
+На master для 6572 уже `fetch --depth=8192`. При смене pin на mid/дальше — явно заложить ancestry, не полагаться на «достал один SHA».
+
+### Headers / build id
+
+| Симптом | Фикс |
+|---------|------|
+| `generate_headers.py` считает rev через `git rev-list --count` | На shallow/неполной истории число врёт (например 286 вместо 6588) |
+| Правильно | Явно задавать `SOURCEMOD_GIT_REV=6588` (и pin) при сборке / packaging |
+
+### AMBuild (эпоха mid / 2.1)
+
+Относительно 6572 на 6588 ловили отличия в logic `AMBuilder` (**postlink**) и в `configure_linux`, когда нет `cxx.target`.
+При апгрейде ждать правки линкерных блоков in place в `apply-sourcemod.sh`, а не отдельный «слой mid».
+
+### Что из root causes #15 уже в master (не повторять)
+
+- Static **tier1 в core** (ConVar / hang до mapchange) — уже в патчах 6572.
+- Logic **sysroot**, Logger/boot-trace, smoke — уже в master.
+- **bintools**: в #15 был rom4s splice; в master — **in-tree** (#16). На mid-апгрейде не возвращать splice без причины.
+
+### Как НЕ делать (отвергнуто вместе с #15)
+
+- Держать `SOURCEMOD_PROFILE=mid|stable|experimental` и параллельные CI jobs в master.
+- Rebase’ить всю старую ветку #15 на нынешний master «как есть» (за ней стек #10 + устаревший smoke).
 
 ## Грабли апгрейда ≥6800 / pin 6970 (из PR #10)
 
@@ -113,7 +163,8 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 | Что | Статус |
 |-----|--------|
 | [PR #7](https://github.com/fmu1337/sourcemod-css34/pull/7) | Развилка слоёв → этот документ; закрыть как superseded |
-| [PR #10](https://github.com/fmu1337/sourcemod-css34/pull/10) | Dual-track 6572/6970 отвергнут; грабли сохранены в секции выше |
+| [PR #10](https://github.com/fmu1337/sourcemod-css34/pull/10) | Dual-track 6572/6970 отвергнут; грабли ≥6800 сохранены выше |
+| [PR #15](https://github.com/fmu1337/sourcemod-css34/pull/15) | Mid 6588 отвергнут как merge; pin/ancestry/headers сохранены в секции «Mid-шаг 6588» |
 | `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
 | Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |
-| Draft [#15](https://github.com/fmu1337/sourcemod-css34/pull/15) (6588), [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Живые эксперименты апгрейда поверх модели B |
+| Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Эксперимент major-апгрейда поверх модели B |
