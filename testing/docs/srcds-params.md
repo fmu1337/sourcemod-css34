@@ -174,7 +174,122 @@ Not present in `engine_i686.so` strings; changing tickrate requires game DLL tha
 
 ### Explicitly **not** found in CSS v34 binaries
 
-`-dumplongticks`, `-dev2`, `-debug` (engine), `-norestart` / `-notrap` (engine — wrapper-only), `-tvdisable`, `-console` (Windows-oriented; Linux dedicated uses text console path), `-nocrashdialog`, `-nobreakpad`, `-nominidumps` (common later/SteamPipe).
+`-dumplongticks`, `-dev2`, `-debug` (engine), `-norestart` / `-notrap` (engine — wrapper-only), `-tvdisable`, `-console` (Windows-oriented; Linux dedicated uses text console path), `-nocrashdialog`, `-nobreakpad`, `-nominidumps` (common later/SteamPipe), and the MyArena proprietary cluster (`-reader`, `-pcmdscpmrc`, `-sfwb`, `-wsb`, `-vcforce`, `-sesb`).
+
+---
+
+## Full verified catalog (all public layers)
+
+Method: NUL-terminated `-flag` scrape across stock + eSTEAM + `srcds_patch`, keep only tokens with an **imm32 xref** (push/mov of string address) or consumed by `srcds_run`. Re-run: `testing/scripts/extract-srcds-params.sh` (details also land in `.ci-cache/flag-details.txt` when produced by the research scrape).
+
+`*` = xref present. Layers: **W**=`srcds_run`, **D**=dedicated, **E**=engine, **G**=game `server`, **T**=tier0, **S**=steamclient.
+
+### Wrapper (`srcds_run`) — W
+
+| Flag | Notes |
+|---|---|
+| `-game` `-debug` `-debuglog` `-norestart` `-pidfile` `-binary` `-timeout` `-gdb` `-autoupdate` `-steamerr` `-steamuser` `-steampass` `-ignoresigint` `-notrap` `-help` | See wrapper section above. `-autoupdate`/`-pidfile` also exist in engine with different meaning. |
+
+### Dedicated (`dedicated_*.so`) — D
+
+| Flag | Function (addr2line) | Role |
+|---|---|---|
+| `-game` | `CDedicatedAppSystemGroup::Main` | Mod directory |
+| `-defaultgamedir` | same | Fallback mod name (`hl2`) |
+| `-textmode` | same | Force text console path |
+| `-condebug` | `CTextConsoleUnix::Init` | Append console to `console.log` |
+| `-conclearlog` | same | Truncate `console.log` before write |
+| `-basedir` | `UTIL_ComputeBaseDir` | Override base directory |
+| `-noasync` | `CBaseFileSystem::InitAsync` | Disable async FS |
+| `-fs_log` / `-fs_target` | `CBaseFileSystem::Init` | FS copy/log script generation |
+| `-fs_logbins` | `CBaseFileSystem::Shutdown` | Emit bin-copy batch bits |
+| `-usegh` | `Load3rdParty` / `InitInstance` | Load `ghostinj.dll` (Win tooling) |
+| `-vcrrecord` / `-vcrplayback` | `main` | VCR input record/replay |
+| `-vproject` / `-NoVConfig` | filesystem setup | VProject / skip vconfig UI |
+| `-tempcontent` | `FileSystem_LoadSearchPaths` | Add `_tempcontent` search path |
+| `-noassert` | `DedicatedSpewOutputFunc` | Suppress assert dialog path |
+
+### Engine (`engine_*.so`) — E — network / server ops
+
+| Flag | Function | Role |
+|---|---|---|
+| `-ip` / `-port` | `NET_Init` | Bind address / game port (`+port` also recognized nearby) |
+| `-steamport` | `CSteam3::Init` | Steam auth/query related port |
+| `-noip` / `-nodns` / `-usetcp` | `NET_Init` | Disable IP / DNS; enable TCP listen path |
+| `-reuse` | `NET_OpenSocket` | `SO_REUSEADDR`-style reuse |
+| `-usercon` | `NET_Config` | Remote console enable path |
+| `-nohltv` | `NET_Init` / `SV_ActivateServer` | Disable SourceTV |
+| `-tvmasteronly` | `CHLTVServer::Init` | HLTV master-only mode |
+| `-insecure` | `CSteam3::Init` | Skip VAC |
+| `-nomaster` | `CMaster::InitConnection` / `UpdateMasterServer` | No master advertise |
+| `-autoupdate` | `CheckMasterServerRequestRestart` | Honor master “restart for update” |
+| `-localcser` | `CUploadGameStats::UpdateConnection` | Local CSER endpoint |
+| `-gamestats` | `CUploadGameStats::*` | Game stats upload enable path |
+| `-maxplayers` | `CGameServer::InitMaxClients` | Slot cap |
+| `-pidfile` | `Sys_InitGame` | Write engine PID file |
+| `-nogamedll` | `Host_Init` | Skip game DLL (tooling) |
+| `-dev` / `-allowdebug` / `-nodev` | `Host_Init` (+ phone-home) | See `-dev` section |
+| `-internalbuild` / `-publicbuild` | `CPhoneHome::IsExternalBuild` | Telemetry classification |
+| `-phonehome` | `Host_Init` | Force phone-home path |
+| `-flushlog` | `CLog::*` | Flush server log aggressively |
+| `-allowstalezip` | `CGameServer::SpawnServer` | Allow stale/mismatched BSP zip |
+| `-preload` / `-nopreload` / `-nopreloadmodels` | `CGameServer::PrecacheModel` | Precache policy |
+| `-random_invariant` | `Sys_InitGame` | Deterministic RNG seeding path |
+| `-uselogdir` | `COM_SetupLogDir` | Use `logs/<map>/…` layout |
+| `-defaultgamedir` | `COM_GetModDirectory` | Default mod string |
+| `-game` / `-vproject` / `-NoVConfig` / `-tempcontent` | FS / mod locate | Same family as dedicated |
+
+### Engine — mapreslist / devshot tooling
+
+| Flag | Function | Role |
+|---|---|---|
+| `-makereslists` | `Host_Init` / `MapReslistGenerator_Init` | Generate reslists |
+| `-usereslistfile` | `CMapReslistGenerator::BuildMapList` | Map list file instead of `maps/*.bsp` |
+| `-startmap` | `EnableReslistGeneration` | Resume reslist at map |
+| `-forever` | `CMapReslistGenerator::RunFrame` | Loop map list |
+| `-rebuildaudio` | same | Rebuild audio during reslist |
+| `-trackdeletions` | `MapReslistGenerator_Init` | Emit `deletions.bat` |
+| `-makedevshots` / `-usedevshotsfile` | `DevShotGenerator_Init` | Automated screenshot pass |
+| `-testscript` | `_Host_RunFrame*` | Run named test script |
+| `-spewsentences` | `VOX_AddSentenceWavesToResList` | Dump sentence waves |
+| `-dti` | `SendTable_Init` / `Host_Init` | DataTable instrumentation |
+| `-heapcheck` | `Host_Init` | Heap check around hunk |
+| `-dumpvidmemstats` | `CModelLoader::Map_IsValid` | Vidmem stats path |
+| `-buildcubemaps` / `-requirecubemaps` | occlusion / cubemap load | Cubemap tooling |
+| `-surfcachesize` | `Sys_GetSurfaceCacheSize` | Override surface cache size |
+
+### Engine — client/window (usually inert on pure DS)
+
+`-sw`, `-w`/`-width`, `-h`/`-height`, `-window`/`-windowed`/`-startwindowed`, `-full`/`-fullscreen`, `-resizing`, `-safe`, `-dxlevel`, `-mat_vsync`, `-mat_antialias`, `-mat_aaquality`, `-adapter`, `-ref` — all hooked from `InitMaterialSystemConfig` / `Shader_Connect`.
+
+### Game DLL (`server_*.so`) — G
+
+| Flag | Function | Role |
+|---|---|---|
+| `-tickrate` | `CServerGameDLL::GetTickInterval` | `>10` → interval `1/N`; else default ~0.03 (≈33.33 Hz) |
+| `-nobots` | `CCSBotManager::*` | Disable bot creation |
+| `-game` | `LevelInit` | Chapter/title path uses mod name |
+| `-makedevshots` / `-makereslists` | various | Coop with engine tooling |
+| `-allowdebug` | (string; module debug-build check) | “Module is a debug build” path |
+
+### tier0 / steamclient — T / S
+
+| Flag | Where | Role |
+|---|---|---|
+| `-noassert` | tier0 `DoNewAssertDialog` | Skip assert UI |
+| `-debugbreak` | tier0 (string present) | Break on assert (xref weak in this build) |
+| `-mpi_worker` | tier0 / steamclient | MPI worker mode |
+| `-debug_steamapi` | steamclient | Steam API debug spew |
+| `-single_core` | steamclient | “Force Steam to run on your primary CPU only” |
+
+### eSTEAM / BufferFix extras
+
+- eSTEAM does **not** add Valve-style game flags beyond stock; steam libs may show `-debug_steamapi` / `-single_core` / `-mpi_worker`.
+- `srcds_patch`: **no new flags** (273-byte engine rewrite only).
+
+### Not cmdline params (noise filtered out)
+
+Hundreds of NUL-strings that look like `-Something` inside eSTEAM OpenSSL/ASN.1 OID names (`-AuthReqTBE`, `-cms`, …), geometry labels (`-Bartels`), temporary paths (`-tmp`, `-ptr`, `-fs`), etc. They have **no** CommandLine xref and are not launch flags.
 
 ---
 
