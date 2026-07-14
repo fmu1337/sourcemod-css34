@@ -1,328 +1,298 @@
-# CS:S v34 `srcds_run` / `srcds` launch parameters (string + DWARF audit)
+# CS:S v34 dedicated: launch parameters reference
 
-Validated against stock binaries from `srcds_css34_l_a.zip` (dated 2010-03-21):
+Complete reference of **command-line flags** consumed by the CSS v34 dedicated stack, validated on stock binaries from `srcds_css34_l_a.zip` (2010-03-21), cross-checked against eSTEAM overlay and BufferFix `srcds_patch`.
 
-| File | Role | MD5 |
+| Method | Detail |
+|---|---|
+| Discovery | NUL-terminated `[+-]flag` scrape in ELF + `srcds_run` |
+| Verification | `imm32` xref (push/mov of string VA) + `addr2line` (unstripped DWARF) |
+| Re-scrape | `testing/scripts/extract-srcds-params.sh` |
+
+**Layers:** wrapper `srcds_run` → loader `srcds_i686` → `bin/dedicated_*.so` → `bin/engine_*.so` → `cstrike/bin/server_*.so` (+ `tier0` / `steamclient`).
+
+Unknown argv tokens are ignored (`FindParm` / `CheckParm` miss → no-op). Flags below are only those with a verified consumer.
+
+`+name value` on the command line is the engine’s way to queue a **console command / ConVar** before/during init (e.g. `+map`, `+sv_pure 0`). Only `[+-]` tokens with an ELF xref are listed as “flags”; common `+cvar` examples used in hosting are noted where verified.
+
+---
+
+## How to read this doc
+
+| Column | Meaning |
+|---|---|
+| **Layer** | Who parses it: **W** wrapper, **D** dedicated, **E** engine, **G** game DLL, **T** tier0, **S** steamclient |
+| **Takes value?** | Whether the next argv word is consumed (`ParmValue`) |
+| **DS useful?** | Relevant on a headless dedicated server |
+
+---
+
+## 1. Wrapper only — `srcds_run` (W)
+
+These are **shell** options. If you start `./srcds_i686` directly (MyArena-style), they do nothing unless the engine also defines the same name (only `-game` / `-pidfile` overlap with different implementations).
+
+| Flag | Value | Description |
 |---|---|---|
-| `srcds_run` | shell wrapper (restart / gdb / steam update) | `9ef9e859ec94776811de6c1a0020df5c` |
-| `srcds_i686` | thin ELF loader → `bin/dedicated_i686.so` | `5ea1005802c49456692c9aa0141e1d91` |
-| `bin/dedicated_i686.so` | dedicated app-system host | `afe97b94b5805a984efb1c77cd3a3c06` |
-| `bin/engine_i686.so` | engine | `a0a8ea1f14c3fafd4a26eca033851817` |
-| `cstrike/bin/server_i486.so` | game DLL | `8349c21323a4e63e1b169dc06e1d7036` |
+| `-game <dir>` | yes | Mod directory (default `cstrike` if omitted). Must exist as a folder. |
+| `-binary <path>` | yes | Skip CPU auto-detect; run this ELF (`srcds_i486` / `i686` / `amd`). Override also via env `FORCE`. |
+| `-norestart` | no | Do not loop-restart after the child exits. Default is restart-on. **Does not detect hangs** — only exit codes. |
+| `-timeout <sec>` | yes | Seconds to sleep between restart attempts (default `10`). |
+| `-debug` | no | Enable core dumps (`ulimit -c`); after non-zero exit run `gdb` batch (`bt`, locals, …) into the debug log. **Not** engine developer mode. |
+| `-debuglog <file>` | yes | gdb output file (default `debug.log`). |
+| `-gdb <path>` | yes | Debugger binary (default `gdb`). |
+| `-pidfile <file>` | yes | Intended pid path when `-debug` is set. In this CSS `srcds_run`, appending `-pidfile` to the **engine** cmdline is commented out — prefer engine `-pidfile` on direct launches. |
+| `-autoupdate` | no | Run `./steam -command update …` before each start; forces restart-on. |
+| `-steamerr` | no | Exit if Steam update fails or `steam` binary missing. |
+| `-steamuser` / `-steampass` | yes | Credentials for Steam update (password requires username). |
+| `-ignoresigint` | no | Ctrl+C does not quit the **wrapper** (empty SIGINT action). |
+| `-notrap` | no | Do not install SIGINT trap on the wrapper. Help text about “lock files” is stale on this script revision. |
+| `-help` | no | Print syntax and exit (code 2). |
 
-Method: `strings` + null-terminated flag scrape, then `addr2line`/disasm xrefs on unstripped DWARF. Cross-checked against Source SDK `Host_Init` / `CServerGameDLL::GetTickInterval` / `CPhoneHome::IsExternalBuild`.
+**Hang note:** `-norestart` only changes post-**exit** behavior. A frozen process never exits, so the wrapper never wakes. Use an external watchdog or spawn the ELF under `timeout`/`systemd`/expect (as CI does).
 
-Reproduce: `testing/scripts/extract-srcds-params.sh` (uses `.ci-cache/srcds_css34_l_a.zip`).
+---
 
-## Layering (what consumes which flags)
+## 2. Dedicated host — `bin/dedicated_*.so` (D)
+
+| Flag | Value | DS? | Description |
+|---|---|---|---|
+| `-game <dir>` | yes | yes | Game/mod directory containing `gameinfo.txt`. |
+| `-defaultgamedir <name>` | yes | rare | Fallback mod name if `-game` missing (stock default path uses `hl2`). |
+| `-textmode` | no | yes | Prefer text console path (no VGUI dedicated UI). |
+| `-condebug` | no | yes | Mirror console output to `cstrike/console.log`. |
+| `-conclearlog` | no | yes | Truncate `console.log` before appending (with `-condebug`). |
+| `-basedir <path>` | yes | rare | Override computed base directory for the install. |
+| `-noasync` | no | rare | Disable async filesystem jobs. |
+| `-fs_log` | no | tool | Start filesystem “copy missing files” logging helper. |
+| `-fs_target <dir>` | yes | tool | Target root for FS log copy scripts. |
+| `-fs_logbins` | no | tool | Emit bin-copy batch fragments on FS shutdown. |
+| `-vcrrecord <file>` | yes | tool | Record VCR input stream. |
+| `-vcrplayback <file>` | yes | tool | Replay VCR input (`can't open` errors if missing). |
+| `-usegh` | no | no | Load `ghostinj.dll` (Windows GhostInject tooling). |
+| `-vproject <path>` | yes | tool | Set VProject for filesystem/gameinfo resolution. |
+| `-NoVConfig` | no | tool | Skip interactive vconfig when gameinfo lookup fails. |
+| `-tempcontent` | no | tool | Add `<mod>_tempcontent` search path. |
+| `-noassert` | no | rare | Soften/suppress assert dialog path in dedicated spew. |
+
+---
+
+## 3. Engine — network & identity (E)
+
+| Flag | Value | DS? | Description |
+|---|---|---|---|
+| `-ip <addr>` | yes | yes | Bind address for the game socket (`NET_Init`). Use `0.0.0.0` for all interfaces. |
+| `-port <n>` | yes | yes | Game listen port (default 27015). |
+| `+port <n>` | yes | yes | Same as `-port` (also accepted by `NET_Init`). |
+| `-steamport <n>` | yes | rare | Extra Steam-related port used during `CSteam3::Init`. |
+| `-noip` | no | rare | Disable IP networking. |
+| `-nodns` | no | rare | Skip DNS in net init. |
+| `-usetcp` | no | rare | Enable TCP listen path alongside UDP. |
+| `-reuse` | no | yes | Allow address reuse on sockets (`NET_OpenSocket`). |
+| `-usercon` | no | yes | Enable remote/user console path (`NET_Config`). |
+| `-nohltv` | no | yes | Disable SourceTV / HLTV. |
+| `-tvmasteronly` | no | rare | SourceTV master-only mode (`CHLTVServer::Init`). |
+| `-insecure` | no | yes | Start without VAC (`CSteam3::Init`). |
+| `-nomaster` | no | yes | Do not talk to Valve master servers. |
+| `-autoupdate` | no | rare | If master requests restart for update, honor that path (`CheckMasterServerRequestRestart`). Distinct from wrapper `-autoupdate`. |
+| `-localcser` | no | yes | Use local CSER / stats upload endpoint (`CUploadGameStats`). Typical on non-Steam/CSS v34 hosting. |
+| `-gamestats` | no | rare | Enable game-stats upload path. |
+| `-maxplayers <n>` | yes | yes | Hard slot cap at `CGameServer::InitMaxClients` (also clamped by game limits). |
+| `-pidfile <path>` | yes | yes | Write the **engine** PID (panel supervisors use this). |
+| `-nogamedll` | no | tool | Skip loading the game DLL (engine-only tooling). |
+
+---
+
+## 4. Engine — developer / phone-home (E)
+
+| Flag | Value | DS? | Description |
+|---|---|---|---|
+| `-dev` | no | rare | In `Host_Init`: set `developer 1` and `sv_cheats 1`. Also marks build **internal** for phone-home. Presence-only — `-dev 1` is the same as `-dev` (the `1` is unused argv). **There is no `-dev2`.** |
+| `-allowdebug` | no | rare | Same cheats/developer effect as `-dev` **unless** `-nodev` is also set. |
+| `-nodev` | no | rare | Blocks the `-allowdebug` → developer/cheats path. |
+| `-phonehome` | no | no | Force phone-home init path in `Host_Init`. |
+| `-internalbuild` | no | no | Treat build as internal (`CPhoneHome::IsExternalBuild`). |
+| `-publicbuild` | no | no | Force “external/public” classification for phone-home. |
+| `-bi <id>` | yes | no | Phone-home **build identifier** override (`CPhoneHome::Init` reads next parm; stock cookie string nearby is `VLV_INTERNAL`). |
+
+Logic (matches Source SDK `Host_Init`):
 
 ```text
-./srcds_run [wrapper flags…] [everything else…]
-        │
-        ├─ consumes: -game -debug -norestart -pidfile -binary -timeout
-        │            -gdb -debuglog -autoupdate -steamerr -ignoresigint
-        │            -notrap -steamuser -steampass -help
-        │
-        └─ passes ALL argv (including its own) to:
-              ./srcds_{i486|i686|amd} …   (CPU auto-detect, or -binary / $FORCE)
-                    │
-                    └─ dlopen bin/dedicated_*.so → engine_*.so → cstrike/bin/server_*.so
+if (-dev) OR (-allowdebug AND NOT -nodev):
+    sv_cheats = 1
+    developer = 1
 ```
-
-`srcds_i686` itself has **no** game flags — only loads dedicated. Unknown tokens are generally ignored (`FindParm` / `CheckParm` miss → no-op).
 
 ---
 
-## `srcds_run` only (not the engine)
+## 5. Engine — logging, precache, misc server (E)
 
-Source of truth: the shell script itself (Copyright Valve 2004). Help text via `./srcds_run -help`.
+| Flag | Value | DS? | Description |
+|---|---|---|---|
+| `-flushlog` | no | rare | Flush server log more aggressively (`CLog`). |
+| `-uselogdir` | no | rare | Prefer `logs/<map>/…` layout (`COM_SetupLogDir`). |
+| `-allowstalezip` | no | rare | Allow spawning with stale/mismatched zip/BSP consistency path. |
+| `-preload` | no | rare | Force model preload behavior in `PrecacheModel`. |
+| `-nopreload` | no | rare | Disable preload. |
+| `-nopreloadmodels` | no | rare | Disable model preload specifically. |
+| `-random_invariant` | no | tool | Deterministic RNG seeding during `Sys_InitGame`. |
+| `-noassert` | no | rare | Soften asserts in engine spew path. |
+| `-surfcachesize <n>` | yes | rare | Override surface cache size. |
+| `-defaultgamedir` | yes | rare | Default mod string when resolving paths. |
+| `-game` | yes | yes | Mod directory (also resolved in engine FS helpers). |
+| `-vproject` / `-NoVConfig` / `-tempcontent` | varies | tool | Filesystem / VProject helpers (same family as dedicated). |
 
-| Flag | Default | Behavior |
+---
+
+## 6. Engine — mapreslist / devshots / test tooling (E)
+
+Valve content pipeline flags; rarely needed on a live DS.
+
+| Flag | Value | Description |
 |---|---|---|
-| `-game <dir>` | `cstrike` | Must be an existing directory |
-| `-norestart` | restart **on** | Clears `RESTART`; after exit, do not loop |
-| `-timeout <sec>` | `10` | Sleep between restart attempts |
-| `-debug` | off | Enable core dumps (`ulimit -c`), after non-zero exit run `gdb` batch (`bt`, `info locals`, …) into `-debuglog` |
-| `-debuglog <file>` | `debug.log` | gdb output target |
-| `-gdb <path>` | `gdb` | Debugger binary |
-| `-pidfile <file>` | auto `hlds.$$.pid` when `-debug` | Noted by script; **pidfile is not appended to the engine cmdline** in this CSS build (block is commented out) |
-| `-binary <path>` | auto-detect | Skip CPU detect; use this ELF |
-| `-autoupdate` | off | Run `./steam -command update …` before each start; also **forces** restart on |
-| `-steamerr` | off | Quit if steam update / binary missing |
-| `-steamuser` / `-steampass` | — | Steam update credentials (both required if password set) |
-| `-ignoresigint` | quit on INT | Empty SIGINT trap action (Ctrl+C does not quit the **wrapper**) |
-| `-notrap` | trap on | Skip `trap … 2` entirely |
+| `-makereslists` | no | Generate reslists (`MapReslistGenerator`). |
+| `-usereslistfile <file>` | yes | Map list file instead of scanning `maps/*.bsp`. |
+| `-startmap <map>` | yes | Resume reslist/devshot generation at map (after crash). |
+| `-forever` | no | Loop map list when finished (`[ -forever ] -- when you get to the end of the maplist, start over`). |
+| `-rebuildaudio` | no | Rebuild audio while generating reslists. |
+| `-trackdeletions` | no | Emit `deletions.bat` for deleted content tracking. |
+| `-makedevshots` | no | Automated map screenshot pass. |
+| `-usedevshotsfile <file>` | yes | Map list for devshots (default `maps/*.bsp`). |
+| `-testscript <file>` | yes | Run a `.vtest`-style test script from host frame loop. |
+| `-spewsentences` | no | Dump sentence wave references while building reslists. |
+| `-dti` | no | DataTable instrumentation (`SendTable_Init`). |
+| `-heapcheck` | no | Heap check around host hunk init. |
+| `-dumpvidmemstats` | no | Video memory stats path during map validation. |
+| `-buildcubemaps` | no | Cubemap build / occlusion tooling. |
+| `-requirecubemaps` | no | Require cubemap samples when loading maps. |
 
-### Why `-norestart` “does nothing” on a hang
-
-`srcds_run` only reacts to **process exit**:
-
-```sh
-# RESTART set (default):
-$HL_CMD
-retval=$?
-# retval==0 → break; else sleep $TIMEOUT and loop
-
-# -norestart:
-exec $HL_CMD   # or run once if -debug
-```
-
-If the server **hard-hangs** (deadlock, stuck in syscall, 100% CPU spin with no exit), there is **no exit code**. The wrapper never wakes up. `-norestart` does not add a watchdog, heartbeat, or timeout.
-
-What actually helps hangs:
-
-- external supervisor (`systemd` with watchdog / `TimeoutStopSec` + kill, `tmux`+manual, `docker --stop-timeout`, custom loop on `status`/`rcon` probe)
-- CI approach in this repo: spawn **engine binary directly** via `expect` (`testing/scripts/console-probe.exp`), not `srcds_run`
-
-### `-notrap` reality on CSS v34
-
-Help text says it prevents “automatic removal of old lock files”. In **this** script version:
-
-- with trap (default): SIGINT runs `quit 0` (or nothing if `-ignoresigint`)
-- `-notrap`: no SIGINT handler on the wrapper; INT goes to the foreground child
-- `quit()` still does `trap - 2; kill -2 $$` on scripted shutdown
-
-There is **no** lock-file cleanup path wired to `-notrap` in this build. Treat it as “don’t steal Ctrl+C”.
-
-### `-debug` (wrapper) ≠ engine developer mode
-
-Wrapper `-debug` ≠ `-dev`. The token `-debug` is also forwarded to the engine argv, but **`engine_i686.so` has no `-debug` string** — so the engine ignores it. GDB/core handling is wrapper-only.
+Embedded help fragment for devshots also documents:  
+`[ -condebug ] -- prepend console.log entries with mapname or engine if not in a map` (engine-side note used by mapreslist tooling; console logging itself is owned by dedicated `-condebug`).
 
 ---
 
-## Engine: `-dev` / `-allowdebug` / `-nodev` (no `-dev2`)
+## 7. Engine — video / window (E) — usually inert on dedicated
 
-Implemented in `Host_Init` (`engine_i686.so`), same logic as Source SDK:
+Still present and xref’d from `InitMaterialSystemConfig` / `Shader_Connect`. On a pure dedicated box they typically do nothing useful.
 
-```cpp
-if ( CommandLine()->FindParm( "-dev" )
-  || ( CommandLine()->FindParm( "-allowdebug" )
-       && !CommandLine()->FindParm( "-nodev" ) ) )
-{
-    sv_cheats.SetValue( 1 );
-    developer.SetValue( 1 );
-}
-```
+| Flag | Value | Description |
+|---|---|---|
+| `-sw` / `-window` / `-windowed` / `-startwindowed` | no | Windowed mode. |
+| `-full` / `-fullscreen` | no | Fullscreen. |
+| `-w` / `-width <n>` | yes | Backbuffer width (`-w` is the short alias). |
+| `-height <n>` | yes | Backbuffer height. (`-h` string exists in the binary but has **no** cmdline xref here — use `-height`.) |
+| `-resizing` | no | Allow resize. |
+| `-safe` | no | Safe video defaults. |
+| `-dxlevel <n>` | yes | Force DX level (e.g. `80` / `90` style values). |
+| `-mat_vsync` / `-mat_antialias` / `-mat_aaquality` | varies | Material system video overrides. |
+| `-adapter <n>` | yes | GPU adapter index. |
+| `-ref` | no | Reference rasterizer path. |
 
-Implications:
+---
 
-| Invocation | Result |
+## 8. Game DLL — `cstrike/bin/server_*.so` (G)
+
+| Flag | Value | DS? | Description |
+|---|---|---|---|
+| `-tickrate <n>` | yes | yes | If `n > 10`, tick interval = `1/n`. Else keep default float ≈ **0.03** → **~33.33 Hz**. Modern Steam CSS removed this for `CSTRIKE_DLL`; **v34 still honors it**. |
+| `-nobots` | no | yes | Prevent bot creation (`CCSBotManager`). |
+| `-game` | yes | rare | Used in level-init / chapter title paths. |
+| `-makedevshots` / `-makereslists` | no | tool | Cooperate with engine tooling (cameras, soundemitter flush, etc.). |
+
+---
+
+## 9. tier0 / steamclient (T / S)
+
+| Flag | Layer | Value | Description |
+|---|---|---|---|
+| `-noassert` | T | no | Skip new assert dialog (`DoNewAssertDialog`). |
+| `-debugbreak` | T | no | Break into debugger on assert (string present; weak xref in this build). |
+| `-mpi_worker` | T/S | no | MPI worker mode. |
+| `-debug_steamapi` | S | no | Extra Steam API debug spew. |
+| `-single_core` | S | no | “Force Steam to run on your primary CPU only.” |
+
+eSTEAM adds **no** additional Valve game flags beyond stock; auth libraries may still expose the steamclient flags above.
+
+BufferFix `srcds_patch`: **273** byte diffs in `engine_i686.so`, **zero** new cmdline strings (memcpy→memmove only).
+
+---
+
+## 10. Verified `+` argv companions
+
+| Token | Layer | Description |
+|---|---|---|
+| `+port <n>` | E | Alternate spelling for `-port` in `NET_Init`. |
+| `+map <name>` | E | Queues map load; also consulted by mapreslist builders (`BuildGeneralMapList`). |
+
+Other `+cvar` / `+cmd` forms work through the normal ConVar/command buffer (not each name needs an ELF cmdline string). Hosting classics that appear as **ConVars** (confirmed as strings, set via `+`):
+
+| Example | Where stored | Notes |
+|---|---|---|
+| `+sv_pure 0` | engine ConVar `sv_pure` | Pure server mode. |
+| `+tv_port 27020` | engine ConVar `tv_port` | SourceTV port (enable TV separately, e.g. `tv_enable`). |
+| `+mp_dynamicpricing 0` | game ConVar | Avoids price-blob download errors on v34. |
+| `+maxplayers` | — | **No** `+maxplayers` NUL string/xref in this engine build — use **`-maxplayers`**. |
+| `+ip` / `-sv_pure` | — | Not present as cmdline tokens here. |
+
+---
+
+## 11. Explicitly absent on CSS v34 public binaries
+
+Searched stock + eSTEAM + `srcds_patch` + myarena SM/MM zip — **no** consumer:
+
+| Token | Notes |
 |---|---|
-| `-dev` | `developer 1` + `sv_cheats 1` |
-| `-dev 1` | Same as `-dev`. `FindParm` only checks **presence** of token `-dev`; the following `1` is an unused argv word (not `ParmValue`) |
-| `-dev2` | **Does not exist** in CSS v34 (no string, no xref) |
-| `-allowdebug` without `-nodev` | Same as `-dev` |
-| `-allowdebug -nodev` | Does **not** force developer/cheats |
-| `+developer 1` / `developer 1` | ConVar only — not identical to `-dev` for phone-home / “external build” checks |
-
-### Side effect: phone-home / “external build”
-
-`CPhoneHome::IsExternalBuild()` treats a build as **internal** if `-dev` **or** `-internalbuild` is present (unless `-publicbuild`). So `-dev` also changes telemetry classification, not just console verbosity.
+| `-dumplongticks` | Later Source / wiki; not in this tree |
+| `-dev2` | Does not exist |
+| `-console` | Windows client/dedicated GUI switch; no Linux ELF consumer |
+| `-debug` (engine) | Wrapper-only; engine has no `-debug` |
+| `-norestart` / `-notrap` (engine) | Wrapper-only |
+| `-nominidumps` / `-nobreakpad` / `-nocrashdialog` | Newer branches |
+| `-tvdisable` / `-pingboost` / `-threads` / `-fork` | Not in these ELFs |
+| `-reader` `-pcmdscpmrc` `-sfwb` `-wsb` `-vcforce` `-sesb` | MyArena panel proprietary / no-op on stock |
 
 ---
 
-## `-dumplongticks` — **absent** on CSS v34
+## 12. Full verified inventory (checklist)
 
-Searched `srcds_*`, `dedicated`, `engine`, `tier0`, `server`: **no** `dumplongticks` / `longtick` string.
+**Wrapper (W):**  
+`-autoupdate` `-binary` `-debug` `-debuglog` `-game` `-gdb` `-help` `-ignoresigint` `-norestart` `-notrap` `-pidfile` `-steamerr` `-steampass` `-steamuser` `-timeout`
 
-Later Source branches (Valve wiki / Orange Box+ dedicated docs) document `-dumplongticks` as “generate minidumps on long server frames”. That is **not** in this 2010 CSS dedicated tree. Closest related bits here: `LinuxMiniDump` symbol exists, but nothing wired to a long-tick cmd/flag by that name.
+**Dedicated (D):**  
+`-NoVConfig` `-basedir` `-conclearlog` `-condebug` `-defaultgamedir` `-fs_log` `-fs_logbins` `-fs_target` `-game` `-noassert` `-noasync` `-tempcontent` `-textmode` `-usegh` `-vcrplayback` `-vcrrecord` `-vproject`
 
-Do not expect `-dumplongticks` to do anything on v34.
+**Engine (E):**  
+`+map` `+port` `-NoVConfig` `-adapter` `-allowdebug` `-allowstalezip` `-autoupdate` `-bi` `-buildcubemaps` `-defaultgamedir` `-dev` `-dti` `-dumpvidmemstats` `-dxlevel` `-flushlog` `-forever` `-full` `-fullscreen` `-game` `-gamestats` `-heapcheck` `-height` `-insecure` `-internalbuild` `-ip` `-localcser` `-makedevshots` `-makereslists` `-mat_aaquality` `-mat_antialias` `-mat_vsync` `-maxplayers` `-noassert` `-nodev` `-nodns` `-nogamedll` `-nohltv` `-noip` `-nomaster` `-nopreload` `-nopreloadmodels` `-phonehome` `-pidfile` `-port` `-preload` `-publicbuild` `-random_invariant` `-rebuildaudio` `-ref` `-requirecubemaps` `-resizing` `-reuse` `-safe` `-spewsentences` `-startmap` `-startwindowed` `-steamport` `-surfcachesize` `-sw` `-tempcontent` `-testscript` `-trackdeletions` `-tvmasteronly` `-usedevshotsfile` `-uselogdir` `-usercon` `-usereslistfile` `-usetcp` `-vproject` `-w` `-width` `-window` `-windowed`
 
----
+**Game (G):**  
+`-game` `-makedevshots` `-makereslists` `-nobots` `-tickrate`
 
-## `-tickrate` — in **game DLL**, not engine
-
-`CServerGameDLL::GetTickInterval()` in `server_i486.so`:
-
-- default interval float `0x3cf5c28f` ≈ **0.03** → **~33.33 Hz** (pre-Valve CSS 66 lock-in)
-- if `FindParm("-tickrate")` and `ParmValue` **> 10** → interval = `1.0 / tickrate`
-- otherwise keep default
-
-Modern Steam CS:S compiled `-tickrate` out for `CSTRIKE_DLL` (SDK2013 comment: “server ops are abusing it”). **v34 still has it** — so `start.sh`’s `-tickrate 66` is meaningful here.
-
-Not present in `engine_i686.so` strings; changing tickrate requires game DLL that still honors the flag.
+**tier0 / steamclient (T/S):**  
+`-debug_steamapi` `-debugbreak` `-mpi_worker` `-noassert` `-single_core`
 
 ---
 
-## Useful engine / dedicated / server flags present in this build
-
-### High-value for dedicated ops
-
-| Flag | Where | Notes |
-|---|---|---|
-| `-game` | eng / ded | Mod directory |
-| `-ip` / `-port` / `-steamport` | eng | Network bind / advertise |
-| `-noip` / `-nodns` | eng | Disable net bits |
-| `-nomaster` | eng | Skip master server (`CMaster` / `UpdateMasterServer`) |
-| `-localcser` | eng | Local CSER / game stats upload path |
-| `-insecure` | eng | Skip VAC path (`CSteam3::Init`) |
-| `-nohltv` / `-tvmasteronly` | eng | SourceTV |
-| `-maxplayers` | eng | Slot cap at launch |
-| `-condebug` / `-conclearlog` | **dedicated** | Console → `console.log` (smoke uses this) |
-| `-textmode` | dedicated | Text console path |
-| `-pidfile` | eng | Engine-side pid file (separate from wrapper’s unused path) |
-| `-nobots` | **server** | Disable bots |
-| `-tickrate` | **server** | See above |
-| `-reuse` | eng | `SO_REUSEADDR`-style reuse |
-| `-usercon` | eng | Present as string (RCON-related in later titles; verify behavior if needed) |
-| `-forever` | eng | Mapreslist loop (`CMapReslistGenerator`) |
-
-### Dev / tooling (often irrelevant on production DS)
-
-`-allowdebug`, `-nodev`, `-dev`, `-makedevshots`, `-makereslists`, `-testscript`, `-profile`, `-heapcheck`, `-noassert` (tier0/engine), `-debugbreak` (tier0), `-vcrrecord`/`-vcrplayback`, `-fs_log*`, `-basedir`, `-vproject`, `-NoVConfig`, client-ish `-window(ed)` / `-width` / `-height` / `-dxlevel` / mat_* flags (mostly inert on pure dedicated).
-
-### Explicitly **not** found in CSS v34 binaries
-
-`-dumplongticks`, `-dev2`, `-debug` (engine), `-norestart` / `-notrap` (engine — wrapper-only), `-tvdisable`, `-console` (Windows-oriented; Linux dedicated uses text console path), `-nocrashdialog`, `-nobreakpad`, `-nominidumps` (common later/SteamPipe), and the MyArena proprietary cluster (`-reader`, `-pcmdscpmrc`, `-sfwb`, `-wsb`, `-vcforce`, `-sesb`).
-
----
-
-## Full verified catalog (all public layers)
-
-Method: NUL-terminated `-flag` scrape across stock + eSTEAM + `srcds_patch`, keep only tokens with an **imm32 xref** (push/mov of string address) or consumed by `srcds_run`. Re-run: `testing/scripts/extract-srcds-params.sh` (details also land in `.ci-cache/flag-details.txt` when produced by the research scrape).
-
-`*` = xref present. Layers: **W**=`srcds_run`, **D**=dedicated, **E**=engine, **G**=game `server`, **T**=tier0, **S**=steamclient.
-
-### Wrapper (`srcds_run`) — W
-
-| Flag | Notes |
-|---|---|
-| `-game` `-debug` `-debuglog` `-norestart` `-pidfile` `-binary` `-timeout` `-gdb` `-autoupdate` `-steamerr` `-steamuser` `-steampass` `-ignoresigint` `-notrap` `-help` | See wrapper section above. `-autoupdate`/`-pidfile` also exist in engine with different meaning. |
-
-### Dedicated (`dedicated_*.so`) — D
-
-| Flag | Function (addr2line) | Role |
-|---|---|---|
-| `-game` | `CDedicatedAppSystemGroup::Main` | Mod directory |
-| `-defaultgamedir` | same | Fallback mod name (`hl2`) |
-| `-textmode` | same | Force text console path |
-| `-condebug` | `CTextConsoleUnix::Init` | Append console to `console.log` |
-| `-conclearlog` | same | Truncate `console.log` before write |
-| `-basedir` | `UTIL_ComputeBaseDir` | Override base directory |
-| `-noasync` | `CBaseFileSystem::InitAsync` | Disable async FS |
-| `-fs_log` / `-fs_target` | `CBaseFileSystem::Init` | FS copy/log script generation |
-| `-fs_logbins` | `CBaseFileSystem::Shutdown` | Emit bin-copy batch bits |
-| `-usegh` | `Load3rdParty` / `InitInstance` | Load `ghostinj.dll` (Win tooling) |
-| `-vcrrecord` / `-vcrplayback` | `main` | VCR input record/replay |
-| `-vproject` / `-NoVConfig` | filesystem setup | VProject / skip vconfig UI |
-| `-tempcontent` | `FileSystem_LoadSearchPaths` | Add `_tempcontent` search path |
-| `-noassert` | `DedicatedSpewOutputFunc` | Suppress assert dialog path |
-
-### Engine (`engine_*.so`) — E — network / server ops
-
-| Flag | Function | Role |
-|---|---|---|
-| `-ip` / `-port` | `NET_Init` | Bind address / game port (`+port` also recognized nearby) |
-| `-steamport` | `CSteam3::Init` | Steam auth/query related port |
-| `-noip` / `-nodns` / `-usetcp` | `NET_Init` | Disable IP / DNS; enable TCP listen path |
-| `-reuse` | `NET_OpenSocket` | `SO_REUSEADDR`-style reuse |
-| `-usercon` | `NET_Config` | Remote console enable path |
-| `-nohltv` | `NET_Init` / `SV_ActivateServer` | Disable SourceTV |
-| `-tvmasteronly` | `CHLTVServer::Init` | HLTV master-only mode |
-| `-insecure` | `CSteam3::Init` | Skip VAC |
-| `-nomaster` | `CMaster::InitConnection` / `UpdateMasterServer` | No master advertise |
-| `-autoupdate` | `CheckMasterServerRequestRestart` | Honor master “restart for update” |
-| `-localcser` | `CUploadGameStats::UpdateConnection` | Local CSER endpoint |
-| `-gamestats` | `CUploadGameStats::*` | Game stats upload enable path |
-| `-maxplayers` | `CGameServer::InitMaxClients` | Slot cap |
-| `-pidfile` | `Sys_InitGame` | Write engine PID file |
-| `-nogamedll` | `Host_Init` | Skip game DLL (tooling) |
-| `-dev` / `-allowdebug` / `-nodev` | `Host_Init` (+ phone-home) | See `-dev` section |
-| `-internalbuild` / `-publicbuild` | `CPhoneHome::IsExternalBuild` | Telemetry classification |
-| `-phonehome` | `Host_Init` | Force phone-home path |
-| `-flushlog` | `CLog::*` | Flush server log aggressively |
-| `-allowstalezip` | `CGameServer::SpawnServer` | Allow stale/mismatched BSP zip |
-| `-preload` / `-nopreload` / `-nopreloadmodels` | `CGameServer::PrecacheModel` | Precache policy |
-| `-random_invariant` | `Sys_InitGame` | Deterministic RNG seeding path |
-| `-uselogdir` | `COM_SetupLogDir` | Use `logs/<map>/…` layout |
-| `-defaultgamedir` | `COM_GetModDirectory` | Default mod string |
-| `-game` / `-vproject` / `-NoVConfig` / `-tempcontent` | FS / mod locate | Same family as dedicated |
-
-### Engine — mapreslist / devshot tooling
-
-| Flag | Function | Role |
-|---|---|---|
-| `-makereslists` | `Host_Init` / `MapReslistGenerator_Init` | Generate reslists |
-| `-usereslistfile` | `CMapReslistGenerator::BuildMapList` | Map list file instead of `maps/*.bsp` |
-| `-startmap` | `EnableReslistGeneration` | Resume reslist at map |
-| `-forever` | `CMapReslistGenerator::RunFrame` | Loop map list |
-| `-rebuildaudio` | same | Rebuild audio during reslist |
-| `-trackdeletions` | `MapReslistGenerator_Init` | Emit `deletions.bat` |
-| `-makedevshots` / `-usedevshotsfile` | `DevShotGenerator_Init` | Automated screenshot pass |
-| `-testscript` | `_Host_RunFrame*` | Run named test script |
-| `-spewsentences` | `VOX_AddSentenceWavesToResList` | Dump sentence waves |
-| `-dti` | `SendTable_Init` / `Host_Init` | DataTable instrumentation |
-| `-heapcheck` | `Host_Init` | Heap check around hunk |
-| `-dumpvidmemstats` | `CModelLoader::Map_IsValid` | Vidmem stats path |
-| `-buildcubemaps` / `-requirecubemaps` | occlusion / cubemap load | Cubemap tooling |
-| `-surfcachesize` | `Sys_GetSurfaceCacheSize` | Override surface cache size |
-
-### Engine — client/window (usually inert on pure DS)
-
-`-sw`, `-w`/`-width`, `-h`/`-height`, `-window`/`-windowed`/`-startwindowed`, `-full`/`-fullscreen`, `-resizing`, `-safe`, `-dxlevel`, `-mat_vsync`, `-mat_antialias`, `-mat_aaquality`, `-adapter`, `-ref` — all hooked from `InitMaterialSystemConfig` / `Shader_Connect`.
-
-### Game DLL (`server_*.so`) — G
-
-| Flag | Function | Role |
-|---|---|---|
-| `-tickrate` | `CServerGameDLL::GetTickInterval` | `>10` → interval `1/N`; else default ~0.03 (≈33.33 Hz) |
-| `-nobots` | `CCSBotManager::*` | Disable bot creation |
-| `-game` | `LevelInit` | Chapter/title path uses mod name |
-| `-makedevshots` / `-makereslists` | various | Coop with engine tooling |
-| `-allowdebug` | (string; module debug-build check) | “Module is a debug build” path |
-
-### tier0 / steamclient — T / S
-
-| Flag | Where | Role |
-|---|---|---|
-| `-noassert` | tier0 `DoNewAssertDialog` | Skip assert UI |
-| `-debugbreak` | tier0 (string present) | Break on assert (xref weak in this build) |
-| `-mpi_worker` | tier0 / steamclient | MPI worker mode |
-| `-debug_steamapi` | steamclient | Steam API debug spew |
-| `-single_core` | steamclient | “Force Steam to run on your primary CPU only” |
-
-### eSTEAM / BufferFix extras
-
-- eSTEAM does **not** add Valve-style game flags beyond stock; steam libs may show `-debug_steamapi` / `-single_core` / `-mpi_worker`.
-- `srcds_patch`: **no new flags** (273-byte engine rewrite only).
-
-### Not cmdline params (noise filtered out)
-
-Hundreds of NUL-strings that look like `-Something` inside eSTEAM OpenSSL/ASN.1 OID names (`-AuthReqTBE`, `-cms`, …), geometry labels (`-Bartels`), temporary paths (`-tmp`, `-ptr`, `-fs`), etc. They have **no** CommandLine xref and are not launch flags.
-
----
-
-## Practical recipes
+## 13. Practical recipes
 
 ```bash
-# Normal hosting (auto-restart on crash/exit≠0 only — NOT hangs)
-./srcds_run -game cstrike -ip 0.0.0.0 -port 27015 -tickrate 66 \
-  -nomaster -localcser +map de_dust2 +maxplayers 32
-
-# One-shot / under external watchdog (preferred if process can freeze)
+# Production-ish v34 (direct binary + external watchdog recommended)
 ./srcds_i686 -game cstrike -ip 0.0.0.0 -port 27015 -tickrate 66 \
-  -nomaster -localcser -norestart   # -norestart is ignored by binary; use for clarity in docs only
-# better: do not use srcds_run at all
+  -maxplayers 32 -condebug -usercon -insecure -localcser -nomaster \
+  -pidfile ../game.pid \
+  +map de_dust2 +sv_pure 0 +mp_dynamicpricing 0
 
-# Crash forensics when the process *exits* non-zero
+# Wrapper auto-restart on crash/exit only (not hangs)
+./srcds_run -game cstrike -ip 0.0.0.0 -port 27015 -tickrate 66 \
+  -timeout 15 -nomaster -localcser +map de_dust2
+
+# Crash forensics when the process exits non-zero
 ./srcds_run -game cstrike -debug -debuglog /tmp/css-debug.log -timeout 15 ...
 
-# Verbose engine spew + cheats (dev box)
-./srcds_i686 -game cstrike -dev -condebug ...
+# Dev spew
+./srcds_i686 -game cstrike -dev -condebug +map de_dust2
 ```
 
 ---
 
-## CI note
-
-Smoke tests intentionally bypass `srcds_run` (`console-probe.exp` spawns `./srcds_i686` directly) so wrapper restart/gdb logic cannot mask hangs or double-start under timeout.
-
----
-
-## Case study: MyArena-style `srcds_i686` cmdline
-
-Observed host launch (direct binary, **not** `srcds_run`):
+## 14. Case study: MyArena cmdline
 
 ```bash
 ./srcds_i686 -game cstrike -ip 0.0.0.0 -port 27015 +map de_dust2_unlimited \
@@ -332,76 +302,17 @@ Observed host launch (direct binary, **not** `srcds_run`):
   -pidfile ../game.pid
 ```
 
-Corpus for this pass (in addition to stock):
-
-| Layer | Source | Same flags as stock? |
-|---|---|---|
-| eSTEAM `engine` / `dedicated` | `srcds_css34_l_eSTEAMATiON.zip` | Yes for Valve flags; auth libs add `-debug_steamapi` only |
-| `srcds_patch` (`engine`/`server`/`steamclient`) | bruno_args BufferFix rar | **273** byte diffs in `engine_i686.so`, **zero** new cmdline strings (memcpy→memmove only) |
-| myarena MM+SM 6522 zip | bitbucket `danyas_dl` bundle | No hits for proprietary tokens below |
-
-### Token-by-token
-
-| Token | Layer that owns it | Effect on **this** launch path (`./srcds_i686`) |
-|---|---|---|
-| `-game cstrike` | dedicated / engine | Required mod dir |
-| `-ip 0.0.0.0` | engine (`NET_Init`) | Bind all interfaces |
-| `-port 27015` | engine (`NET_Init`) | Game port |
-| `+map …` | engine (`+` → Cbuf) | Start map |
-| `-maxplayers 62` | engine | Slot cap at launch |
-| `-tickrate 66` | **server** `GetTickInterval` | interval = `1/66` (v34 still honors this) |
-| `-console` | **nowhere** in Linux ELFs | No-op (Windows `srcds.exe` GUI switch; not a NUL-terminated string in dedicated/engine/server) |
-| `-condebug` | **dedicated** `CTextConsoleUnix::Init` | Write `cstrike/console.log` |
-| `-norestart` | **`srcds_run` only** | **No-op** — binary launch ignores it (and would not help hangs anyway) |
-| `-usercon` | engine (`NET_Config`) | Present / checked; enables remote console path on builds that use it |
-| `-reader 512` | **not found** in any public layer | See proprietary block below |
-| `-insecure` | engine (`CSteam3::Init`) | Skip VAC |
-| `+sv_pure 0` | engine convar `sv_pure` | Pure mode off |
-| `+tv_port 27020` | engine convar `tv_port` | SourceTV port (still need `tv_enable 1` separately if TV is used) |
-| `+mp_dynamicpricing 0` | **server** convar | Avoids “Incorrect price blob / couldn't download price list” spam when left at 1 |
-| `-localcser` | engine | Local CSER / stats path |
-| `-nomaster` | engine | No Valve master advertise |
-| `-debug` | **`srcds_run` only** (engine has no `-debug`) | **No-op** on direct `srcds_i686`. Hits like `-debug_steamapi` / `suid-debug` in steam libs are unrelated substrings |
-| `-pcmdscpmrc` | **not found** | Proprietary — name echoes MyArena **ProcessCmds** (`GoDtm666`), but the public SM bundle has no such argv string |
-| `-sfwb` | **not found** | Proprietary / no-op on stock |
-| `-wsb 2` | **not found** (byte `wsb` in eSTEAM SCI is unrelated garbage) | Proprietary / no-op on stock |
-| `-vcforce` | **not found** | Proprietary / no-op on stock |
-| `-sesb` | **not found** | Proprietary / no-op on stock |
-| `-pidfile ../game.pid` | engine (`Sys_Init`) | Writes PID for the **panel** supervisor (this is the engine-side pidfile, unlike the unused wrapper path) |
-
-### Proprietary cluster (`-reader`, `-pcmdscpmrc`, `-sfwb`, `-wsb`, `-vcforce`, `-sesb`)
-
-Absent from every public binary we scanned:
-
-- stock `srcds_*` / `dedicated` / `engine` / `server` / `tier0` / `vstdlib` / `steamclient`
-- eSTEAM overlay (`libeST_*`, `valve_api`, patched steam_api)
-- BufferFix `srcds_patch`
-- myarena SourceMod/Metamod package (all `.so`)
-
-So on a **stock / rom4s / our CI tree**, those six tokens are ignored argv noise. On MyArena game nodes they may still do something if the host injects:
-
-- a **custom** `srcds_i686` / `engine_*.so` not published in the community zips, or
-- an `LD_PRELOAD` / panel helper that wraps `main`/`CommandLine`, or
-- a license/feature cookie consumed only by private ProcessCmds/host tooling
-
-Do **not** treat them as documented Valve flags. If reproducing a MyArena bug outside their panel, drop them first and retest.
-
-### What is actually useful to copy from that line
-
-Keep for vanilla v34:
-
-```text
--game cstrike -ip 0.0.0.0 -port 27015 -maxplayers N -tickrate 66
--condebug -usercon -insecure -localcser -nomaster -pidfile <path>
-+map <map> +sv_pure 0 +tv_port <port> +mp_dynamicpricing 0
-```
-
-Drop or replace:
-
-| Drop | Why |
+| Keep on stock v34 | Drop / no-op on stock |
 |---|---|
-| `-console` | No Linux consumer |
-| `-norestart` / `-debug` | Only `srcds_run`; meaningless on `srcds_i686` |
-| `-reader` / `-pcmdscpmrc` / `-sfwb` / `-wsb` / `-vcforce` / `-sesb` | Not in public game tree |
+| `-game` `-ip` `-port` `-maxplayers` `-tickrate` `-condebug` `-usercon` `-insecure` `-localcser` `-nomaster` `-pidfile` | `-console` `-norestart` `-debug` |
+| `+map` `+sv_pure` `+tv_port` `+mp_dynamicpricing` | `-reader` `-pcmdscpmrc` `-sfwb` `-wsb` `-vcforce` `-sesb` |
 
-Related panel plugins sometimes seen next to such launches (not cmdline flags): Metamod `addons/daf/bin/dosattackfix`, `nativetools`, SM extension **ProcessCmds** (`processcmds.ext`) by GoDtm666 / MyArena — those load via `addons/`, not via argv.
+Proprietary tokens are absent from stock / eSTEAM / BufferFix / public myarena SM+MM packages — panel-private binary or `LD_PRELOAD`, or dead weight.
+
+Related addons often co-installed by panels (not argv): Metamod `dosattackfix`, `nativetools`, SM **ProcessCmds** (`processcmds.ext`, GoDtm666 / MyArena).
+
+---
+
+## 15. CI note
+
+Smoke tests spawn `./srcds_i686` via expect (`testing/scripts/console-probe.exp`), not `srcds_run`, so wrapper restart/gdb cannot mask hangs.

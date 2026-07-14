@@ -65,7 +65,8 @@ watched = [
     "-notrap", "-norestart", "-tickrate", "-condebug", "-nomaster",
     "-localcser", "-insecure", "-nobots", "-textmode", "-pidfile",
     "-console", "-usercon", "-reader", "-pcmdscpmrc", "-sfwb", "-wsb",
-    "-vcforce", "-sesb",
+    "-vcforce", "-sesb", "-bi", "-w", "-width", "-height", "+port", "+map",
+    "-reuse", "-usetcp", "-nohltv", "-nobots", "-single_core", "-debug_steamapi",
 ]
 
 bins = [
