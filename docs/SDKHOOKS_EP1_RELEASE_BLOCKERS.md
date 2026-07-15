@@ -1,18 +1,19 @@
-# Release blockers: SDKHooks EP1 + Metamod PLAPI (CSS:S v34)
+# Field report: SDKHooks EP1 + Metamod PLAPI (CSS:S v34)
 
-Field report from a live CSS:Source **v34** (EP1 / `server_i486.so`) dedicated
+Field notes from a live CSS:Source **v34** (EP1 / `server_i486.so`) dedicated
 server (Oracle Ampere aarch64 host, 32-bit `srcds_i686`, eSTEAMATiON SCI,
 AppID 240), compared against production backup **2021-07-05** and GitHub
 release tag [`1.11.0.6572-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6572-mm1.10.7).
 
-**Treat both items below as release blockers** for shipping a drop-in
-replacement of a working v34 SM/MM tree.
+**Verdict (re-checked against CI after [#34](https://github.com/fmu1337/sourcemod-css34/pull/34) landed):**
 
-Related in-flight work: SDKHooks **vtable** gamedata overlay is in
-[#34](https://github.com/fmu1337/sourcemod-css34/pull/34) (rom4s / css34
-`builder/assets/gamedata/sdkhooks.games`). That does **not** replace this
-write-up: #34 targets post-load crashes (`IndexOfEdict`); the load-time
-`entity listeners` / `gEntList` path and the PLAPI mix-up are separate.
+| Symptom | Real package bug? | What it actually is |
+|---------|-------------------|---------------------|
+| `Older Metamod… (11 < 14)` | **No** | Install mix: PLAPI-11 SM under leftover **MM 1.11** / `metamod.2.ep1` |
+| `Failed to setup entity listeners` / `gEntList` on **matched** SM+MM | **Not reproduced** in CI | Almost certainly collateral of the mix (or host quirk); see below |
+| Wrong SDKHooks **vtables** in tagged `1.11.0.6572-mm1.10.7` | **Yes** (post-load) | Upstream-ish `OnTakeDamage` 62/63 vs css34 60/61 — fixed on **master** via #34 gamedata overlay; needs a **retag** to ship |
+
+These notes stay useful as an operator trap guide. They are **not** evidence that the matched release pair refuses to load SDKHooks.
 
 ## Environment (reference)
 
@@ -24,59 +25,49 @@ write-up: #34 targets post-load crashes (`IndexOfEdict`); the load-time
 | Working reference | Live DM backup **2021-07-05** (`sm_backup_core`) |
 | Repro instance | `~/v34/sm6572_repro/` on UDP **27035** (prod DM stays on **27015** with SM **6522**) |
 
-## Blocker A — SDKHooks fails to set up entity listeners
+## Symptom A — `Failed to setup entity listeners` / `gEntList`
 
-### Symptoms (when SM 6572 actually loads)
+### What was reported
+
+When SourceMod **1.11.0.6572** appeared to be running on the Ampere host:
 
 ```
 Failed lookup of gEntList - Reverting to networkable entities only
 [SM] Unable to load extension "sdkhooks.ext": Failed to setup entity listeners
 ```
 
-Confirmed in `addons/sourcemod/logs/errors_*.log` on every map load while
-`SourceMod Version: 1.11.0.6572` was running (logs `L20260714.log`,
-`errors_20260715.log`).
+### CI reality (matched SM + MM on amd64 Debian)
 
-Consequence: any plugin needing SDKHooks fails (`flash_spawner`, `map_decals`,
-`disconnect_msg`, VIP ammo, etc.). Mixed fresh core + old plugins/gamedata
-also segfaults in `server_i486.so` on map load / changelevel.
+On the repo’s v34 smoke / botplay tree:
 
-### Cause chain (verified in SM source)
+- Stock smoke may **not list** SDKHooks at all — it only autoloads when a plugin
+  requires it, and smoke’s required-ext assert is currently BinTools / SDK Tools /
+  CS Tools (gap; should assert SDK Hooks when an SMAC/botplay plugin is present).
+- With SMAC/botplay (#34), **SDK Hooks loads cleanly** for:
+  - rom4s SM 6572
+  - built master SM 6572 (with #34 css34 `sdkhooks.games` overlay)
+- No `entity listeners` / `gEntList` load failure in those sessions.
 
-SDKHooks `EntListeners()` calls `gamehelpers->GetGlobalEntityList()`. If that
-is NULL (and there is no `EntityListenersPtr` fallback), load fails with
-**Failed to setup entity listeners**. The SDKTools line about `gEntList` is
-the same underlying failure.
+`EntityListeners` offset **65572** is identical in the 2021 backup, the published
+6572 package, and #34’s overlay — it does **not** distinguish success from
+failure. Release `core.games/engine.ep1.txt` already has linux `@gEntList`.
 
-`EntityListeners` offset **65572** is identical in the 2021 backup, the
-published 6572 package, and #34’s rom4s overlay — it is **not** what
-distinguishes load failure from success.
+So for a **clean matched** install on a normal x86_64 host, treat this symptom as
+**not a confirmed release blocker**. Re-check only if it still appears after the
+checklist below (especially MM version). The Ampere/multiarch host remains an
+unverified variable.
 
-### Backup vs release gamedata (key deltas)
+### Related real issue (vtables, not listeners)
 
-| File | Production backup (works) | Release `1.11.0.6572` |
-|------|---------------------------|------------------------|
-| `sdkhooks.games/common.games.txt` | `EntityListeners` 65572 | same |
-| `sdkhooks.games/game.cstrike.txt` | v34 vtables (e.g. OnTakeDamage **60/61**) | upstream-ish (e.g. **62/63**) — wrong for EP1; tracked in **#34** |
-| `core.games/engine.ep1.txt` | `#default` + `@gEntList` (+ Cmd_ExecuteString, …) | `"cstrike"` + `@gEntList` (signature **present**) |
-| `sdkhooks.ext.2.ep1.so` | SHA ≠ release | different binary |
+Published tag `game.cstrike.txt` still has upstream-ish offsets
+(`OnTakeDamage` linux **63**). Production/css34 backup and #34 assets use **61**.
+That class of bug shows up **after** hooks load (crashes / `IndexOfEdict`), not
+as `Failed to setup entity listeners`. Master already overlays css34
+`builder/assets/gamedata/sdkhooks.games/`; cut a new tag to publish it.
 
-Local `server_i486.so` **does** export `gEntList` (`GLOBAL` `OBJECT` in `.dynsym`,
-size 65592). CI smoke on the matched SM+MM package loads extensions (fails hard
-on `<FAILED>`). So the field load-fail may still involve install mix / host
-quirks, but EP1 gamedata + sdkhooks package content still need re-verify against
-a real v34 `server_i486.so` and an explicit **SDK Hooks** smoke assert.
+## Symptom B — Metamod plugin iface (`11 < 14`)
 
-### Minimal reproduce
-
-1. Clean CSS:v34 tree; start `srcds_i686 -game cstrike +map de_dust2 -insecure`.
-2. Install release SM+MM **as a matched pair** (see Blocker B).
-3. `sm exts list` / error log.
-4. Expected: SDKHooks running. Observed (when 6572 loaded): entity-listeners fail.
-
-## Blocker B — Metamod plugin iface (`11 < 14`) on clean / hybrid installs
-
-### Symptoms (second-instance / swap matrix)
+### What was reported
 
 On the same host, with Metamod reporting **`1.11.0-dev+1130`**, plugin iface
 **16:14** (current:min):
@@ -92,12 +83,12 @@ On the same host, with Metamod reporting **`1.11.0-dev+1130`**, plugin iface
 Message originates in Metamod (`metamod_plugins.cpp`): plugin
 `GetApiVersion() < PLAPI_MIN_VERSION`.
 
-### Verified binary facts (tag `1.11.0.6572-mm1.10.7`)
+### Package facts (tag `1.11.0.6572-mm1.10.7`) — not a build bug
 
 | Artifact | Field |
 |----------|--------|
-| Release `addons/metamod/bin/metamod.1.ep1.so` | String **`1.10.7-dev`** (not 1.11) |
-| Backup `addons/metamod/bin/metamod.2.ep1.so` | String **`1.11.0-dev+1130`** |
+| Release `addons/metamod/bin/metamod.1.ep1.so` | String **`1.10.7-dev`** only (MM package has **no** `metamod.2.ep1.so`) |
+| Backup / myarena `metamod.2.ep1.so` | String **`1.11.0-dev+1130`**, iface min **14** |
 | Release SM/exts | Intentionally advertise **PLAPI 11** |
 
 ### Why the repo pins PLAPI 11
@@ -110,47 +101,44 @@ Message originates in Metamod (`metamod_plugins.cpp`): plugin
 - The patch sets `METAMOD_PLAPI_VERSION` to **11** so SourceMod/exts compile
   against the legacy vtable layout; `GetApiVersion()` returns **11**.
 
-So release SM **must** pair with release (or rom4s-compatible) **MM 1.10.x /
+Release SM **must** pair with release (or rom4s-compatible) **MM 1.10.x /
 `metamod.1.ep1` / PLAPI 11**. Mixing with MM **1.11** (`metamod.2.ep1`, iface
-min **14**) is unsupported and fails before any SDKHooks gamedata runs.
+min **14**) is unsupported and fails **before** any SDKHooks gamedata runs.
 
-Tag naming `…-mm1.10.7` matches the packaged `1.10.7-dev` string. If
-`meta version` shows `1.11.0-dev+1130`, runtime Metamod is **not** the release
-binary (common trap: leftover `metamod.2.ep1.so` from the 2021 / myarena tree
-while `metamod.1.ep1.so` was copied beside it).
+If `meta version` shows `1.11.0-dev+1130`, runtime Metamod is **not** the release
+binary — usual trap: leftover `metamod.2.ep1.so` from the 2021 / myarena tree
+wins over the copied `metamod.1.ep1.so`.
 
-See also the myarena / `1.ep1` vs `2.ep1` matrix already recorded in
+See also the myarena / `1.ep1` vs `2.ep1` matrix in
 [PATCH_STRATEGY.md](PATCH_STRATEGY.md).
 
-## Out of scope (but blocked by A)
+**Classification: operator / hybrid-install confusion**, documented so it is not
+re-investigated as a broken release tarball.
+
+## Out of scope
 
 Production `plugins/cssdm/*.smx` need `cssdm.ext.*.so`. The fresh package does
-**not** ship CS:S DM. Fix A (and a matched MM pair) first; package `cssdm`
-separately if desired.
-
-## Secondary friction (not root cause)
+**not** ship CS:S DM. Package `cssdm` separately if desired.
 
 Stock `adminmenu.smx` can fail `AskPluginLoad` with error 23 when Material Admin
-already registered topmenu natives. Packaging / plugin-set issue on v34, not
-SDKHooks.
-
-## Ask / follow-ups for the repo
-
-1. **Blocker A:** Re-sync/verify EP1 `core.games` + `sdkhooks.games` (+ rebuild
-   test of sdkhooks/sdktools) against a real v34 `server_i486.so`. Land #34’s
-   css34 sdkhooks vtables. Add CI assert that **SDK Hooks** is loaded (not only
-   BinTools / SDK Tools / CS Tools).
-2. **Blocker B:** Document the contract in release notes / README: css34 SM ↔
-   MM PLAPI **11** / SH v4 / `metamod.1.ep1`. Smoke-fail if `meta version` is
-   not the pinned `1.10.7-dev` (or if `metamod.2.ep1` is what actually loads).
-   Do **not** hybrid-test release SM against backup/myarena MM 1.11.
-3. Clarify packaging: tag says `mm1.10.7`; users must install **both** SM and MM
-   tarballs and remove conflicting `metamod.2.ep1.so` from older trees.
+already registered topmenu natives — plugin-set friction, not SDKHooks.
 
 ## Operator checklist (clean second instance)
 
 1. `meta version` → expect **`1.10.7-dev`**, not `1.11.0-dev+1130`.
-2. `addons/metamod/bin/`: release **`metamod.1.ep1.so`** present; do not leave a
-   winning **`metamod.2.ep1.so`** from the backup tree.
-3. Install release **SM tar + MM tar as a pair** (no shim swaps).
-4. Then check SDKHooks / `gEntList`; apply #34 gamedata if hooks load but crash.
+2. `addons/metamod/bin/`: release **`metamod.1.ep1.so`** present; **remove** any
+   leftover **`metamod.2.ep1.so`** from the backup tree.
+3. Install release **SM tar + MM tar as a pair** (no shim / single-file swaps).
+4. `sm exts list` after a plugin that requires SDKHooks (or SMAC) → expect
+   **SDK Hooks** running. If hooks load but crash later, refresh sdkhooks
+   gamedata from master (#34) / retag.
+5. Do **not** hybrid-test release SM against backup/myarena MM 1.11.
+
+## Follow-ups for the repo
+
+1. **Retag** (or patch release) so published `1.11.0.6572-*` includes #34 css34
+   `sdkhooks.games` offsets.
+2. Smoke/botplay: assert **SDK Hooks** is loaded when a requiring plugin is
+   installed (smoke alone can pass without ever autoloading it).
+3. Keep this doc linked from README / release notes as the PLAPI **11** contract
+   and “don’t leave `metamod.2.ep1` around” warning.

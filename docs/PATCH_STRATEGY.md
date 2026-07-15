@@ -195,18 +195,20 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 
 Актуальные наши артефакты — тег `1.11.0.6572-mm1.10.7` (in-tree SM+MM), не myarena.
 
-### Field blockers: SDKHooks EP1 + PLAPI 11 vs MM 1.11 (2026-07-15)
+### Field notes: SDKHooks EP1 + PLAPI 11 vs MM 1.11 (2026-07-15)
 
-На живом CSS:S v34 (Oracle/SCI, backup 2021-07-05 vs tag `1.11.0.6572-mm1.10.7`)
-зафиксированы **два** release blocker’а — полный разбор в
-[SDKHOOKS_EP1_RELEASE_BLOCKERS.md](SDKHOOKS_EP1_RELEASE_BLOCKERS.md):
+Живой CSS:S v34 (Oracle/SCI, backup 2021-07-05 vs tag `1.11.0.6572-mm1.10.7`) —
+полный разбор и пересмотр после [#34](https://github.com/fmu1337/sourcemod-css34/pull/34)
+в [SDKHOOKS_EP1_RELEASE_BLOCKERS.md](SDKHOOKS_EP1_RELEASE_BLOCKERS.md):
 
-1. **SDKHooks** `Failed to setup entity listeners` / SDKTools `gEntList` — когда
-   SM 6572 реально загружен (отдельно от vtable overlay в [#34](https://github.com/fmu1337/sourcemod-css34/pull/34)).
-2. **`11 < 14`** — release SM/exts намеренно PLAPI **11** (`apply-mmsource-css34.sh`);
+1. **`11 < 14`** — **не баг пакета**, а микс: release SM/exts намеренно PLAPI **11**;
    leftover / myarena **`metamod.2.ep1.so` (`1.11.0-dev+1130`, iface min 14)** режет
-   чистый install до entity-listener path. С матчить только MM **1.10.x /
-   `metamod.1.ep1` / `1.10.7-dev`**.
+   install до hooks. Ставить только MM **1.10.x / `metamod.1.ep1` / `1.10.7-dev`**,
+   без старого `2.ep1`.
+2. **`Failed to setup entity listeners` / `gEntList`** на matched SM+MM в CI
+   **не воспроизводится** (botplay грузит SDK Hooks). Реальная проблема тега —
+   неверные **vtable** offsets в published `sdkhooks.games` (мастер чинит через #34;
+   нужен retag).
 
 ### Скрипты на master
 
