@@ -24,9 +24,12 @@ ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 SM_LOG_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/logs"
 
 case "${BOTPLAY_PROFILE}" in
-  built)
+  built|release)
+    # "built" = CI artifacts or local tarballs; "release" = same install path
+    # (pass SM_PACKAGE + MM_PACKAGE from a GitHub Release tag).
     MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
     SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
+    BOTPLAY_PROFILE=built
     ;;
   rom4s)
     MM_URL="${MM_URL:-https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz}"
@@ -35,7 +38,7 @@ case "${BOTPLAY_PROFILE}" in
     SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
     ;;
   *)
-    echo "Unknown BOTPLAY_PROFILE=${BOTPLAY_PROFILE} (use rom4s or built)" >&2
+    echo "Unknown BOTPLAY_PROFILE=${BOTPLAY_PROFILE} (use rom4s, built, or release)" >&2
     exit 1
     ;;
 esac
