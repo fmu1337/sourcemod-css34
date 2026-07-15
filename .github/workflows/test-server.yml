@@ -12,6 +12,20 @@ on:
         description: "Apply bruno_args srcds_patch (1/0)"
         required: false
         default: "1"
+      record_secs:
+        description: "Botplay recording length in seconds"
+        required: false
+        default: "600"
+      botplay_extra_distros:
+        description: "Also run botplay on debian:11, debian:12, rockylinux:9"
+        type: boolean
+        required: false
+        default: false
+      run_botplay_bisect:
+        description: "Run slow botplay bisect matrix (diagnostics)"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: test-server-${{ github.workflow }}-${{ github.ref }}
@@ -108,7 +122,7 @@ jobs:
             testing/scripts/apply-valve-rc-fix.sh
             testing/scripts/apply-srcds-patch.sh
           fi
-          KEEP_MAP=de_dust2 testing/scripts/trim-server-maps.sh
+          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
 
       - name: Pack server tree
         run: |
@@ -357,3 +371,533 @@ jobs:
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
           retention-days: 7
+
+  # Baseline capture: rom4s MM 1.10.6 + SM 6572 + SMAC + 4 bots for ~10 minutes.
+  # Parses round_start / round_end / player_death from engine console.log.
+  test-rom4s-botplay:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    needs: [prepare-server]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Rom4s botplay stress (debian:latest)
+        env:
+          IMAGE: debian:latest
+          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
+          BOTPLAY_PROFILE: rom4s
+          BOTPLAY_CFG: botplay-stress.cfg
+          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
+          MM_VERSION_EXPECT: "1.10.6"
+          SM_VERSION_EXPECT: "1.11.0.6572"
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e RECORD_SECS \
+            -e BOTPLAY_PROFILE \
+            -e BOTPLAY_CFG \
+            -e BOTPLAY_MAPS \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-test.sh
+            '
+
+      - name: Upload botplay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rom4s-botplay-report-debianlatest
+          path: |
+            .ci-server/botplay-report.json
+            .ci-server/botplay-report.txt
+            .ci-server/botplay.log
+            .ci-server/botplay-run.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  test-rom4s-botplay-extra:
+    if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
+    needs: [prepare-server]
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:11
+            image_id: debian11
+          - image: debian:12
+            image_id: debian12
+          - image: rockylinux:9
+            image_id: rocky9
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Rom4s botplay stress (${{ matrix.image }})
+        env:
+          IMAGE: ${{ matrix.image }}
+          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
+          BOTPLAY_PROFILE: rom4s
+          BOTPLAY_CFG: botplay-stress.cfg
+          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
+          MM_VERSION_EXPECT: "1.10.6"
+          SM_VERSION_EXPECT: "1.11.0.6572"
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e RECORD_SECS \
+            -e BOTPLAY_PROFILE \
+            -e BOTPLAY_CFG \
+            -e BOTPLAY_MAPS \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-test.sh
+            '
+
+      - name: Upload botplay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rom4s-botplay-report-${{ matrix.image_id }}
+          path: |
+            .ci-server/botplay-report.json
+            .ci-server/botplay-report.txt
+            .ci-server/botplay.log
+            .ci-server/botplay-run.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Same botplay session on in-tree MM 1.10.7 + SM 6572, compared to rom4s baseline.
+  test-built-botplay:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    needs: [build-linux, prepare-server]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SourceMod package
+        uses: actions/download-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download Metamod package
+        uses: actions/download-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
+          path: packages
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Built botplay stress + compare (debian:latest)
+        env:
+          IMAGE: debian:latest
+          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
+          BOTPLAY_PROFILE: built
+          BOTPLAY_CFG: botplay-stress.cfg
+          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
+          MM_VERSION_EXPECT: "1.10.7"
+          SM_VERSION_EXPECT: "1.11.0.6572"
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e RECORD_SECS \
+            -e BOTPLAY_PROFILE \
+            -e BOTPLAY_CFG \
+            -e BOTPLAY_MAPS \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e REPORT_JSON=/workspace/.ci-server/built-botplay-report.json \
+            -e REPORT_TXT=/workspace/.ci-server/built-botplay-report.txt \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-test.sh
+            '
+
+      - name: Compare built botplay vs rom4s baseline
+        if: always()
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/compare-botplay-reports.sh
+          if [[ -f .ci-server/built-botplay-report.json ]]; then
+            testing/scripts/compare-botplay-reports.sh \
+              testing/botplay/rom4s-baseline.json \
+              .ci-server/built-botplay-report.json \
+              .ci-server/botplay-compare.txt || true
+            cat .ci-server/botplay-compare.txt || true
+          else
+            echo "No built-botplay-report.json to compare" >&2
+          fi
+
+      - name: Upload built botplay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-botplay-report-debianlatest
+          path: |
+            .ci-server/built-botplay-report.json
+            .ci-server/built-botplay-report.txt
+            .ci-server/botplay-compare.txt
+            .ci-server/botplay.log
+            .ci-server/botplay-run.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  test-built-botplay-extra:
+    if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
+    needs: [build-linux, prepare-server]
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:11
+            image_id: debian11
+          - image: debian:12
+            image_id: debian12
+          - image: rockylinux:9
+            image_id: rocky9
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SourceMod package
+        uses: actions/download-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download Metamod package
+        uses: actions/download-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
+          path: packages
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Built botplay stress + compare (${{ matrix.image }})
+        env:
+          IMAGE: ${{ matrix.image }}
+          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
+          BOTPLAY_PROFILE: built
+          BOTPLAY_CFG: botplay-stress.cfg
+          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
+          MM_VERSION_EXPECT: "1.10.7"
+          SM_VERSION_EXPECT: "1.11.0.6572"
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e RECORD_SECS \
+            -e BOTPLAY_PROFILE \
+            -e BOTPLAY_CFG \
+            -e BOTPLAY_MAPS \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e REPORT_JSON=/workspace/.ci-server/built-botplay-report.json \
+            -e REPORT_TXT=/workspace/.ci-server/built-botplay-report.txt \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-test.sh
+            '
+
+      - name: Compare built botplay vs rom4s baseline
+        if: always()
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/compare-botplay-reports.sh
+          if [[ -f .ci-server/built-botplay-report.json ]]; then
+            testing/scripts/compare-botplay-reports.sh \
+              testing/botplay/rom4s-baseline.json \
+              .ci-server/built-botplay-report.json \
+              .ci-server/botplay-compare.txt || true
+            cat .ci-server/botplay-compare.txt || true
+          else
+            echo "No built-botplay-report.json to compare" >&2
+          fi
+
+      - name: Upload built botplay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-botplay-report-${{ matrix.image_id }}
+          path: |
+            .ci-server/built-botplay-report.json
+            .ci-server/built-botplay-report.txt
+            .ci-server/botplay-compare.txt
+            .ci-server/botplay.log
+            .ci-server/botplay-run.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Botplay against published GitHub Release packages (SM 1.12 + SM 1.13 lines).
+  # Master CI still builds 1.11; these lines are released from upgrade branches.
+  test-release-botplay:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    needs: [prepare-server]
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - line: sm12
+            tag: 1.12.0.7239-mm1.12.0
+            sm_asset: sourcemod-1.12.0-git7239-css34-linux.tar.gz
+            mm_asset: mmsource-1.12.0-dev-css34-linux.tar.gz
+            sm_expect: "1.12.0.7239"
+            mm_expect: "1.12.0"
+          - line: sm13
+            tag: 1.13.0.7394-mm1.12.0
+            sm_asset: sourcemod-1.13.0-git7394-css34-linux.tar.gz
+            mm_asset: mmsource-1.12.0-dev-css34-linux.tar.gz
+            sm_expect: "1.13.0.7394"
+            mm_expect: "1.12.0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Download release packages (${{ matrix.tag }})
+        env:
+          TAG: ${{ matrix.tag }}
+          SM_ASSET: ${{ matrix.sm_asset }}
+          MM_ASSET: ${{ matrix.mm_asset }}
+        run: |
+          set -euo pipefail
+          mkdir -p packages
+          base="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          curl -fL --retry 5 --retry-delay 3 -o "packages/${SM_ASSET}" "${base}/${SM_ASSET}"
+          curl -fL --retry 5 --retry-delay 3 -o "packages/${MM_ASSET}" "${base}/${MM_ASSET}"
+          ls -la packages/
+
+      - name: Release botplay stress (${{ matrix.line }} / debian:latest)
+        env:
+          IMAGE: debian:latest
+          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
+          BOTPLAY_PROFILE: release
+          BOTPLAY_CFG: botplay-stress.cfg
+          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          SM_ASSET: ${{ matrix.sm_asset }}
+          MM_ASSET: ${{ matrix.mm_asset }}
+          LINE: ${{ matrix.line }}
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          SM_PACKAGE="packages/${SM_ASSET}"
+          MM_PACKAGE="packages/${MM_ASSET}"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e RECORD_SECS \
+            -e BOTPLAY_PROFILE \
+            -e BOTPLAY_CFG \
+            -e BOTPLAY_MAPS \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e REPORT_JSON=/workspace/.ci-server/release-botplay-report.json \
+            -e REPORT_TXT=/workspace/.ci-server/release-botplay-report.txt \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-test.sh
+            '
+
+      - name: Compare release botplay vs rom4s baseline
+        if: always()
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/compare-botplay-reports.sh
+          if [[ -f .ci-server/release-botplay-report.json ]]; then
+            testing/scripts/compare-botplay-reports.sh \
+              testing/botplay/rom4s-baseline.json \
+              .ci-server/release-botplay-report.json \
+              .ci-server/botplay-compare.txt || true
+            cat .ci-server/botplay-compare.txt || true
+          else
+            echo "No release-botplay-report.json to compare" >&2
+          fi
+
+      - name: Upload release botplay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-botplay-report-${{ matrix.line }}
+          path: |
+            .ci-server/release-botplay-report.json
+            .ci-server/release-botplay-report.txt
+            .ci-server/botplay-compare.txt
+            .ci-server/botplay.log
+            .ci-server/botplay-run.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Optional diagnostics: short botplay cases (slow; workflow_dispatch only).
+  test-botplay-bisect:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_botplay_bisect == true
+    needs: [build-linux, prepare-server]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SourceMod package
+        uses: actions/download-artifact@v4
+        with:
+          name: sourcemod-css34-linux-for-test
+          path: packages
+
+      - name: Download Metamod package
+        uses: actions/download-artifact@v4
+        with:
+          name: metamod-css34-linux-for-test
+          path: packages
+
+      - name: Download server tree
+        uses: actions/download-artifact@v4
+        with:
+          name: css34-server-tree
+          path: server-art
+
+      - name: Botplay bisect quick matrix (debian:latest, 90s/case)
+        env:
+          IMAGE: debian:latest
+          RECORD_SECS: "90"
+          BISECT_SET: quick
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e RECORD_SECS \
+            -e BISECT_SET \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e BISECT_OUT=/workspace/.ci-bisect/results.tsv \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server-seed /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server-seed
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-bisect.sh
+              cat /workspace/.ci-bisect/results.tsv
+            '
+
+      - name: Upload bisect results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: botplay-bisect-results
+          path: |
+            .ci-bisect/results.tsv
+            .ci-bisect/*/botplay-report.txt
+            .ci-bisect/*/cstrike/console.log
+          if-no-files-found: ignore
+          retention-days: 14
