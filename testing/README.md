@@ -60,6 +60,8 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 | sm12 | `1.12.0.7239-mm1.12.0` | SM 1.12.0.7239 + MM 1.12.0-dev |
 | sm13 | `1.13.0.7394-mm1.12.0` | SM 1.13.0.7394 + MM 1.12.0-dev |
 
+SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/` (not shipped in the tarball). `botplay-test.sh` installs `GeoLite2-Country.mmdb` via `install-geoip2-db.sh` so SMAC core can load; `prepare-package.sh` does the same for future packages.
+
 **Stress profile (default):** `botplay-stress.cfg` execs `botplay-server.cfg` (fast 1‑minute rounds) then raises `bot_quota` to 8. Plugin `css34_botplay_stress.smx` rotates maps every 3 rounds (`de_dust2` → `de_inferno` → `de_nuke`) and logs sdkhooks/sdktools ABI probe results each round.
 
 **CI distro default:** `test-rom4s-botplay`, `test-built-botplay`, and `test-release-botplay` run on **`debian:latest`** (~20 min + 2× release sessions on `cursor/**` pushes). Extra images (`debian:11`, `debian:12`, `rockylinux:9`) for rom4s/built are optional via workflow_dispatch input `botplay_extra_distros`.

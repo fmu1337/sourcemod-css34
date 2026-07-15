@@ -86,6 +86,21 @@ if [ -f "$core_cfg" ]; then
   sed -i 's/^\(\s*"DisableAutoUpdate"\s*\)"no"/\1"yes"/' "$core_cfg"
 fi
 
+# SM 1.12+ geoip.ext looks for any *.mmdb under configs/geoip (legacy GeoIP.dat
+# is not enough). Official SM also omits the DB; ship GeoLite2-Country for css34.
+geoip_cfg="$SM_ROOT/configs/geoip"
+if [ -f "$SM_ROOT/extensions/geoip.ext.so" ] || [ -f "$SM_ROOT/extensions/geoip.ext.dll" ]; then
+  mkdir -p "$geoip_cfg"
+  shopt -s nullglob
+  mmdbs=("$geoip_cfg"/*.mmdb)
+  shopt -u nullglob
+  if [ "${#mmdbs[@]}" -eq 0 ]; then
+    echo "==> Fetching GeoLite2-Country.mmdb for geoip.ext"
+    chmod +x "$BUILDER_DIR/download-geolite2.sh"
+    CACHE_DIR="${CACHE_DIR:-$DEPS_DIR}" "$BUILDER_DIR/download-geolite2.sh" "$geoip_cfg"
+  fi
+fi
+
 echo "==> Fetching upstream translations"
 translations_dir="$DEPS_DIR/sourcemod-translations"
 rm -rf "$translations_dir"

@@ -87,6 +87,13 @@ if [[ "${SKIP_INSTALL_ADDONS:-0}" != "1" ]]; then
   esac
 fi
 
+# SM 1.12+ geoip.ext needs a *.mmdb under configs/geoip (packages do not ship it).
+# Without it SMAC core fails: Required extension "GeoIP" not running.
+if [[ "${INSTALL_GEOIP2_DB:-1}" == "1" ]]; then
+  export SERVER_DIR CACHE_DIR="${CACHE_DIR:-${ROOT}/.ci-cache}"
+  "${ROOT}/testing/scripts/install-geoip2-db.sh"
+fi
+
 mkdir -p "${SERVER_DIR}/cstrike/cfg"
 cp -f "${ROOT}/testing/cfg/botplay-server.cfg" "${SERVER_DIR}/cstrike/cfg/botplay-server.cfg"
 if [[ -f "${ROOT}/testing/cfg/${BOTPLAY_CFG}" ]]; then
