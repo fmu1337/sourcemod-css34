@@ -1,0 +1,23 @@
+{
+  "profile": "rom4s",
+  "packages": {
+    "metamod": "1.10.6",
+    "sourcemod": "1.11.0.6572"
+  },
+  "map": "de_dust2",
+  "record_secs": 600,
+  "events": {
+    "round_start": 12,
+    "round_end": 10,
+    "player_death": 24
+  },
+  "smac": {
+    "running_plugins": 16,
+    "failed_plugins": 0
+  },
+  "stability": {
+    "crash": false,
+    "sm_log_errors": 0
+  },
+  "notes": "Captured from CI test-rom4s-botplay on debian:11 (run 29307603188)."
+}
