@@ -195,6 +195,21 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 
 Актуальные наши артефакты — тег `1.11.0.6572-mm1.10.7` (in-tree SM+MM), не myarena.
 
+### Field notes: SDKHooks EP1 + PLAPI 11 vs MM 1.11 (2026-07-15)
+
+Живой CSS:S v34 (Oracle/SCI, backup 2021-07-05 vs tag `1.11.0.6572-mm1.10.7`) —
+полный разбор и пересмотр после [#34](https://github.com/fmu1337/sourcemod-css34/pull/34)
+в [SDKHOOKS_EP1_RELEASE_BLOCKERS.md](SDKHOOKS_EP1_RELEASE_BLOCKERS.md):
+
+1. **`11 < 14`** — **не баг пакета**, а микс: release SM/exts намеренно PLAPI **11**;
+   leftover / myarena **`metamod.2.ep1.so` (`1.11.0-dev+1130`, iface min 14)** режет
+   install до hooks. Ставить только MM **1.10.x / `metamod.1.ep1` / `1.10.7-dev`**,
+   без старого `2.ep1`.
+2. **`Failed to setup entity listeners` / `gEntList`** на matched SM+MM в CI
+   **не воспроизводится** (botplay грузит SDK Hooks). Реальная проблема тега —
+   неверные **vtable** offsets в published `sdkhooks.games` (мастер чинит через #34;
+   нужен retag).
+
 ### Скрипты на master
 
 ```bash
@@ -214,6 +229,7 @@ sudo bash testing/scripts/run-built-mm-matrix.sh
 | [PR #10](https://github.com/fmu1337/sourcemod-css34/pull/10) | Dual-track 6572/6970 отвергнут; грабли ≥6800 сохранены выше |
 | [PR #15](https://github.com/fmu1337/sourcemod-css34/pull/15) | Mid 6588 отвергнут как merge; pin/ancestry/headers сохранены в секции «Mid-шаг 6588» |
 | [PR #17](https://github.com/fmu1337/sourcemod-css34/pull/17) | Tooling landed via #19; myarena/MM compatibility notes выше |
+| Field report 2026-07-15 | SDKHooks `gEntList` + MM PLAPI 11 vs 1.11 mix — [SDKHOOKS_EP1_RELEASE_BLOCKERS.md](SDKHOOKS_EP1_RELEASE_BLOCKERS.md); sdkhooks vtables → #34 |
 | [PR #4](https://github.com/fmu1337/sourcemod-css34/pull/4), [PR #9](https://github.com/fmu1337/sourcemod-css34/pull/9) | Byte-identical vs rom4s — **не преследуем**; вердикт в [BYTE_MATCH.md](BYTE_MATCH.md) |
 | `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
 | Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |
