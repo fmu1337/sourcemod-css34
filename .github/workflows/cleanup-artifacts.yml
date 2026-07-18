@@ -1,0 +1,89 @@
+name: Cleanup Artifacts
+
+# One-shot / periodic purge of Actions artifacts that fill the included 0.5 GB storage.
+# Run manually after merging, or leave on the weekly schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      keep_hours:
+        description: "Keep artifacts newer than this many hours (0 = delete all)"
+        required: false
+        default: "0"
+      dry_run:
+        description: "List what would be deleted without deleting"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    # Sundays 06:00 UTC — sweep anything older than keep window below.
+    - cron: '0 6 * * 0'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old Actions artifacts
+        uses: actions/github-script@v7
+        env:
+          KEEP_HOURS: ${{ github.event.inputs.keep_hours || '48' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        with:
+          script: |
+            const keepHours = parseInt(process.env.KEEP_HOURS || '48', 10);
+            const dryRun = String(process.env.DRY_RUN || 'false') === 'true';
+            const cutoff = Date.now() - keepHours * 3600 * 1000;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            let deleted = 0;
+            let skipped = 0;
+            let freed = 0;
+            let failed = 0;
+
+            for await (const response of github.paginate.iterator(
+              github.rest.actions.listArtifactsForRepo,
+              { owner, repo, per_page: 100 }
+            )) {
+              for (const art of response.data) {
+                if (art.expired) {
+                  skipped++;
+                  continue;
+                }
+                const created = new Date(art.created_at).getTime();
+                if (created >= cutoff) {
+                  skipped++;
+                  continue;
+                }
+                const mb = (art.size_in_bytes / (1024 * 1024)).toFixed(1);
+                core.info(
+                  `${dryRun ? '[dry-run] would delete' : 'deleting'} ${art.name} (#${art.id}) ${mb} MB created=${art.created_at}`
+                );
+                if (dryRun) {
+                  deleted++;
+                  freed += art.size_in_bytes;
+                  continue;
+                }
+                try {
+                  await github.rest.actions.deleteArtifact({
+                    owner,
+                    repo,
+                    artifact_id: art.id,
+                  });
+                  deleted++;
+                  freed += art.size_in_bytes;
+                } catch (e) {
+                  failed++;
+                  core.warning(`failed to delete #${art.id}: ${e.message}`);
+                }
+              }
+            }
+
+            const freedGb = (freed / (1024 * 1024 * 1024)).toFixed(2);
+            core.notice(
+              `${dryRun ? 'Dry-run: would free' : 'Freed'} ~${freedGb} GB ` +
+              `(deleted=${deleted}, skipped=${skipped}, failed=${failed}, keep_hours=${keepHours})`
+            );
