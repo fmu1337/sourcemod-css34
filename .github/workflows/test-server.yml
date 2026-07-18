@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       apply_srcds_patch:
-        description: "Apply bruno_args srcds_patch (1/0)"
+        description: "Apply BufferFix ELF rewrite memcpy→memmove (1/0)"
         required: false
         default: "1"
       record_secs:
@@ -30,9 +30,6 @@ on:
 concurrency:
   group: test-server-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  SRCDS_PATCH_URL: https://github.com/fmu1337/sourcemod-css34/raw/bufferfix/srcds_patch%20(1).rar
 
 jobs:
   build-linux:
