@@ -1,6 +1,8 @@
-# BufferFix / srcds_patch analysis
+# BufferFix / srcds_patch (CS:S v34 on modern glibc)
 
-Context: [hlmod thread](https://hlmod.net/threads/cs-s-v34-bufferfix-fiks-krivogo-bufera-valve-rc-unknown-command.63301/), [post with srcds_patch](https://hlmod.net/threads/cs-s-v34-bufferfix-fiks-krivogo-bufera-valve-rc-unknown-command.63301/page-2#post-656715), [WeSTManCoder/BufferFix](https://github.com/WeSTManCoder/BufferFix), archive on branch `bufferfix` (`srcds_patch (1).rar`).
+Context: [hlmod thread](https://hlmod.net/threads/cs-s-v34-bufferfix-fiks-krivogo-bufera-valve-rc-unknown-command.63301/),
+[post with srcds_patch](https://hlmod.net/threads/cs-s-v34-bufferfix-fiks-krivogo-bufera-valve-rc-unknown-command.63301/page-2#post-656715),
+[WeSTManCoder/BufferFix](https://github.com/WeSTManCoder/BufferFix).
 
 ## Problem
 
@@ -10,37 +12,59 @@ CS:S v34 dedicated server on modern Linux (Debian 9+, newer glibc) often:
 - fails to load configs / SourceMod unreliably
 - prints `Incorrect price blob version!` and `Assertion Failed: !"Implement me!"`
 
-Root cause: engine code uses `memcpy` on overlapping buffers. Older glibc was more permissive; modern `memcpy` is undefined for overlaps. `memmove` is the correct call.
+Root cause: engine / `server_i486.so` use `memcpy` on **overlapping** buffers.
+Older glibc was permissive; modern `memcpy` is undefined for overlaps.
+`memmove` is the correct call.
 
 ## Approaches
 
 | Approach | What it does | Pros | Cons |
 |---|---|---|---|
-| Edit `cstrike/cfg/valve.rc` | Minimal cfg (no comments / less parse work) | Tiny workaround | Does **not** fix the underlying memcpy bug; may still fail |
-| BufferFix VSP | Runtime hook: `memcpy` → `memmove` via subhook | Clean, reversible | Needs `_i486` suffix on v34; loads after some early parsing |
-| **srcds_patch (bruno_args)** | Binary rewrite of engine/server/steamclient | No VSP; works before early cfg parse; silences two spam messages | Opaque binary patch of Valve `.so` files |
+| Edit `cstrike/cfg/valve.rc` | Minimal cfg (less parse work) | Tiny workaround | Does **not** fix memcpy |
+| BufferFix VSP | Runtime hook `memcpy` → `memmove` | Clean, reversible | Needs `_i486` suffix; loads after some early parse |
+| **ELF rewrite (this repo)** | Same binary edits as bruno_args `srcds_patch`, done by script | No VSP; no patched blobs in git; works before early cfg | Touches proprietary `.so` files in the **server tree** (not in this repo) |
 
-## What srcds_patch actually changes (validated)
+## What the script changes
 
-Compared stock binaries from `srcds_css34_l_a.zip` / `srcds_css34_l_eSTEAMATiON.zip` to the rar contents (same file sizes, in-place edits):
+`testing/scripts/patch-srcds-bufferfix.py` (via `apply-srcds-patch.sh`) edits a
+stock server tree in place. Validated against the historical hlmod rar
+(`srcds_patch (1).rar`): same sizes, `memcpy` relocation count → **0**.
 
-1. **`bin/engine_{amd,i486,i686}.so`**
-   - All `R_386_PC32` relocations that pointed at `memcpy` were retargeted to `memmove`.
-   - Example (`engine_i486.so`): stock `memcpy` relocs **126** → patched **0**; `memmove` **186** → **312**.
-   - The `memcpy` `.dynsym` entry is zeroed so the dynamic linker no longer binds `memcpy` for those sites.
+### 1. `bin/engine_{amd,i486,i686}.so` and `cstrike/bin/server_i486.so`
 
-2. **`cstrike/bin/server_i486.so`**
-   - Same memcpy→memmove relocation rewrite (stock memcpy relocs **193** → **0**).
+1. Find ELF32 `.dynsym` indices for `memcpy` and `memmove`.
+2. For every relocation in `.rel.dyn` / `.rel.plt` whose symbol is `memcpy`,
+   rewrite `r_info` so the symbol is `memmove` (relocation type unchanged).
+3. Zero the primary `memcpy` `.dynsym` entry (16 bytes) and its `.gnu.version`
+   slot so the loader no longer binds `memcpy` for those sites.
 
-3. **`bin/steamclient_i486.so`**
-   - Three call sites that push/`call` the `"Assertion Failed: !"Implement me!"` path are replaced with `jmp +0x0a` + NOPs (message suppressed only; string left in binary).
+Example (`engine_i486.so` from `srcds_css34_l_a.zip`): stock `memcpy` relocs
+**126** → **0**; `memmove` **186** → **312**.
 
-This matches the author’s claim: BufferFix is unnecessary after the patch, and the two noisy messages are muted. The patch is **technically valid** and safe to use for smoke tests on modern distros.
+### 2. `bin/steamclient_i486.so` (noise only)
+
+Three call sites that push/`call` the `"Assertion Failed: !"Implement me!"`
+string are replaced with `jmp +0x0a` + NOPs (string left in the binary).
+Optional: `SRCDS_PATCH_STEAMCLIENT=0`.
+
+### Not shipped in git
+
+We do **not** keep pre-patched Valve binaries or the rar in this repository.
+CI downloads stock zips via `fetch-server.sh`, then runs the script.
+
+## Apply locally
+
+```bash
+SERVER_DIR=/path/to/css34 \
+  APPLY_SRCDS_PATCH=1 testing/scripts/apply-srcds-patch.sh
+# or directly:
+python3 testing/scripts/patch-srcds-bufferfix.py /path/to/css34
+```
+
+Keep the minimal `valve.rc` rewrite as a cheap extra (`APPLY_VALVE_RC=1`).
 
 ## Recommendation for CI
 
-- Prefer **srcds_patch** for Debian 9+ / modern CentOS-family images.
-- Keep the **valve.rc** minimal rewrite as a cheap extra (harmless with the patch).
-- BufferFix VSP remains a valid alternative when you cannot replace engine binaries.
-
-Do not treat srcds_patch as open-source SourceMod code: it is a binary patch of proprietary server libraries. CI downloads it from the `bufferfix` branch and applies it onto a freshly fetched stock server.
+- Default: run the ELF rewrite on Debian 9+ / modern RHEL-family images.
+- BufferFix VSP remains valid when you cannot rewrite engine binaries.
+- Do not treat these edits as SourceMod source: they patch proprietary server libs.

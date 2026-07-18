@@ -45,7 +45,7 @@ String-audited notes for CSS v34 (`-dev`, `-debug`, `-norestart`, `-tickrate`, d
 See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 
 - minimal `cstrike/cfg/valve.rc`
-- **srcds_patch** (bruno_args) — verified memcpy→memmove rewrite
+- **srcds_patch** — ELF rewrite memcpy→memmove (`patch-srcds-bufferfix.py`)
 
 ## Botplay baseline (rom4s + SMAC)
 
