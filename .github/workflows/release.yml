@@ -65,6 +65,8 @@ jobs:
           name: sourcemod-css34-linux
           path: packages/sourcemod-*-css34-linux.tar.gz
           if-no-files-found: error
+          # Intermediate only — release assets live on the GitHub Release.
+          retention-days: 1
 
       - name: Upload Metamod artifact
         uses: actions/upload-artifact@v4
@@ -72,6 +74,7 @@ jobs:
           name: metamod-css34-linux
           path: packages/mmsource-*-css34-linux.tar.gz
           if-no-files-found: error
+          retention-days: 1
 
   windows:
     runs-on: windows-latest
@@ -110,6 +113,7 @@ jobs:
           name: sourcemod-css34-windows
           path: packages/sourcemod-*-css34-windows.zip
           if-no-files-found: error
+          retention-days: 1
 
       - name: Upload Metamod artifact
         uses: actions/upload-artifact@v4
@@ -117,6 +121,7 @@ jobs:
           name: metamod-css34-windows
           path: packages/mmsource-*-css34-windows.zip
           if-no-files-found: error
+          retention-days: 1
 
   release:
     needs: [linux, windows]

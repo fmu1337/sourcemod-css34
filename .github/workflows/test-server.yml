@@ -5,7 +5,15 @@ on:
     branches:
       - master
       - 'cursor/**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/workflows/cleanup-artifacts.yml'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/workflows/cleanup-artifacts.yml'
   workflow_dispatch:
     inputs:
       apply_srcds_patch:
@@ -62,6 +70,8 @@ jobs:
           name: sourcemod-css34-linux-for-test
           path: packages/sourcemod-*-css34-linux.tar.gz
           if-no-files-found: error
+          # Shared between jobs in this run; keep short — fills Actions storage fast.
+          retention-days: 2
 
       - name: Upload Metamod package
         uses: actions/upload-artifact@v4
@@ -69,6 +79,7 @@ jobs:
           name: metamod-css34-linux-for-test
           path: packages/mmsource-*-css34-linux.tar.gz
           if-no-files-found: error
+          retention-days: 2
 
   check-built-package:
     needs: [build-linux]
@@ -134,7 +145,8 @@ jobs:
         with:
           name: css34-server-tree
           path: css34-server.tar.gz
-          retention-days: 3
+          # ~500 MB each; 0.5 GB included Actions storage cannot hold many copies.
+          retention-days: 1
 
   # Primary gate: our built Metamod 1.10.7 + SourceMod 6572 on modern glibc.
   # Packages are produced in debian:11 (legacy-build.sh), so Debian 11+ / Rocky 9.
