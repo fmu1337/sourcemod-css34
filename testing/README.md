@@ -134,4 +134,4 @@ Needs root (or passwordless sudo) inside the target distro for package installs.
 
 ## Version URLs
 
-Historical community SM/MM download URLs are listed in [`versions/matrix.json`](versions/matrix.json) for local comparison only — CI does not pull them.
+Published release pairs (1.11 / 1.12 / 1.13) and mix PASS/FAIL notes live in [`versions/matrix.json`](versions/matrix.json) and the root [README](../README.md#releases-matched-sm--mm). Historical community URLs under `reference` are for local comparison only — CI smoke does not pull them.
