@@ -1,19 +1,94 @@
 {
-  "metamod": {
-    "1.10.6": "https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz"
+  "releases": {
+    "1.11.0.6572-mm1.10.7": {
+      "role": "production",
+      "sourcemod": "1.11.0-git6572",
+      "metamod": "1.10.7-dev",
+      "metamod_binary": "metamod.1.ep1",
+      "plapi": 11,
+      "assets": {
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6572-mm1.10.7/sourcemod-1.11.0-git6572-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6572-mm1.10.7/mmsource-1.10.7-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6572-mm1.10.7/sourcemod-1.11.0-git6572-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6572-mm1.10.7/mmsource-1.10.7-dev-css34-windows.zip"
+      },
+      "verified": ["ci_smoke_debian_rocky_host", "botplay_built"]
+    },
+    "1.12.0.7239-mm1.12.0": {
+      "role": "alternate",
+      "sourcemod": "1.12.0-git7239",
+      "metamod": "1.12.0-dev",
+      "assets": {
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7239-mm1.12.0/sourcemod-1.12.0-git7239-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7239-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7239-mm1.12.0/sourcemod-1.12.0-git7239-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7239-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
+      },
+      "verified": ["botplay_release"]
+    },
+    "1.13.0.7394-mm1.12.0": {
+      "role": "alternate",
+      "sourcemod": "1.13.0-git7394",
+      "metamod": "1.12.0-dev",
+      "assets": {
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7394-mm1.12.0/sourcemod-1.13.0-git7394-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7394-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7394-mm1.12.0/sourcemod-1.13.0-git7394-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7394-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
+      },
+      "verified": ["botplay_release"]
+    }
   },
-  "sourcemod": {
-    "1.6.4-git4626": "https://bitbucket.org/_4/smdrop-1.6/downloads/sourcemod-1.6.4-stable-git4626-css34-linux.tar.gz",
-    "1.9.0-git6224": "https://bitbucket.org/_4/smdrop-1.9/downloads/sourcemod-1.9.0-git6224-linux.tar.gz",
-    "1.11.0-git6490": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6490/sourcemod-1.11.0-git6490-css34-linux.tar.gz",
-    "1.11.0-git6541": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6541/sourcemod-1.11.0-git6541-css34-linux.tar.gz",
-    "1.11.0-git6572": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz",
-    "1.9.0-myarena": "https://bitbucket.org/fmu1337/danyas_dl/downloads/SourceMod_1.9.0.6189_css_v34_1.zip",
-    "1.11-myarena-bundle": "https://bitbucket.org/fmu1337/danyas_dl/downloads/mms-1.11.0-1130_sourcemod-1.11.0-6522-css_v34-linux-up-git6541-10.05.2020-fix-gamedata-12.10.2020_1.zip"
+  "compatibility": [
+    {
+      "mm": "built/rom4s 1.10.x metamod.1.ep1",
+      "sm": "built/rom4s 1.11.0.6572",
+      "result": "PASS",
+      "notes": "Production CI path"
+    },
+    {
+      "mm": "release 1.12.0-dev (matched tag)",
+      "sm": "1.12.0.7239 or 1.13.0.7394 (matched tag)",
+      "result": "PASS",
+      "notes": "test-release-botplay on cursor/** / workflow_dispatch"
+    },
+    {
+      "mm": "myarena 1.11 metamod.2.ep1",
+      "sm": "rom4s 1.11.0.6572",
+      "result": "PASS",
+      "notes": "Field/CI mix; not our release install path"
+    },
+    {
+      "mm": "built/rom4s 1.10.x",
+      "sm": "myarena 6522 (2.ep1 only)",
+      "result": "FAIL",
+      "notes": "Expected — myarena SM needs MM 1.11 / CreateInterface_MMS-only bridge"
+    },
+    {
+      "mm": "myarena 1.11 metamod.2.ep1 (iface min 14)",
+      "sm": "release 1.11.0.6572 (PLAPI 11)",
+      "result": "FAIL",
+      "notes": "Older Metamod (11 < 14) — leftover MM, not a package bug"
+    }
+  ],
+  "reference": {
+    "metamod": {
+      "1.10.6": "https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz"
+    },
+    "sourcemod": {
+      "1.6.4-git4626": "https://bitbucket.org/_4/smdrop-1.6/downloads/sourcemod-1.6.4-stable-git4626-css34-linux.tar.gz",
+      "1.9.0-git6224": "https://bitbucket.org/_4/smdrop-1.9/downloads/sourcemod-1.9.0-git6224-linux.tar.gz",
+      "1.11.0-git6490": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6490/sourcemod-1.11.0-git6490-css34-linux.tar.gz",
+      "1.11.0-git6541": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6541/sourcemod-1.11.0-git6541-css34-linux.tar.gz",
+      "1.11.0-git6572": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz",
+      "1.9.0-myarena": "https://bitbucket.org/fmu1337/danyas_dl/downloads/SourceMod_1.9.0.6189_css_v34_1.zip",
+      "1.11-myarena-bundle": "https://bitbucket.org/fmu1337/danyas_dl/downloads/mms-1.11.0-1130_sourcemod-1.11.0-6522-css_v34-linux-up-git6541-10.05.2020-fix-gamedata-12.10.2020_1.zip"
+    }
   },
   "notes": [
-    "CI smoke uses only freshly built packages from this repo: MM 1.10.7-dev + SM 1.11.0.6572.",
-    "URLs above are for local comparison / historical reference; Test Server workflow does not download them.",
-    "myarena bundles are zip overlays; install-addons.sh currently expects tar.gz for SM_URL/SM_PACKAGE."
+    "Master CI smoke builds only MM 1.10.7-dev + SM 1.11.0.6572.",
+    "Use matched release tags; do not mix MM from one line with SM from another.",
+    "Published 1.11.0.6572-mm1.10.7 needs retag for #34 sdkhooks.games css34 overlay (fixed on master).",
+    "reference.* URLs are historical community drops for local comparison only."
   ]
 }
