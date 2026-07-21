@@ -154,6 +154,24 @@ if needle not in text:
     raise SystemExit('Failed to locate compiler flags block in AMBuildScript')
 text = text.replace(needle, insert, 1)
 
+# 6970+ / modern AMBuild tip: DetectCxx may leave linker_argv as raw `ld`, which
+# rejects -static-libstdc++ ("unrecognized -a option `tic-libstdc++'"). Force the
+# C++ driver (same fix as apply-sourcemod-v112.sh).
+if "css34: link via C++ driver" not in text:
+    detect_anchor = "    if not self.all_targets:\n        raise Exception('No suitable C/C++ compiler was found.')\n"
+    if detect_anchor in text:
+        text = text.replace(
+            detect_anchor,
+            detect_anchor
+            + """
+    # css34: link via C++ driver (AMBuild tip uses raw ld by default)
+    for _cxx in self.all_targets:
+      _cxx.linker_argv = list(_cxx.cxx_argv)
+""",
+            1,
+        )
+        print('==> Forced linker_argv to C++ driver')
+
 sp_script = Path(sourcemod_dir) / 'sourcepawn/AMBuildScript'
 sp_text = sp_script.read_text()
 if compiler_flavor == 'clang' and supports_deprecated_non_prototype and '-Wno-deprecated-non-prototype' not in sp_text:
