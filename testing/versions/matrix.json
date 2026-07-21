@@ -1,19 +1,47 @@
 {
-  "metamod": {
-    "1.10.6": "https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz"
+  "lines": {
+    "sm11-oldstable": {
+      "sourcemod": "1.11.0.6970",
+      "sourcemod_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "metamod": "1.10-dev",
+      "metamod_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "metamod_binary": "metamod.1.ep1",
+      "role": "oldstable"
+    },
+    "sm12-latest": {
+      "sourcemod": "1.12.0.7245",
+      "sourcemod_commit": "f8490c8104a844fbf1826cd8b8f22900b86adf8a",
+      "metamod": "1.12.0-dev+1224",
+      "metamod_commit": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
+      "metamod_binary": "metamod.2.ep1",
+      "role": "latest"
+    },
+    "sm13-dev": {
+      "sourcemod": "1.13.0.7404",
+      "sourcemod_commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
+      "metamod": "1.12.0-dev+1224",
+      "metamod_commit": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
+      "metamod_binary": "metamod.2.ep1",
+      "role": "dev"
+    },
+    "sm13-mm20": {
+      "sourcemod": "1.13.0.7404",
+      "sourcemod_commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
+      "metamod": "2.0.0-dev+1407",
+      "metamod_commit": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
+      "metamod_binary": "metamod.2.ep1",
+      "role": "experimental"
+    }
   },
-  "sourcemod": {
-    "1.6.4-git4626": "https://bitbucket.org/_4/smdrop-1.6/downloads/sourcemod-1.6.4-stable-git4626-css34-linux.tar.gz",
-    "1.9.0-git6224": "https://bitbucket.org/_4/smdrop-1.9/downloads/sourcemod-1.9.0-git6224-linux.tar.gz",
-    "1.11.0-git6490": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6490/sourcemod-1.11.0-git6490-css34-linux.tar.gz",
-    "1.11.0-git6541": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6541/sourcemod-1.11.0-git6541-css34-linux.tar.gz",
-    "1.11.0-git6572": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz",
-    "1.9.0-myarena": "https://bitbucket.org/fmu1337/danyas_dl/downloads/SourceMod_1.9.0.6189_css_v34_1.zip",
-    "1.11-myarena-bundle": "https://bitbucket.org/fmu1337/danyas_dl/downloads/mms-1.11.0-1130_sourcemod-1.11.0-6522-css_v34-linux-up-git6541-10.05.2020-fix-gamedata-12.10.2020_1.zip"
+  "metamod_pins": {
+    "1.10-dev": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+    "1.11-dev": "7ff2d97bdad1493b809c5ec91bbfc7abc6ae5445",
+    "1.12-1224": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
+    "2.0-1407": "0084b86af4b08614ed6b95485d072b5aa2e88cdc"
   },
   "notes": [
-    "CI smoke uses only freshly built packages from this repo: MM 1.10.7-dev + SM 1.11.0.6572.",
-    "URLs above are for local comparison / historical reference; Test Server workflow does not download them.",
-    "myarena bundles are zip overlays; install-addons.sh currently expects tar.gz for SM_URL/SM_PACKAGE."
+    "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
+    "Smoke loads sdkhooks and asserts OnTakeDamage linux offset 61.",
+    "Botplay stress plugin hooks SDKHook_OnTakeDamage and logs hits."
   ]
 }
