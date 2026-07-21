@@ -28,6 +28,9 @@ required=(
   "addons/sourcemod/extensions/dbi.sqlite.ext.so"
   "addons/sourcemod/extensions/game.cstrike.ext.1.ep1.so"
   "addons/sourcemod/extensions/game.cstrike.ext.2.ep1.so"
+  "addons/sourcemod/gamedata/sdkhooks.games/common.games.txt"
+  "addons/sourcemod/gamedata/sdkhooks.games/game.cstrike.txt"
+  "addons/sourcemod/gamedata/sdkhooks.games/master.games.txt"
   "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt"
   "addons/sourcemod/scripting/include/version_auto.inc"
   "cfg/sourcemod/sourcemod.cfg"
@@ -39,6 +42,12 @@ for rel in "${required[@]}"; do
     exit 1
   fi
 done
+
+sdkhooks_master="$PACKAGE_DIR/addons/sourcemod/gamedata/sdkhooks.games/master.games.txt"
+if ! grep -Fq '"game.cstrike.txt"' "$sdkhooks_master"; then
+  echo "SDKHooks master.games.txt does not load CS:S v34 gamedata" >&2
+  exit 1
+fi
 
 tar -C "$PACKAGE_DIR" -czf "$archive" addons cfg
 echo "$archive"
