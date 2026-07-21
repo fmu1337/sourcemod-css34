@@ -28,16 +28,10 @@ New-Item -ItemType Directory -Path $staging | Out-Null
 try {
     Copy-Item -Recurse (Join-Path $PackageDir 'addons') (Join-Path $staging 'addons')
 
-    # Match rom4s/css34 gameinfo path (relative to hl2/cstrike).
     $vdf = Join-Path $staging 'addons/metamod.vdf'
-    if (Test-Path $vdf) {
-        $text = Get-Content -Raw $vdf
-        $text = [regex]::Replace(
-            $text,
-            '"file"\s+"addons/metamod/bin/server"',
-            "`"file`"`t`"../cstrike/addons/metamod/bin/server`""
-        )
-        Set-Content -NoNewline -Path $vdf -Value $text
+    $vdfText = Get-Content -Raw $vdf
+    if ($vdfText -notmatch '"file"\s+"addons/metamod/bin/server"') {
+        throw 'Invalid Metamod VDF path; package would load outside the active game root'
     }
 
     if (Test-Path $archive) {
