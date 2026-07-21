@@ -112,12 +112,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Restore cached server tree
+        id: server-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+
       - name: Install extract tools
+        if: steps.server-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y curl unzip unrar
 
       - name: Fetch CS:S v34 server
+        if: steps.server-cache.outputs.cache-hit != 'true'
         env:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
@@ -133,17 +142,18 @@ jobs:
           KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
 
       - name: Pack server tree
+        if: steps.server-cache.outputs.cache-hit != 'true'
         run: |
-          tar -C .ci-server -czf css34-server.tar.gz .
-          ls -lh css34-server.tar.gz
+          mkdir -p server-art
+          tar -C .ci-server -czf server-art/css34-server.tar.gz .
+          ls -lh server-art/css34-server.tar.gz
 
-      - name: Upload server tree
-        uses: actions/upload-artifact@v4
+      - name: Save server tree cache
+        if: steps.server-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
         with:
-          name: css34-server-tree
-          path: css34-server.tar.gz
-          # ~500 MB each; 0.5 GB included Actions storage cannot hold many copies.
-          retention-days: 1
+          path: server-art/css34-server.tar.gz
+          key: ${{ steps.server-cache.outputs.cache-primary-key }}
 
   # Primary gate: our built Metamod 1.10.7 + SourceMod 6572 on modern glibc.
   # Packages are produced in debian:11 (legacy-build.sh), so Debian 11+ / Rocky 9.
@@ -174,11 +184,12 @@ jobs:
           name: metamod-css34-linux-for-test
           path: packages
 
-      - name: Download server tree
-        uses: actions/download-artifact@v4
+      - name: Restore cached server tree
+        uses: actions/cache/restore@v4
         with:
-          name: css34-server-tree
-          path: server-art
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
 
       - name: Smoke test built SM+MM in ${{ matrix.image }}
         env:
@@ -255,11 +266,12 @@ jobs:
           name: metamod-css34-linux-for-test
           path: packages
 
-      - name: Download server tree
-        uses: actions/download-artifact@v4
+      - name: Restore cached server tree
+        uses: actions/cache/restore@v4
         with:
-          name: css34-server-tree
-          path: server-art
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
 
       - name: Smoke test built SM+MM in ${{ matrix.image }}
         env:
@@ -334,11 +346,12 @@ jobs:
           name: metamod-css34-linux-for-test
           path: packages
 
-      - name: Download server tree
-        uses: actions/download-artifact@v4
+      - name: Restore cached server tree
+        uses: actions/cache/restore@v4
         with:
-          name: css34-server-tree
-          path: server-art
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
 
       - name: Install host 32-bit runtime
         run: |
@@ -391,11 +404,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download server tree
-        uses: actions/download-artifact@v4
+      - name: Restore cached server tree
+        uses: actions/cache/restore@v4
         with:
-          name: css34-server-tree
-          path: server-art
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
 
       - name: Rom4s botplay stress (debian:latest)
         env:
@@ -464,11 +478,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download server tree
-        uses: actions/download-artifact@v4
+      - name: Restore cached server tree
+        uses: actions/cache/restore@v4
         with:
-          name: css34-server-tree
-          path: server-art
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
 
       - name: Rom4s botplay stress (${{ matrix.image }})
         env:
@@ -540,11 +555,12 @@ jobs:
           name: metamod-css34-linux-for-test
           path: packages
 
-      - name: Download server tree
-        uses: actions/download-artifact@v4
+      - name: Restore cached server tree
+        uses: actions/cache/restore@v4
         with:
-          name: css34-server-tree
-          path: server-art
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
 
       - name: Built botplay stress + compare (debian:latest)
         env:
@@ -647,11 +663,12 @@ jobs:
           name: metamod-css34-linux-for-test
           path: packages
 
-      - name: Download server tree
-        uses: actions/download-artifact@v4
+      - name: Restore cached server tree
+        uses: actions/cache/restore@v4
         with:
-          name: css34-server-tree
-          path: server-art
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
 
       - name: Built botplay stress + compare (${{ matrix.image }})
         env:
@@ -750,11 +767,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download server tree
-        uses: actions/download-artifact@v4
+      - name: Restore cached server tree
+        uses: actions/cache/restore@v4
         with:
-          name: css34-server-tree
-          path: server-art
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
 
       - name: Download release packages (${{ matrix.tag }})
         env:
@@ -865,11 +883,12 @@ jobs:
           name: metamod-css34-linux-for-test
           path: packages
 
-      - name: Download server tree
-        uses: actions/download-artifact@v4
+      - name: Restore cached server tree
+        uses: actions/cache/restore@v4
         with:
-          name: css34-server-tree
-          path: server-art
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
 
       - name: Botplay bisect quick matrix (debian:latest, 90s/case)
         env:
