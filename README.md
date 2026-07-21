@@ -64,11 +64,14 @@ CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/run/windows.sh
 
 - `.github/workflows/build.yml` — default `CSS34_LINE=sm13-dev`, pure-source Linux + Windows
 - `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**, **sm13-mm20** (SM 1.13 + MM 2.0); smoke on Debian 11 (all four) + Debian latest / Rocky / host for sm13-dev; forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata
-- `.github/workflows/release.yml` — tag-driven; set `CSS34_LINE` to match the tag
+- `.github/workflows/release.yml` — tag-driven; tag maps to `CSS34_LINE` automatically
 
 ```bash
-git tag 1.13.0.7404-mm1.12.0
-git push origin 1.13.0.7404-mm1.12.0
+git tag 1.11.0.6970-mm1.10.7   # sm11-oldstable
+git tag 1.12.0.7245-mm1.12.0   # sm12-latest
+git tag 1.13.0.7404-mm1.12.0   # sm13-dev
+git tag 1.13.0.7404-mm2.0.0    # sm13-mm20
+git push origin --tags
 ```
 
 ## Install
