@@ -53,6 +53,7 @@ jobs:
           SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
           SOURCEMOD_GIT_REV: "6572"
           MMS_COMMIT: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
+          PURE_SOURCE_BUILD: "1"
         run: |
           chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \

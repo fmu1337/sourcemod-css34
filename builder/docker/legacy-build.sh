@@ -6,6 +6,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${LEGACY_BUILD_IMAGE:-debian:11}"
 PACKAGES_DIR="${PACKAGES_DIR:-$ROOT/packages}"
+PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-0}"
+
+if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
+  # Never copy SourceMod/Metamod binaries from a reference package.
+  export SPLICE_REFERENCE_EXTRAS=0
+  export SPLICE_REFERENCE_LOGIC=0
+  echo "==> Pure-source mode: reference binary splicing is disabled" >&2
+fi
 
 mkdir -p "$PACKAGES_DIR"
 
@@ -89,6 +97,10 @@ fi
 chmod +x "$ROOT/builder/splice-reference-extras.sh" "$ROOT/builder/splice-reference-logic.sh"
 "$ROOT/builder/splice-reference-extras.sh" "${ARTIFACT}"
 "$ROOT/builder/splice-reference-logic.sh" "${ARTIFACT}"
+
+if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
+  echo "==> Pure-source package contains only binaries produced by this build" >&2
+fi
 
 echo "==> Legacy build complete: ${ARTIFACT}" >&2
 ls -la "${ARTIFACT}" >&2

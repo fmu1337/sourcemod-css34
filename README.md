@@ -26,6 +26,16 @@ The script installs multilib packages, pins SourceMod to the v1.11.0.6572 commit
 - `packages/mmsource-1.10.7-dev-css34-linux.tar.gz`
 - `packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz`
 
+To build and test a package containing no SourceMod/Metamod binaries copied
+from a reference release, use:
+
+```bash
+PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+```
+
+This disables the optional `sourcemod.logic.so` and `bintools.ext.so` reference
+fallbacks. The Test Server workflow runs in this pure-source mode.
+
 Linux builds use **gcc-9** multilib on Ubuntu 22.04 (clang-9 from the original rom4s Travis builder is fragile on modern hosts). Before packaging, binaries are stripped, upstream translations are bundled, and gamedata is trimmed to the CS:S v34 layout.
 
 Override the pinned SourceMod commit if needed:
