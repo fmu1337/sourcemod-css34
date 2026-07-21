@@ -41,6 +41,7 @@
   },
   "notes": [
     "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
+    "CI matrix includes sm13-mm20 (SM 1.13.7404 + MM 2.0 git1407).",
     "Smoke loads sdkhooks and asserts OnTakeDamage linux offset 61.",
     "Botplay stress plugin hooks SDKHook_OnTakeDamage and logs hits."
   ]

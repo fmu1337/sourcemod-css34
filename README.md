@@ -42,7 +42,9 @@ CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 CSS34_LINE=sm11-oldstable PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 CSS34_LINE=sm12-latest    PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 
-# Mix MM on a line:
+# Experimental SM 1.13 + MM 2.0 (also in CI as sm13-mm20):
+CSS34_LINE=sm13-mm20 PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+# Equivalent override on the DEV line:
 CSS34_LINE=sm13-dev MMS_LINE=2.0 PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 ```
 
@@ -61,7 +63,7 @@ CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/run/windows.sh
 ## CI
 
 - `.github/workflows/build.yml` — default `CSS34_LINE=sm13-dev`, pure-source Linux + Windows
-- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**; smoke on Debian 11 (all three) + Debian latest / Rocky / host for sm13; forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata
+- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**, **sm13-mm20** (SM 1.13 + MM 2.0); smoke on Debian 11 (all four) + Debian latest / Rocky / host for sm13-dev; forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata
 - `.github/workflows/release.yml` — tag-driven; set `CSS34_LINE` to match the tag
 
 ```bash

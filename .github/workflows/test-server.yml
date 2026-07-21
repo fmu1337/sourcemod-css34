@@ -68,6 +68,11 @@ jobs:
             mm_expect: "1.12.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
             mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+          - line: sm13-mm20
+            sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -126,6 +131,7 @@ jobs:
           - line: sm11-oldstable
           - line: sm12-latest
           - line: sm13-dev
+          - line: sm13-mm20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -239,6 +245,12 @@ jobs:
             mm_expect: "1.12.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
             mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+          - line: sm13-mm20
+            image: debian:11
+            sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
           - line: sm13-dev
             image: debian:latest
             sm_expect: "1.13.0.7404"
