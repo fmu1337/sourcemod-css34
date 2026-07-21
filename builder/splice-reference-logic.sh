@@ -7,6 +7,12 @@ ARTIFACT="${1:?package tarball required}"
 REF_URL="${REFERENCE_SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
 SPLICE_REFERENCE_LOGIC="${SPLICE_REFERENCE_LOGIC:-auto}"
 
+# Never splice 1.11 rom4s logic into a SourceMod 1.12+ package.
+if [[ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]]; then
+  echo "==> Skipping logic splice (SOURCEMOD_MAJOR=${SOURCEMOD_MAJOR}; rom4s 1.11 logic is incompatible)" >&2
+  exit 0
+fi
+
 logic_needs_splice() {
   local tarball="$1"
   local tmp logic needed cxx11

@@ -17,9 +17,8 @@ on:
   workflow_dispatch:
 
 env:
-  SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
-  SOURCEMOD_GIT_REV: "6572"
-  MMS_COMMIT: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
+  CSS34_LINE: sm13-dev
+  PURE_SOURCE_BUILD: "1"
 
 jobs:
   linux:
@@ -53,14 +52,13 @@ jobs:
           SKIP_APT_INSTALL: 1
           CC: gcc-9
           CXX: g++-9
-          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
-          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
-          MMS_COMMIT: ${{ env.MMS_COMMIT }}
+          CSS34_LINE: ${{ env.CSS34_LINE }}
+          PURE_SOURCE_BUILD: ${{ env.PURE_SOURCE_BUILD }}
         run: |
           export WDIR="$PWD"
           chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
             builder/package-metamod.sh builder/build-metamod.sh builder/prepare-package.sh \
-            builder/write-build-stamps.sh builder/py.sh builder/patches/*.sh
+            builder/write-build-stamps.sh builder/resolve-version.sh builder/py.sh builder/patches/*.sh
           builder/run/linux.sh
 
       - name: Upload SourceMod artifact
@@ -100,14 +98,13 @@ jobs:
       - name: Build SourceMod + Metamod for CS:S v34
         shell: bash
         env:
-          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
-          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
-          MMS_COMMIT: ${{ env.MMS_COMMIT }}
+          CSS34_LINE: ${{ env.CSS34_LINE }}
+          PURE_SOURCE_BUILD: ${{ env.PURE_SOURCE_BUILD }}
         run: |
           export WDIR="$PWD"
           chmod +x builder/run/windows.sh builder/checkout-deps.sh builder/prepare-package.sh \
-            builder/build-metamod.sh builder/write-build-stamps.sh builder/py.sh \
-            builder/patches/*.sh
+            builder/build-metamod.sh builder/write-build-stamps.sh builder/resolve-version.sh \
+            builder/py.sh builder/patches/*.sh
           builder/run/windows.sh
 
       - name: Upload SourceMod artifact

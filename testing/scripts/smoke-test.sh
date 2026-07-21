@@ -173,9 +173,27 @@ if [[ "${listed_exts:-0}" -lt 5 ]]; then
   fail=1
 fi
 
-for required_ext in 'BinTools' 'SDK Tools' 'CS Tools'; do
+for required_ext in 'BinTools' 'SDK Tools' 'CS Tools' 'SDK Hooks'; do
   require_grep "${CONSOLE_PROBE_LOG}" "${required_ext}" "required extension (${required_ext})"
 done
+
+# css34 OnTakeDamage vtables must be the packaged overlay (windows 60 / linux 61).
+# Match the exact Offsets key (not OnTakeDamage_Alive). linux is 3 lines after the key
+# when windows is listed first — use enough context.
+sdkhooks_gd="${SERVER_DIR}/cstrike/addons/sourcemod/gamedata/sdkhooks.games/game.cstrike.txt"
+if [[ -f "${sdkhooks_gd}" ]]; then
+  if ! grep -A4 -E '^[[:space:]]*"OnTakeDamage"[[:space:]]*$' "${sdkhooks_gd}" \
+      | grep -qE '"linux"[[:space:]]+"61"'; then
+    echo "FAIL: sdkhooks OnTakeDamage linux offset is not css34 61 in ${sdkhooks_gd}" >&2
+    grep -A5 -E '^[[:space:]]*"OnTakeDamage"[[:space:]]*$' "${sdkhooks_gd}" >&2 || true
+    fail=1
+  else
+    echo "OK: sdkhooks OnTakeDamage linux offset is 61 (css34)"
+  fi
+else
+  echo "FAIL: missing sdkhooks gamedata ${sdkhooks_gd}" >&2
+  fail=1
+fi
 
 if grep -Eiq '<FAILED>' "${CONSOLE_PROBE_LOG}"; then
   echo "FAIL: failed extension(s) in sm exts list" >&2

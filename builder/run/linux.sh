@@ -6,10 +6,19 @@ DEPS_DIR="${DEPS_DIR:-$WDIR/deps}"
 PACKAGES_DIR="${PACKAGES_DIR:-$WDIR/packages}"
 BUILDER_DIR="$WDIR/builder"
 SOURCEMOD_DIR="$WDIR/sourcemod"
-SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
-SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}"
+
+# shellcheck source=../resolve-version.sh
+source "$BUILDER_DIR/resolve-version.sh"
+MMS_DIR="${MMS_DIR:-$DEPS_DIR/$MMS_DIRNAME}"
 
 export PATH="$HOME/.local/bin:$PATH"
+export SOURCEMOD_MAJOR MMS_MODE MMS_DIRNAME MMS_COMMIT MMS_BRANCH
+export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV
+export PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-1}"
+if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
+  export SPLICE_REFERENCE_EXTRAS=0
+  export SPLICE_REFERENCE_LOGIC=0
+fi
 
 if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
   echo "==> Installing Linux build dependencies"
@@ -74,25 +83,30 @@ chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/pack
   "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
 
 python3 -m pip install --upgrade pip --user
-chmod +x "$BUILDER_DIR/patches/patch-ambuild-linker.sh" 2>/dev/null || true
+chmod +x "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$BUILDER_DIR/patches/patch-ambuild-py312.sh" 2>/dev/null || true
 bash "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$DEPS_DIR/ambuild"
+bash "$BUILDER_DIR/patches/patch-ambuild-py312.sh" "$DEPS_DIR/ambuild"
 python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS_DIR/ambuild" 2>/dev/null || true
+# Ensure Python 3.12 site-packages stay patched after reinstall.
+bash "$BUILDER_DIR/patches/patch-ambuild-py312.sh" "$(python3 -c 'import ambuild2, pathlib; print(pathlib.Path(ambuild2.__file__).parent.parent)')" 2>/dev/null || true
 
 echo "==> Writing CSS34 build stamp headers (pre-Metamod)"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
-  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}" \
+  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" MMS_DIR="$MMS_DIR" \
   bash "$BUILDER_DIR/write-build-stamps.sh"
 
-echo "==> Building Metamod:Source (css34 metamod.1.ep1)"
+echo "==> Building Metamod:Source (css34 episode1, ${MMS_MODE})"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
   CC="$CC" CXX="$CXX" USE_CLANG9="$USE_CLANG9" \
+  SOURCEMOD_MAJOR="$SOURCEMOD_MAJOR" MMS_DIR="$MMS_DIR" \
+  MMS_MODE="$MMS_MODE" MMS_DIRNAME="$MMS_DIRNAME" \
   bash "$BUILDER_DIR/build-metamod.sh"
 
 MM_ARTIFACT="$(
   bash "$BUILDER_DIR/package-metamod.sh" \
-    "$DEPS_DIR/mmsource-1.10/build/package" \
+    "$MMS_DIR/build/package" \
     "$PACKAGES_DIR" \
-    "$DEPS_DIR/mmsource-1.10"
+    "$MMS_DIR"
 )"
 ln -sfn "$MM_ARTIFACT" "$WDIR/$(basename "$MM_ARTIFACT")"
 echo "==> Metamod package: $MM_ARTIFACT"
@@ -102,21 +116,36 @@ echo "==> Applying CS:S v34 compatibility patches"
 
 echo "==> Writing CSS34 build stamp headers (pre-SourceMod)"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
-  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}" \
+  SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" MMS_DIR="$MMS_DIR" \
   bash "$BUILDER_DIR/write-build-stamps.sh"
 
-echo "==> Configuring SourceMod (ep1 + episode1, like original release)"
+echo "==> Configuring SourceMod (episode1 / 2.ep1 with Metamod 1.12)"
 cd "$SOURCEMOD_DIR"
 rm -rf build obj-*
 mkdir -p build
 cd build
 
-python3 ../configure.py \
-  --enable-optimize \
-  --hl2sdk-root="$DEPS_DIR" \
-  --mms-path="$DEPS_DIR/mmsource-1.10" \
-  --mysql-path="$DEPS_DIR/mysql-5.5" \
-  --sdks=ep1,episode1
+CONFIGURE_ARGS=(
+  --enable-optimize
+  --hl2sdk-root="$DEPS_DIR"
+  --mms-path="$MMS_DIR"
+  --mysql-path="$DEPS_DIR/mysql-5.5"
+  --sdks=episode1
+)
+if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
+  CONFIGURE_ARGS+=(--targets=x86)
+elif [ "$SOURCEMOD_MAJOR" -lt 12 ]; then
+  # SM 1.11 css34 still builds dual 1.ep1 + 2.ep1 cores against MM 1.10.
+  CONFIGURE_ARGS=(
+    --enable-optimize
+    --hl2sdk-root="$DEPS_DIR"
+    --mms-path="$MMS_DIR"
+    --mysql-path="$DEPS_DIR/mysql-5.5"
+    --sdks=ep1,episode1
+  )
+fi
+
+python3 ../configure.py "${CONFIGURE_ARGS[@]}"
 
 echo "==> Building SourceMod"
 ambuild

@@ -1,23 +1,59 @@
 name: Release
 
-# Tag format (short): 1.11.0.6572-mm1.10.7
-# Pushing a matching tag builds SM+MM for Linux and Windows and publishes a GitHub Release.
+# Tag format examples (must match builder/versions.env pins):
+#   1.11.0.6970-mm1.10.7   → sm11-oldstable
+#   1.12.0.7245-mm1.12.0   → sm12-latest
+#   1.13.0.7404-mm1.12.0   → sm13-dev
+#   1.13.0.7404-mm2.0.0    → sm13-mm20
+# Pushing a matching tag builds SM+MM for Linux (legacy-build) and Windows
+# and publishes a GitHub Release. CSS34_LINE is derived from the tag.
 on:
   push:
     tags:
       - '*-mm*'
   workflow_dispatch:
+    inputs:
+      css34_line:
+        description: "CSS34_LINE for manual dispatch (ignored on tag pushes)"
+        required: false
+        default: "sm13-dev"
 
 permissions:
   contents: write
 
 env:
-  SOURCEMOD_COMMIT: "832519ab647cdecb85763918dbfed1cb5e79c6cb"
-  SOURCEMOD_GIT_REV: "6572"
-  MMS_COMMIT: "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2"
+  PURE_SOURCE_BUILD: "1"
 
 jobs:
+  resolve-line:
+    runs-on: ubuntu-22.04
+    outputs:
+      css34_line: ${{ steps.map.outputs.css34_line }}
+    steps:
+      - name: Map tag / input → CSS34_LINE
+        id: map
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            tag="${GITHUB_REF_NAME}"
+            case "${tag}" in
+              1.11.0.6970-mm1.10.7) line=sm11-oldstable ;;
+              1.12.0.7245-mm1.12.0) line=sm12-latest ;;
+              1.13.0.7404-mm1.12.0) line=sm13-dev ;;
+              1.13.0.7404-mm2.0.0)  line=sm13-mm20 ;;
+              *)
+                echo "Unknown release tag '${tag}' — add a mapping in release.yml" >&2
+                exit 1
+                ;;
+            esac
+          else
+            line="${{ github.event.inputs.css34_line || 'sm13-dev' }}"
+          fi
+          echo "css34_line=${line}" >> "$GITHUB_OUTPUT"
+          echo "Resolved CSS34_LINE=${line} (ref=${GITHUB_REF_NAME})"
+
   linux:
+    needs: [resolve-line]
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -25,39 +61,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install build dependencies
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y \
-            curl \
-            g++-9-multilib \
-            gcc-9-multilib \
-            git \
-            lib32stdc++-9-dev \
-            lib32stdc++6 \
-            lib32z1-dev \
-            libc6-dev-i386 \
-            libstdc++-9-dev \
-            linux-libc-dev \
-            python3 \
-            python3-pip
-
-      - name: Build SourceMod + Metamod for CS:S v34
+      - name: Build SourceMod + Metamod (legacy-build / pure-source)
         env:
-          SKIP_APT_INSTALL: 1
-          CC: gcc-9
-          CXX: g++-9
-          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
-          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
-          MMS_COMMIT: ${{ env.MMS_COMMIT }}
+          CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
+          PURE_SOURCE_BUILD: "1"
         run: |
-          export WDIR="$PWD"
-          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
-            builder/package-metamod.sh builder/build-metamod.sh builder/prepare-package.sh \
-            builder/write-build-stamps.sh builder/py.sh builder/patches/*.sh \
+          chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
+            builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
+            builder/build-metamod.sh builder/prepare-package.sh builder/write-build-stamps.sh \
+            builder/resolve-version.sh builder/py.sh builder/patches/*.sh \
             builder/install-clang9.sh builder/install-clang10.sh
-          builder/run/linux.sh
+          builder/docker/legacy-build.sh
 
       - name: Upload SourceMod artifact
         uses: actions/upload-artifact@v4
@@ -65,7 +79,6 @@ jobs:
           name: sourcemod-css34-linux
           path: packages/sourcemod-*-css34-linux.tar.gz
           if-no-files-found: error
-          # Intermediate only — release assets live on the GitHub Release.
           retention-days: 1
 
       - name: Upload Metamod artifact
@@ -77,6 +90,7 @@ jobs:
           retention-days: 1
 
   windows:
+    needs: [resolve-line]
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -97,14 +111,13 @@ jobs:
       - name: Build SourceMod + Metamod for CS:S v34
         shell: bash
         env:
-          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
-          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
-          MMS_COMMIT: ${{ env.MMS_COMMIT }}
+          CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
+          PURE_SOURCE_BUILD: "1"
         run: |
           export WDIR="$PWD"
           chmod +x builder/run/windows.sh builder/checkout-deps.sh builder/prepare-package.sh \
-            builder/build-metamod.sh builder/write-build-stamps.sh builder/py.sh \
-            builder/patches/*.sh
+            builder/build-metamod.sh builder/write-build-stamps.sh builder/resolve-version.sh \
+            builder/py.sh builder/patches/*.sh
           builder/run/windows.sh
 
       - name: Upload SourceMod artifact
@@ -124,7 +137,7 @@ jobs:
           retention-days: 1
 
   release:
-    needs: [linux, windows]
+    needs: [resolve-line, linux, windows]
     runs-on: ubuntu-22.04
     if: github.ref_type == 'tag'
     steps:
@@ -156,6 +169,5 @@ jobs:
             - SourceMod Linux / Windows
             - Metamod:Source Linux / Windows
 
-            Upstream pins in this build:
-            - SourceMod `${{ env.SOURCEMOD_COMMIT }}` (git ${{ env.SOURCEMOD_GIT_REV }})
-            - Metamod:Source `${{ env.MMS_COMMIT }}`
+            Build line: `${{ needs.resolve-line.outputs.css34_line }}` (pure-source, legacy-build Linux, no reference binary splice).
+            Pins are resolved from `builder/versions.env` via `builder/resolve-version.sh`.
