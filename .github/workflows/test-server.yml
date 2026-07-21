@@ -67,8 +67,8 @@ jobs:
           name: sourcemod-css34-linux-for-test
           path: packages/sourcemod-*-css34-linux.tar.gz
           if-no-files-found: error
-          # Shared between jobs in this run; keep short — fills Actions storage fast.
-          retention-days: 2
+          # Shared between jobs in this run; keep minimal — fills Actions storage fast.
+          retention-days: 1
 
       - name: Upload Metamod package
         uses: actions/upload-artifact@v4
@@ -76,7 +76,7 @@ jobs:
           name: metamod-css34-linux-for-test
           path: packages/mmsource-*-css34-linux.tar.gz
           if-no-files-found: error
-          retention-days: 2
+          retention-days: 1
 
   check-built-package:
     needs: [build-linux]
