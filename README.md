@@ -4,6 +4,9 @@ Patched [SourceMod](https://www.sourcemod.net/) + [Metamod:Source](https://www.s
 
 All CI packages are **pure-source** (`PURE_SOURCE_BUILD=1`): no rom4s/reference `.so` splicing. Smoke asserts SDK Hooks load and css34 `OnTakeDamage` gamedata (linux **61** / windows **60**). Botplay hooks `SDKHook_OnTakeDamage` and logs hits.
 
+How we patch and upgrade SourceMod versions (one pin at a time vs layered patches) is documented in [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md).
+Why we do **not** chase byte-identical `.so` vs rom4s («SUPER GOLDEN») is in [docs/BYTE_MATCH.md](docs/BYTE_MATCH.md).
+
 ## Version matrix (current pins)
 
 | Line (`CSS34_LINE`) | SourceMod | Metamod | Role |
