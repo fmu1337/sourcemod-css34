@@ -173,10 +173,14 @@ plugin = (tmpdir / 'ISmmPlugin.h').read_text()
 plugin = plugin.replace('RegisterConCmdBase', 'RegisterConCommandBase')
 plugin = plugin.replace('UnregisterConCmdBase', 'UnregisterConCommandBase')
 
+api = wrap_sourcemm(api, ['ISmmAPI'])
+plugin = wrap_sourcemm(plugin, ['ISmmPlugin', 'IMetamodListener'])
+
 # Bundled DHooks (SM 6970+) builds with META_NO_HL2SDK and no SDK include
-# paths. Stock core-legacy headers always pull <interface.h>/<eiface.h>;
-# mirror modern MM and provide forward decls / CreateInterfaceFn when the
-# SDK is intentionally absent.
+# paths. Stock core-legacy headers always pull <interface.h>/<eiface.h>.
+# Patch *after* wrap_sourcemm: that helper only keeps `#include` lines in the
+# preamble, so `#ifndef` / forward decls applied beforehand are swallowed
+# into the namespace and leave the includes unconditional.
 api_hl2 = '#include <interface.h>\n#include <eiface.h>\n'
 api_meta_no = (
     '#if defined META_NO_HL2SDK\n'
@@ -192,7 +196,7 @@ api_meta_no = (
     '#endif\n'
 )
 if api_hl2 not in api:
-    raise SystemExit('Expected legacy ISmmAPI.h HL2SDK includes missing')
+    raise SystemExit('Expected wrapped ISmmAPI.h HL2SDK includes missing')
 api = api.replace(api_hl2, api_meta_no, 1)
 
 plugin_iface = '#include <interface.h>\n'
@@ -202,11 +206,8 @@ plugin_iface_guarded = (
     '#endif\n'
 )
 if plugin_iface not in plugin:
-    raise SystemExit('Expected legacy ISmmPlugin.h interface.h include missing')
+    raise SystemExit('Expected wrapped ISmmPlugin.h interface.h include missing')
 plugin = plugin.replace(plugin_iface, plugin_iface_guarded, 1)
-
-api = wrap_sourcemm(api, ['ISmmAPI'])
-plugin = wrap_sourcemm(plugin, ['ISmmPlugin', 'IMetamodListener'])
 
 # Legacy headers only export with default visibility on GCC 4.x; gcc-9 needs >= 4.
 plugin = plugin.replace(
@@ -218,8 +219,12 @@ if 'GetEngineFactory' not in api or 'SetLastMetaReturn' not in api:
     raise SystemExit('ISmmAPI rename/wrap failed sanity check')
 if 'META_NO_HL2SDK' not in api or 'CreateInterfaceFn' not in api:
     raise SystemExit('ISmmAPI META_NO_HL2SDK forward-decl patch failed')
+if api.count('#include <interface.h>') != 1 or '#else\n#include <interface.h>' not in api:
+    raise SystemExit('ISmmAPI interface.h must appear only inside #else of META_NO_HL2SDK')
 if 'META_NO_HL2SDK' not in plugin:
     raise SystemExit('ISmmPlugin META_NO_HL2SDK interface.h guard failed')
+if plugin.count('#include <interface.h>') != 1:
+    raise SystemExit('ISmmPlugin interface.h must appear only inside META_NO_HL2SDK guard')
 if 'PLAPI_VERSION' not in plugin:
     raise SystemExit('ISmmPlugin missing PLAPI_VERSION')
 if '#if (__GNUC__ >= 4)' not in plugin:
