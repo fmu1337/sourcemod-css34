@@ -80,20 +80,45 @@ else
 fi
 
 echo "==> Fetching Metamod:Source"
-if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
-  # SourceMod 1.12 expects Metamod 1.12 (PLAPI 16 / modern Core / metamod.2.ep1).
-  MMS_COMMIT="${MMS_COMMIT:-364cb6c26f66f7d9254d95a2fc533eac3557166b}"
-  clone_repo "mmsource-1.12" "https://github.com/alliedmodders/metamod-source" "1.12-dev" "$MMS_COMMIT"
-  echo "==> Metamod:Source at $(git -C "$DEPS/mmsource-1.12" rev-parse HEAD)"
-  git -C "$DEPS/mmsource-1.12" submodule update --init --recursive
-  bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/mmsource-1.12"
-else
-  # SourceMod 1.11 css34: keep legacy metamod.1.ep1 / SH v4 / PLAPI 11.
-  MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-  clone_repo "mmsource-1.10" "https://github.com/alliedmodders/metamod-source" "1.10-dev" "$MMS_COMMIT"
-  echo "==> Metamod:Source at $(git -C "$DEPS/mmsource-1.10" rev-parse HEAD)"
-  bash "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/mmsource-1.10"
+# MMS_MODE / MMS_DIRNAME / MMS_COMMIT come from resolve-version.sh (or env).
+MMS_MODE="${MMS_MODE:-}"
+MMS_DIRNAME="${MMS_DIRNAME:-}"
+MMS_COMMIT="${MMS_COMMIT:-}"
+MMS_BRANCH="${MMS_BRANCH:-}"
+
+if [[ -z "$MMS_MODE" || -z "$MMS_DIRNAME" || -z "$MMS_COMMIT" ]]; then
+  if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
+    MMS_COMMIT="${MMS_COMMIT:-364cb6c26f66f7d9254d95a2fc533eac3557166b}"
+    MMS_BRANCH="${MMS_BRANCH:-1.12-dev}"
+    MMS_DIRNAME="${MMS_DIRNAME:-mmsource-1.12}"
+    MMS_MODE="${MMS_MODE:-1.12}"
+  else
+    MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
+    MMS_BRANCH="${MMS_BRANCH:-1.10-dev}"
+    MMS_DIRNAME="${MMS_DIRNAME:-mmsource-1.10}"
+    MMS_MODE="${MMS_MODE:-1.10}"
+  fi
 fi
+
+clone_repo "$MMS_DIRNAME" "https://github.com/alliedmodders/metamod-source" "$MMS_BRANCH" "$MMS_COMMIT"
+echo "==> Metamod:Source (${MMS_MODE}) at $(git -C "$DEPS/$MMS_DIRNAME" rev-parse HEAD)"
+
+case "$MMS_MODE" in
+  1.10)
+    MMS_DIR="$DEPS/$MMS_DIRNAME" bash "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/$MMS_DIRNAME"
+    ;;
+  1.11)
+    bash "$BUILDER_DIR/patches/apply-mmsource-v111.sh" "$DEPS/$MMS_DIRNAME"
+    ;;
+  1.12|2.0)
+    git -C "$DEPS/$MMS_DIRNAME" submodule update --init --recursive
+    bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/$MMS_DIRNAME"
+    ;;
+  *)
+    echo "Unsupported MMS_MODE=$MMS_MODE" >&2
+    exit 1
+    ;;
+esac
 
 echo "==> Fetching HL2SDK episode1"
 rm -rf "$DEPS/hl2sdk-episode1"

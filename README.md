@@ -1,102 +1,82 @@
 # sourcemod-css34
 
-Patched [SourceMod](https://www.sourcemod.net/) builds for **Counter-Strike: Source v34** (non-Steam / legacy builds).
+Patched [SourceMod](https://www.sourcemod.net/) + [Metamod:Source](https://www.sourcemm.net/) builds for **Counter-Strike: Source v34** (non-Steam / legacy).
 
-The repository tracks upstream SourceMod as a git submodule and produces packages matching the original [v1.11.0.6572 release](https://github.com/rom4s/sourcemod-css34/releases/tag/v1.11.0.6572) layout:
+All CI packages are **pure-source** (`PURE_SOURCE_BUILD=1`): no rom4s/reference `.so` splicing. Smoke asserts SDK Hooks load and css34 `OnTakeDamage` gamedata (linux **61** / windows **60**). Botplay hooks `SDKHook_OnTakeDamage` and logs hits.
 
-- `sourcemod-1.11.0-git6572-css34-linux.tar.gz`
-- `sourcemod-1.11.0-git6572-css34-windows.zip`
-- `sourcemod.1.ep1.so` / `sourcemod.1.ep1.dll` and `sourcemod.2.ep1.so` / `sourcemod.2.ep1.dll`
-- `game.cstrike.ext.1.ep1.so` / `.dll` and `game.cstrike.ext.2.ep1.so` / `.dll`
-- MySQL and SQLite DBI extensions
+## Version matrix (current pins)
 
-## Build locally (Linux)
+| Line (`CSS34_LINE`) | SourceMod | Metamod | Role |
+|---------------------|-----------|---------|------|
+| `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev** (`80e8ff0…`, `metamod.1.ep1`) | OldStable |
+| `sm12-latest` | **1.12.0.7245** (`f8490c810…`) | **1.12 git1224** (`364cb6c…`, `metamod.2.ep1`) | Latest |
+| `sm13-dev` | **1.13.0.7404** (`cdedec760…`) | **1.12 git1224** | DEV (default) |
+| `sm13-mm20` | 1.13.0.7404 | **2.0 git1407** (`0084b86…`) | Experimental |
+| `sm11-mm111` | 1.11.0.6970 | **1.11-dev** (`7ff2d97…`) | Exploratory (PLAPI mix risk) |
 
-```bash
-git submodule update --init --recursive
-chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh builder/patches/*.sh
-builder/run/linux.sh
-```
+Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
 
-The script installs multilib packages, pins SourceMod to the v1.11.0.6572 commit, downloads dependencies, applies compatibility patches, builds **Metamod:Source** (`metamod.1.ep1.so` with css34 header patches), and writes:
+### What pairs with what
 
-- `packages/mmsource-1.10.7-dev-css34-linux.tar.gz`
-- `packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz`
+| | SM 1.11 (PLAPI 11, `1.ep1`) | SM 1.12 / 1.13 (`2.ep1`) |
+|--|--|--|
+| **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable`) | no |
+| **MM 1.11** (`metamod.2.ep1`) | exploratory only | not a release path |
+| **MM 1.12** git1224 | no | **matched** (`sm12-latest`, `sm13-dev`) |
+| **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
 
-To build and test a package containing no SourceMod/Metamod binaries copied
-from a reference release, use:
+Do **not** install leftover myarena `metamod.2.ep1` / MM 1.11 under SM 1.11 — you get `Older Metamod… (11 < 14)`.
 
-```bash
-PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
-```
-
-This disables the optional `sourcemod.logic.so` and `bintools.ext.so` reference
-fallbacks. The Test Server workflow runs in this pure-source mode.
-
-Linux builds use **gcc-9** multilib on Ubuntu 22.04 (clang-9 from the original rom4s Travis builder is fragile on modern hosts). Before packaging, binaries are stripped, upstream translations are bundled, and gamedata is trimmed to the CS:S v34 layout.
-
-Override the pinned SourceMod commit if needed:
-
-```bash
-SOURCEMOD_COMMIT=832519ab647cdecb85763918dbfed1cb5e79c6cb builder/run/linux.sh
-```
-
-## Build locally (Windows)
-
-Requires Visual Studio Build Tools with the x86 MSVC toolset, Python 3, and Git Bash (or WSL).
+## Build (pure-source)
 
 ```bash
 git submodule update --init --recursive
-# Open "x86 Native Tools Command Prompt for VS" or run vcvarsall.bat x86 first
-builder/run/windows.sh
+
+# Default DEV line (SM 1.13.7404 + MM 1.12.1224):
+CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+
+# OldStable / Latest:
+CSS34_LINE=sm11-oldstable PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+CSS34_LINE=sm12-latest    PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+
+# Mix MM on a line:
+CSS34_LINE=sm13-dev MMS_LINE=2.0 PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 ```
 
-The script builds Metamod + SourceMod and writes:
+Host / jammy-native (ABI may fail legacy smoke):
 
-- `packages/mmsource-1.10.7-dev-css34-windows.zip`
-- `packages/sourcemod-1.11.0-git6572-css34-windows.zip`
+```bash
+CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/run/linux.sh
+```
+
+Windows (x86 MSVC env):
+
+```bash
+CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/run/windows.sh
+```
 
 ## CI
 
-GitHub Actions workflow `.github/workflows/build.yml` runs the Linux and Windows builds on pushes and pull requests.
-
-Release builds publish from **tags** only. Short tag format for this branch:
-
-```text
-1.13.0.7394-mm1.12.0
-```
-
-Push a matching tag on **this branch tip** (not `master`) to run `.github/workflows/release.yml`, which builds SM + MM for Linux and Windows and attaches the four packages to a GitHub Release.
+- `.github/workflows/build.yml` — default `CSS34_LINE=sm13-dev`, pure-source Linux + Windows
+- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**; smoke on Debian 11 (all three) + Debian latest / Rocky / host for sm13; forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata
+- `.github/workflows/release.yml` — tag-driven; set `CSS34_LINE` to match the tag
 
 ```bash
-git tag 1.13.0.7394-mm1.12.0
-git push origin 1.13.0.7394-mm1.12.0
+git tag 1.13.0.7404-mm1.12.0
+git push origin 1.13.0.7404-mm1.12.0
 ```
-
-Other version lines (tags point at their own branch tips):
-
-- master / sm11: `1.11.0.6572-mm1.10.7` (already released)
-- sm12 PR branch: `1.12.0.7239-mm1.12.0`
-
-`.github/workflows/test-server.yml` builds **our** Metamod 1.12 + SourceMod 7394 packages and smoke-tests them on a real CS:S v34 dedicated server under Debian 11 / 12 / 13 / Latest, Rocky Linux 9, and the Ubuntu 22.04 host runner.
-
-It applies the modern-OS buffer fix (`srcds_patch` + `valve.rc`), loads our Metamod + SourceMod, and asserts console markers. Details: [`testing/README.md`](testing/README.md), buffer-fix notes: [`testing/docs/bufferfix.md`](testing/docs/bufferfix.md).
 
 ## Install
 
-Extract the Metamod package into the CS:S v34 server `cstrike` directory first, then SourceMod.
-
-Linux:
+Extract **matched** MM then SM from the same line into `cstrike`:
 
 ```bash
-tar -xzf mmsource-1.10.7-dev-css34-linux.tar.gz -C /path/to/cstrike
-tar -xzf sourcemod-1.11.0-git6572-css34-linux.tar.gz -C /path/to/cstrike
+tar -xzf mmsource-*-css34-linux.tar.gz -C /path/to/cstrike
+tar -xzf sourcemod-*-css34-linux.tar.gz -C /path/to/cstrike
 ```
-
-Windows: unzip `mmsource-*-css34-windows.zip`, then `sourcemod-*-css34-windows.zip`, into `cstrike`.
 
 ## Notes
 
-- Builds against `rom4s/hl2sdk-ep1c` (ep1) and `alliedmodders/hl2sdk` episode1, like the original builder.
-- MySQL extension (`dbi.mysql.ext.so`) is included by default.
-- 32-bit (`x86`) binaries are produced for compatibility with the v34 dedicated server.
+- Patch strategy: [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md). 6970 carries API/toolchain shims from the old ≥6800 notes.
+- SDKHooks EP1 / PLAPI traps: [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
+- Machine-readable pins: [`testing/versions/matrix.json`](testing/versions/matrix.json) (updated with this matrix when present on the branch).

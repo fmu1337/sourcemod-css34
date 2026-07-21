@@ -11,6 +11,10 @@ on:
         description: "Apply bruno_args srcds_patch (1/0)"
         required: false
         default: "1"
+      css34_line:
+        description: "Optional single CSS34_LINE (sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20); empty = matrix"
+        required: false
+        default: ""
 
 concurrency:
   group: test-server-${{ github.workflow }}-${{ github.ref }}
@@ -18,65 +22,111 @@ concurrency:
 
 env:
   SRCDS_PATCH_URL: https://github.com/fmu1337/sourcemod-css34/raw/bufferfix/srcds_patch%20(1).rar
+  PURE_SOURCE_BUILD: "1"
 
 jobs:
   build-linux:
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - line: sm11-oldstable
+            sm_expect: "1.11.0.6970"
+            mm_expect: "1.10.7"
+            sm_commit: f53cb134ef83b580c83e1f4bf35f60d11c4571dd
+            mm_commit: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
+          - line: sm12-latest
+            sm_expect: "1.12.0.7245"
+            mm_expect: "1.12.0"
+            sm_commit: f8490c8104a844fbf1826cd8b8f22900b86adf8a
+            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+          - line: sm13-dev
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Build SourceMod for CS:S v34
+      - name: Maybe skip non-selected lines
+        id: select
+        run: |
+          want="${{ github.event.inputs.css34_line }}"
+          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build SourceMod+Metamod (${{ matrix.line }}) pure-source
+        if: steps.select.outputs.skip != '1'
         env:
-          SOURCEMOD_COMMIT: bd1bde7def4c1e3e584c320dfb2ac974eb4d7433
-          SOURCEMOD_GIT_REV: "7394"
-          SOURCEMOD_MAJOR: "13"
-          MMS_COMMIT: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+          CSS34_LINE: ${{ matrix.line }}
           PURE_SOURCE_BUILD: "1"
         run: |
           chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
             builder/build-metamod.sh builder/prepare-package.sh builder/write-build-stamps.sh \
-            builder/py.sh builder/patches/*.sh \
+            builder/resolve-version.sh builder/py.sh builder/patches/*.sh \
             builder/install-clang9.sh builder/install-clang10.sh
           builder/docker/legacy-build.sh
 
       - name: Upload SourceMod package
+        if: steps.select.outputs.skip != '1'
         uses: actions/upload-artifact@v4
         with:
-          name: sourcemod-css34-linux-for-test
+          name: sourcemod-css34-linux-${{ matrix.line }}
           path: packages/sourcemod-*-css34-linux.tar.gz
           if-no-files-found: error
+          retention-days: 2
 
       - name: Upload Metamod package
+        if: steps.select.outputs.skip != '1'
         uses: actions/upload-artifact@v4
         with:
-          name: metamod-css34-linux-for-test
+          name: metamod-css34-linux-${{ matrix.line }}
           path: packages/mmsource-*-css34-linux.tar.gz
           if-no-files-found: error
+          retention-days: 2
 
   check-built-package:
     needs: [build-linux]
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - line: sm11-oldstable
+          - line: sm12-latest
+          - line: sm13-dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download SourceMod package
-        uses: actions/download-artifact@v4
-        with:
-          name: sourcemod-css34-linux-for-test
-          path: packages
+      - name: Maybe skip
+        id: select
+        run: |
+          want="${{ github.event.inputs.css34_line }}"
+          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Download Metamod package
+      - name: Download packages
+        if: steps.select.outputs.skip != '1'
         uses: actions/download-artifact@v4
         with:
-          name: metamod-css34-linux-for-test
+          pattern: '*-${{ matrix.line }}'
           path: packages
+          merge-multiple: true
 
       - name: ABI / export checks
+        if: steps.select.outputs.skip != '1'
         run: |
           chmod +x testing/scripts/*.sh
           sudo apt-get update
@@ -84,14 +134,6 @@ jobs:
           ls -la packages || true
           SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
           MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
-          if [[ -z "${SM_PACKAGE}" || ! -f "${SM_PACKAGE}" ]]; then
-            echo "No SourceMod package found under packages/" >&2
-            exit 1
-          fi
-          if [[ -z "${MM_PACKAGE}" || ! -f "${MM_PACKAGE}" ]]; then
-            echo "No Metamod package found under packages/" >&2
-            exit 1
-          fi
           export SM_PACKAGE MM_PACKAGE
           echo "Checking ${SM_PACKAGE}"
           testing/scripts/check-package.sh
@@ -136,48 +178,76 @@ jobs:
           path: css34-server.tar.gz
           retention-days: 3
 
-  # Primary gate: built Metamod 1.12 + SourceMod 1.13.0.7394 on modern glibc.
-  # Packages are produced in debian:11 (legacy-build.sh), so Debian 11+ / Rocky 9.
+  # Primary gate: pure-source matched SM×MM lines on modern glibc.
+  # Packages are produced in debian:11 (legacy-build.sh).
   test-built-debian:
     needs: [build-linux, prepare-server, check-built-package]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        image:
-          - debian:11
-          - debian:12
-          - debian:13
-          - debian:latest
+        include:
+          - line: sm11-oldstable
+            image: debian:11
+            sm_expect: "1.11.0.6970"
+            mm_expect: "1.10.7"
+            sm_commit: f53cb134ef83b580c83e1f4bf35f60d11c4571dd
+            mm_commit: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
+          - line: sm12-latest
+            image: debian:11
+            sm_expect: "1.12.0.7245"
+            mm_expect: "1.12.0"
+            sm_commit: f8490c8104a844fbf1826cd8b8f22900b86adf8a
+            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+          - line: sm13-dev
+            image: debian:11
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+          - line: sm13-dev
+            image: debian:latest
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download SourceMod package
-        uses: actions/download-artifact@v4
-        with:
-          name: sourcemod-css34-linux-for-test
-          path: packages
+      - name: Maybe skip
+        id: select
+        run: |
+          want="${{ github.event.inputs.css34_line }}"
+          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Download Metamod package
+      - name: Download packages
+        if: steps.select.outputs.skip != '1'
         uses: actions/download-artifact@v4
         with:
-          name: metamod-css34-linux-for-test
+          pattern: '*-${{ matrix.line }}'
           path: packages
+          merge-multiple: true
 
       - name: Download server tree
+        if: steps.select.outputs.skip != '1'
         uses: actions/download-artifact@v4
         with:
           name: css34-server-tree
           path: server-art
 
-      - name: Smoke test built SM+MM in ${{ matrix.image }}
+      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image }}
+        if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
-          MM_VERSION_EXPECT: "1.12.0"
-          SM_VERSION_EXPECT: "1.13.0.7394"
-          MM_COMMIT_EXPECT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
-          SM_COMMIT_EXPECT: "bd1bde7def4c1e3e584c320dfb2ac974eb4d7433"
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
+          SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -210,10 +280,10 @@ jobs:
             '
 
       - name: Upload smoke logs on failure
-        if: failure()
+        if: failure() && steps.select.outputs.skip != '1'
         uses: actions/upload-artifact@v4
         with:
-          name: built-debian-smoke-logs-${{ strategy.job-index }}
+          name: built-debian-smoke-logs-${{ matrix.line }}-${{ strategy.job-index }}
           path: |
             .ci-server/smoke.log
             .ci-server/console-probe.log
@@ -233,38 +303,51 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: rockylinux:9
+          - line: sm13-dev
+            image: rockylinux:9
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download SourceMod package
-        uses: actions/download-artifact@v4
-        with:
-          name: sourcemod-css34-linux-for-test
-          path: packages
+      - name: Maybe skip
+        id: select
+        run: |
+          want="${{ github.event.inputs.css34_line }}"
+          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Download Metamod package
+      - name: Download packages
+        if: steps.select.outputs.skip != '1'
         uses: actions/download-artifact@v4
         with:
-          name: metamod-css34-linux-for-test
+          pattern: '*-${{ matrix.line }}'
           path: packages
+          merge-multiple: true
 
       - name: Download server tree
+        if: steps.select.outputs.skip != '1'
         uses: actions/download-artifact@v4
         with:
           name: css34-server-tree
           path: server-art
 
-      - name: Smoke test built SM+MM in ${{ matrix.image }}
+      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image }}
+        if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
-          MM_VERSION_EXPECT: "1.12.0"
-          SM_VERSION_EXPECT: "1.13.0.7394"
-          MM_COMMIT_EXPECT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
-          SM_COMMIT_EXPECT: "bd1bde7def4c1e3e584c320dfb2ac974eb4d7433"
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
+          SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
-          SRCDS_BINARY: ${{ matrix.srcds_binary || './srcds_i686' }}
+          SRCDS_BINARY: ./srcds_i686
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
@@ -297,10 +380,10 @@ jobs:
             '
 
       - name: Upload smoke logs on failure
-        if: failure()
+        if: failure() && steps.select.outputs.skip != '1'
         uses: actions/upload-artifact@v4
         with:
-          name: built-rhel-smoke-logs-${{ strategy.job-index }}
+          name: built-rhel-smoke-logs-${{ matrix.line }}
           path: |
             .ci-server/smoke.log
             .ci-server/console-probe.log
@@ -321,17 +404,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download SourceMod package
+      - name: Download packages (sm13-dev)
         uses: actions/download-artifact@v4
         with:
-          name: sourcemod-css34-linux-for-test
+          pattern: '*-sm13-dev'
           path: packages
-
-      - name: Download Metamod package
-        uses: actions/download-artifact@v4
-        with:
-          name: metamod-css34-linux-for-test
-          path: packages
+          merge-multiple: true
 
       - name: Download server tree
         uses: actions/download-artifact@v4
@@ -350,9 +428,9 @@ jobs:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
           MM_VERSION_EXPECT: "1.12.0"
-          SM_VERSION_EXPECT: "1.13.0.7394"
+          SM_VERSION_EXPECT: "1.13.0.7404"
           MM_COMMIT_EXPECT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
-          SM_COMMIT_EXPECT: "bd1bde7def4c1e3e584c320dfb2ac974eb4d7433"
+          SM_COMMIT_EXPECT: "cdedec7606f1ee9bf3685b2cce3620fbec90efa8"
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
           TIMEOUT_SECS: 120
           SMOKE_CONDEBUG: "1"

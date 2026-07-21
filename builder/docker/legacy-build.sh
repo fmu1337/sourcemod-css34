@@ -6,7 +6,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${LEGACY_BUILD_IMAGE:-debian:11}"
 PACKAGES_DIR="${PACKAGES_DIR:-$ROOT/packages}"
-PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-0}"
+PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-1}"
+
+# Resolve SM/MM pins on the host so the container gets concrete values.
+# shellcheck source=../resolve-version.sh
+source "$ROOT/builder/resolve-version.sh"
 
 if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
   # Never copy SourceMod/Metamod binaries from a reference package.
@@ -23,10 +27,17 @@ docker run --rm --platform linux/amd64 \
   -v "$ROOT:/workspace" \
   -w /workspace \
   -e SKIP_APT_INSTALL=1 \
-  -e SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-bd1bde7def4c1e3e584c320dfb2ac974eb4d7433}" \
-  -e SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-7394}" \
-  -e SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-13}" \
-  -e MMS_COMMIT="${MMS_COMMIT:-364cb6c26f66f7d9254d95a2fc533eac3557166b}" \
+  -e CSS34_LINE="${CSS34_LINE}" \
+  -e SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT}" \
+  -e SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV}" \
+  -e SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR}" \
+  -e MMS_COMMIT="${MMS_COMMIT}" \
+  -e MMS_BRANCH="${MMS_BRANCH}" \
+  -e MMS_DIRNAME="${MMS_DIRNAME}" \
+  -e MMS_MODE="${MMS_MODE}" \
+  -e PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD}" \
+  -e SPLICE_REFERENCE_EXTRAS="${SPLICE_REFERENCE_EXTRAS:-0}" \
+  -e SPLICE_REFERENCE_LOGIC="${SPLICE_REFERENCE_LOGIC:-0}" \
   -e USE_CLANG9=1 \
   -e WDIR=/workspace \
   -e DEPS_DIR=/workspace/deps \
@@ -111,10 +122,10 @@ if [[ -z "${ARTIFACT}" || ! -f "${ARTIFACT}" ]]; then
   exit 1
 fi
 
-# SM 1.12 packs its own logic/extensions; splicing rom4s 1.11.0.6572 binaries
-# would mask regressions and fail the logic splice-identity ABI check.
-if [[ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]]; then
-  echo "==> Skipping rom4s logic/extras splice (SOURCEMOD_MAJOR=${SOURCEMOD_MAJOR})" >&2
+# Pure-source builds never splice rom4s binaries. SM 1.12+ also skips because
+# rom4s 1.11 logic/extensions are ABI-incompatible.
+if [[ "${PURE_SOURCE_BUILD}" == "1" || "${SOURCEMOD_MAJOR:-11}" -ge 12 ]]; then
+  echo "==> Skipping rom4s logic/extras splice (PURE_SOURCE_BUILD=${PURE_SOURCE_BUILD} SOURCEMOD_MAJOR=${SOURCEMOD_MAJOR:-})" >&2
 else
   chmod +x "$ROOT/builder/splice-reference-extras.sh" "$ROOT/builder/splice-reference-logic.sh"
   "$ROOT/builder/splice-reference-extras.sh" "${ARTIFACT}"

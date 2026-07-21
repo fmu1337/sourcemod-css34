@@ -6,19 +6,19 @@ DEPS_DIR="${DEPS_DIR:-$WDIR/deps}"
 PACKAGES_DIR="${PACKAGES_DIR:-$WDIR/packages}"
 BUILDER_DIR="$WDIR/builder"
 SOURCEMOD_DIR="$WDIR/sourcemod"
-SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-bd1bde7def4c1e3e584c320dfb2ac974eb4d7433}"
-SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-7394}"
-SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-13}"
-if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
-  MMS_COMMIT="${MMS_COMMIT:-364cb6c26f66f7d9254d95a2fc533eac3557166b}"
-  MMS_DIR="${MMS_DIR:-$DEPS_DIR/mmsource-1.12}"
-else
-  MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-  MMS_DIR="${MMS_DIR:-$DEPS_DIR/mmsource-1.10}"
-fi
+
+# shellcheck source=../resolve-version.sh
+source "$BUILDER_DIR/resolve-version.sh"
+MMS_DIR="${MMS_DIR:-$DEPS_DIR/$MMS_DIRNAME}"
 
 export PATH="$HOME/.local/bin:$PATH"
-export SOURCEMOD_MAJOR
+export SOURCEMOD_MAJOR MMS_MODE MMS_DIRNAME MMS_COMMIT MMS_BRANCH
+export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV
+export PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-1}"
+if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
+  export SPLICE_REFERENCE_EXTRAS=0
+  export SPLICE_REFERENCE_LOGIC=0
+fi
 
 if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
   echo "==> Installing Linux build dependencies"
@@ -95,10 +95,11 @@ WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
   SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" MMS_DIR="$MMS_DIR" \
   bash "$BUILDER_DIR/write-build-stamps.sh"
 
-echo "==> Building Metamod:Source (css34 episode1)"
+echo "==> Building Metamod:Source (css34 episode1, ${MMS_MODE})"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
   CC="$CC" CXX="$CXX" USE_CLANG9="$USE_CLANG9" \
   SOURCEMOD_MAJOR="$SOURCEMOD_MAJOR" MMS_DIR="$MMS_DIR" \
+  MMS_MODE="$MMS_MODE" MMS_DIRNAME="$MMS_DIRNAME" \
   bash "$BUILDER_DIR/build-metamod.sh"
 
 MM_ARTIFACT="$(

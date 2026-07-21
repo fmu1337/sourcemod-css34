@@ -1,8 +1,11 @@
 name: Release
 
-# Tag format (short): 1.13.0.7394-mm1.12.0
+# Tag format examples:
+#   1.11.0.6970-mm1.10.7
+#   1.12.0.7245-mm1.12.0
+#   1.13.0.7404-mm1.12.0
 # Pushing a matching tag builds SM+MM for Linux and Windows and publishes a GitHub Release.
-# Tag the tip of this version line (not master / not another SM major).
+# Set CSS34_LINE (or SOURCEMOD_* / MMS_*) before tagging so release assets match.
 on:
   push:
     tags:
@@ -13,10 +16,8 @@ permissions:
   contents: write
 
 env:
-  SOURCEMOD_COMMIT: "bd1bde7def4c1e3e584c320dfb2ac974eb4d7433"
-  SOURCEMOD_GIT_REV: "7394"
-  SOURCEMOD_MAJOR: "13"
-  MMS_COMMIT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
+  CSS34_LINE: sm13-dev
+  PURE_SOURCE_BUILD: "1"
 
 jobs:
   linux:
@@ -50,15 +51,13 @@ jobs:
           SKIP_APT_INSTALL: 1
           CC: gcc-9
           CXX: g++-9
-          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
-          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
-          SOURCEMOD_MAJOR: ${{ env.SOURCEMOD_MAJOR }}
-          MMS_COMMIT: ${{ env.MMS_COMMIT }}
+          CSS34_LINE: ${{ env.CSS34_LINE }}
+          PURE_SOURCE_BUILD: ${{ env.PURE_SOURCE_BUILD }}
         run: |
           export WDIR="$PWD"
           chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
             builder/package-metamod.sh builder/build-metamod.sh builder/prepare-package.sh \
-            builder/write-build-stamps.sh builder/py.sh builder/patches/*.sh \
+            builder/write-build-stamps.sh builder/resolve-version.sh builder/py.sh builder/patches/*.sh \
             builder/install-clang9.sh builder/install-clang10.sh
           builder/run/linux.sh
 
@@ -97,15 +96,13 @@ jobs:
       - name: Build SourceMod + Metamod for CS:S v34
         shell: bash
         env:
-          SOURCEMOD_COMMIT: ${{ env.SOURCEMOD_COMMIT }}
-          SOURCEMOD_GIT_REV: ${{ env.SOURCEMOD_GIT_REV }}
-          SOURCEMOD_MAJOR: ${{ env.SOURCEMOD_MAJOR }}
-          MMS_COMMIT: ${{ env.MMS_COMMIT }}
+          CSS34_LINE: ${{ env.CSS34_LINE }}
+          PURE_SOURCE_BUILD: ${{ env.PURE_SOURCE_BUILD }}
         run: |
           export WDIR="$PWD"
           chmod +x builder/run/windows.sh builder/checkout-deps.sh builder/prepare-package.sh \
-            builder/build-metamod.sh builder/write-build-stamps.sh builder/py.sh \
-            builder/patches/*.sh
+            builder/build-metamod.sh builder/write-build-stamps.sh builder/resolve-version.sh \
+            builder/py.sh builder/patches/*.sh
           builder/run/windows.sh
 
       - name: Upload SourceMod artifact
@@ -155,6 +152,5 @@ jobs:
             - SourceMod Linux / Windows
             - Metamod:Source Linux / Windows
 
-            Upstream pins in this build:
-            - SourceMod `${{ env.SOURCEMOD_COMMIT }}` (git ${{ env.SOURCEMOD_GIT_REV }})
-            - Metamod:Source `${{ env.MMS_COMMIT }}`
+            Build line: `${{ env.CSS34_LINE }}` (pure-source, no reference binary splice).
+            Pins are resolved from `builder/versions.env` via `builder/resolve-version.sh`.
