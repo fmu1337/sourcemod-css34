@@ -1152,6 +1152,10 @@ new_6970 = """    if compiler.target.platform == 'linux':
         for lib in ('-lpthread', '-lrt', '-lgcc_s'):
           if lib not in compiler.linkflags:
             compiler.linkflags += [lib]
+        # css34: MM 1.10 PLUGIN_EXPOSE defines CreateInterface; tier1_i486.a
+        # also exports it via interface.o — allow the SM definition to win.
+        if '-Wl,--allow-multiple-definition' not in compiler.linkflags:
+          compiler.linkflags += ['-Wl,--allow-multiple-definition']
 """
 if 'css34: match rom4s (static libstdc++' in text:
     print('==> rom4s link flags already in AMBuildScript')
