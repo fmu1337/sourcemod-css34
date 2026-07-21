@@ -1189,6 +1189,29 @@ else:
     raise SystemExit('Failed to locate bintools AMBuilder entry')
 PY
 
+# Bundled DHooks (SM >=6970) needs SourceHook::IHookManagerAutoGen (SH v5 /
+# Metamod 1.11+). MM 1.10 css34 ships SH v4 only — skip the extension here.
+# sm12+/MM 1.12 keeps dhooks via apply-sourcemod-v112.sh (unpatched BuildScripts).
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+enabled = "  'extensions/dhooks/AMBuilder',\n"
+skipped = (
+    "  # css34: bundled DHooks needs SourceHook::IHookManagerAutoGen (SH v5 / MM 1.11+)\n"
+    "  # 'extensions/dhooks/AMBuilder',\n"
+)
+if skipped in text:
+    print('==> Bundled DHooks already skipped for MM 1.10 / SH v4')
+elif enabled in text:
+    path.write_text(text.replace(enabled, skipped, 1))
+    print('==> Skipped bundled DHooks (requires IHookManagerAutoGen; use standalone on MM 1.10)')
+else:
+    # Pre-6970 trees have no bundled dhooks — fine.
+    print('==> No bundled DHooks AMBuilder entry (pre-6970 SourceMod)')
+PY
+
 # css34: sourcemod.logic.so must match rom4s (old libstdc++ ABI, pthread/rt NEEDED,
 # no HL2 malloc hooks). rom4s built logic with clang 10 (hlmod #588406); clang-9
 # logic hangs srcds before the first mapchange in smoke tests.
