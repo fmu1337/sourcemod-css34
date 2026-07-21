@@ -238,10 +238,14 @@ if sp.exists():
         else:
             sp.write_text(sp_text.replace(dyn_old, dyn_new, 1))
             print('==> Patched BuildDynamicCoreLib for pthread/rt DT_NEEDED')
+            # Must re-read: the ABI0 block below previously overwrote this write
+            # using a stale sp_text and dropped pthread/rt from libsourcepawn.so.
+            sp_text = sp.read_text()
     else:
         print('==> BuildDynamicCoreLib pthread/rt already patched')
 
     # css34: static libsourcepawn is linked into logic.so — must use ABI0.
+    sp_text = sp.read_text()
     if 'CSS34 ABI0 for static libsourcepawn' not in sp_text:
         sp_text = sp_text.replace(
             "    def SetupBinForArch(self, binary, builder):\n        if binary.compiler.like('gcc'):",

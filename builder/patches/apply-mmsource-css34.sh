@@ -368,3 +368,40 @@ def patch_console(rel: str) -> None:
 patch_console('core-legacy/concommands.cpp')
 patch_console('core/metamod_console.cpp')
 PYCONS
+
+# css34: HL2Library puts shared vstdlib/tier0 on linkflags (prepended) while
+# static tier1_i486.a stays in postlink — ConVar is then imported from vstdlib
+# and GameDLLInit hangs. Move tier1 to the front of linkflags (same as SM / MM 1.12).
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYTIER1'
+from pathlib import Path
+import os
+
+path = Path(os.environ['MMS_DIR']) / 'AMBuildScript'
+text = path.read_text()
+if 'css34: episode1 tier1 before vstdlib' in text:
+    print('==> MM HL2Library tier1-before-vstdlib already patched')
+else:
+    needle = (
+        "      linker = make_linker(source_path, output_path)\n"
+        "      binary.compiler.linkflags[0:0] = [binary.Dep(library, linker)]\n\n"
+        "    return binary\n"
+    )
+    insert = (
+        "      linker = make_linker(source_path, output_path)\n"
+        "      binary.compiler.linkflags[0:0] = [binary.Dep(library, linker)]\n\n"
+        "    # css34: episode1 tier1 before vstdlib so ConVar is embedded, not imported\n"
+        "    if builder.target_platform == 'linux' and sdk.name in ('episode1', 'ep1'):\n"
+        "      tier1 = os.path.join(lib_folder, 'tier1_i486.a')\n"
+        "      if os.path.isfile(tier1):\n"
+        "        def _not_tier1(x, _needle='tier1_i486.a'):\n"
+        "          s = getattr(x, 'path', None) or getattr(x, 'localPath', None) or x\n"
+        "          return _needle not in str(s)\n"
+        "        compiler.postlink = [x for x in compiler.postlink if _not_tier1(x)]\n"
+        "        binary.compiler.linkflags[0:0] = [tier1]\n\n"
+        "    return binary\n"
+    )
+    if needle not in text:
+        raise SystemExit('Failed to locate HL2Library dynamic_libs return in MM AMBuildScript')
+    path.write_text(text.replace(needle, insert, 1))
+    print('==> Patched MM HL2Library for episode1 tier1-before-vstdlib')
+PYTIER1
