@@ -173,6 +173,38 @@ plugin = (tmpdir / 'ISmmPlugin.h').read_text()
 plugin = plugin.replace('RegisterConCmdBase', 'RegisterConCommandBase')
 plugin = plugin.replace('UnregisterConCmdBase', 'UnregisterConCommandBase')
 
+# Bundled DHooks (SM 6970+) builds with META_NO_HL2SDK and no SDK include
+# paths. Stock core-legacy headers always pull <interface.h>/<eiface.h>;
+# mirror modern MM and provide forward decls / CreateInterfaceFn when the
+# SDK is intentionally absent.
+api_hl2 = '#include <interface.h>\n#include <eiface.h>\n'
+api_meta_no = (
+    '#if defined META_NO_HL2SDK\n'
+    'class CGlobalVars;\n'
+    'struct edict_t;\n'
+    'class ConCommandBase;\n'
+    'class IConCommandBaseAccessor;\n'
+    'class IServerPluginCallbacks;\n'
+    'typedef void* (*CreateInterfaceFn)(const char *pName, int *pReturnCode);\n'
+    '#else\n'
+    '#include <interface.h>\n'
+    '#include <eiface.h>\n'
+    '#endif\n'
+)
+if api_hl2 not in api:
+    raise SystemExit('Expected legacy ISmmAPI.h HL2SDK includes missing')
+api = api.replace(api_hl2, api_meta_no, 1)
+
+plugin_iface = '#include <interface.h>\n'
+plugin_iface_guarded = (
+    '#ifndef META_NO_HL2SDK\n'
+    '#include <interface.h>\n'
+    '#endif\n'
+)
+if plugin_iface not in plugin:
+    raise SystemExit('Expected legacy ISmmPlugin.h interface.h include missing')
+plugin = plugin.replace(plugin_iface, plugin_iface_guarded, 1)
+
 api = wrap_sourcemm(api, ['ISmmAPI'])
 plugin = wrap_sourcemm(plugin, ['ISmmPlugin', 'IMetamodListener'])
 
@@ -184,6 +216,10 @@ plugin = plugin.replace(
 
 if 'GetEngineFactory' not in api or 'SetLastMetaReturn' not in api:
     raise SystemExit('ISmmAPI rename/wrap failed sanity check')
+if 'META_NO_HL2SDK' not in api or 'CreateInterfaceFn' not in api:
+    raise SystemExit('ISmmAPI META_NO_HL2SDK forward-decl patch failed')
+if 'META_NO_HL2SDK' not in plugin:
+    raise SystemExit('ISmmPlugin META_NO_HL2SDK interface.h guard failed')
 if 'PLAPI_VERSION' not in plugin:
     raise SystemExit('ISmmPlugin missing PLAPI_VERSION')
 if '#if (__GNUC__ >= 4)' not in plugin:
@@ -192,6 +228,7 @@ if '#if (__GNUC__ >= 4)' not in plugin:
 (core / 'ISmmAPI.h').write_text(api)
 (core / 'ISmmPlugin.h').write_text(plugin)
 print('==> Installed legacy-layout ISmmAPI/ISmmPlugin with modern method names')
+print('==> Gated legacy HL2SDK includes for META_NO_HL2SDK (DHooks)')
 PY
 
 # Ext.h: define METAMOD_PLAPI_VERSION=11 so smsdk_ext takes the modern-name code path
