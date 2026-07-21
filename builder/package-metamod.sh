@@ -16,6 +16,12 @@ trap 'rm -rf "$staging"' EXIT
 
 cp -a "$MMS_PACKAGE_DIR/addons" "$staging/"
 
+# Match rom4s/css34 gameinfo path (relative to hl2/cstrike).
+vdf="$staging/addons/metamod.vdf"
+if [[ -f "$vdf" ]]; then
+  sed -i 's|"file"[[:space:]]*"addons/metamod/bin/server"|"file"\t"../cstrike/addons/metamod/bin/server"|' "$vdf"
+fi
+
 echo "==> Stripping Metamod Linux binaries"
 while IFS= read -r -d '' binary; do
   strip --strip-unneeded "$binary"
@@ -34,12 +40,6 @@ for rel in "${required[@]}"; do
     exit 1
   fi
 done
-
-if ! grep -Eq '"file"[[:space:]]*"addons/metamod/bin/server"' \
-  "$staging/addons/metamod.vdf"; then
-  echo "Invalid Metamod VDF path; package would load outside the active game root" >&2
-  exit 1
-fi
 
 tar -C "$staging" -czf "$archive" addons
 echo "$archive"
