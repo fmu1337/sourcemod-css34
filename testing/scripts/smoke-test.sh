@@ -178,11 +178,14 @@ for required_ext in 'BinTools' 'SDK Tools' 'CS Tools' 'SDK Hooks'; do
 done
 
 # css34 OnTakeDamage vtables must be the packaged overlay (windows 60 / linux 61).
+# Match the exact Offsets key (not OnTakeDamage_Alive). linux is 3 lines after the key
+# when windows is listed first — use enough context.
 sdkhooks_gd="${SERVER_DIR}/cstrike/addons/sourcemod/gamedata/sdkhooks.games/game.cstrike.txt"
 if [[ -f "${sdkhooks_gd}" ]]; then
-  if ! grep -A2 '"OnTakeDamage"' "${sdkhooks_gd}" | grep -q '"linux"[[:space:]]*"61"'; then
+  if ! grep -A4 -E '^[[:space:]]*"OnTakeDamage"[[:space:]]*$' "${sdkhooks_gd}" \
+      | grep -qE '"linux"[[:space:]]+"61"'; then
     echo "FAIL: sdkhooks OnTakeDamage linux offset is not css34 61 in ${sdkhooks_gd}" >&2
-    grep -A5 '"OnTakeDamage"' "${sdkhooks_gd}" >&2 || true
+    grep -A5 -E '^[[:space:]]*"OnTakeDamage"[[:space:]]*$' "${sdkhooks_gd}" >&2 || true
     fail=1
   else
     echo "OK: sdkhooks OnTakeDamage linux offset is 61 (css34)"
