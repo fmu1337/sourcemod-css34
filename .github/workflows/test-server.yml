@@ -30,17 +30,11 @@ jobs:
 
       - name: Build SourceMod for CS:S v34
         env:
-<<<<<<< HEAD
           SOURCEMOD_COMMIT: bd1bde7def4c1e3e584c320dfb2ac974eb4d7433
           SOURCEMOD_GIT_REV: "7394"
           SOURCEMOD_MAJOR: "13"
           MMS_COMMIT: 364cb6c26f66f7d9254d95a2fc533eac3557166b
-=======
-          SOURCEMOD_COMMIT: 832519ab647cdecb85763918dbfed1cb5e79c6cb
-          SOURCEMOD_GIT_REV: "6572"
-          MMS_COMMIT: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
           PURE_SOURCE_BUILD: "1"
->>>>>>> ed0e500 (ci: test pure-source SM and MM packages)
         run: |
           chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
