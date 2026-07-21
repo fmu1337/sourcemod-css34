@@ -114,14 +114,31 @@ def patch_console(rel: str) -> None:
     if 'CSS34 pack:' in text:
         print(f'==> {rel}: meta version already prints CSS34 pack commit')
         return
-    if '#include <versionlib.h>' not in text:
-        print(f'==> WARN: versionlib.h include missing in {rel}')
+
+    # MM 1.12: versionlib.h + CONMSG / METAMOD_BUILD_SHA
+    # MM 2.0:  metamod_version.h + CMDMSG / METAMOD_SHA (no versionlib.h)
+    if '#include <versionlib.h>' in text:
+        text = text.replace(
+            '#include <versionlib.h>',
+            '#include <versionlib.h>\n#include <css34_build_stamp.h>',
+            1,
+        )
+    elif '#include "metamod_version.h"' in text:
+        text = text.replace(
+            '#include "metamod_version.h"',
+            '#include "metamod_version.h"\n#include <css34_build_stamp.h>',
+            1,
+        )
+    elif '#include <metamod_version.h>' in text:
+        text = text.replace(
+            '#include <metamod_version.h>',
+            '#include <metamod_version.h>\n#include <css34_build_stamp.h>',
+            1,
+        )
+    else:
+        print(f'==> WARN: no version header include found in {rel}')
         return
-    text = text.replace(
-        '#include <versionlib.h>',
-        '#include <versionlib.h>\n#include <css34_build_stamp.h>',
-        1,
-    )
+
     for old, new in (
         (
             '''\t\t\tCONMSG("Built from: https://github.com/alliedmodders/metamod-source/commit/%s\\n", METAMOD_BUILD_SHA);
@@ -143,6 +160,16 @@ def patch_console(rel: str) -> None:
 #endif
 \t\tCONMSG("CSS34 pack: https://github.com/fmu1337/sourcemod-css34/commit/%s\\n", CSS34_PACK_COMMIT);
 \t\tCONMSG("Build ID: %s:%s\\n", METAMOD_BUILD_LOCAL_REV, METAMOD_BUILD_SHA);
+''',
+        ),
+        # MM 2.0 ReplyVersion (CMDMSG + METAMOD_SHA)
+        (
+            '''\tCMDMSG(client, "    Built from: https://github.com/alliedmodders/metamod-source/commit/%s\\n", METAMOD_SHA);
+\tCMDMSG(client, "    Build ID: %s:%s\\n", METAMOD_LOCAL_REV, METAMOD_SHA);
+''',
+            '''\tCMDMSG(client, "    Built from: https://github.com/alliedmodders/metamod-source/commit/%s\\n", METAMOD_SHA);
+\tCMDMSG(client, "    CSS34 pack: https://github.com/fmu1337/sourcemod-css34/commit/%s\\n", CSS34_PACK_COMMIT);
+\tCMDMSG(client, "    Build ID: %s:%s\\n", METAMOD_LOCAL_REV, METAMOD_SHA);
 ''',
         ),
     ):
@@ -199,25 +226,44 @@ else:
     print('==> Forced MM linker_argv to C++ driver')
 PYLINK
 
-# episode1 SDK: MemAllocScratch lives in tier0/mem.h but provider_ep2.cpp never includes it
-# (newer SDKS pull it transitively). Without the include, metamod.2.ep1 fails to compile.
+# episode1 SDK: MemAllocScratch lives in tier0/mem.h but the Source1 provider
+# never includes it (newer SDKs pull it transitively). Without the include,
+# metamod.2.ep1 fails to compile.
+# MM 1.12: core/provider/provider_ep2.cpp
+# MM 2.0+:  core/provider/source/provider_source.cpp
 MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYMEM'
 from pathlib import Path
 import os
-path = Path(os.environ['MMS_DIR']) / 'core/provider/provider_ep2.cpp'
+
+root = Path(os.environ['MMS_DIR'])
+candidates = [
+    root / 'core/provider/provider_ep2.cpp',
+    root / 'core/provider/source/provider_source.cpp',
+]
+path = next((p for p in candidates if p.is_file()), None)
+if path is None:
+    raise SystemExit(
+        'Failed to locate provider_ep2.cpp / provider_source.cpp for mem.h patch'
+    )
 text = path.read_text()
+rel = path.relative_to(root)
 if 'tier0/mem.h' in text:
-    print('==> provider_ep2.cpp already includes tier0/mem.h')
+    print(f'==> {rel} already includes tier0/mem.h')
 else:
-    needle = '#include <tier1/KeyValues.h>\n'
-    if needle not in text:
-        raise SystemExit('Failed to locate KeyValues include in provider_ep2.cpp')
+    needles = [
+        '#include <tier1/KeyValues.h>\n',
+        '#include "KeyValues.h"\n',
+        '#include <KeyValues.h>\n',
+    ]
+    needle = next((n for n in needles if n in text), None)
+    if needle is None:
+        raise SystemExit(f'Failed to locate KeyValues include in {rel}')
     path.write_text(text.replace(
         needle,
         needle + '#include <tier0/mem.h>  /* css34 episode1: MemAllocScratch */\n',
         1,
     ))
-    print('==> Patched provider_ep2.cpp to include tier0/mem.h for episode1')
+    print(f'==> Patched {rel} to include tier0/mem.h for episode1')
 PYMEM
 
 # css34: SdkHelpers puts dynamic vstdlib/tier0 BEFORE static tier1_i486.a (postlink).
