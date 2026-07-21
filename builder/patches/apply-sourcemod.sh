@@ -163,21 +163,74 @@ if compiler_flavor == 'clang' and supports_deprecated_non_prototype and '-Wno-de
     )
     sp_script.write_text(sp_text)
 
-# css34: keep DT_NEEDED libpthread/librt on sourcepawn.jit.x86.so.
-# Configure()'s cxx.postlink is NOT applied to Root.Library() clones when SM
-# embeds sourcepawn (link line has -lm/-static-libstdc++ but no -lpthread).
-# Without libpthread, Metamod fails on glibc < 2.34 (Debian 11):
-#   undefined symbol: pthread_key_create
+# css34: keep DT_NEEDED libpthread/librt on the SourcePawn shared library.
+# Pre-6800 trees ship sourcepawn.jit.x86.so via Root.Library in vm/AMBuilder.
+# 6970+ uses modular BuildDynamicCoreLib → libsourcepawn.so (packaged as jit).
+# Configure()'s cxx.postlink is NOT applied to embedded SP Root.Library clones.
 jit_ambuilder = Path(sourcemod_dir) / 'sourcepawn/vm/AMBuilder'
-jit_text = jit_ambuilder.read_text()
-jit_old = """dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
+sp_script = Path(sourcemod_dir) / 'sourcepawn/AMBuildScript'
+modular_sp = 'def BuildDynamicCoreLib' in sp_script.read_text()
+if modular_sp:
+    # Modular SourcePawn (6970+): patch shared libsourcepawn + Configure postlink.
+    sp_text = sp_script.read_text()
+    old_pl_variants = [
+        "                cxx.postlink += ['-lpthread', '-lrt']",
+        "        cxx.postlink += ['-lpthread', '-lrt']",
+    ]
+    patched_pl = False
+    if 'css34: force pthread/rt NEEDED for Debian 11' in sp_text:
+        print('==> sourcepawn Configure pthread/rt no-as-needed already patched')
+        patched_pl = True
+    else:
+        for old_pl in old_pl_variants:
+            if old_pl in sp_text:
+                indent = old_pl[: len(old_pl) - len(old_pl.lstrip(' '))]
+                new_pl = (
+                    f"{indent}# css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
+                    f"{indent}cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
+                )
+                sp_script.write_text(sp_text.replace(old_pl, new_pl, 1))
+                print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt DT_NEEDED')
+                patched_pl = True
+                break
+    if not patched_pl:
+        print('==> WARN: sourcepawn linux pthread postlink not found (modular)')
+    sp_text = sp_script.read_text()
+    dyn_marker = 'css34: libsourcepawn pthread/rt DT_NEEDED'
+    if dyn_marker not in sp_text:
+        dyn_old = (
+            "    def BuildDynamicCoreLib(self, builder):\n"
+            "        cxx = builder.cxx\n"
+            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
+            "        self.SetupBinForArch(binary, builder)\n"
+        )
+        dyn_new = (
+            "    def BuildDynamicCoreLib(self, builder):\n"
+            "        cxx = builder.cxx\n"
+            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
+            "        self.SetupBinForArch(binary, builder)\n"
+            "        # css34: libsourcepawn pthread/rt DT_NEEDED (packaged as sourcepawn.jit.x86.so)\n"
+            "        if binary.compiler.target.platform == 'linux':\n"
+            "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):\n"
+            "            if flag not in binary.compiler.linkflags:\n"
+            "              binary.compiler.linkflags += [flag]\n"
+        )
+        if dyn_old not in sp_text:
+            raise SystemExit('Failed to locate BuildDynamicCoreLib for modular sourcepawn pthread patch')
+        sp_script.write_text(sp_text.replace(dyn_old, dyn_new, 1))
+        print('==> Patched BuildDynamicCoreLib for pthread/rt DT_NEEDED')
+    else:
+        print('==> BuildDynamicCoreLib pthread/rt already patched')
+elif jit_ambuilder.exists():
+    jit_text = jit_ambuilder.read_text()
+    jit_old = """dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
 dll.compiler.includes += Includes
 dll.compiler.linkflags[0:0] = [
   libsourcepawn_a.binary,
   SP.zlib[arch],
 ]
 """
-jit_new = """dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
+    jit_new = """dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
 dll.compiler.includes += Includes
 dll.compiler.linkflags[0:0] = [
   libsourcepawn_a.binary,
@@ -187,28 +240,30 @@ dll.compiler.linkflags[0:0] = [
 if builder.target.platform == 'linux':
   dll.compiler.linkflags += ['-Wl,--no-as-needed', '-lpthread', '-lrt']
 """
-if "css34: force pthread/rt NEEDED (postlink from Configure" in jit_text:
-    print('==> sourcepawn.jit pthread/rt already patched')
-elif jit_old in jit_text:
-    jit_ambuilder.write_text(jit_text.replace(jit_old, jit_new, 1))
-    print('==> Patched sourcepawn vm/AMBuilder for pthread/rt DT_NEEDED on jit dll')
-else:
-    raise SystemExit('Failed to locate sourcepawn.jit.x86 Library block in vm/AMBuilder')
+    if "css34: force pthread/rt NEEDED (postlink from Configure" in jit_text:
+        print('==> sourcepawn.jit pthread/rt already patched')
+    elif jit_old in jit_text:
+        jit_ambuilder.write_text(jit_text.replace(jit_old, jit_new, 1))
+        print('==> Patched sourcepawn vm/AMBuilder for pthread/rt DT_NEEDED on jit dll')
+    else:
+        raise SystemExit('Failed to locate sourcepawn.jit.x86 Library block in vm/AMBuilder')
 
-# Keep Configure postlink patched too (shell/tools binaries).
-sp_text = sp_script.read_text()
-sp_old_pthread = "        cxx.postlink += ['-lpthread', '-lrt']"
-sp_new_pthread = (
-    "        # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
-    "        cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
-)
-if "css34: force pthread/rt NEEDED for Debian 11" in sp_text:
-    print('==> sourcepawn Configure pthread/rt no-as-needed already patched')
-elif sp_old_pthread in sp_text:
-    sp_script.write_text(sp_text.replace(sp_old_pthread, sp_new_pthread, 1))
-    print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt DT_NEEDED')
+    # Keep Configure postlink patched too (shell/tools binaries).
+    sp_text = sp_script.read_text()
+    sp_old_pthread = "        cxx.postlink += ['-lpthread', '-lrt']"
+    sp_new_pthread = (
+        "        # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
+        "        cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
+    )
+    if "css34: force pthread/rt NEEDED for Debian 11" in sp_text:
+        print('==> sourcepawn Configure pthread/rt no-as-needed already patched')
+    elif sp_old_pthread in sp_text:
+        sp_script.write_text(sp_text.replace(sp_old_pthread, sp_new_pthread, 1))
+        print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt DT_NEEDED')
+    else:
+        raise SystemExit('Failed to locate sourcepawn linux pthread postlink block')
 else:
-    raise SystemExit('Failed to locate sourcepawn linux pthread postlink block')
+    raise SystemExit('sourcepawn AMBuildScript / vm/AMBuilder missing')
 
 old_dynamic = (
     "      if sdk.name in ['css', 'hl2dm', 'dods', 'tf2', 'sdk2013', 'bms', 'nucleardawn', 'l4d2', 'insurgency', 'doi']:\n"
@@ -252,6 +307,14 @@ old_tier1_variants = [
         "          compiler.Dep(os.path.join(lib_folder, 'mathlib_i486.a'))\n"
         "        ]"
     ),
+    # 6970+ AMBuild 2.x: bare paths (no compiler.Dep)
+    (
+        "      else:\n"
+        "        compiler.postlink += [\n"
+        "          os.path.join(lib_folder, 'tier1_i486.a'),\n"
+        "          os.path.join(lib_folder, 'mathlib_i486.a')\n"
+        "        ]"
+    ),
 ]
 new_tier1 = (
     "      else:\n"
@@ -260,14 +323,22 @@ new_tier1 = (
     "          compiler.Dep(os.path.join(lib_folder, 'mathlib_i486.a'))\n"
     "        ]"
 )
+new_tier1_bare = (
+    "      else:\n"
+    "        # css34: mathlib only here; tier1 is prepended before vstdlib below\n"
+    "        compiler.postlink += [\n"
+    "          os.path.join(lib_folder, 'mathlib_i486.a')\n"
+    "        ]"
+)
 replaced_tier1 = False
-for old_tier1 in old_tier1_variants:
+for i, old_tier1 in enumerate(old_tier1_variants):
     if old_tier1 in text:
-        text = text.replace(old_tier1, new_tier1, 1)
+        repl = new_tier1_bare if i >= 2 else new_tier1
+        text = text.replace(old_tier1, repl, 1)
         replaced_tier1 = True
         break
 if not replaced_tier1:
-    if new_tier1 not in text:
+    if new_tier1 not in text and new_tier1_bare not in text:
         raise SystemExit('Failed to locate tier1_i486.a postlink block in AMBuildScript')
 
 tier1_before_vstdlib = (
@@ -310,10 +381,50 @@ tier1_before_vstdlib_new = (
     "\n"
     "    return binary\n"
 )
+# 6970+: AddFolder + weaklinkdeps (no make_linker Dep)
+tier1_before_vstdlib_6970 = (
+    "    for library in dynamic_libs:\n"
+    "      source_path = os.path.join(lib_folder, library)\n"
+    "      output_path = os.path.join(binary.localFolder, library)\n"
+    "\n"
+    "      # Ensure the output path exists.\n"
+    "      context.AddFolder(binary.localFolder)\n"
+    "      output = context.AddSymlink(source_path, output_path)\n"
+    "\n"
+    "      compiler.weaklinkdeps += [output]\n"
+    "      compiler.linkflags[0:0] = [library]\n"
+    "\n"
+    "    return binary\n"
+)
+tier1_before_vstdlib_6970_new = (
+    "    for library in dynamic_libs:\n"
+    "      source_path = os.path.join(lib_folder, library)\n"
+    "      output_path = os.path.join(binary.localFolder, library)\n"
+    "\n"
+    "      # Ensure the output path exists.\n"
+    "      context.AddFolder(binary.localFolder)\n"
+    "      output = context.AddSymlink(source_path, output_path)\n"
+    "\n"
+    "      compiler.weaklinkdeps += [output]\n"
+    "      compiler.linkflags[0:0] = [library]\n"
+    "\n"
+    "    # css34: static tier1 BEFORE shared vstdlib so ConVar is embedded (T),\n"
+    "    # not imported from vstdlib (U). Must run after the dynamic_libs prepend.\n"
+    "    if compiler.target.platform in ['linux', 'mac']:\n"
+    "      if not (sdk.name in ['sdk2013', 'bms'] or compiler.target.arch == 'x86_64'):\n"
+    "        compiler.linkflags[0:0] = [\n"
+    "          os.path.join(lib_folder, 'tier1_i486.a')\n"
+    "        ]\n"
+    "\n"
+    "    return binary\n"
+)
 if 'css34: static tier1 BEFORE shared vstdlib' not in text:
-    if tier1_before_vstdlib not in text:
+    if tier1_before_vstdlib in text:
+        text = text.replace(tier1_before_vstdlib, tier1_before_vstdlib_new, 1)
+    elif tier1_before_vstdlib_6970 in text:
+        text = text.replace(tier1_before_vstdlib_6970, tier1_before_vstdlib_6970_new, 1)
+    else:
         raise SystemExit('Failed to locate dynamic_libs linkflags prepend in AMBuildScript')
-    text = text.replace(tier1_before_vstdlib, tier1_before_vstdlib_new, 1)
 
 path.write_text(text)
 
@@ -935,11 +1046,32 @@ new = """  def ExtLibrary(self, context, name, arch):
           binary.compiler.linkflags += [flag]
     return binary
 """
+# 6970+: ExtLibrary(self, context, compiler, name) + SetArchFlags
+old_6970 = """  def ExtLibrary(self, context, compiler, name):
+    binary = self.Library(context, compiler, name)
+    SetArchFlags(compiler)
+    self.ConfigureForExtension(context, binary.compiler)
+    return binary
+"""
+new_6970 = """  def ExtLibrary(self, context, compiler, name):
+    binary = self.Library(context, compiler, name)
+    SetArchFlags(compiler)
+    self.ConfigureForExtension(context, binary.compiler)
+    # css34: match rom4s clientprefs DT_NEEDED on Debian 11 / old glibc
+    if compiler.target.platform == 'linux':
+      for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
+        if flag not in binary.compiler.linkflags:
+          binary.compiler.linkflags += [flag]
+    return binary
+"""
 if "css34: match rom4s clientprefs DT_NEEDED" in text:
     print('==> ExtLibrary pthread/rt already patched')
 elif old in text:
     path.write_text(text.replace(old, new, 1))
     print('==> Patched ExtLibrary for pthread/rt DT_NEEDED')
+elif old_6970 in text:
+    path.write_text(text.replace(old_6970, new_6970, 1))
+    print('==> Patched ExtLibrary (6970+) for pthread/rt DT_NEEDED')
 else:
     raise SystemExit('Failed to patch ExtLibrary for css34 pthread/rt')
 PYEXT
@@ -982,11 +1114,35 @@ new = """    if builder.target.platform == 'linux':
           if lib not in compiler.linkflags:
             compiler.linkflags += [lib]
 """
+# 6970+: compiler.target.platform + -lstdc++ in the csgo/blade arm
+old_6970 = """    if compiler.target.platform == 'linux':
+      if sdk.name in ['csgo', 'blade']:
+        compiler.linkflags.remove('-static-libstdc++')
+        compiler.linkflags += ['-lstdc++']
+        compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']
+"""
+new_6970 = """    if compiler.target.platform == 'linux':
+      if sdk.name in ['csgo', 'blade']:
+        compiler.linkflags.remove('-static-libstdc++')
+        compiler.linkflags += ['-lstdc++']
+        compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']
+      # css34: match rom4s (static libstdc++, dynamic libgcc_s/pthread/rt)
+      if sdk.name in ['ep1', 'episode1']:
+        if '-static-libgcc' in compiler.linkflags:
+          compiler.linkflags.remove('-static-libgcc')
+        compiler.defines += ['NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE']
+        for lib in ('-lpthread', '-lrt', '-lgcc_s'):
+          if lib not in compiler.linkflags:
+            compiler.linkflags += [lib]
+"""
 if 'css34: match rom4s (static libstdc++' in text:
     print('==> rom4s link flags already in AMBuildScript')
 elif old in text:
     path.write_text(text.replace(old, new, 1))
     print('==> Patched AMBuildScript for rom4s-like link flags')
+elif old_6970 in text:
+    path.write_text(text.replace(old_6970, new_6970, 1))
+    print('==> Patched AMBuildScript (6970+) for rom4s-like link flags')
 else:
     raise SystemExit('Failed to patch static-libstdc++ block for css34')
 PYLINK
@@ -1020,6 +1176,172 @@ import os
 
 path = Path(os.environ['SOURCEMOD_DIR']) / 'core/logic/AMBuilder'
 text = path.read_text()
+
+# 6970+: AMBuild 2.x `for cxx in builder.targets` (same shape as SM 1.12 logic).
+# Apply g++-9 + gcc-4.9 sysroot toolchain without static SourcePawn (SP is not
+# passed into BuildScripts on 1.11/1.12).
+_loop_old_mod = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
+if _loop_old_mod in text or (
+    "for cxx in builder.targets:" in text
+    and "SM.Library(builder, cxx, 'sourcemod.logic')" in text
+    and 'SM_LOGIC_CXX_SYSROOT' in text
+):
+    if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in text:
+        if _loop_old_mod not in text:
+            raise SystemExit('Failed to locate modular logic AMBuilder for-cxx loop')
+        _loop_new_mod = """for cxx in builder.targets:
+  if cxx.target.platform == 'linux':
+    # css34: SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9 logic toolchain.
+    import shutil as _shutil
+    import os as _os
+    logic_cxx = cxx.clone()
+    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    _gcc9 = _shutil.which('gcc-9') or '/usr/bin/gcc-9'
+    logic_cxx.cxx_argv = [_gpp9]
+    logic_cxx.cc_argv = [_gcc9]
+    logic_cxx.linker_argv = [_gpp9]
+    if logic_cxx.target.arch == 'x86':
+      if '-m32' not in logic_cxx.cflags:
+        logic_cxx.cflags += ['-m32']
+      if '-m32' not in logic_cxx.linkflags:
+        logic_cxx.linkflags += ['-m32']
+    _clang_only = [
+      '-Wno-nonportable-include-path', '-Wno-macro-redefined', '-Wno-writable-strings',
+      '-Wno-sometimes-uninitialized', '-Wno-inconsistent-missing-override',
+      '-Wno-implicit-exception-spec-mismatch', '-Wno-deprecated-register',
+      '-Wno-tautological-overlap-compare',
+    ]
+    for _attr in ('cflags', 'cxxflags'):
+      _flags = getattr(logic_cxx, _attr)
+      setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    if _sysroot and logic_cxx.target.arch == 'x86':
+      logic_cxx.cxxflags += [
+        '-nostdinc++',
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
+        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
+      ]
+    for _flag in ('-lgcc_eh', '-static-libstdc++'):
+      if _flag in logic_cxx.linkflags:
+        logic_cxx.linkflags.remove(_flag)
+    if '-static-libgcc' not in logic_cxx.linkflags:
+      logic_cxx.linkflags += ['-static-libgcc']
+    logic_cxx.cxxflags += [
+      '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
+      '-Wno-stringop-truncation', '-Wno-unused-result',
+      '-D_GLIBCXX_USE_CXX11_ABI=0',
+      '-fno-sized-deallocation',  # css34: no UND _ZdlPvj/_ZdaPvj at dlopen
+    ]
+    binary = SM.Library(builder, logic_cxx, 'sourcemod.logic')
+  else:
+    binary = SM.Library(builder, cxx, 'sourcemod.logic')
+"""
+        text = text.replace(_loop_old_mod, _loop_new_mod, 1)
+        print('==> Patched modular logic AMBuilder (gcc-4.9 g++-9)')
+
+    defs_old = """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC'
+  ]"""
+    defs_new = """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC',
+    '_GLIBCXX_USE_CXX11_ABI=0',
+    'NO_HOOK_MALLOC',
+    'NO_MALLOC_OVERRIDE',
+  ]"""
+    defs_old_boot = """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC',
+    'SM_BOOT_TRACE',
+  ]"""
+    defs_new_boot = """  binary.compiler.defines += [
+    'SM_DEFAULT_THREADER',
+    'SM_LOGIC',
+    '_GLIBCXX_USE_CXX11_ABI=0',
+    'NO_HOOK_MALLOC',
+    'NO_MALLOC_OVERRIDE',
+    'SM_BOOT_TRACE',
+  ]"""
+    if '_GLIBCXX_USE_CXX11_ABI=0' not in text or 'NO_HOOK_MALLOC' not in text:
+        if defs_old_boot in text:
+            text = text.replace(defs_old_boot, defs_new_boot, 1)
+        elif defs_old in text:
+            text = text.replace(defs_old, defs_new, 1)
+        else:
+            raise SystemExit('Failed to locate modular logic AMBuilder defines block')
+        print('==> Patched modular logic AMBuilder css34 ABI defines')
+
+    if 'css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT' not in text and \
+       'css34: gcc-4.9 libstdc++ when SM_LOGIC_CXX_SYSROOT' not in text:
+        linux_old = """  if binary.compiler.target.platform == 'linux':
+    binary.compiler.postlink += ['-lpthread', '-lrt']
+  elif binary.compiler.target.platform == 'mac':"""
+        linux_new = """  if binary.compiler.target.platform == 'linux':
+    # css34: gcc-4.9 libstdc++ when SM_LOGIC_CXX_SYSROOT (SM < 1.13); no static SP.
+    import os as _os
+    for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    for flag in list(binary.compiler.postlink):
+      if flag in ('-lpthread', '-lrt', '-Wl,--no-as-needed'):
+        binary.compiler.postlink.remove(flag)
+    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
+    _stdcxx = None
+    _sup = None
+    if _sysroot:
+      for _base in (
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
+          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
+      ):
+        _cand = _os.path.join(_base, 'libstdc++.a')
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_base, 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      for _cand in (
+          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
+      ):
+        if _os.path.isfile(_cand):
+          _stdcxx = _cand
+          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
+          break
+    if _stdcxx is None:
+      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+    _gcc = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc.a')
+    _gcc_eh = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc_eh.a')
+    for flag in ('-static-libgcc',):
+      if flag in binary.compiler.linkflags:
+        binary.compiler.linkflags.remove(flag)
+    _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
+    if _sup and _os.path.isfile(_sup):
+      _static.append(_sup)
+    if _os.path.isfile(_gcc_eh):
+      _static.append(_gcc_eh)
+    if _os.path.isfile(_gcc):
+      _static.append(_gcc)
+    binary.compiler.linkflags += _static + [
+      '-Wl,-Bdynamic',
+      '-lc', '-lm',
+      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
+    ]
+  elif binary.compiler.target.platform == 'mac':"""
+        if linux_old not in text:
+            raise SystemExit('Failed to locate modular logic AMBuilder linux link block')
+        text = text.replace(linux_old, linux_new, 1)
+        print('==> Patched modular logic AMBuilder linux static libstdc++ + pthread/rt')
+
+    path.write_text(text)
+    print('==> modular (6970+) logic AMBuilder css34 patches complete')
+    raise SystemExit(0)
 
 logic_loop_new = """for arch in SM.archs:
   if builder.target.platform == 'linux':

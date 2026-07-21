@@ -381,6 +381,24 @@ if logic_am.exists():
     binary.compiler.postlink += ['-lpthread', '-lrt']
   elif binary.compiler.target.platform == 'mac':""",
         ]
+        # SM 1.12 logic does not link static SourcePawn (SP is not passed into
+        # BuildScripts). SM 1.13+ embeds SP.static_libsp into logic.so.
+        sp_link = ""
+        if sm_minor >= 13:
+            sp_link = """    arch = binary.compiler.target.arch
+    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
+    binary.compiler.linkflags += [
+      SP.static_libsp[arch],
+      SP.libamtl[arch],
+      SP.zlib[arch],
+    ]
+"""
+        exclude_libs = ""
+        if sm_minor >= 13:
+            exclude_libs = """    # css34: hide static archive symbols from the dynamic export table (libsourcepawn_static)
+    if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
+"""
         linux_new = f"""  if binary.compiler.target.platform == 'linux':
     # css34: gcc-4.9 libstdc++ when SM_LOGIC_CXX_SYSROOT (SM < 1.13); gcc-9 for 1.13+ static SP.
     import os as _os
@@ -423,14 +441,7 @@ if logic_am.exists():
     for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
-    arch = binary.compiler.target.arch
-    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
-    binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
-    _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
+{sp_link}    _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
     if _sup and _os.path.isfile(_sup):
       _static.append(_sup)
     if _os.path.isfile(_gcc_eh):
@@ -442,10 +453,7 @@ if logic_am.exists():
       '-lc', '-lm',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]
-    # css34: hide static archive symbols from the dynamic export table (libsourcepawn_static)
-    if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
-      binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
-  elif binary.compiler.target.platform == 'mac':"""
+{exclude_libs}  elif binary.compiler.target.platform == 'mac':"""
         replaced = False
         for linux_old in linux_old_variants:
             if linux_old in lt:
@@ -477,7 +485,8 @@ if logic_am.exists():
             print('==> logic AMBuilder: gcc-9 libstdc++ for SM 1.13+ (skip sysroot 4.9 link)')
 
     # SM 1.13+: static SourcePawn was appended after libstdc++.a; reorder so std::thread resolves.
-    if 'css34: static SP before libstdc++ for std::thread' not in lt:
+    # SM 1.12 has no SP in logic AMBuilder / BuildScripts — skip entirely.
+    if sm_minor >= 13 and 'css34: static SP before libstdc++ for std::thread' not in lt:
         sp_before_old = """    for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
@@ -532,7 +541,7 @@ if logic_am.exists():
             lt = lt.replace(sp_tail_old, sp_tail_new, 1)
             print('==> logic AMBuilder: skip duplicate static SP on linux')
 
-    if 'css34: logic postlink pthread after static SP' not in lt:
+    if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt:
         sp_libs_anchor = """  arch = binary.compiler.target.arch
   binary.compiler.linkflags += [
     SP.static_libsp[arch],
@@ -584,6 +593,8 @@ if logic_am.exists():
         else:
             lt = lt.replace(sp_libs_anchor, sp_libs_new, 1)
             print('==> Patched logic AMBuilder postlink pthread after static SP')
+    elif sm_minor < 13:
+        print('==> SM < 1.13: skipping static SourcePawn logic link reorder')
 
     logic_am.write_text(lt)
 
