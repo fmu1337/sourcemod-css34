@@ -176,6 +176,39 @@ plugin = plugin.replace('UnregisterConCmdBase', 'UnregisterConCommandBase')
 api = wrap_sourcemm(api, ['ISmmAPI'])
 plugin = wrap_sourcemm(plugin, ['ISmmPlugin', 'IMetamodListener'])
 
+# Bundled DHooks (SM 6970+) builds with META_NO_HL2SDK and no SDK include
+# paths. Stock core-legacy headers always pull <interface.h>/<eiface.h>.
+# Patch *after* wrap_sourcemm: that helper only keeps `#include` lines in the
+# preamble, so `#ifndef` / forward decls applied beforehand are swallowed
+# into the namespace and leave the includes unconditional.
+api_hl2 = '#include <interface.h>\n#include <eiface.h>\n'
+api_meta_no = (
+    '#if defined META_NO_HL2SDK\n'
+    'class CGlobalVars;\n'
+    'struct edict_t;\n'
+    'class ConCommandBase;\n'
+    'class IConCommandBaseAccessor;\n'
+    'class IServerPluginCallbacks;\n'
+    'typedef void* (*CreateInterfaceFn)(const char *pName, int *pReturnCode);\n'
+    '#else\n'
+    '#include <interface.h>\n'
+    '#include <eiface.h>\n'
+    '#endif\n'
+)
+if api_hl2 not in api:
+    raise SystemExit('Expected wrapped ISmmAPI.h HL2SDK includes missing')
+api = api.replace(api_hl2, api_meta_no, 1)
+
+plugin_iface = '#include <interface.h>\n'
+plugin_iface_guarded = (
+    '#ifndef META_NO_HL2SDK\n'
+    '#include <interface.h>\n'
+    '#endif\n'
+)
+if plugin_iface not in plugin:
+    raise SystemExit('Expected wrapped ISmmPlugin.h interface.h include missing')
+plugin = plugin.replace(plugin_iface, plugin_iface_guarded, 1)
+
 # Legacy headers only export with default visibility on GCC 4.x; gcc-9 needs >= 4.
 plugin = plugin.replace(
     '#if (__GNUC__ == 4) && (__GNUC_MINOR__ >= 1)',
@@ -184,6 +217,14 @@ plugin = plugin.replace(
 
 if 'GetEngineFactory' not in api or 'SetLastMetaReturn' not in api:
     raise SystemExit('ISmmAPI rename/wrap failed sanity check')
+if 'META_NO_HL2SDK' not in api or 'CreateInterfaceFn' not in api:
+    raise SystemExit('ISmmAPI META_NO_HL2SDK forward-decl patch failed')
+if api.count('#include <interface.h>') != 1 or '#else\n#include <interface.h>' not in api:
+    raise SystemExit('ISmmAPI interface.h must appear only inside #else of META_NO_HL2SDK')
+if 'META_NO_HL2SDK' not in plugin:
+    raise SystemExit('ISmmPlugin META_NO_HL2SDK interface.h guard failed')
+if plugin.count('#include <interface.h>') != 1:
+    raise SystemExit('ISmmPlugin interface.h must appear only inside META_NO_HL2SDK guard')
 if 'PLAPI_VERSION' not in plugin:
     raise SystemExit('ISmmPlugin missing PLAPI_VERSION')
 if '#if (__GNUC__ >= 4)' not in plugin:
@@ -192,6 +233,7 @@ if '#if (__GNUC__ >= 4)' not in plugin:
 (core / 'ISmmAPI.h').write_text(api)
 (core / 'ISmmPlugin.h').write_text(plugin)
 print('==> Installed legacy-layout ISmmAPI/ISmmPlugin with modern method names')
+print('==> Gated legacy HL2SDK includes for META_NO_HL2SDK (DHooks)')
 PY
 
 # Ext.h: define METAMOD_PLAPI_VERSION=11 so smsdk_ext takes the modern-name code path
@@ -326,3 +368,40 @@ def patch_console(rel: str) -> None:
 patch_console('core-legacy/concommands.cpp')
 patch_console('core/metamod_console.cpp')
 PYCONS
+
+# css34: HL2Library puts shared vstdlib/tier0 on linkflags (prepended) while
+# static tier1_i486.a stays in postlink — ConVar is then imported from vstdlib
+# and GameDLLInit hangs. Move tier1 to the front of linkflags (same as SM / MM 1.12).
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYTIER1'
+from pathlib import Path
+import os
+
+path = Path(os.environ['MMS_DIR']) / 'AMBuildScript'
+text = path.read_text()
+if 'css34: episode1 tier1 before vstdlib' in text:
+    print('==> MM HL2Library tier1-before-vstdlib already patched')
+else:
+    needle = (
+        "      linker = make_linker(source_path, output_path)\n"
+        "      binary.compiler.linkflags[0:0] = [binary.Dep(library, linker)]\n\n"
+        "    return binary\n"
+    )
+    insert = (
+        "      linker = make_linker(source_path, output_path)\n"
+        "      binary.compiler.linkflags[0:0] = [binary.Dep(library, linker)]\n\n"
+        "    # css34: episode1 tier1 before vstdlib so ConVar is embedded, not imported\n"
+        "    if builder.target_platform == 'linux' and sdk.name in ('episode1', 'ep1'):\n"
+        "      tier1 = os.path.join(lib_folder, 'tier1_i486.a')\n"
+        "      if os.path.isfile(tier1):\n"
+        "        def _not_tier1(x, _needle='tier1_i486.a'):\n"
+        "          s = getattr(x, 'path', None) or getattr(x, 'localPath', None) or x\n"
+        "          return _needle not in str(s)\n"
+        "        compiler.postlink = [x for x in compiler.postlink if _not_tier1(x)]\n"
+        "        binary.compiler.linkflags[0:0] = [tier1]\n\n"
+        "    return binary\n"
+    )
+    if needle not in text:
+        raise SystemExit('Failed to locate HL2Library dynamic_libs return in MM AMBuildScript')
+    path.write_text(text.replace(needle, insert, 1))
+    print('==> Patched MM HL2Library for episode1 tier1-before-vstdlib')
+PYTIER1

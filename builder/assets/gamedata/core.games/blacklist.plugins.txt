@@ -1,0 +1,8 @@
+/**
+ * Empty plugin name blacklist for CS:S v34 packs.
+ * Referenced by core.games/master.games.txt; must exist to avoid SM Error logs.
+ */
+
+"Games"
+{
+}

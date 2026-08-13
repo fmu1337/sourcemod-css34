@@ -22,16 +22,29 @@ archive="$OUTPUT_DIR/$filename"
 
 required=(
   "addons/metamod/sourcemod.vdf"
-  "addons/sourcemod/bin/sourcemod.1.ep1.so"
   "addons/sourcemod/bin/sourcemod.2.ep1.so"
   "addons/sourcemod/extensions/dbi.mysql.ext.so"
   "addons/sourcemod/extensions/dbi.sqlite.ext.so"
-  "addons/sourcemod/extensions/game.cstrike.ext.1.ep1.so"
   "addons/sourcemod/extensions/game.cstrike.ext.2.ep1.so"
   "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt"
   "addons/sourcemod/scripting/include/version_auto.inc"
   "cfg/sourcemod/sourcemod.cfg"
 )
+
+# Dual 1.ep1 + 2.ep1 packages (SM 1.11 / MM 1.10 css34) still satisfy the modern core.
+if [[ ! -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.2.ep1.so" \
+   && -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" ]]; then
+  required=(
+    "addons/metamod/sourcemod.vdf"
+    "addons/sourcemod/bin/sourcemod.1.ep1.so"
+    "addons/sourcemod/extensions/dbi.mysql.ext.so"
+    "addons/sourcemod/extensions/dbi.sqlite.ext.so"
+    "addons/sourcemod/extensions/game.cstrike.ext.1.ep1.so"
+    "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt"
+    "addons/sourcemod/scripting/include/version_auto.inc"
+    "cfg/sourcemod/sourcemod.cfg"
+  )
+fi
 
 for rel in "${required[@]}"; do
   if [ ! -e "$PACKAGE_DIR/$rel" ]; then

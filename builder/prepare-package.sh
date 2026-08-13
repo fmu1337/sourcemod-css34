@@ -60,6 +60,7 @@ if [ -d "$GAMEDATA_ROOT" ]; then
     "$GAMEDATA_ROOT/sm-cstrike.games/game.cstrike.txt"
   cp -f "$BUILDER_DIR/assets/gamedata/sm-cstrike.games/master.games.txt" \
     "$GAMEDATA_ROOT/sm-cstrike.games/master.games.txt"
+  mkdir -p "$GAMEDATA_ROOT/core.games"
   if [ -f "$BUILDER_DIR/assets/gamedata/core.games/master.games.txt" ]; then
     cp -f "$BUILDER_DIR/assets/gamedata/core.games/master.games.txt" \
       "$GAMEDATA_ROOT/core.games/master.games.txt"
@@ -67,6 +68,10 @@ if [ -d "$GAMEDATA_ROOT" ]; then
   if [ -f "$BUILDER_DIR/assets/gamedata/core.games/engine.ep1.txt" ]; then
     cp -f "$BUILDER_DIR/assets/gamedata/core.games/engine.ep1.txt" \
       "$GAMEDATA_ROOT/core.games/engine.ep1.txt"
+  fi
+  if [ -f "$BUILDER_DIR/assets/gamedata/core.games/blacklist.plugins.txt" ]; then
+    cp -f "$BUILDER_DIR/assets/gamedata/core.games/blacklist.plugins.txt" \
+      "$GAMEDATA_ROOT/core.games/blacklist.plugins.txt"
   fi
   if [ -f "$BUILDER_DIR/assets/gamedata/sdktools.games/engine.ep1.txt" ]; then
     mkdir -p "$GAMEDATA_ROOT/sdktools.games"

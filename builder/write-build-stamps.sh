@@ -5,9 +5,16 @@ set -euo pipefail
 
 WDIR="${WDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 SOURCEMOD_DIR="${SOURCEMOD_DIR:-$WDIR/sourcemod}"
-MMS_DIR="${MMS_DIR:-$WDIR/deps/mmsource-1.10}"
-SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
-MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
+MMS_DIR="${MMS_DIR:-$WDIR/deps/mmsource-1.12}"
+SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-b951843d42f7b9204615c14885468ea131a24002}"
+MMS_COMMIT="${MMS_COMMIT:-364cb6c26f66f7d9254d95a2fc533eac3557166b}"
+# Fall back to MMS 1.10 tree when building the 1.11 css34 track.
+if [[ ! -d "$MMS_DIR/.git" && -d "$WDIR/deps/mmsource-1.10/.git" ]]; then
+  MMS_DIR="$WDIR/deps/mmsource-1.10"
+fi
+if [[ ! -d "$MMS_DIR/.git" && -d "$WDIR/deps/mmsource-1.12/.git" ]]; then
+  MMS_DIR="$WDIR/deps/mmsource-1.12"
+fi
 
 if git -C "$WDIR" rev-parse HEAD >/dev/null 2>&1; then
   CSS34_PACK_COMMIT="$(git -C "$WDIR" rev-parse HEAD)"

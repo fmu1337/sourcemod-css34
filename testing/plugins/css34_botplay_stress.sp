@@ -13,6 +13,8 @@ new g_MapIndex;
 new g_RoundCount;
 new g_ProbeOk;
 new g_ProbeFail;
+new g_OnTakeDamageHooks;
+new g_OnTakeDamageHits;
 new bool:g_ClientHooked[MAXPLAYERS + 1];
 
 new const String:g_Maps[MAP_COUNT][] =
@@ -26,8 +28,8 @@ public Plugin:myinfo =
 {
     name = "CSS34 Botplay Stress",
     author = "sourcemod-css34 CI",
-    description = "Map rotation + sdkhooks/sdktools ABI probe for botplay",
-    version = "1.1",
+    description = "Map rotation + sdkhooks OnTakeDamage ABI probe for botplay",
+    version = "1.2",
     url = "https://github.com/fmu1337/sourcemod-css34"
 };
 
@@ -73,8 +75,9 @@ public Action:Timer_RunAbiProbe(Handle:timer, any:retry)
     }
 
     RunAbiProbe(bots);
-    LogMessage("%s probe round=%d ok=%d fail=%d bots=%d map=%s",
-        PLUGIN_TAG, g_RoundCount + 1, g_ProbeOk, g_ProbeFail, bots, g_Maps[g_MapIndex]);
+    LogMessage("%s probe round=%d ok=%d fail=%d bots=%d map=%s otd_hooks=%d otd_hits=%d",
+        PLUGIN_TAG, g_RoundCount + 1, g_ProbeOk, g_ProbeFail, bots, g_Maps[g_MapIndex],
+        g_OnTakeDamageHooks, g_OnTakeDamageHits);
     return Plugin_Stop;
 }
 
@@ -198,11 +201,28 @@ AttachClientHooksOnce(client)
     }
 
     SDKHook(client, SDKHook_PreThink, Probe_PreThink);
+    SDKHook(client, SDKHook_OnTakeDamage, Probe_OnTakeDamage);
     g_ClientHooked[client] = true;
+    g_OnTakeDamageHooks++;
     ProbePass(true);
 }
 
 public Action:Probe_PreThink(client)
 {
+    return Plugin_Continue;
+}
+
+public Action:Probe_OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype)
+{
+    // css34 gamedata OnTakeDamage vtable must be correct or this never fires / crashes.
+    if (victim >= 1 && victim <= MaxClients && IsClientInGame(victim))
+    {
+        g_OnTakeDamageHits++;
+        if ((g_OnTakeDamageHits % 25) == 1)
+        {
+            LogMessage("%s on_take_damage victim=%d attacker=%d dmg=%.1f hits=%d",
+                PLUGIN_TAG, victim, attacker, damage, g_OnTakeDamageHits);
+        }
+    }
     return Plugin_Continue;
 }

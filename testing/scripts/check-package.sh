@@ -9,18 +9,22 @@ trap cleanup EXIT
 
 tar -xzf "${SM_PACKAGE}" -C "${TMP}"
 MM_SO="${TMP}/addons/sourcemod/bin/sourcemod_mm_i486.so"
-CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so"
+CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.2.ep1.so"
+if [[ ! -f "${CORE_SO}" ]]; then
+  CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so"
+fi
 LOGIC_SO="${TMP}/addons/sourcemod/bin/sourcemod.logic.so"
 JIT_SO="${TMP}/addons/sourcemod/bin/sourcepawn.jit.x86.so"
 
 fail=0
+STATIC_SP=0
 
 if [[ ! -f "${MM_SO}" ]]; then
   echo "FAIL: missing sourcemod_mm_i486.so" >&2
   exit 1
 fi
 if [[ ! -f "${CORE_SO}" ]]; then
-  echo "FAIL: missing sourcemod.1.ep1.so" >&2
+  echo "FAIL: missing sourcemod.2.ep1.so / sourcemod.1.ep1.so" >&2
   exit 1
 fi
 if [[ ! -f "${LOGIC_SO}" ]]; then
@@ -28,15 +32,19 @@ if [[ ! -f "${LOGIC_SO}" ]]; then
   exit 1
 fi
 if [[ ! -f "${JIT_SO}" ]]; then
-  echo "FAIL: missing sourcepawn.jit.x86.so" >&2
-  exit 1
+  echo "OK: no sourcepawn.jit.x86.so (static SourcePawn in logic.so, SM 1.13+)"
+  STATIC_SP=1
+else
+  STATIC_SP=0
 fi
 
 echo "==> Checking Metamod bridge exports"
 if nm -D "${MM_SO}" 2>/dev/null | grep -q ' T CreateInterface$'; then
-  echo "OK: CreateInterface export present (needed by MM:S 1.10 / EP1)"
+  echo "OK: CreateInterface export present (MM:S 1.10 V1 bridge)"
+elif nm -D "${MM_SO}" 2>/dev/null | grep -q 'CreateInterface_MMS'; then
+  echo "OK: CreateInterface_MMS present (MM:S 1.12 modern load path; no V1 CreateInterface needed)"
 else
-  echo "FAIL: sourcemod_mm_i486.so missing CreateInterface (MM:S 1.10 cannot load it)" >&2
+  echo "FAIL: sourcemod_mm_i486.so missing CreateInterface / CreateInterface_MMS" >&2
   echo "      present symbols:" >&2
   nm -D "${MM_SO}" 2>/dev/null | grep CreateInterface || true
   fail=1
@@ -68,6 +76,9 @@ for lib in libpthread.so.0 librt.so.1; do
 done
 
 echo "==> Checking sourcepawn.jit pthread/rt (required on glibc < 2.34)"
+if [[ "${STATIC_SP}" -eq 1 ]]; then
+  echo "SKIP: static SourcePawn — pthread/rt checked on logic.so only"
+else
 jit_needed="$(readelf -d "${JIT_SO}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]')"
 for lib in libpthread.so.0 librt.so.1; do
   if printf '%s\n' "${jit_needed}" | grep -qx "${lib}"; then
@@ -77,6 +88,7 @@ for lib in libpthread.so.0 librt.so.1; do
     fail=1
   fi
 done
+fi
 if printf '%s\n' "${logic_needed}" | grep -qx 'libstdc++.so.6'; then
   echo "WARN: sourcemod.logic.so links libstdc++.so.6 dynamically (rom4s embeds static libstdc++; hang risk)"
 else
@@ -84,8 +96,12 @@ else
 fi
 logic_cxx11="$(printf '%s\n' "${logic_dynsyms}" | grep -c '__cxx11' || true)"
 if [[ "${logic_cxx11}" -gt 0 ]]; then
-  echo "FAIL: logic.so exports ${logic_cxx11} C++11 std::string ABI symbols (rom4s logic has none)" >&2
-  fail=1
+  if [[ "${STATIC_SP}" -eq 1 ]]; then
+    echo "WARN: logic.so exports ${logic_cxx11} __cxx11 symbols (static SourcePawn embed; verify on legacy-build smoke)"
+  else
+    echo "FAIL: logic.so exports ${logic_cxx11} C++11 std::string ABI symbols (rom4s logic has none)" >&2
+    fail=1
+  fi
 else
   echo "OK: logic.so has no __cxx11 ABI exports"
 fi
@@ -98,8 +114,24 @@ else
   echo "OK: logic.so has no UND _ZdlPvj/_ZdaPvj sized-delete imports"
 fi
 
+logic_thread_und="$(readelf -Ws "${LOGIC_SO}" 2>/dev/null | awk '$7=="UND" && $8 ~ /^_ZNSt6thread/' || true)"
+if [[ -n "${logic_thread_und}" ]]; then
+  echo "FAIL: logic.so has unresolved libstdc++ std::thread symbols (static SP link order)" >&2
+  printf '%s\n' "${logic_thread_und}" | head -5 | sed 's/^/        /' >&2
+  fail=1
+else
+  echo "OK: logic.so has no UND std::thread symbols"
+fi
+
 logic_t_count="$(printf '%s\n' "${logic_dynsyms}" | grep -c ' T ' || true)"
-if [[ "${logic_t_count}" -lt 100 ]]; then
+if [[ "${STATIC_SP}" -eq 1 ]]; then
+  if [[ "${logic_t_count}" -lt 1 ]]; then
+    echo "FAIL: logic.so exports no defined symbols" >&2
+    fail=1
+  else
+    echo "OK: logic.so exports ${logic_t_count} defined symbols (static SourcePawn; visibility-hidden)"
+  fi
+elif [[ "${logic_t_count}" -lt 100 ]]; then
   echo "FAIL: logic.so exports only ${logic_t_count} defined symbols (rom4s ~285; missing libstdc++ EH exports?)" >&2
   fail=1
 else
@@ -172,11 +204,11 @@ iface_strings="$(strings "${CORE_SO}" 2>/dev/null || true)"
 if printf '%s\n' "${iface_strings}" | grep -F 'ServerGameDLL006' >/dev/null; then
   echo "OK: ServerGameDLL006 present"
 else
-  echo "FAIL: sourcemod.1.ep1.so missing ServerGameDLL006 (ep1c/SDK mismatch)" >&2
+  echo "FAIL: ${CORE_SO##*/} missing ServerGameDLL006 (ep1c/SDK mismatch)" >&2
   fail=1
 fi
 if printf '%s\n' "${iface_strings}" | grep -F 'VEngineServer023' >/dev/null; then
-  echo "FAIL: sourcemod.1.ep1.so still embeds VEngineServer023 (SE_CSS shim; css34 MM needs EP1 path)" >&2
+  echo "FAIL: ${CORE_SO##*/} still embeds VEngineServer023 (SE_CSS shim; css34 needs EP1 path)" >&2
   fail=1
 else
   echo "OK: no VEngineServer023 shim"

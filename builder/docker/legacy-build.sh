@@ -6,6 +6,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${LEGACY_BUILD_IMAGE:-debian:11}"
 PACKAGES_DIR="${PACKAGES_DIR:-$ROOT/packages}"
+PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-1}"
+
+# Resolve SM/MM pins on the host so the container gets concrete values.
+# shellcheck source=../resolve-version.sh
+source "$ROOT/builder/resolve-version.sh"
+
+if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
+  # Never copy SourceMod/Metamod binaries from a reference package.
+  export SPLICE_REFERENCE_EXTRAS=0
+  export SPLICE_REFERENCE_LOGIC=0
+  echo "==> Pure-source mode: reference binary splicing is disabled" >&2
+fi
 
 mkdir -p "$PACKAGES_DIR"
 
@@ -15,9 +27,17 @@ docker run --rm --platform linux/amd64 \
   -v "$ROOT:/workspace" \
   -w /workspace \
   -e SKIP_APT_INSTALL=1 \
-  -e SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}" \
-  -e SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV:-6572}" \
-  -e MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}" \
+  -e CSS34_LINE="${CSS34_LINE}" \
+  -e SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT}" \
+  -e SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV}" \
+  -e SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR}" \
+  -e MMS_COMMIT="${MMS_COMMIT}" \
+  -e MMS_BRANCH="${MMS_BRANCH}" \
+  -e MMS_DIRNAME="${MMS_DIRNAME}" \
+  -e MMS_MODE="${MMS_MODE}" \
+  -e PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD}" \
+  -e SPLICE_REFERENCE_EXTRAS="${SPLICE_REFERENCE_EXTRAS:-0}" \
+  -e SPLICE_REFERENCE_LOGIC="${SPLICE_REFERENCE_LOGIC:-0}" \
   -e USE_CLANG9=1 \
   -e WDIR=/workspace \
   -e DEPS_DIR=/workspace/deps \
@@ -47,8 +67,24 @@ Acquire::AllowDowngradeToInsecureRepositories "true";
 EOF
       fi
     fi
-    apt-get update -qq
-    apt-get install -y -qq \
+    apt_retry() {
+      local attempt=1 max=5 delay=4
+      while true; do
+        if "$@"; then
+          return 0
+        fi
+        if (( attempt >= max )); then
+          echo "==> apt command failed after ${max} attempts: $*" >&2
+          return 1
+        fi
+        echo "==> apt failed (attempt ${attempt}/${max}), retrying in ${delay}s..." >&2
+        sleep "${delay}"
+        delay=$((delay * 2))
+        attempt=$((attempt + 1))
+      done
+    }
+    apt_retry apt-get update -qq
+    apt_retry apt-get install -y -qq \
       curl git python3 python3-pip \
       lib32stdc++6 lib32z1-dev libc6-dev-i386 linux-libc-dev \
       binutils ca-certificates \
@@ -86,9 +122,19 @@ if [[ -z "${ARTIFACT}" || ! -f "${ARTIFACT}" ]]; then
   exit 1
 fi
 
-chmod +x "$ROOT/builder/splice-reference-extras.sh" "$ROOT/builder/splice-reference-logic.sh"
-"$ROOT/builder/splice-reference-extras.sh" "${ARTIFACT}"
-"$ROOT/builder/splice-reference-logic.sh" "${ARTIFACT}"
+# Pure-source builds never splice rom4s binaries. SM 1.12+ also skips because
+# rom4s 1.11 logic/extensions are ABI-incompatible.
+if [[ "${PURE_SOURCE_BUILD}" == "1" || "${SOURCEMOD_MAJOR:-11}" -ge 12 ]]; then
+  echo "==> Skipping rom4s logic/extras splice (PURE_SOURCE_BUILD=${PURE_SOURCE_BUILD} SOURCEMOD_MAJOR=${SOURCEMOD_MAJOR:-})" >&2
+else
+  chmod +x "$ROOT/builder/splice-reference-extras.sh" "$ROOT/builder/splice-reference-logic.sh"
+  "$ROOT/builder/splice-reference-extras.sh" "${ARTIFACT}"
+  "$ROOT/builder/splice-reference-logic.sh" "${ARTIFACT}"
+fi
+
+if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
+  echo "==> Pure-source package contains only binaries produced by this build" >&2
+fi
 
 echo "==> Legacy build complete: ${ARTIFACT}" >&2
 ls -la "${ARTIFACT}" >&2
