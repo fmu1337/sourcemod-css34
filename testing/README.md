@@ -9,9 +9,9 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 | `test-built-debian` | `debian:11` … `13` / `latest` | **built** MM 1.10.7 + SM 6572 |
 | `test-built-rhel` | `rockylinux:9` | **built** MM 1.10.7 + SM 6572 |
 | `test-built-smoke` | ubuntu-22.04 host | **built** MM 1.10.7 + SM 6572 |
-| `check-built-package` | ubuntu-22.04 | freshly built SM artifact (CreateInterface + DT_NEEDED) |
+| `build-linux` ABI step | ubuntu-22.04 | freshly built SM/MM packages (CreateInterface + DT_NEEDED) |
 
-CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` artifacts from `build-linux`. rom4s reference drops are not used in this workflow.
+CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` from `build-linux` (handed to later jobs via Actions cache, not artifacts). rom4s reference drops are not used in this workflow.
 
 Packages come from `legacy-build.sh` (`debian:11`), so the smoke matrix starts at Debian 11+ / Rocky 9.
 
@@ -24,7 +24,7 @@ When the CI server tree is trimmed to a single map (`de_dust2`), `testing/script
 | `SMOKE_CONDEBUG=1` | on | srcds `-condebug` → `cstrike/console.log` |
 | `SMOKE_VERBOSE=1` | off in local runs | expect `log_user 1`, `+log on +sv_logfile 1` |
 
-On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/console.log`, and SourceMod `L*.log`. CI uploads them as smoke-log artifacts from built jobs.
+On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/console.log`, and SourceMod `L*.log`. CI uploads those logs as artifacts **only on failure** (1-day retention) so they do not fill the Actions storage quota.
 
 ## What the smoke test checks
 

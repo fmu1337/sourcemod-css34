@@ -1,5 +1,8 @@
 name: Test Server
 
+# Packages are handed between jobs via Actions cache, not artifacts
+# (artifact storage is the 0.5 GB quota). Logs upload only on failure, 1 day.
+
 on:
   push:
     branches:
@@ -102,65 +105,12 @@ jobs:
             builder/install-clang9.sh builder/install-clang10.sh
           builder/docker/legacy-build.sh
 
-      - name: Upload SourceMod package
-        if: steps.select.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
-        with:
-          name: sourcemod-css34-linux-${{ matrix.line }}
-          path: packages/sourcemod-*-css34-linux.tar.gz
-          if-no-files-found: error
-          # Shared between jobs in this run; keep minimal — fills Actions storage fast.
-          retention-days: 1
-
-      - name: Upload Metamod package
-        if: steps.select.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
-        with:
-          name: metamod-css34-linux-${{ matrix.line }}
-          path: packages/mmsource-*-css34-linux.tar.gz
-          if-no-files-found: error
-          retention-days: 1
-
-  check-built-package:
-    needs: [build-linux]
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - line: sm11-oldstable
-          - line: sm12-latest
-          - line: sm13-dev
-          - line: sm13-mm20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Maybe skip
-        id: select
-        run: |
-          want="${{ github.event.inputs.css34_line }}"
-          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Download packages
-        if: steps.select.outputs.skip != '1'
-        uses: actions/download-artifact@v4
-        with:
-          pattern: '*-${{ matrix.line }}'
-          path: packages
-          merge-multiple: true
-
       - name: ABI / export checks
         if: steps.select.outputs.skip != '1'
         run: |
           chmod +x testing/scripts/*.sh
           sudo apt-get update
           sudo apt-get install -y binutils
-          ls -la packages || true
           SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
           MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
           export SM_PACKAGE MM_PACKAGE
@@ -168,6 +118,14 @@ jobs:
           testing/scripts/check-package.sh
           echo "Checking ${MM_PACKAGE}"
           testing/scripts/check-metamod-package.sh
+
+      # Job-to-job handoff via Actions cache (does not count against the 0.5 GB artifact quota).
+      - name: Cache packages for later jobs
+        if: steps.select.outputs.skip != '1'
+        uses: actions/cache/save@v4
+        with:
+          path: packages
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
 
   prepare-server:
     runs-on: ubuntu-22.04
@@ -221,7 +179,7 @@ jobs:
   # Primary gate: pure-source matched SM×MM lines on modern glibc.
   # Packages are produced in debian:11 (legacy-build.sh).
   test-built-debian:
-    needs: [build-linux, prepare-server, check-built-package]
+    needs: [build-linux, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -271,13 +229,13 @@ jobs:
             echo "skip=0" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Download packages
+      - name: Restore packages from cache
         if: steps.select.outputs.skip != '1'
-        uses: actions/download-artifact@v4
+        uses: actions/cache/restore@v4
         with:
-          pattern: '*-${{ matrix.line }}'
           path: packages
-          merge-multiple: true
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
+          fail-on-cache-miss: true
 
       - name: Restore cached server tree
         if: steps.select.outputs.skip != '1'
@@ -341,10 +299,10 @@ jobs:
             .ci-server/cstrike/metamod-fatal.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 1
 
   test-built-rhel:
-    needs: [build-linux, prepare-server, check-built-package]
+    needs: [build-linux, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -370,13 +328,13 @@ jobs:
             echo "skip=0" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Download packages
+      - name: Restore packages from cache
         if: steps.select.outputs.skip != '1'
-        uses: actions/download-artifact@v4
+        uses: actions/cache/restore@v4
         with:
-          pattern: '*-${{ matrix.line }}'
           path: packages
-          merge-multiple: true
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
+          fail-on-cache-miss: true
 
       - name: Restore cached server tree
         if: steps.select.outputs.skip != '1'
@@ -442,22 +400,22 @@ jobs:
             .ci-server/cstrike/metamod-fatal.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 1
 
   # Boots freshly built Metamod + SourceMod on the GitHub Actions host runner.
   test-built-smoke:
-    needs: [build-linux, prepare-server, check-built-package]
+    needs: [build-linux, prepare-server]
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download packages (sm13-dev)
-        uses: actions/download-artifact@v4
+      - name: Restore packages from cache (sm13-dev)
+        uses: actions/cache/restore@v4
         with:
-          pattern: '*-sm13-dev'
           path: packages
-          merge-multiple: true
+          key: css34-pkg-${{ github.run_id }}-sm13-dev
+          fail-on-cache-miss: true
 
       - name: Restore cached server tree
         uses: actions/cache/restore@v4
@@ -509,7 +467,7 @@ jobs:
             .ci-server/cstrike/metamod-fatal.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 1
 
   # Baseline capture: rom4s MM 1.10.6 + SM 6572 + SMAC + 4 bots for ~10 minutes.
   # Parses round_start / round_end / player_death from engine console.log.
@@ -562,8 +520,8 @@ jobs:
               testing/scripts/botplay-test.sh
             '
 
-      - name: Upload botplay report
-        if: always()
+      - name: Upload botplay report on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: rom4s-botplay-report-debianlatest
@@ -575,7 +533,7 @@ jobs:
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
 
   test-rom4s-botplay-extra:
     if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
@@ -636,8 +594,8 @@ jobs:
               testing/scripts/botplay-test.sh
             '
 
-      - name: Upload botplay report
-        if: always()
+      - name: Upload botplay report on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: rom4s-botplay-report-${{ matrix.image_id }}
@@ -649,7 +607,7 @@ jobs:
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
 
   # Same botplay session on in-tree SM 1.13.7404 + MM 1.12, compared to rom4s baseline.
   test-built-botplay:
@@ -660,12 +618,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download packages (sm13-dev)
-        uses: actions/download-artifact@v4
+      - name: Restore packages from cache (sm13-dev)
+        uses: actions/cache/restore@v4
         with:
-          pattern: '*-sm13-dev'
           path: packages
-          merge-multiple: true
+          key: css34-pkg-${{ github.run_id }}-sm13-dev
+          fail-on-cache-miss: true
 
       - name: Restore cached server tree
         uses: actions/cache/restore@v4
@@ -729,8 +687,8 @@ jobs:
             echo "No built-botplay-report.json to compare" >&2
           fi
 
-      - name: Upload built botplay report
-        if: always()
+      - name: Upload built botplay report on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: built-botplay-report-debianlatest
@@ -743,7 +701,7 @@ jobs:
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
 
   test-built-botplay-extra:
     if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
@@ -763,12 +721,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download packages (sm13-dev)
-        uses: actions/download-artifact@v4
+      - name: Restore packages from cache (sm13-dev)
+        uses: actions/cache/restore@v4
         with:
-          pattern: '*-sm13-dev'
           path: packages
-          merge-multiple: true
+          key: css34-pkg-${{ github.run_id }}-sm13-dev
+          fail-on-cache-miss: true
 
       - name: Restore cached server tree
         uses: actions/cache/restore@v4
@@ -832,8 +790,8 @@ jobs:
             echo "No built-botplay-report.json to compare" >&2
           fi
 
-      - name: Upload built botplay report
-        if: always()
+      - name: Upload built botplay report on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: built-botplay-report-${{ matrix.image_id }}
@@ -846,7 +804,7 @@ jobs:
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
 
   # Botplay against published GitHub Release packages (SM 1.12 + SM 1.13 lines).
   # Master CI still builds 1.11; these lines are released from upgrade branches.
@@ -952,8 +910,8 @@ jobs:
             echo "No release-botplay-report.json to compare" >&2
           fi
 
-      - name: Upload release botplay report
-        if: always()
+      - name: Upload release botplay report on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: release-botplay-report-${{ matrix.line }}
@@ -966,7 +924,7 @@ jobs:
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
 
   # Optional diagnostics: short botplay cases (slow; workflow_dispatch only).
   test-botplay-bisect:
@@ -978,12 +936,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download packages (sm13-dev)
-        uses: actions/download-artifact@v4
+      - name: Restore packages from cache (sm13-dev)
+        uses: actions/cache/restore@v4
         with:
-          pattern: '*-sm13-dev'
           path: packages
-          merge-multiple: true
+          key: css34-pkg-${{ github.run_id }}-sm13-dev
+          fail-on-cache-miss: true
 
       - name: Restore cached server tree
         uses: actions/cache/restore@v4
@@ -1020,8 +978,8 @@ jobs:
               cat /workspace/.ci-bisect/results.tsv
             '
 
-      - name: Upload bisect results
-        if: always()
+      - name: Upload bisect results on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: botplay-bisect-results
@@ -1030,4 +988,4 @@ jobs:
             .ci-bisect/*/botplay-report.txt
             .ci-bisect/*/cstrike/console.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1

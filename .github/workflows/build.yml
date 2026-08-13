@@ -61,21 +61,8 @@ jobs:
             builder/write-build-stamps.sh builder/resolve-version.sh builder/py.sh builder/patches/*.sh
           builder/run/linux.sh
 
-      - name: Upload SourceMod artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sourcemod-css34-linux
-          path: packages/sourcemod-*-css34-linux.tar.gz
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Upload Metamod artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: metamod-css34-linux
-          path: packages/mmsource-*-css34-linux.tar.gz
-          if-no-files-found: error
-          retention-days: 1
+      - name: Confirm Linux packages exist
+        run: ls -lh packages/sourcemod-*-css34-linux.tar.gz packages/mmsource-*-css34-linux.tar.gz
 
   windows:
     runs-on: windows-latest
@@ -107,18 +94,6 @@ jobs:
             builder/py.sh builder/patches/*.sh
           builder/run/windows.sh
 
-      - name: Upload SourceMod artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sourcemod-css34-windows
-          path: packages/sourcemod-*-css34-windows.zip
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Upload Metamod artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: metamod-css34-windows
-          path: packages/mmsource-*-css34-windows.zip
-          if-no-files-found: error
-          retention-days: 1
+      - name: Confirm Windows packages exist
+        shell: bash
+        run: ls -lh packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip
