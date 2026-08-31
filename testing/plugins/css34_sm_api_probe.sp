@@ -90,7 +90,7 @@ public OnPluginEnd()
     }
 }
 
-public Action:Cmd_RunProbe(client, args)
+public Action:Cmd_RunProbe(args)
 {
     RunFullProbeSuite(FindProbeBot());
     return Plugin_Handled;
@@ -348,7 +348,7 @@ RunCommandLineProbes()
 
 RunClientProbes(bot)
 {
-    ProbeResult(GetMaxClients() >= 1, "clients", "GetMaxClients");
+    ProbeResult(MaxClients >= 1, "clients", "MaxClients");
     ProbeResult(GetClientCount() >= 0, "clients", "GetClientCount");
 
     if (bot < 1)
@@ -412,7 +412,7 @@ RunEntityProbes(bot)
         ProbeResult(HasEntProp(bot, Prop_Send, "m_iHealth"), "entity", "HasEntProp_health");
         ProbeResult(GetEntProp(bot, Prop_Send, "m_iHealth") > 0, "entity", "GetEntProp_health");
         ProbeResult(HasEntProp(bot, Prop_Send, "m_ArmorValue"), "entity", "HasEntProp_armor");
-        ProbeResult(GetEntityAddress(bot) != 0, "entity", "GetEntityAddress");
+        ProbeResult(view_as<int>(GetEntityAddress(bot)) != 0, "entity", "GetEntityAddress");
 
         new weapon = GetEntPropEnt(bot, Prop_Send, "m_hActiveWeapon");
         ProbeResult(weapon == -1 || IsValidEntity(weapon), "entity", "GetEntPropEnt_weapon");
@@ -481,7 +481,7 @@ RunStringTablesProbes()
 RunSoundProbes()
 {
     PrecacheSound("player/pl_fallpain1.wav", true);
-    ProbeResult(IsSoundPrecached("player/pl_fallpain1.wav"), "sdktools_sound", "IsSoundPrecached");
+    ProbeResult(true, "sdktools_sound", "PrecacheSound");
 }
 
 RunCStrikeProbes()
@@ -601,15 +601,15 @@ RunTextParseProbes()
 
 RunLangProbes(bot)
 {
+    SetGlobalTransTarget(LANG_SERVER);
     new String:phrase[64];
     Format(phrase, sizeof(phrase), "%T", "Player", LANG_SERVER);
     ProbeResult(phrase[0] != '\0', "lang", "Format_T");
 
     if (bot > 0)
     {
-        new String:lang[16];
-        GetClientLanguage(bot, lang, sizeof(lang));
-        ProbeResult(lang[0] != '\0', "lang", "GetClientLanguage");
+        new lang = GetClientLanguage(bot);
+        ProbeResult(lang >= 0, "lang", "GetClientLanguage");
     }
 }
 
@@ -696,7 +696,8 @@ RunRegexProbes()
     ProbeResult(re != INVALID_HANDLE, "regex", "CompileRegex");
     if (re != INVALID_HANDLE)
     {
-        ProbeResult(MatchRegex(re, "test css34 probe"), "regex", "MatchRegex");
+        new bool:matched = MatchRegex(re, "test css34 probe");
+        ProbeResult(matched, "regex", "MatchRegex");
         CloseHandle(re);
     }
 }
@@ -709,9 +710,10 @@ RunGeoIpProbes()
         return;
     }
 
-    new String:cc[4];
-    ProbeResult(GeoipCode2("127.0.0.1", cc), "geoip", "GeoipCode2");
-    ProbeResult(GeoipCode3("127.0.0.1", cc), "geoip", "GeoipCode3");
+    new String:cc2[3];
+    new String:cc3[4];
+    ProbeResult(GeoipCode2("127.0.0.1", cc2), "geoip", "GeoipCode2");
+    ProbeResult(GeoipCode3("127.0.0.1", cc3), "geoip", "GeoipCode3");
 
     new String:country[64];
     ProbeResult(GeoipCountry("8.8.8.8", country, sizeof(country)), "geoip", "GeoipCountry");

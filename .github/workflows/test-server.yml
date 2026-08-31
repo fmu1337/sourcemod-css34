@@ -41,6 +41,11 @@ on:
         type: boolean
         required: false
         default: true
+      run_reference_botplay:
+        description: "Run rom4s / GitHub Release reference botplay jobs (not pure-source)"
+        type: boolean
+        required: false
+        default: false
       botplay_extra_distros:
         description: "Also run botplay on debian:11, debian:12, rockylinux:9"
         type: boolean
@@ -610,7 +615,7 @@ jobs:
   # Baseline capture: rom4s MM 1.10.6 + SM 6572 + SMAC + 4 bots for ~10 minutes.
   # Parses round_start / round_end / player_death from engine console.log.
   test-rom4s-botplay:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_botplay == 'true'
     needs: [prepare-server]
     runs-on: ubuntu-22.04
     steps:
@@ -948,7 +953,7 @@ jobs:
   # Botplay against published GitHub Release packages (SM 1.12 + SM 1.13 lines).
   # Master CI still builds 1.11; these lines are released from upgrade branches.
   test-release-botplay:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_botplay == 'true'
     needs: [prepare-server]
     runs-on: ubuntu-22.04
     strategy:
