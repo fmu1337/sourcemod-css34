@@ -81,8 +81,7 @@ public Action:Timer_RunAbiProbe(Handle:timer, any:retry)
         g_OnTakeDamageHooks, g_OnTakeDamageHits);
 
     if (!g_SmApiProbeTriggered
-        && bots >= 1 && g_ProbeFail == 0 && g_ProbeOk >= 3
-        && LibraryExists("sdkhooks") && LibraryExists("sdktools"))
+        && bots >= 1 && g_ProbeFail == 0 && g_ProbeOk >= 3)
     {
         g_SmApiProbeTriggered = true;
         TriggerSmApiProbe();

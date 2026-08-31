@@ -159,9 +159,8 @@ public Action:Timer_DeferredProbe(Handle:timer, any:retry)
             CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
             return Plugin_Stop;
         }
-        LogMessage("%s probe_deferred_giveup reason=extensions retry=%d sdktools=%d sdkhooks=%d cs_getteamscore=%d",
-            PLUGIN_TAG, retry, LibraryExists("sdktools"), LibraryExists("sdkhooks"),
-            GetFeatureStatus(FeatureType_Native, "CS_GetTeamScore") == FeatureStatus_Available);
+        LogMessage("%s probe_deferred_giveup reason=extensions retry=%d sdktools=%d sdkhooks=%d cstrike=%d",
+            PLUGIN_TAG, retry, SdkToolsReady(), SdkHooksReady(), CStrikeReady());
         return Plugin_Stop;
     }
 
@@ -258,11 +257,29 @@ bool:BotReadyForSdkProbe(bot)
     return origin[2] > 1.0;
 }
 
+bool:NativeAvailable(const String:native[])
+{
+    return GetFeatureStatus(FeatureType_Native, native) == FeatureStatus_Available;
+}
+
+bool:SdkToolsReady()
+{
+    return NativeAvailable("GetTeamCount");
+}
+
+bool:SdkHooksReady()
+{
+    return LibraryExists("sdkhooks") || NativeAvailable("SDKHook");
+}
+
+bool:CStrikeReady()
+{
+    return LibraryExists("cstrike") || NativeAvailable("CS_GetTeamScore");
+}
+
 bool:ExtensionsReady()
 {
-    return LibraryExists("sdktools")
-        && LibraryExists("sdkhooks")
-        && GetFeatureStatus(FeatureType_Native, "CS_GetTeamScore") == FeatureStatus_Available;
+    return SdkToolsReady() && SdkHooksReady() && CStrikeReady();
 }
 
 ProbeResult(bool:pass, const String:category[], const String:name[])
@@ -425,9 +442,9 @@ LogProbeSummary(startOk, startFail)
 
 RunExtensionsProbes()
 {
-    ProbeLibrary("sdktools", true);
-    ProbeLibrary("sdkhooks", true);
-    ProbeLibrary("cstrike", true);
+    ProbeResult(SdkToolsReady(), "extensions", "sdktools");
+    ProbeResult(SdkHooksReady(), "extensions", "sdkhooks");
+    ProbeResult(CStrikeReady(), "extensions", "cstrike");
     ProbeLibrary("regex", true);
     ProbeLibrary("clientprefs", true);
     ProbeLibrary("dbi.sqlite", true);
@@ -574,7 +591,7 @@ RunEntityProbes(bot)
 
 RunSdkToolsProbes(bot)
 {
-    if (!LibraryExists("sdktools"))
+    if (!SdkToolsReady())
     {
         ProbeSkip("sdktools", "extension_missing");
         return;
@@ -622,7 +639,7 @@ RunSdkToolsProbes(bot)
 
 RunStringTablesProbes()
 {
-    if (!LibraryExists("sdktools"))
+    if (!SdkToolsReady())
     {
         ProbeSkip("sdktools_stringtables", "extension_missing");
         return;
@@ -640,7 +657,7 @@ RunStringTablesProbes()
 
 RunSoundProbes()
 {
-    if (!LibraryExists("sdktools"))
+    if (!SdkToolsReady())
     {
         ProbeSkip("sdktools_sound", "extension_missing");
         return;
