@@ -13,7 +13,7 @@
 #define PLUGIN_TAG "[css34_sm_probe]"
 #define PROBE_RETRY_MAX 12
 #define PROBE_RETRY_DELAY 1.5
-#define PROBE_MAP_SETTLE 12.0
+#define PROBE_MAP_SETTLE 8.0
 
 new Handle:g_CvarAuto;
 new Handle:g_CvarVerbose;
@@ -28,7 +28,7 @@ new bool:g_Hooked[MAXPLAYERS + 1];
 new bool:g_PlayerHurtSeen;
 new bool:g_ProbeRunning;
 new bool:g_ProbeSuiteFinished;
-new Float:g_MapLoadTime;
+new Float:g_MapSettleTime;
 
 public Plugin:myinfo =
 {
@@ -83,7 +83,7 @@ public OnConfigsExecuted()
 
 public OnMapStart()
 {
-    g_MapLoadTime = GetGameTime();
+    ResetProbeSettleClock();
 }
 
 public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
@@ -93,6 +93,7 @@ public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
         return;
     }
 
+    SyncProbeSettleClock();
     CreateTimer(PROBE_RETRY_DELAY, Timer_MapStartProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -205,14 +206,26 @@ bool:ExtensionsReady()
         && LibraryExists("cstrike");
 }
 
+ResetProbeSettleClock()
+{
+    g_MapSettleTime = GetGameTime();
+}
+
+SyncProbeSettleClock()
+{
+    new Float:now = GetGameTime();
+    if (now + 0.05 < g_MapSettleTime)
+    {
+        ResetProbeSettleClock();
+        g_ProbeSuiteFinished = false;
+        g_ProbeRunning = false;
+    }
+}
+
 bool:MapReadyForProbe()
 {
-    if (g_MapLoadTime <= 0.0)
-    {
-        return true;
-    }
-
-    return (GetGameTime() - g_MapLoadTime) >= PROBE_MAP_SETTLE;
+    SyncProbeSettleClock();
+    return (GetGameTime() - g_MapSettleTime) >= PROBE_MAP_SETTLE;
 }
 
 ProbeResult(bool:pass, const String:category[], const String:name[])
@@ -568,6 +581,12 @@ RunSdkToolsProbes(bot)
 
 RunStringTablesProbes()
 {
+    if (!LibraryExists("sdktools"))
+    {
+        ProbeSkip("sdktools_stringtables", "extension_missing");
+        return;
+    }
+
     ProbeResult(GetNumStringTables() > 0, "sdktools_stringtables", "GetNumStringTables");
 
     new idx = FindStringTable("modelprecache");
@@ -580,6 +599,12 @@ RunStringTablesProbes()
 
 RunSoundProbes()
 {
+    if (!LibraryExists("sdktools"))
+    {
+        ProbeSkip("sdktools_sound", "extension_missing");
+        return;
+    }
+
     PrecacheSound("player/pl_fallpain1.wav", true);
     ProbeResult(true, "sdktools_sound", "PrecacheSound");
 }
