@@ -90,6 +90,8 @@ sm_log_errors=0
 probe_ok=0
 probe_fail=0
 map_rotations=0
+otd_hits=0
+otd_hooks=0
 if [[ -d "${SM_LOG_DIR}" ]]; then
   shopt -s nullglob
   sm_logs=("${SM_LOG_DIR}"/*.log)
@@ -113,6 +115,10 @@ if [[ -d "${SM_LOG_DIR}" ]]; then
       probe_fail=$((probe_fail + n))
       n="$(grep -c '\[css34_botplay\] map_rotate' "${f}" 2>/dev/null || true)"
       map_rotations=$((map_rotations + n))
+      n="$(grep -c '\[css34_botplay\] on_take_damage' "${f}" 2>/dev/null || true)"
+      otd_hits=$((otd_hits + n))
+      n="$(grep -Ec 'otd_hooks=[1-9]' "${f}" 2>/dev/null || true)"
+      otd_hooks=$((otd_hooks + n))
     done
   fi
 fi
@@ -174,7 +180,9 @@ cat >"${OUT_JSON}" <<EOF
     "map_rotations": ${map_rotations},
     "abi_probe_rounds": ${probe_ok},
     "abi_probe_clean_rounds": ${probe_clean},
-    "abi_probe_fail_rounds": ${probe_fail}
+    "abi_probe_fail_rounds": ${probe_fail},
+    "on_take_damage_log_lines": ${otd_hits},
+    "on_take_damage_hook_rounds": ${otd_hooks}
   }
 }
 EOF
@@ -207,6 +215,8 @@ EOF
   echo "  abi_probe rounds logged: ${probe_ok}"
   echo "  abi_probe clean (fail=0): ${probe_clean}"
   echo "  abi_probe fail rounds: ${probe_fail}"
+  echo "  on_take_damage log lines: ${otd_hits}"
+  echo "  on_take_damage hook rounds: ${otd_hooks}"
   echo ""
   echo "Sample round_start lines:"
   first_matches "${ENGINE_CONSOLE_LOG}" "${ROUND_START_PAT}" 3 | sed 's/^/  /'

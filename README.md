@@ -63,7 +63,7 @@ CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/run/windows.sh
 ## CI
 
 - `.github/workflows/build.yml` — default `CSS34_LINE=sm13-dev`, pure-source Linux + Windows (no Actions artifacts)
-- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**, **sm13-mm20** (SM 1.13 + MM 2.0); smoke on Debian 11 (all four) + Debian latest / Rocky / host for sm13-dev; forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata. Packages pass between jobs via **Actions cache**; log artifacts only on **failure** (1-day retention)
+- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**, **sm13-mm20** (SM 1.13 + MM 2.0); smoke on Debian 11 (all four) + Debian latest / Rocky / host for sm13-dev; **botplay-stress matrix** on Debian 11 for all four lines (SMAC + SDKHooks OnTakeDamage); forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata. Packages pass between jobs via **Actions cache**; log artifacts only on **failure** and are **deleted at end of run** by `cleanup-workflow-storage`
 - `.github/workflows/release.yml` — tag-driven; tag maps to `CSS34_LINE`; packages attach with `gh release upload` (**GitHub Releases**, not Actions artifacts)
 - `.github/workflows/cleanup-artifacts.yml` — purge leftover Actions artifacts (`keep_hours=0`) if quota is still full
 

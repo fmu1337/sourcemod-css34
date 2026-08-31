@@ -100,6 +100,15 @@ expect {
     timeout { puts stderr "timeout waiting for sm version"; exit 4 }
 }
 
+# Force-load SDK Hooks so botplay can assert css34 OnTakeDamage gamedata path.
+send "sm exts load sdkhooks\r"
+expect {
+    -re {SDK Hooks|sdkhooks|Failed|error|Error|already} {}
+    eof { puts stderr "srcds exited while loading sdkhooks"; exit 9 }
+    timeout { puts stderr "timeout waiting for sdkhooks load"; exit 9 }
+}
+sleep 1
+
 send "sm exts list\r"
 expect {
     -re {\[SM\] Displaying [0-9]+ extensions:|\[SM\] No extensions are loaded\.} {}
