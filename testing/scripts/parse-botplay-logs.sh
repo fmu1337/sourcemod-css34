@@ -90,6 +90,10 @@ sm_log_errors=0
 probe_ok=0
 probe_fail=0
 map_rotations=0
+otd_hits=0
+otd_hooks=0
+sm_probe_round_ok=0
+sm_probe_round_fail=0
 if [[ -d "${SM_LOG_DIR}" ]]; then
   shopt -s nullglob
   sm_logs=("${SM_LOG_DIR}"/*.log)
@@ -113,9 +117,40 @@ if [[ -d "${SM_LOG_DIR}" ]]; then
       probe_fail=$((probe_fail + n))
       n="$(grep -c '\[css34_botplay\] map_rotate' "${f}" 2>/dev/null || true)"
       map_rotations=$((map_rotations + n))
+      n="$(grep -c '\[css34_botplay\] on_take_damage' "${f}" 2>/dev/null || true)"
+      otd_hits=$((otd_hits + n))
+      n="$(grep -Ec 'otd_hooks=[1-9]' "${f}" 2>/dev/null || true)"
+      otd_hooks=$((otd_hooks + n))
     done
   fi
 fi
+
+sm_probe_sources=()
+if [[ -d "${SM_LOG_DIR}" ]]; then
+  shopt -s nullglob
+  sm_probe_sources+=("${SM_LOG_DIR}"/*.log)
+  shopt -u nullglob
+fi
+[[ -f "${ENGINE_CONSOLE_LOG}" ]] && sm_probe_sources+=("${ENGINE_CONSOLE_LOG}")
+[[ -f "${BOTPLAY_LOG}" ]] && sm_probe_sources+=("${BOTPLAY_LOG}")
+if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
+  sm_probe_round_ok="$(
+    grep '\[css34_sm_probe\] summary ' "${sm_probe_sources[@]}" 2>/dev/null \
+      | tail -n1 \
+      | grep -Eo ' ok=[0-9]+' \
+      | tail -n1 \
+      | grep -Eo '[0-9]+' || true
+  )"
+  sm_probe_round_fail="$(
+    grep '\[css34_sm_probe\] summary ' "${sm_probe_sources[@]}" 2>/dev/null \
+      | tail -n1 \
+      | grep -Eo ' fail=[0-9]+' \
+      | tail -n1 \
+      | grep -Eo '[0-9]+' || true
+  )"
+fi
+sm_probe_round_ok="${sm_probe_round_ok:-0}"
+sm_probe_round_fail="${sm_probe_round_fail:-0}"
 
 if [[ "${map_rotations}" -eq 0 ]]; then
   map_rotations="$(count_pattern "${ENGINE_CONSOLE_LOG}" 'Started map|changelevel|Loading map')"
@@ -174,7 +209,11 @@ cat >"${OUT_JSON}" <<EOF
     "map_rotations": ${map_rotations},
     "abi_probe_rounds": ${probe_ok},
     "abi_probe_clean_rounds": ${probe_clean},
-    "abi_probe_fail_rounds": ${probe_fail}
+    "abi_probe_fail_rounds": ${probe_fail},
+    "on_take_damage_log_lines": ${otd_hits},
+    "on_take_damage_hook_rounds": ${otd_hooks},
+    "sm_api_probe_round_ok": ${sm_probe_round_ok},
+    "sm_api_probe_round_fail": ${sm_probe_round_fail}
   }
 }
 EOF
@@ -207,6 +246,10 @@ EOF
   echo "  abi_probe rounds logged: ${probe_ok}"
   echo "  abi_probe clean (fail=0): ${probe_clean}"
   echo "  abi_probe fail rounds: ${probe_fail}"
+  echo "  on_take_damage log lines: ${otd_hits}"
+  echo "  on_take_damage hook rounds: ${otd_hooks}"
+  echo "  sm_api_probe round ok: ${sm_probe_round_ok}"
+  echo "  sm_api_probe round fail: ${sm_probe_round_fail}"
   echo ""
   echo "Sample round_start lines:"
   first_matches "${ENGINE_CONSOLE_LOG}" "${ROUND_START_PAT}" 3 | sed 's/^/  /'

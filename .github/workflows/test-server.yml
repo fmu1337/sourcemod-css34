@@ -1,7 +1,12 @@
 name: Test Server
 
-# Packages are handed between jobs via Actions cache, not artifacts
-# (artifact storage is the 0.5 GB quota). Logs upload only on failure, 1 day.
+# Packages are handed between jobs via Actions cache (10 GB quota, not the 0.5 GB
+# Actions artifact storage). Failure logs may upload as artifacts briefly; the
+# cleanup-workflow-storage job deletes every artifact from this run when finished.
+
+permissions:
+  contents: read
+  actions: write
 
 on:
   push:
@@ -28,9 +33,19 @@ on:
         required: false
         default: ""
       record_secs:
-        description: "Botplay recording length in seconds"
+        description: "Botplay recording length in seconds (full matrix uses botplay-stress.cfg)"
         required: false
         default: "600"
+      run_full_botplay_matrix:
+        description: "Run botplay-stress matrix for all CSS34_LINE builds (master gate)"
+        type: boolean
+        required: false
+        default: true
+      run_reference_botplay:
+        description: "Run rom4s / GitHub Release reference botplay jobs (not pure-source)"
+        type: boolean
+        required: false
+        default: false
       botplay_extra_distros:
         description: "Also run botplay on debian:11, debian:12, rockylinux:9"
         type: boolean
@@ -301,6 +316,134 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+  # Primary comprehensive gate: botplay-stress (SMAC + sdkhooks OnTakeDamage ABI probe)
+  # for every built CSS34_LINE. Uses Actions cache for packages (not artifact storage).
+  test-built-botplay-matrix:
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || github.event.inputs.run_full_botplay_matrix == 'true'
+    needs: [build-linux, prepare-server]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - line: sm11-oldstable
+            sm_expect: "1.11.0.6970"
+            mm_expect: "1.10.7"
+          - line: sm12-latest
+            sm_expect: "1.12.0.7245"
+            mm_expect: "1.12.0"
+          - line: sm13-dev
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+          - line: sm13-mm20
+            sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Maybe skip
+        id: select
+        run: |
+          want="${{ github.event.inputs.css34_line }}"
+          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore packages from cache
+        if: steps.select.outputs.skip != '1'
+        uses: actions/cache/restore@v4
+        with:
+          path: packages
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
+          fail-on-cache-miss: true
+
+      - name: Restore cached server tree
+        if: steps.select.outputs.skip != '1'
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
+
+      - name: Botplay stress ${{ matrix.line }} (SDKTools + SDKHooks + OnTakeDamage)
+        if: steps.select.outputs.skip != '1'
+        env:
+          IMAGE: debian:11
+          RECORD_SECS: ${{ github.event.inputs.record_secs || '300' }}
+          BOTPLAY_PROFILE: built
+          BOTPLAY_CFG: botplay-stress.cfg
+          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz | head -n1)"
+          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz | head -n1)"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e RECORD_SECS \
+            -e BOTPLAY_PROFILE \
+            -e BOTPLAY_CFG \
+            -e BOTPLAY_MAPS \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e REPORT_JSON=/workspace/.ci-server/botplay-report.json \
+            -e REPORT_TXT=/workspace/.ci-server/botplay-report.txt \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-test.sh
+            '
+
+      - name: Compare botplay vs rom4s baseline
+        if: always() && steps.select.outputs.skip != '1'
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/compare-botplay-reports.sh
+          if [[ -f .ci-server/botplay-report.json ]]; then
+            testing/scripts/compare-botplay-reports.sh \
+              testing/botplay/rom4s-baseline.json \
+              .ci-server/botplay-report.json \
+              .ci-server/botplay-compare-${{ matrix.line }}.txt
+            cat .ci-server/botplay-compare-${{ matrix.line }}.txt
+          else
+            echo "No botplay-report.json for ${{ matrix.line }}" >&2
+            exit 1
+          fi
+
+      - name: Upload botplay report on failure
+        if: failure() && steps.select.outputs.skip != '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: botplay-matrix-${{ matrix.line }}-logs
+          path: |
+            .ci-server/botplay-report.json
+            .ci-server/botplay-report.txt
+            .ci-server/botplay-compare-${{ matrix.line }}.txt
+            .ci-server/botplay.log
+            .ci-server/botplay-run.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 1
+
   test-built-rhel:
     needs: [build-linux, prepare-server]
     runs-on: ubuntu-22.04
@@ -472,7 +615,7 @@ jobs:
   # Baseline capture: rom4s MM 1.10.6 + SM 6572 + SMAC + 4 bots for ~10 minutes.
   # Parses round_start / round_end / player_death from engine console.log.
   test-rom4s-botplay:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_botplay == 'true'
     needs: [prepare-server]
     runs-on: ubuntu-22.04
     steps:
@@ -610,8 +753,9 @@ jobs:
           retention-days: 1
 
   # Same botplay session on in-tree SM 1.13.7404 + MM 1.12, compared to rom4s baseline.
+  # Superseded by test-built-botplay-matrix (all lines). Kept for extra-distro dispatch only.
   test-built-botplay:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    if: false
     needs: [build-linux, prepare-server]
     runs-on: ubuntu-22.04
     steps:
@@ -809,7 +953,7 @@ jobs:
   # Botplay against published GitHub Release packages (SM 1.12 + SM 1.13 lines).
   # Master CI still builds 1.11; these lines are released from upgrade branches.
   test-release-botplay:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/cursor/')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_botplay == 'true'
     needs: [prepare-server]
     runs-on: ubuntu-22.04
     strategy:
@@ -989,3 +1133,54 @@ jobs:
             .ci-bisect/*/cstrike/console.log
           if-no-files-found: ignore
           retention-days: 1
+
+  # Delete every Actions artifact created by this workflow run (failure log uploads).
+  # Packages never use artifact storage — only Actions cache between jobs.
+  cleanup-workflow-storage:
+    if: always()
+    needs:
+      - build-linux
+      - prepare-server
+      - test-built-debian
+      - test-built-botplay-matrix
+      - test-built-rhel
+      - test-built-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all artifacts from this workflow run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const run_id = context.runId;
+            let deleted = 0;
+            let failed = 0;
+            let freed = 0;
+
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              { owner, repo, run_id, per_page: 100 }
+            );
+
+            for (const art of artifacts) {
+              const mb = (art.size_in_bytes / (1024 * 1024)).toFixed(1);
+              core.info(`deleting artifact ${art.name} (#${art.id}) ${mb} MB`);
+              try {
+                await github.rest.actions.deleteArtifact({
+                  owner,
+                  repo,
+                  artifact_id: art.id,
+                });
+                deleted++;
+                freed += art.size_in_bytes;
+              } catch (e) {
+                failed++;
+                core.warning(`failed to delete #${art.id}: ${e.message}`);
+              }
+            }
+
+            const freedMb = (freed / (1024 * 1024)).toFixed(1);
+            core.notice(
+              `Run ${run_id} artifact cleanup: deleted=${deleted}, failed=${failed}, freed~${freedMb} MB`
+            );

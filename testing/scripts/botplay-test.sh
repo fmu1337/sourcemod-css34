@@ -47,6 +47,12 @@ MIN_ROUND_START="${MIN_ROUND_START:-3}"
 MIN_ROUND_END="${MIN_ROUND_END:-3}"
 MIN_PLAYER_DEATH="${MIN_PLAYER_DEATH:-8}"
 MIN_SMAC_RUNNING="${MIN_SMAC_RUNNING:-14}"
+MIN_ABI_PROBE_CLEAN="${MIN_ABI_PROBE_CLEAN:-3}"
+MIN_ABI_PROBE_FAIL="${MIN_ABI_PROBE_FAIL:-0}"
+MIN_OTD_HITS="${MIN_OTD_HITS:-1}"
+MIN_MAP_ROTATIONS="${MIN_MAP_ROTATIONS:-1}"
+MIN_SM_PROBE_OK="${MIN_SM_PROBE_OK:-75}"
+MIN_SM_PROBE_FAIL="${MIN_SM_PROBE_FAIL:-0}"
 
 cd "${SERVER_DIR}"
 export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
@@ -233,6 +239,105 @@ if grep -Fq "${SM_VERSION_EXPECT}" "${BOTPLAY_LOG}" 2>/dev/null; then
 else
   echo "FAIL: SourceMod version ${SM_VERSION_EXPECT} not found in botplay log" >&2
   record_failed=1
+fi
+
+# SDK Tools / SDK Hooks must be listed after forced sdkhooks load (see botplay-record.exp).
+for required_ext in 'BinTools' 'SDK Tools' 'CS Tools' 'SDK Hooks'; do
+  if grep -Fq "${required_ext}" "${BOTPLAY_LOG}" 2>/dev/null; then
+    echo "OK: required extension (${required_ext}) in botplay log"
+  else
+    echo "FAIL: required extension (${required_ext}) missing from botplay log" >&2
+    record_failed=1
+  fi
+done
+
+if grep -Eiq '<FAILED>' "${BOTPLAY_LOG}" 2>/dev/null; then
+  echo "FAIL: failed extension(s) in botplay sm exts list" >&2
+  grep -Ei '<FAILED>' "${BOTPLAY_LOG}" >&2 || true
+  record_failed=1
+else
+  echo "OK: no <FAILED> extensions in botplay log"
+fi
+
+# css34 OnTakeDamage vtables must be the packaged overlay (linux 61).
+sdkhooks_gd="${SERVER_DIR}/cstrike/addons/sourcemod/gamedata/sdkhooks.games/game.cstrike.txt"
+if [[ -f "${sdkhooks_gd}" ]]; then
+  if ! grep -A4 -E '^[[:space:]]*"OnTakeDamage"[[:space:]]*$' "${sdkhooks_gd}" \
+      | grep -qE '"linux"[[:space:]]+"61"'; then
+    echo "FAIL: sdkhooks OnTakeDamage linux offset is not css34 61 in ${sdkhooks_gd}" >&2
+    grep -A5 -E '^[[:space:]]*"OnTakeDamage"[[:space:]]*$' "${sdkhooks_gd}" >&2 || true
+    record_failed=1
+  else
+    echo "OK: sdkhooks OnTakeDamage linux offset is 61 (css34)"
+  fi
+else
+  echo "FAIL: missing sdkhooks gamedata ${sdkhooks_gd}" >&2
+  record_failed=1
+fi
+
+abi_probe_clean="$(json_nested_field "${REPORT_JSON}" stress abi_probe_clean_rounds)"
+abi_probe_fail="$(json_nested_field "${REPORT_JSON}" stress abi_probe_fail_rounds)"
+map_rotations="$(json_nested_field "${REPORT_JSON}" stress map_rotations)"
+otd_hits="$(json_nested_field "${REPORT_JSON}" stress on_take_damage_log_lines)"
+abi_probe_clean="${abi_probe_clean:-0}"
+abi_probe_fail="${abi_probe_fail:-0}"
+map_rotations="${map_rotations:-0}"
+otd_hits="${otd_hits:-0}"
+
+require_min "abi_probe clean rounds" "${abi_probe_clean}" "${MIN_ABI_PROBE_CLEAN}"
+if [[ "${abi_probe_fail}" -gt "${MIN_ABI_PROBE_FAIL}" ]]; then
+  echo "FAIL: abi_probe fail rounds (${abi_probe_fail} > ${MIN_ABI_PROBE_FAIL})" >&2
+  record_failed=1
+else
+  echo "OK: abi_probe fail rounds (${abi_probe_fail} <= ${MIN_ABI_PROBE_FAIL})"
+fi
+require_min "map rotations" "${map_rotations}" "${MIN_MAP_ROTATIONS}"
+require_min "OnTakeDamage hook hits (logged)" "${otd_hits}" "${MIN_OTD_HITS}"
+
+sm_probe_round_ok=0
+sm_probe_round_fail=0
+sm_probe_sources=()
+if compgen -G "${SM_LOG_DIR}"/*.log >/dev/null; then
+  while IFS= read -r -d '' f; do
+    sm_probe_sources+=("${f}")
+  done < <(find "${SM_LOG_DIR}" -maxdepth 1 -name '*.log' -print0 2>/dev/null)
+fi
+[[ -f "${ENGINE_CONSOLE_LOG}" ]] && sm_probe_sources+=("${ENGINE_CONSOLE_LOG}")
+[[ -f "${BOTPLAY_LOG}" ]] && sm_probe_sources+=("${BOTPLAY_LOG}")
+if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
+  sm_probe_round_ok="$(
+    grep '\[css34_sm_probe\] summary ' "${sm_probe_sources[@]}" 2>/dev/null \
+      | tail -n1 \
+      | grep -Eo ' ok=[0-9]+' \
+      | tail -n1 \
+      | grep -Eo '[0-9]+' || true
+  )"
+  sm_probe_round_fail="$(
+    grep '\[css34_sm_probe\] summary ' "${sm_probe_sources[@]}" 2>/dev/null \
+      | tail -n1 \
+      | grep -Eo ' fail=[0-9]+' \
+      | tail -n1 \
+      | grep -Eo '[0-9]+' || true
+  )"
+fi
+sm_probe_round_ok="${sm_probe_round_ok:-0}"
+sm_probe_round_fail="${sm_probe_round_fail:-0}"
+if [[ "${sm_probe_round_ok}" -lt "${MIN_SM_PROBE_OK}" ]]; then
+  echo "DEBUG: API probe summary not found (ok=${sm_probe_round_ok}); recent probe lines:" >&2
+  if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
+    grep '\[css34_sm_probe\]' "${sm_probe_sources[@]}" 2>/dev/null | tail -n 20 >&2 || true
+  fi
+fi
+require_min "SM API probe round ok" "${sm_probe_round_ok}" "${MIN_SM_PROBE_OK}"
+if [[ "${sm_probe_round_fail}" -gt "${MIN_SM_PROBE_FAIL}" ]]; then
+  echo "DEBUG: API probe failures (fail=${sm_probe_round_fail}); probes with ok=0:" >&2
+  if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
+    grep '\[css34_sm_probe\].*ok=0' "${sm_probe_sources[@]}" 2>/dev/null | tail -n 20 >&2 || true
+  fi
+  echo "FAIL: SM API probe round failures (${sm_probe_round_fail} > ${MIN_SM_PROBE_FAIL})" >&2
+  record_failed=1
+else
+  echo "OK: SM API probe round failures (${sm_probe_round_fail} <= ${MIN_SM_PROBE_FAIL})"
 fi
 
 if [[ "${record_failed}" -ne 0 ]]; then

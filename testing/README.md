@@ -31,10 +31,13 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 1. Game DLL loads (`Counter-Strike: Source`)
 2. Map / dedicated server config starts (`Mapchange to …` in console)
 3. `sm version` — expected MM/SM versions
-4. `sm exts list` — prints full list; fails on `<FAILED>`; requires SDK Tools + CS Tools
+4. `sm exts list` — prints full list; fails on `<FAILED>`; requires BinTools + SDK Tools + CS Tools + **SDK Hooks**
 5. `sm plugins list` — every enabled `.smx` listed as Running (not `<Failed>`)
 6. SourceMod session log (`addons/sourcemod/logs/L*.log`) — no error markers
-7. No segfault; not flooded with `Unknown command` (buffer bug signature)
+7. **sdkhooks.games** `OnTakeDamage` linux offset **61** (css34)
+8. No segfault; not flooded with `Unknown command` (buffer bug signature)
+
+The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs). Runs for all four `CSS34_LINE` builds on every `master` push.
 
 ## `srcds_run` / engine launch flags
 
@@ -71,6 +74,7 @@ SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/` (not shipped
 | `testing/cfg/botplay-server.cfg` | Base bots + fast rounds |
 | `testing/cfg/botplay-stress.cfg` | Stress overlay (more bots, map/plugin cvars) |
 | `testing/plugins/css34_botplay_stress.sp` | Map rotation + ABI probe |
+| `testing/plugins/css34_sm_api_probe.sp` | Broad SM API exerciser: extensions inventory, core/clients/entity/sdktools/sdkhooks/cstrike, menus, usermessages, geoip, clientprefs, dbi/sqlite, regex, adt, sorting, keyvalues, lang |
 
 Override: `BOTPLAY_CFG=botplay-server.cfg` for the lighter profile without extra bots / plugin cvars.
 
