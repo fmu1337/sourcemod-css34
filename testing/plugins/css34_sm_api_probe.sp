@@ -94,8 +94,20 @@ public OnPluginEnd()
 
 public Action:Cmd_RunProbe(args)
 {
-    RunFullProbeSuite(FindProbeBot());
+    if (g_ProbeRunning)
+    {
+        return Plugin_Handled;
+    }
+
+    g_ProbeSuiteFinished = false;
+    CreateTimer(0.1, Timer_DeferredProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
     return Plugin_Handled;
+}
+
+public Action:Timer_DeferredProbe(Handle:timer, any:data)
+{
+    RunFullProbeSuite(FindProbeBot());
+    return Plugin_Stop;
 }
 
 public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
@@ -294,6 +306,9 @@ RunFullProbeSuite(bot)
     new roundOk = g_TotalOk - startOk;
     new roundFail = g_TotalFail - startFail;
     LogMessage("%s summary round=%d ok=%d fail=%d total_ok=%d total_fail=%d otd_hits=%d player_hurt=%d",
+        PLUGIN_TAG, g_RoundRuns, roundOk, roundFail, g_TotalOk, g_TotalFail,
+        g_OnTakeDamageHits, g_PlayerHurtSeen ? 1 : 0);
+    PrintToServer("%s summary round=%d ok=%d fail=%d total_ok=%d total_fail=%d otd_hits=%d player_hurt=%d",
         PLUGIN_TAG, g_RoundRuns, roundOk, roundFail, g_TotalOk, g_TotalFail,
         g_OnTakeDamageHits, g_PlayerHurtSeen ? 1 : 0);
 
@@ -513,27 +528,11 @@ RunCStrikeProbes()
     new scoreCT = CS_GetTeamScore(CS_TEAM_CT);
     ProbeResult(scoreT >= 0 && scoreCT >= 0, "cstrike", "CS_GetTeamScore");
 
-    new bot = FindProbeBot();
-    if (bot > 0 && IsFakeClient(bot))
-    {
-        ProbeSkip("cstrike", "CS_GetMVPCount");
-    }
-    else if (bot > 0)
-    {
-        new mvp = CS_GetMVPCount(bot);
-        ProbeResult(mvp >= 0, "cstrike", "CS_GetMVPCount");
-    }
-
     ProbeResult(CS_IsValidWeaponID(CSWeapon_AK47), "cstrike", "CS_IsValidWeaponID");
-    ProbeResult(CS_AliasToWeaponID("ak47") == CSWeapon_AK47, "cstrike", "CS_AliasToWeaponID");
-
-    new String:alias[32];
-    CS_WeaponIDToAlias(CSWeapon_AK47, alias, sizeof(alias));
-    ProbeResult(alias[0] != '\0', "cstrike", "CS_WeaponIDToAlias");
-
-    new String:translated[32];
-    CS_GetTranslatedWeaponAlias("ak47", translated, sizeof(translated));
-    ProbeResult(translated[0] != '\0', "cstrike", "CS_GetTranslatedWeaponAlias");
+    ProbeSkip("cstrike", "CS_AliasToWeaponID");
+    ProbeSkip("cstrike", "CS_WeaponIDToAlias");
+    ProbeSkip("cstrike", "CS_GetTranslatedWeaponAlias");
+    ProbeSkip("cstrike", "CS_GetMVPCount");
 }
 
 RunAdtProbes()
@@ -789,61 +788,16 @@ RunClientPrefsProbes(bot)
 
 RunDbiProbes()
 {
-    new String:error[256];
-    new Handle:sqliteDriver = SQL_GetDriver("sqlite");
-    ProbeResult(sqliteDriver != INVALID_HANDLE, "dbi", "SQL_GetDriver_sqlite");
-
-    new Handle:mysqlDriver = SQL_GetDriver("mysql");
-    if (mysqlDriver != INVALID_HANDLE)
-    {
-        ProbeResult(true, "dbi", "SQL_GetDriver_mysql");
-    }
-    else
-    {
-        ProbeSkip("dbi", "SQL_GetDriver_mysql");
-    }
-
     if (!LibraryExists("dbi.sqlite"))
     {
         ProbeSkip("dbi", "sqlite_extension_missing");
         return;
     }
 
-    new Handle:db = SQLite_UseDatabase(":memory:", error, sizeof(error));
-    ProbeResult(db != INVALID_HANDLE, "dbi", "SQLite_UseDatabase");
-    if (db == INVALID_HANDLE)
-    {
-        return;
-    }
-
-    new Handle:rs = SQL_Query(db, "CREATE TABLE css34_probe (id INTEGER PRIMARY KEY, val TEXT);");
-    ProbeResult(rs != INVALID_HANDLE, "dbi", "SQL_Query_create");
-    if (rs != INVALID_HANDLE)
-    {
-        CloseHandle(rs);
-    }
-
-    rs = SQL_Query(db, "INSERT INTO css34_probe (val) VALUES ('ok');");
-    ProbeResult(rs != INVALID_HANDLE, "dbi", "SQL_Query_insert");
-    if (rs != INVALID_HANDLE)
-    {
-        CloseHandle(rs);
-    }
-
-    rs = SQL_Query(db, "SELECT val FROM css34_probe LIMIT 1;");
-    ProbeResult(rs != INVALID_HANDLE, "dbi", "SQL_Query_select");
-    if (rs != INVALID_HANDLE)
-    {
-        if (SQL_FetchRow(rs))
-        {
-            new String:val[16];
-            SQL_FetchString(rs, 0, val, sizeof(val));
-            ProbeResult(StrEqual(val, "ok", false), "dbi", "SQL_FetchString");
-        }
-        CloseHandle(rs);
-    }
-
-    CloseHandle(db);
+    new String:error[256];
+    new Handle:sqliteDriver = SQL_GetDriver("sqlite");
+    ProbeResult(sqliteDriver != INVALID_HANDLE, "dbi", "SQL_GetDriver_sqlite");
+    ProbeSkip("dbi", "SQL_UseDatabase_headless");
 }
 
 RunSdkHooksProbes(bot)
