@@ -11,9 +11,8 @@
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_TAG "[css34_sm_probe]"
-#define PROBE_MAPSTART_DELAY 20.0
-#define PROBE_RETRY_MAX 12
-#define PROBE_RETRY_DELAY 3.0
+#define PROBE_ROUND_DELAY 3.0
+#define PROBE_MIN_ROUND 2
 
 new Handle:g_CvarAuto;
 new Handle:g_CvarVerbose;
@@ -28,6 +27,7 @@ new bool:g_Hooked[MAXPLAYERS + 1];
 new bool:g_PlayerHurtSeen;
 new bool:g_ProbeRunning;
 new bool:g_ProbeSuiteFinished;
+new g_ProbeRoundWaits;
 
 public Plugin:myinfo =
 {
@@ -87,7 +87,13 @@ public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
         return;
     }
 
-    CreateTimer(PROBE_RETRY_DELAY, Timer_MapStartProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
+    g_ProbeRoundWaits++;
+    if (g_ProbeRoundWaits < PROBE_MIN_ROUND)
+    {
+        return;
+    }
+
+    CreateTimer(PROBE_ROUND_DELAY, Timer_MapStartProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public OnPluginEnd()
@@ -122,7 +128,7 @@ public Action:Timer_DeferredProbe(Handle:timer, any:data)
     return Plugin_Stop;
 }
 
-public Action:Timer_MapStartProbe(Handle:timer, any:retry)
+public Action:Timer_MapStartProbe(Handle:timer, any:unused)
 {
     if (g_ProbeSuiteFinished || g_ProbeRunning)
     {
@@ -130,9 +136,8 @@ public Action:Timer_MapStartProbe(Handle:timer, any:retry)
     }
 
     new bot = FindProbeBot();
-    if (!BotReadyForSdkProbe(bot) && retry < PROBE_RETRY_MAX)
+    if (!BotReadyForSdkProbe(bot))
     {
-        CreateTimer(PROBE_RETRY_DELAY, Timer_MapStartProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
         return Plugin_Stop;
     }
 
@@ -305,6 +310,11 @@ RunFullProbeSuite(bot)
     ProbeSection("sdkhooks");
     RunSdkHooksProbes(bot);
 
+    LogProbeSummary(startOk, startFail);
+}
+
+LogProbeSummary(startOk, startFail)
+{
     new roundOk = g_TotalOk - startOk;
     new roundFail = g_TotalFail - startFail;
     LogMessage("%s summary round=%d ok=%d fail=%d total_ok=%d total_fail=%d otd_hits=%d player_hurt=%d",
@@ -314,7 +324,7 @@ RunFullProbeSuite(bot)
         PLUGIN_TAG, g_RoundRuns, roundOk, roundFail, g_TotalOk, g_TotalFail,
         g_OnTakeDamageHits, g_PlayerHurtSeen ? 1 : 0);
 
-    g_ProbeSuiteFinished = (roundOk >= 1);
+    g_ProbeSuiteFinished = true;
     g_ProbeRunning = false;
 }
 
@@ -378,7 +388,10 @@ RunHalflifeProbes()
     ProbeResult(display[0] != '\0', "halflife", "GetMapDisplayName");
 
     SetRandomSeed(12345);
-    ProbeResult(GetRandomInt(1, 100) == GetRandomInt(1, 100), "halflife", "SetRandomSeed");
+    new randA = GetRandomInt(1, 100);
+    SetRandomSeed(12345);
+    new randB = GetRandomInt(1, 100);
+    ProbeResult(randA == randB, "halflife", "SetRandomSeed");
 }
 
 RunCommandLineProbes()
@@ -579,6 +592,10 @@ RunAdtProbes()
         CloseHandle(pack);
     }
 
+    new String:dir[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, dir, sizeof(dir), "data/css34_probe");
+    CreateDirectory(dir, 511);
+
     new String:testfile[PLATFORM_MAX_PATH];
     BuildPath(Path_SM, testfile, sizeof(testfile), "data/css34_probe/probe.txt");
     new Handle:f = OpenFile(testfile, "w");
@@ -630,13 +647,23 @@ RunTextParseProbes()
 RunLangProbes(bot)
 {
     SetGlobalTransTarget(LANG_SERVER);
-    new String:phrase[64];
-    Format(phrase, sizeof(phrase), "%T", "Player", LANG_SERVER);
-    ProbeResult(phrase[0] != '\0', "lang", "Format_T");
-
-    if (bot > 0)
+    if (TranslationPhraseExists("Yes"))
     {
-        new lang = GetClientLanguage(bot);
+        new String:phrase[64];
+        Format(phrase, sizeof(phrase), "%T", "Yes", LANG_SERVER);
+        ProbeResult(StrEqual(phrase, "Yes", false), "lang", "Format_T");
+    }
+    else
+    {
+        ProbeSkip("lang", "Format_T");
+    }
+
+    new lang = GetServerLanguage();
+    ProbeResult(lang >= 0, "lang", "GetServerLanguage");
+
+    if (bot > 0 && IsClientInGame(bot))
+    {
+        lang = GetClientLanguage(bot);
         ProbeResult(lang >= 0, "lang", "GetClientLanguage");
     }
 }
@@ -796,7 +823,6 @@ RunDbiProbes()
         return;
     }
 
-    new String:error[256];
     new Handle:sqliteDriver = SQL_GetDriver("sqlite");
     ProbeResult(sqliteDriver != INVALID_HANDLE, "dbi", "SQL_GetDriver_sqlite");
     ProbeSkip("dbi", "SQL_UseDatabase_headless");
