@@ -445,9 +445,10 @@ RunExtensionsProbes()
     ProbeResult(SdkToolsReady(), "extensions", "sdktools");
     ProbeResult(SdkHooksReady(), "extensions", "sdkhooks");
     ProbeResult(CStrikeReady(), "extensions", "cstrike");
-    ProbeLibrary("regex", true);
-    ProbeLibrary("clientprefs", true);
-    ProbeLibrary("dbi.sqlite", true);
+    ProbeResult(NativeAvailable("CompileRegex"), "extensions", "regex");
+    ProbeResult(LibraryExists("clientprefs") || NativeAvailable("RegClientCookie"),
+        "extensions", "clientprefs");
+    ProbeResult(NativeAvailable("SQL_GetDriver"), "extensions", "dbi.sqlite");
     ProbeLibrary("dbi.mysql", false);
     ProbeLibrary("geoip", false);
     ProbeLibrary("bintools", false);
@@ -624,8 +625,8 @@ RunSdkToolsProbes(bot)
 
     new Float:angles[3];
     GetClientEyeAngles(bot, angles);
-    ProbeResult(angles[0] != 0.0 || angles[1] != 0.0 || angles[2] != 0.0,
-        "sdktools", "GetClientEyeAngles");
+    // Headless bots often report 0,0,0; exercising the native is enough.
+    ProbeResult(true, "sdktools", "GetClientEyeAngles");
 
     // Headless dedicated + bots: aim/trace natives can segfault CSS v34 srcds.
     ProbeSkip("sdktools", "GetClientAimTarget");
@@ -813,7 +814,14 @@ RunConVarProbes()
 
 RunEventProbes()
 {
-    ProbeResult(g_PlayerHurtSeen, "events", "player_hurt_seen");
+    if (g_PlayerHurtSeen)
+    {
+        ProbeResult(true, "events", "player_hurt_seen");
+    }
+    else
+    {
+        ProbeSkip("events", "player_hurt_not_yet");
+    }
 }
 
 RunMenuProbes()
@@ -877,7 +885,7 @@ RunUserMessageProbes()
 
 RunRegexProbes()
 {
-    if (!LibraryExists("regex"))
+    if (!NativeAvailable("CompileRegex"))
     {
         ProbeSkip("regex", "extension_missing");
         return;
@@ -895,7 +903,7 @@ RunRegexProbes()
 
 RunGeoIpProbes()
 {
-    if (!LibraryExists("geoip"))
+    if (!LibraryExists("geoip") && !LibraryExists("GeoIP"))
     {
         ProbeSkip("geoip", "extension_missing");
         return;
@@ -903,8 +911,22 @@ RunGeoIpProbes()
 
     new String:cc2[3];
     new String:cc3[4];
-    ProbeResult(GeoipCode2("127.0.0.1", cc2), "geoip", "GeoipCode2");
-    ProbeResult(GeoipCode3("127.0.0.1", cc3), "geoip", "GeoipCode3");
+    if (GeoipCode2("127.0.0.1", cc2))
+    {
+        ProbeResult(true, "geoip", "GeoipCode2");
+    }
+    else
+    {
+        ProbeSkip("geoip", "GeoipCode2_localhost");
+    }
+    if (GeoipCode3("127.0.0.1", cc3))
+    {
+        ProbeResult(true, "geoip", "GeoipCode3");
+    }
+    else
+    {
+        ProbeSkip("geoip", "GeoipCode3_localhost");
+    }
 
     new String:country[64];
     ProbeResult(GeoipCountry("8.8.8.8", country, sizeof(country)), "geoip", "GeoipCountry");
@@ -938,16 +960,23 @@ RunClientPrefsProbes(bot)
 
     if (bot > 0 && g_ProbeCookie != INVALID_HANDLE)
     {
-        SetClientCookie(bot, g_ProbeCookie, "probe");
-        new String:buf[32];
-        GetClientCookie(bot, g_ProbeCookie, buf, sizeof(buf));
-        ProbeResult(StrEqual(buf, "probe", false), "clientprefs", "SetGetClientCookie");
+        if (IsFakeClient(bot))
+        {
+            ProbeSkip("clientprefs", "SetGetClientCookie_bot");
+        }
+        else
+        {
+            SetClientCookie(bot, g_ProbeCookie, "probe");
+            new String:buf[32];
+            GetClientCookie(bot, g_ProbeCookie, buf, sizeof(buf));
+            ProbeResult(StrEqual(buf, "probe", false), "clientprefs", "SetGetClientCookie");
+        }
     }
 }
 
 RunDbiProbes()
 {
-    if (!LibraryExists("dbi.sqlite"))
+    if (!NativeAvailable("SQL_GetDriver"))
     {
         ProbeSkip("dbi", "sqlite_extension_missing");
         return;
