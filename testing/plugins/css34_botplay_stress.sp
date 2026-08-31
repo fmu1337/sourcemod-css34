@@ -14,7 +14,6 @@ new g_RoundCount;
 new g_ProbeOk;
 new g_ProbeFail;
 new g_OnTakeDamageHooks;
-new bool:g_SmApiProbeTriggered;
 new g_OnTakeDamageHits;
 new bool:g_ClientHooked[MAXPLAYERS + 1];
 
@@ -80,10 +79,11 @@ public Action:Timer_RunAbiProbe(Handle:timer, any:retry)
         PLUGIN_TAG, g_RoundCount + 1, g_ProbeOk, g_ProbeFail, bots, g_Maps[g_MapIndex],
         g_OnTakeDamageHooks, g_OnTakeDamageHits);
 
-    if (!g_SmApiProbeTriggered && bots >= 1 && g_ProbeFail == 0 && g_ProbeOk >= 3)
+    if (bots >= 1 && g_ProbeFail == 0 && g_ProbeOk >= 3
+        && LibraryExists("sdkhooks") && LibraryExists("sdktools") && LibraryExists("cstrike"))
     {
-        g_SmApiProbeTriggered = true;
         ServerCommand("sm_css34_api_probe_run\n");
+        ServerExecute();
     }
     return Plugin_Stop;
 }

@@ -11,7 +11,7 @@
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_TAG "[css34_sm_probe]"
-#define PROBE_RETRY_MAX 24
+#define PROBE_RETRY_MAX 48
 #define PROBE_RETRY_DELAY 1.5
 
 new Handle:g_CvarAuto;
@@ -27,6 +27,7 @@ new bool:g_Hooked[MAXPLAYERS + 1];
 new bool:g_PlayerHurtSeen;
 new bool:g_ProbeRunning;
 new bool:g_ProbeSuiteFinished;
+new bool:g_ProbeDeferredPending;
 
 public Plugin:myinfo =
 {
@@ -71,6 +72,8 @@ public OnPluginStart()
     {
         g_ProbeCookie = RegClientCookie("css34_probe_cookie", "css34 probe cookie", CookieAccess_Public);
     }
+
+    LogMessage("%s plugin loaded", PLUGIN_TAG);
 }
 
 public OnConfigsExecuted()
@@ -105,11 +108,12 @@ public OnPluginEnd()
 
 public Action:Cmd_RunProbe(args)
 {
-    if (g_ProbeRunning || g_ProbeSuiteFinished)
+    if (g_ProbeRunning || g_ProbeSuiteFinished || g_ProbeDeferredPending)
     {
         return Plugin_Handled;
     }
 
+    g_ProbeDeferredPending = true;
     CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
     return Plugin_Handled;
 }
@@ -118,6 +122,7 @@ public Action:Timer_DeferredProbe(Handle:timer, any:retry)
 {
     if (g_ProbeSuiteFinished || g_ProbeRunning)
     {
+        g_ProbeDeferredPending = false;
         return Plugin_Stop;
     }
 
@@ -126,20 +131,25 @@ public Action:Timer_DeferredProbe(Handle:timer, any:retry)
         if (retry < PROBE_RETRY_MAX)
         {
             CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
+            return Plugin_Stop;
         }
+        g_ProbeDeferredPending = false;
         return Plugin_Stop;
     }
 
     new bot = FindProbeBot();
-    if (!BotReadyForSdkProbe(bot))
+    if (!BotPresentForProbe(bot))
     {
         if (retry < PROBE_RETRY_MAX)
         {
             CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
+            return Plugin_Stop;
         }
+        g_ProbeDeferredPending = false;
         return Plugin_Stop;
     }
 
+    g_ProbeDeferredPending = false;
     g_RoundRuns++;
     RunFullProbeSuite(bot);
     return Plugin_Stop;
@@ -196,6 +206,11 @@ FindProbeBot()
         }
     }
     return 0;
+}
+
+bool:BotPresentForProbe(bot)
+{
+    return bot >= 1 && IsClientInGame(bot) && IsFakeClient(bot);
 }
 
 bool:BotReadyForSdkProbe(bot)
