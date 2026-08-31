@@ -65,6 +65,7 @@ public OnPluginStart()
         "Log every individual probe pass/fail", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
     RegServerCmd("sm_css34_api_probe_run", Cmd_RunProbe, "Run SourceMod API probe suite now");
+    HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
     HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_PostNoCopy);
 
     if (LibraryExists("clientprefs"))
@@ -79,14 +80,14 @@ public OnConfigsExecuted()
     LoadTranslations("common.phrases");
 }
 
-public OnMapStart()
+public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 {
-    if (GetConVarInt(g_CvarAuto) < 1 || g_ProbeSuiteFinished)
+    if (GetConVarInt(g_CvarAuto) < 1 || g_ProbeSuiteFinished || g_ProbeRunning)
     {
         return;
     }
 
-    CreateTimer(PROBE_MAPSTART_DELAY, Timer_MapStartProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(PROBE_RETRY_DELAY, Timer_MapStartProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public OnPluginEnd()
@@ -148,25 +149,6 @@ public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
     {
         g_PlayerHurtSeen = true;
     }
-}
-
-public Action:Timer_RunProbe(Handle:timer, any:retry)
-{
-    if (g_ProbeSuiteFinished || g_ProbeRunning)
-    {
-        return Plugin_Stop;
-    }
-
-    new bot = FindProbeBot();
-    if (!BotReadyForSdkProbe(bot) && retry < PROBE_RETRY_MAX)
-    {
-        CreateTimer(PROBE_RETRY_DELAY, Timer_RunProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
-        return Plugin_Stop;
-    }
-
-    g_RoundRuns++;
-    RunFullProbeSuite(bot);
-    return Plugin_Stop;
 }
 
 FindProbeBot()
@@ -332,7 +314,7 @@ RunFullProbeSuite(bot)
         PLUGIN_TAG, g_RoundRuns, roundOk, roundFail, g_TotalOk, g_TotalFail,
         g_OnTakeDamageHits, g_PlayerHurtSeen ? 1 : 0);
 
-    g_ProbeSuiteFinished = true;
+    g_ProbeSuiteFinished = (roundOk >= 1);
     g_ProbeRunning = false;
 }
 
