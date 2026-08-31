@@ -11,9 +11,8 @@
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_TAG "[css34_sm_probe]"
-#define PROBE_RETRY_MAX 12
+#define PROBE_RETRY_MAX 24
 #define PROBE_RETRY_DELAY 1.5
-#define PROBE_MAP_SETTLE 8.0
 
 new Handle:g_CvarAuto;
 new Handle:g_CvarVerbose;
@@ -28,7 +27,6 @@ new bool:g_Hooked[MAXPLAYERS + 1];
 new bool:g_PlayerHurtSeen;
 new bool:g_ProbeRunning;
 new bool:g_ProbeSuiteFinished;
-new Float:g_MapSettleTime;
 
 public Plugin:myinfo =
 {
@@ -60,8 +58,8 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 
 public OnPluginStart()
 {
-    g_CvarAuto = CreateConVar("sm_css34_api_probe_auto", "1",
-        "Run full API probe once per map after bots spawn", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_CvarAuto = CreateConVar("sm_css34_api_probe_auto", "0",
+        "Auto-run API probe on round_start (botplay-stress triggers by default)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_CvarVerbose = CreateConVar("sm_css34_api_probe_verbose", "0",
         "Log every individual probe pass/fail", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
@@ -81,11 +79,6 @@ public OnConfigsExecuted()
     LoadTranslations("common.phrases");
 }
 
-public OnMapStart()
-{
-    ResetProbeSettleClock();
-}
-
 public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 {
     if (GetConVarInt(g_CvarAuto) < 1 || g_ProbeSuiteFinished || g_ProbeRunning)
@@ -93,7 +86,6 @@ public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
         return;
     }
 
-    SyncProbeSettleClock();
     CreateTimer(PROBE_RETRY_DELAY, Timer_MapStartProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -113,19 +105,43 @@ public OnPluginEnd()
 
 public Action:Cmd_RunProbe(args)
 {
-    if (g_ProbeRunning)
+    if (g_ProbeRunning || g_ProbeSuiteFinished)
     {
         return Plugin_Handled;
     }
 
-    g_ProbeSuiteFinished = false;
-    CreateTimer(0.1, Timer_DeferredProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
     return Plugin_Handled;
 }
 
-public Action:Timer_DeferredProbe(Handle:timer, any:data)
+public Action:Timer_DeferredProbe(Handle:timer, any:retry)
 {
-    RunFullProbeSuite(FindProbeBot());
+    if (g_ProbeSuiteFinished || g_ProbeRunning)
+    {
+        return Plugin_Stop;
+    }
+
+    if (!ExtensionsReady())
+    {
+        if (retry < PROBE_RETRY_MAX)
+        {
+            CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
+        }
+        return Plugin_Stop;
+    }
+
+    new bot = FindProbeBot();
+    if (!BotReadyForSdkProbe(bot))
+    {
+        if (retry < PROBE_RETRY_MAX)
+        {
+            CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
+        }
+        return Plugin_Stop;
+    }
+
+    g_RoundRuns++;
+    RunFullProbeSuite(bot);
     return Plugin_Stop;
 }
 
@@ -136,7 +152,7 @@ public Action:Timer_MapStartProbe(Handle:timer, any:retry)
         return Plugin_Stop;
     }
 
-    if (!MapReadyForProbe())
+    if (!ExtensionsReady())
     {
         if (retry < PROBE_RETRY_MAX)
         {
@@ -206,28 +222,6 @@ bool:ExtensionsReady()
         && LibraryExists("cstrike");
 }
 
-ResetProbeSettleClock()
-{
-    g_MapSettleTime = GetGameTime();
-}
-
-SyncProbeSettleClock()
-{
-    new Float:now = GetGameTime();
-    if (now + 0.05 < g_MapSettleTime)
-    {
-        ResetProbeSettleClock();
-        g_ProbeSuiteFinished = false;
-        g_ProbeRunning = false;
-    }
-}
-
-bool:MapReadyForProbe()
-{
-    SyncProbeSettleClock();
-    return (GetGameTime() - g_MapSettleTime) >= PROBE_MAP_SETTLE;
-}
-
 ProbeResult(bool:pass, const String:category[], const String:name[])
 {
     if (pass)
@@ -279,12 +273,16 @@ RunFullProbeSuite(bot)
         return;
     }
 
-    if (!ExtensionsReady() || !MapReadyForProbe())
+    if (!ExtensionsReady())
     {
         return;
     }
 
     g_ProbeRunning = true;
+
+    new String:mapName[PLATFORM_MAX_PATH];
+    GetCurrentMap(mapName, sizeof(mapName));
+    LogMessage("%s probe_begin bot=%d map=%s", PLUGIN_TAG, bot, mapName);
 
     new startOk = g_TotalOk;
     new startFail = g_TotalFail;
