@@ -16,6 +16,7 @@ new g_ProbeFail;
 new g_OnTakeDamageHooks;
 new g_OnTakeDamageHits;
 new bool:g_ClientHooked[MAXPLAYERS + 1];
+new bool:g_SmApiProbeTriggered;
 
 new const String:g_Maps[MAP_COUNT][] =
 {
@@ -79,9 +80,11 @@ public Action:Timer_RunAbiProbe(Handle:timer, any:retry)
         PLUGIN_TAG, g_RoundCount + 1, g_ProbeOk, g_ProbeFail, bots, g_Maps[g_MapIndex],
         g_OnTakeDamageHooks, g_OnTakeDamageHits);
 
-    if (bots >= 1 && g_ProbeFail == 0 && g_ProbeOk >= 3
-        && LibraryExists("sdkhooks") && LibraryExists("sdktools") && LibraryExists("cstrike"))
+    if (!g_SmApiProbeTriggered
+        && bots >= 1 && g_ProbeFail == 0 && g_ProbeOk >= 3
+        && LibraryExists("sdkhooks") && LibraryExists("sdktools"))
     {
+        g_SmApiProbeTriggered = true;
         TriggerSmApiProbe();
     }
     return Plugin_Stop;
@@ -89,14 +92,12 @@ public Action:Timer_RunAbiProbe(Handle:timer, any:retry)
 
 TriggerSmApiProbe()
 {
-    new Handle:cv = FindConVar("sm_css34_api_probe_trigger");
-    if (cv == INVALID_HANDLE)
-    {
-        return;
-    }
-
-    // notify=true so HookConVarChange runs (false silently skips the hook).
-    SetConVarInt(cv, 1, true, false);
+    // Inter-plugin SetConVarInt does not reliably invoke HookConVarChange on headless
+    // srcds; drive the ConVar through the server console like botplay-record.exp did.
+    LogMessage("%s sm_api_probe_trigger requested ok=%d fail=%d bots_ready=1",
+        PLUGIN_TAG, g_ProbeOk, g_ProbeFail);
+    ServerCommand("sm_css34_api_probe_trigger 1\n");
+    ServerExecute();
 }
 
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast)

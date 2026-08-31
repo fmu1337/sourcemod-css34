@@ -159,8 +159,9 @@ public Action:Timer_DeferredProbe(Handle:timer, any:retry)
             CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
             return Plugin_Stop;
         }
-        LogMessage("%s probe_deferred_giveup reason=extensions retry=%d sdktools=%d sdkhooks=%d cstrike=%d",
-            PLUGIN_TAG, retry, LibraryExists("sdktools"), LibraryExists("sdkhooks"), LibraryExists("cstrike"));
+        LogMessage("%s probe_deferred_giveup reason=extensions retry=%d sdktools=%d sdkhooks=%d cs_getteamscore=%d",
+            PLUGIN_TAG, retry, LibraryExists("sdktools"), LibraryExists("sdkhooks"),
+            GetFeatureStatus(FeatureType_Native, "CS_GetTeamScore") == FeatureStatus_Available);
         return Plugin_Stop;
     }
 
@@ -261,7 +262,7 @@ bool:ExtensionsReady()
 {
     return LibraryExists("sdktools")
         && LibraryExists("sdkhooks")
-        && LibraryExists("cstrike");
+        && GetFeatureStatus(FeatureType_Native, "CS_GetTeamScore") == FeatureStatus_Available;
 }
 
 ProbeResult(bool:pass, const String:category[], const String:name[])
