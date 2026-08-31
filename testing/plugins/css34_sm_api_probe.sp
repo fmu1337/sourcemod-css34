@@ -683,6 +683,12 @@ RunMenuProbes()
 
 RunTopMenuProbes()
 {
+    if (!LibraryExists("topmenus"))
+    {
+        ProbeSkip("topmenus", "extension_missing");
+        return;
+    }
+
     if (g_ProbeTopMenu != INVALID_HANDLE)
     {
         CloseHandle(g_ProbeTopMenu);

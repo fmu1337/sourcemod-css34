@@ -296,16 +296,24 @@ require_min "OnTakeDamage hook hits (logged)" "${otd_hits}" "${MIN_OTD_HITS}"
 
 sm_probe_round_ok=0
 sm_probe_round_fail=0
-if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
+sm_probe_sources=()
+if compgen -G "${SM_LOG_DIR}"/*.log >/dev/null; then
+  while IFS= read -r -d '' f; do
+    sm_probe_sources+=("${f}")
+  done < <(find "${SM_LOG_DIR}" -maxdepth 1 -name '*.log' -print0 2>/dev/null)
+fi
+[[ -f "${ENGINE_CONSOLE_LOG}" ]] && sm_probe_sources+=("${ENGINE_CONSOLE_LOG}")
+[[ -f "${BOTPLAY_LOG}" ]] && sm_probe_sources+=("${BOTPLAY_LOG}")
+if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
   sm_probe_round_ok="$(
-    grep '\[css34_sm_probe\] summary ' "${SM_LOG_DIR}"/L*.log 2>/dev/null \
+    grep '\[css34_sm_probe\] summary ' "${sm_probe_sources[@]}" 2>/dev/null \
       | tail -n1 \
       | grep -Eo ' ok=[0-9]+' \
       | tail -n1 \
       | grep -Eo '[0-9]+' || true
   )"
   sm_probe_round_fail="$(
-    grep '\[css34_sm_probe\] summary ' "${SM_LOG_DIR}"/L*.log 2>/dev/null \
+    grep '\[css34_sm_probe\] summary ' "${sm_probe_sources[@]}" 2>/dev/null \
       | tail -n1 \
       | grep -Eo ' fail=[0-9]+' \
       | tail -n1 \

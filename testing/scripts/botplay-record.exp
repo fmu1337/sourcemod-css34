@@ -132,6 +132,19 @@ send "exec ${botplay_cfg}\r"
 sleep 8
 
 send "mp_restartgame 1\r"
+sleep 15
+
+set saved_timeout $timeout
+set timeout 120
+send "sm_css34_api_probe_run\r"
+expect {
+    -re {\[css34_sm_probe\] summary } {
+        puts stderr "OK: API probe summary logged"
+    }
+    eof { puts stderr "srcds exited during API probe"; exit 8 }
+    timeout { puts stderr "timeout waiting for API probe summary (continuing)" }
+}
+set timeout $saved_timeout
 sleep 5
 
 puts stderr "Recording botplay session for ${record_secs}s..."

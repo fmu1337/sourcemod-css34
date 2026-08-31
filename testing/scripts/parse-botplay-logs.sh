@@ -121,25 +121,36 @@ if [[ -d "${SM_LOG_DIR}" ]]; then
       otd_hits=$((otd_hits + n))
       n="$(grep -Ec 'otd_hooks=[1-9]' "${f}" 2>/dev/null || true)"
       otd_hooks=$((otd_hooks + n))
-      n="$(
-        grep '\[css34_sm_probe\] summary ' "${f}" 2>/dev/null \
-          | tail -n1 \
-          | grep -Eo ' ok=[0-9]+' \
-          | tail -n1 \
-          | grep -Eo '[0-9]+' || true
-      )"
-      sm_probe_round_ok=$((sm_probe_round_ok + ${n:-0}))
-      n="$(
-        grep '\[css34_sm_probe\] summary ' "${f}" 2>/dev/null \
-          | tail -n1 \
-          | grep -Eo ' fail=[0-9]+' \
-          | tail -n1 \
-          | grep -Eo '[0-9]+' || true
-      )"
-      sm_probe_round_fail=$((sm_probe_round_fail + ${n:-0}))
     done
   fi
 fi
+
+sm_probe_sources=()
+if [[ -d "${SM_LOG_DIR}" ]]; then
+  shopt -s nullglob
+  sm_probe_sources+=("${SM_LOG_DIR}"/*.log)
+  shopt -u nullglob
+fi
+[[ -f "${ENGINE_CONSOLE_LOG}" ]] && sm_probe_sources+=("${ENGINE_CONSOLE_LOG}")
+[[ -f "${BOTPLAY_LOG}" ]] && sm_probe_sources+=("${BOTPLAY_LOG}")
+if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
+  sm_probe_round_ok="$(
+    grep '\[css34_sm_probe\] summary ' "${sm_probe_sources[@]}" 2>/dev/null \
+      | tail -n1 \
+      | grep -Eo ' ok=[0-9]+' \
+      | tail -n1 \
+      | grep -Eo '[0-9]+' || true
+  )"
+  sm_probe_round_fail="$(
+    grep '\[css34_sm_probe\] summary ' "${sm_probe_sources[@]}" 2>/dev/null \
+      | tail -n1 \
+      | grep -Eo ' fail=[0-9]+' \
+      | tail -n1 \
+      | grep -Eo '[0-9]+' || true
+  )"
+fi
+sm_probe_round_ok="${sm_probe_round_ok:-0}"
+sm_probe_round_fail="${sm_probe_round_fail:-0}"
 
 if [[ "${map_rotations}" -eq 0 ]]; then
   map_rotations="$(count_pattern "${ENGINE_CONSOLE_LOG}" 'Started map|changelevel|Loading map')"
