@@ -2,21 +2,21 @@
 #include <sdktools>
 #include <sdkhooks>
 #include <cstrike>
-#include <topmenus>
 
 #undef REQUIRE_PLUGIN
+#include <topmenus>
 #include <regex>
 #include <geoip>
 #include <clientprefs>
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_TAG "[css34_sm_probe]"
+#define PROBE_MAPSTART_DELAY 20.0
 #define PROBE_RETRY_MAX 12
 #define PROBE_RETRY_DELAY 3.0
 
 new Handle:g_CvarAuto;
 new Handle:g_CvarVerbose;
-new Handle:g_CvarTrigger;
 new Handle:g_ProbeCookie = INVALID_HANDLE;
 new Handle:g_ProbeMenu = INVALID_HANDLE;
 new Handle:g_ProbeTopMenu = INVALID_HANDLE;
@@ -53,21 +53,18 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
     MarkNativeAsOptional("SQL_GetDriver");
     MarkNativeAsOptional("SQLite_UseDatabase");
     MarkNativeAsOptional("SQL_Query");
+    MarkNativeAsOptional("CreateTopMenu");
     return APLRes_Success;
 }
 
 public OnPluginStart()
 {
     g_CvarAuto = CreateConVar("sm_css34_api_probe_auto", "1",
-        "Run full API probe each round_start", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        "Run full API probe once per map after bots spawn", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_CvarVerbose = CreateConVar("sm_css34_api_probe_verbose", "0",
         "Log every individual probe pass/fail", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    g_CvarTrigger = CreateConVar("sm_css34_api_probe_trigger", "0",
-        "Set to 1 to run the API probe suite once", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    HookConVarChange(g_CvarTrigger, OnProbeTriggerChanged);
 
     RegServerCmd("sm_css34_api_probe_run", Cmd_RunProbe, "Run SourceMod API probe suite now");
-    HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
     HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_PostNoCopy);
 
     if (LibraryExists("clientprefs"))
@@ -82,19 +79,14 @@ public OnConfigsExecuted()
     LoadTranslations("common.phrases");
 }
 
-public OnProbeTriggerChanged(Handle:cvar, const String:oldValue[], const String:newValue[])
+public OnMapStart()
 {
-    if (StringToInt(newValue) != 1)
+    if (GetConVarInt(g_CvarAuto) < 1 || g_ProbeSuiteFinished)
     {
         return;
     }
 
-    SetConVarInt(g_CvarTrigger, 0);
-    if (!g_ProbeRunning)
-    {
-        g_ProbeSuiteFinished = false;
-        CreateTimer(0.1, Timer_DeferredProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
-    }
+    CreateTimer(PROBE_MAPSTART_DELAY, Timer_MapStartProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public OnPluginEnd()
@@ -129,14 +121,23 @@ public Action:Timer_DeferredProbe(Handle:timer, any:data)
     return Plugin_Stop;
 }
 
-public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
+public Action:Timer_MapStartProbe(Handle:timer, any:retry)
 {
-    if (GetConVarInt(g_CvarAuto) < 1 || g_ProbeSuiteFinished || g_ProbeRunning)
+    if (g_ProbeSuiteFinished || g_ProbeRunning)
     {
-        return;
+        return Plugin_Stop;
     }
 
-    CreateTimer(PROBE_RETRY_DELAY, Timer_RunProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
+    new bot = FindProbeBot();
+    if (!BotReadyForSdkProbe(bot) && retry < PROBE_RETRY_MAX)
+    {
+        CreateTimer(PROBE_RETRY_DELAY, Timer_MapStartProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
+        return Plugin_Stop;
+    }
+
+    g_RoundRuns++;
+    RunFullProbeSuite(bot);
+    return Plugin_Stop;
 }
 
 public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
