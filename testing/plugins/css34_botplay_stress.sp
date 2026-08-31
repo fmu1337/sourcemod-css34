@@ -97,7 +97,6 @@ TriggerSmApiProbe()
 
     SetConVarInt(cv, 1, false, false);
 }
-}
 
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast)
 {
