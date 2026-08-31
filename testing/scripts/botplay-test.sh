@@ -51,6 +51,8 @@ MIN_ABI_PROBE_CLEAN="${MIN_ABI_PROBE_CLEAN:-3}"
 MIN_ABI_PROBE_FAIL="${MIN_ABI_PROBE_FAIL:-0}"
 MIN_OTD_HITS="${MIN_OTD_HITS:-1}"
 MIN_MAP_ROTATIONS="${MIN_MAP_ROTATIONS:-1}"
+MIN_SM_PROBE_OK="${MIN_SM_PROBE_OK:-40}"
+MIN_SM_PROBE_FAIL="${MIN_SM_PROBE_FAIL:-0}"
 
 cd "${SERVER_DIR}"
 export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
@@ -291,6 +293,34 @@ else
 fi
 require_min "map rotations" "${map_rotations}" "${MIN_MAP_ROTATIONS}"
 require_min "OnTakeDamage hook hits (logged)" "${otd_hits}" "${MIN_OTD_HITS}"
+
+sm_probe_round_ok=0
+sm_probe_round_fail=0
+if compgen -G "${SM_LOG_DIR}/L*.log" >/dev/null; then
+  sm_probe_round_ok="$(
+    grep '\[css34_sm_probe\] summary ' "${SM_LOG_DIR}"/L*.log 2>/dev/null \
+      | tail -n1 \
+      | grep -Eo ' ok=[0-9]+' \
+      | tail -n1 \
+      | grep -Eo '[0-9]+' || true
+  )"
+  sm_probe_round_fail="$(
+    grep '\[css34_sm_probe\] summary ' "${SM_LOG_DIR}"/L*.log 2>/dev/null \
+      | tail -n1 \
+      | grep -Eo ' fail=[0-9]+' \
+      | tail -n1 \
+      | grep -Eo '[0-9]+' || true
+  )"
+fi
+sm_probe_round_ok="${sm_probe_round_ok:-0}"
+sm_probe_round_fail="${sm_probe_round_fail:-0}"
+require_min "SM API probe round ok" "${sm_probe_round_ok}" "${MIN_SM_PROBE_OK}"
+if [[ "${sm_probe_round_fail}" -gt "${MIN_SM_PROBE_FAIL}" ]]; then
+  echo "FAIL: SM API probe round failures (${sm_probe_round_fail} > ${MIN_SM_PROBE_FAIL})" >&2
+  record_failed=1
+else
+  echo "OK: SM API probe round failures (${sm_probe_round_fail} <= ${MIN_SM_PROBE_FAIL})"
+fi
 
 if [[ "${record_failed}" -ne 0 ]]; then
   echo "Botplay test FAILED"
