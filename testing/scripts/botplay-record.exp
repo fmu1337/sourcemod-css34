@@ -136,7 +136,7 @@ sleep 15
 
 set saved_timeout $timeout
 set timeout 120
-send "sm_css34_api_probe_run\r"
+send "sm_css34_api_probe_trigger 1\r"
 expect {
     -re {\[css34_sm_probe\] summary } {
         puts stderr "OK: API probe summary logged"

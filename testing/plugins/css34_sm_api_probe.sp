@@ -16,6 +16,7 @@
 
 new Handle:g_CvarAuto;
 new Handle:g_CvarVerbose;
+new Handle:g_CvarTrigger;
 new Handle:g_ProbeCookie = INVALID_HANDLE;
 new Handle:g_ProbeMenu = INVALID_HANDLE;
 new Handle:g_ProbeTopMenu = INVALID_HANDLE;
@@ -61,6 +62,9 @@ public OnPluginStart()
         "Run full API probe each round_start", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_CvarVerbose = CreateConVar("sm_css34_api_probe_verbose", "0",
         "Log every individual probe pass/fail", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_CvarTrigger = CreateConVar("sm_css34_api_probe_trigger", "0",
+        "Set to 1 to run the API probe suite once", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    HookConVarChange(g_CvarTrigger, OnProbeTriggerChanged);
 
     RegServerCmd("sm_css34_api_probe_run", Cmd_RunProbe, "Run SourceMod API probe suite now");
     HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
@@ -76,6 +80,21 @@ public OnConfigsExecuted()
 {
     AddServerTag("css34-api-probe");
     LoadTranslations("common.phrases");
+}
+
+public OnProbeTriggerChanged(Handle:cvar, const String:oldValue[], const String:newValue[])
+{
+    if (StringToInt(newValue) != 1)
+    {
+        return;
+    }
+
+    SetConVarInt(g_CvarTrigger, 0);
+    if (!g_ProbeRunning)
+    {
+        g_ProbeSuiteFinished = false;
+        CreateTimer(0.1, Timer_DeferredProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
+    }
 }
 
 public OnPluginEnd()
