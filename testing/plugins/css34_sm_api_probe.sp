@@ -25,6 +25,8 @@ new g_TotalFail;
 new g_OnTakeDamageHits;
 new bool:g_Hooked[MAXPLAYERS + 1];
 new bool:g_PlayerHurtSeen;
+new bool:g_ProbeRunning;
+new bool:g_ProbeSuiteFinished;
 
 public Plugin:myinfo =
 {
@@ -98,7 +100,7 @@ public Action:Cmd_RunProbe(args)
 
 public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 {
-    if (GetConVarInt(g_CvarAuto) < 1)
+    if (GetConVarInt(g_CvarAuto) < 1 || g_ProbeSuiteFinished || g_ProbeRunning)
     {
         return;
     }
@@ -118,6 +120,11 @@ public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
 
 public Action:Timer_RunProbe(Handle:timer, any:retry)
 {
+    if (g_ProbeSuiteFinished || g_ProbeRunning)
+    {
+        return Plugin_Stop;
+    }
+
     new bot = FindProbeBot();
     if (!BotReadyForSdkProbe(bot) && retry < PROBE_RETRY_MAX)
     {
@@ -200,6 +207,12 @@ ProbeLibrary(const String:name[], bool:required)
 
 RunFullProbeSuite(bot)
 {
+    if (g_ProbeRunning || g_ProbeSuiteFinished)
+    {
+        return;
+    }
+    g_ProbeRunning = true;
+
     new startOk = g_TotalOk;
     new startFail = g_TotalFail;
 
@@ -283,6 +296,9 @@ RunFullProbeSuite(bot)
     LogMessage("%s summary round=%d ok=%d fail=%d total_ok=%d total_fail=%d otd_hits=%d player_hurt=%d",
         PLUGIN_TAG, g_RoundRuns, roundOk, roundFail, g_TotalOk, g_TotalFail,
         g_OnTakeDamageHits, g_PlayerHurtSeen ? 1 : 0);
+
+    g_ProbeSuiteFinished = true;
+    g_ProbeRunning = false;
 }
 
 RunExtensionsProbes()
@@ -498,7 +514,11 @@ RunCStrikeProbes()
     ProbeResult(scoreT >= 0 && scoreCT >= 0, "cstrike", "CS_GetTeamScore");
 
     new bot = FindProbeBot();
-    if (bot > 0)
+    if (bot > 0 && IsFakeClient(bot))
+    {
+        ProbeSkip("cstrike", "CS_GetMVPCount");
+    }
+    else if (bot > 0)
     {
         new mvp = CS_GetMVPCount(bot);
         ProbeResult(mvp >= 0, "cstrike", "CS_GetMVPCount");
