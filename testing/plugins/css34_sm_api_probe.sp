@@ -16,6 +16,7 @@
 
 new Handle:g_CvarAuto;
 new Handle:g_CvarVerbose;
+new Handle:g_CvarTrigger;
 new Handle:g_ProbeCookie = INVALID_HANDLE;
 new Handle:g_ProbeMenu = INVALID_HANDLE;
 new Handle:g_ProbeTopMenu = INVALID_HANDLE;
@@ -63,8 +64,11 @@ public OnPluginStart()
         "Auto-run API probe on round_start (botplay-stress triggers by default)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_CvarVerbose = CreateConVar("sm_css34_api_probe_verbose", "0",
         "Log every individual probe pass/fail", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_CvarTrigger = CreateConVar("sm_css34_api_probe_trigger", "0",
+        "Set to 1 to run the API probe suite", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    HookConVarChange(g_CvarTrigger, OnProbeTriggerChanged);
 
-    RegServerCmd("sm_css34_api_probe_run", Cmd_RunProbe, "Run SourceMod API probe suite now");
+    RegServerCmd("css34_api_probe_run", Cmd_RunProbe, "Run SourceMod API probe suite now");
     HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
     HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_PostNoCopy);
 
@@ -106,15 +110,40 @@ public OnPluginEnd()
     }
 }
 
-public Action:Cmd_RunProbe(args)
+public OnProbeTriggerChanged(Handle:convar, const String:oldValue[], const String:newValue[])
+{
+    if (StringToInt(newValue) < 1)
+    {
+        return;
+    }
+
+    ResetProbeTriggerCvar();
+    ScheduleProbeRun();
+}
+
+ResetProbeTriggerCvar()
+{
+    if (g_CvarTrigger != INVALID_HANDLE)
+    {
+        SetConVarInt(g_CvarTrigger, 0, false, false);
+    }
+}
+
+ScheduleProbeRun()
 {
     if (g_ProbeRunning || g_ProbeSuiteFinished || g_ProbeDeferredPending)
     {
-        return Plugin_Handled;
+        return;
     }
 
+    LogMessage("%s probe_scheduled", PLUGIN_TAG);
     g_ProbeDeferredPending = true;
     CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action:Cmd_RunProbe(args)
+{
+    ScheduleProbeRun();
     return Plugin_Handled;
 }
 

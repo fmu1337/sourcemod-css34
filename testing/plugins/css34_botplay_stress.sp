@@ -82,10 +82,21 @@ public Action:Timer_RunAbiProbe(Handle:timer, any:retry)
     if (bots >= 1 && g_ProbeFail == 0 && g_ProbeOk >= 3
         && LibraryExists("sdkhooks") && LibraryExists("sdktools") && LibraryExists("cstrike"))
     {
-        ServerCommand("sm_css34_api_probe_run\n");
-        ServerExecute();
+        TriggerSmApiProbe();
     }
     return Plugin_Stop;
+}
+
+TriggerSmApiProbe()
+{
+    new Handle:cv = FindConVar("sm_css34_api_probe_trigger");
+    if (cv == INVALID_HANDLE)
+    {
+        return;
+    }
+
+    SetConVarInt(cv, 1, false, false);
+}
 }
 
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast)

@@ -136,9 +136,9 @@ sleep 5
 
 # Give bots time to spawn, then trigger the API probe from the server console.
 sleep 20
-send "sm_css34_api_probe_run\r"
+send "sm_css34_api_probe_trigger 1\r"
 expect {
-    -re {css34_sm_probe|Unknown command|plugin loaded} {}
+    -re {probe_scheduled|probe_begin|css34_sm_probe} {}
     eof { puts stderr "srcds exited during api probe trigger"; exit 10 }
     timeout {}
 }
