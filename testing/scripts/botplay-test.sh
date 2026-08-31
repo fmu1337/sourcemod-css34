@@ -322,6 +322,12 @@ if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
 fi
 sm_probe_round_ok="${sm_probe_round_ok:-0}"
 sm_probe_round_fail="${sm_probe_round_fail:-0}"
+if [[ "${sm_probe_round_ok}" -lt "${MIN_SM_PROBE_OK}" ]]; then
+  echo "DEBUG: API probe summary not found (ok=${sm_probe_round_ok}); recent probe lines:" >&2
+  if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
+    grep '\[css34_sm_probe\]' "${sm_probe_sources[@]}" 2>/dev/null | tail -n 20 >&2 || true
+  fi
+fi
 require_min "SM API probe round ok" "${sm_probe_round_ok}" "${MIN_SM_PROBE_OK}"
 if [[ "${sm_probe_round_fail}" -gt "${MIN_SM_PROBE_FAIL}" ]]; then
   echo "FAIL: SM API probe round failures (${sm_probe_round_fail} > ${MIN_SM_PROBE_FAIL})" >&2
