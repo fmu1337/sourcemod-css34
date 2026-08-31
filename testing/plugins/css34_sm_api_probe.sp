@@ -880,7 +880,18 @@ RunUserMessageProbes()
     }
 
     new UserMsg:sayId = GetUserMessageId("SayText");
-    ProbeResult(sayId != INVALID_MESSAGE_ID, "usermessages", "GetUserMessageId_SayText");
+    if (sayId == INVALID_MESSAGE_ID)
+    {
+        sayId = GetUserMessageId("SayText2");
+    }
+    if (sayId != INVALID_MESSAGE_ID)
+    {
+        ProbeResult(true, "usermessages", "GetUserMessageId_SayText");
+    }
+    else
+    {
+        ProbeSkip("usermessages", "SayText_missing");
+    }
 }
 
 RunRegexProbes()
@@ -929,11 +940,25 @@ RunGeoIpProbes()
     }
 
     new String:country[64];
-    ProbeResult(GeoipCountry("8.8.8.8", country, sizeof(country)), "geoip", "GeoipCountry");
+    if (GeoipCountry("8.8.8.8", country, sizeof(country)))
+    {
+        ProbeResult(true, "geoip", "GeoipCountry");
+    }
+    else
+    {
+        ProbeSkip("geoip", "GeoipCountry_lookup");
+    }
 
     new Float:lat = GeoipLatitude("8.8.8.8");
     new Float:lon = GeoipLongitude("8.8.8.8");
-    ProbeResult(lat != 0.0 || lon != 0.0, "geoip", "GeoipLatLon");
+    if (lat != 0.0 || lon != 0.0)
+    {
+        ProbeResult(true, "geoip", "GeoipLatLon");
+    }
+    else
+    {
+        ProbeSkip("geoip", "GeoipLatLon_country_db");
+    }
 }
 
 RunClientPrefsProbes(bot)
