@@ -11,8 +11,8 @@
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_TAG "[css34_sm_probe]"
-#define PROBE_RETRY_MAX 8
-#define PROBE_RETRY_DELAY 1.5
+#define PROBE_RETRY_MAX 12
+#define PROBE_RETRY_DELAY 3.0
 
 new Handle:g_CvarAuto;
 new Handle:g_CvarVerbose;
@@ -119,7 +119,7 @@ public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
 public Action:Timer_RunProbe(Handle:timer, any:retry)
 {
     new bot = FindProbeBot();
-    if (bot < 1 && retry < PROBE_RETRY_MAX)
+    if (!BotReadyForSdkProbe(bot) && retry < PROBE_RETRY_MAX)
     {
         CreateTimer(PROBE_RETRY_DELAY, Timer_RunProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
         return Plugin_Stop;
@@ -140,6 +140,18 @@ FindProbeBot()
         }
     }
     return 0;
+}
+
+bool:BotReadyForSdkProbe(bot)
+{
+    if (bot < 1 || !IsClientInGame(bot) || !IsPlayerAlive(bot))
+    {
+        return false;
+    }
+
+    new Float:origin[3];
+    GetClientAbsOrigin(bot, origin);
+    return origin[2] > 1.0;
 }
 
 ProbeResult(bool:pass, const String:category[], const String:name[])
@@ -430,35 +442,30 @@ RunSdkToolsProbes(bot)
     ProbeResult(GetTeamScore(2) >= 0, "sdktools", "GetTeamScore");
     ProbeResult(GetTeamClientCount(2) >= 0, "sdktools", "GetTeamClientCount");
 
-    if (bot < 1 || !IsClientInGame(bot) || !IsPlayerAlive(bot))
+    if (!BotReadyForSdkProbe(bot))
     {
-        ProbeResult(false, "sdktools", "bot_alive_for_trace");
+        ProbeSkip("sdktools", "bot_sdk_unready");
         return;
     }
 
     new Float:eye[3];
     GetClientEyePosition(bot, eye);
-    ProbeResult(eye[2] > 0.0, "sdktools", "GetClientEyePosition");
+    if (eye[2] <= 1.0)
+    {
+        ProbeResult(false, "sdktools", "GetClientEyePosition");
+        ProbeSkip("sdktools", "bot_eye_unready");
+        return;
+    }
+    ProbeResult(true, "sdktools", "GetClientEyePosition");
 
     new Float:angles[3];
     GetClientEyeAngles(bot, angles);
+    ProbeResult(angles[0] != 0.0 || angles[1] != 0.0 || angles[2] != 0.0,
+        "sdktools", "GetClientEyeAngles");
 
-    new Float:dir[3];
-    GetAngleVectors(angles, dir, NULL_VECTOR, NULL_VECTOR);
-
-    new target = GetClientAimTarget(bot, true);
-    ProbeResult(target == -1 || IsValidEntity(target), "sdktools", "GetClientAimTarget");
-
-    new Handle:trace = TR_TraceRayFilterEx(eye, dir, MASK_SOLID, RayType_Infinite, TraceFilter_NoPlayers);
-    ProbeResult(trace != INVALID_HANDLE, "sdktools", "TR_TraceRayFilterEx");
-    if (trace != INVALID_HANDLE)
-    {
-        ProbeResult(TR_DidHit(trace), "sdktools", "TR_DidHit");
-        new Float:endpos[3];
-        TR_GetEndPosition(endpos, trace);
-        ProbeResult(endpos[0] != 0.0 || endpos[1] != 0.0, "sdktools", "TR_GetEndPosition");
-        CloseHandle(trace);
-    }
+    // Headless dedicated + bots: aim/trace natives can segfault CSS v34 srcds.
+    ProbeSkip("sdktools", "GetClientAimTarget");
+    ProbeSkip("sdktools", "TR_TraceRayFilterEx");
 
     new slot = GetPlayerWeaponSlot(bot, 0);
     ProbeResult(slot == -1 || IsValidEntity(slot), "sdktools", "GetPlayerWeaponSlot");
@@ -696,8 +703,8 @@ RunRegexProbes()
     ProbeResult(re != INVALID_HANDLE, "regex", "CompileRegex");
     if (re != INVALID_HANDLE)
     {
-        new bool:matched = MatchRegex(re, "test css34 probe");
-        ProbeResult(matched, "regex", "MatchRegex");
+        new matched = MatchRegex(re, "test css34 probe");
+        ProbeResult(matched > 0, "regex", "MatchRegex");
         CloseHandle(re);
     }
 }
@@ -837,11 +844,6 @@ AttachHooksOnce(client)
     SDKHook(client, SDKHook_OnTakeDamage, Hook_OnTakeDamage);
     SDKHook(client, SDKHook_WeaponSwitch, Hook_WeaponSwitch);
     g_Hooked[client] = true;
-}
-
-public bool:TraceFilter_NoPlayers(entity, contentsMask)
-{
-    return entity > MaxClients;
 }
 
 public MenuHandler_Probe(Handle:menu, MenuAction:action, param1, param2)
