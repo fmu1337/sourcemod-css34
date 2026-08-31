@@ -257,9 +257,9 @@ bool:BotReadyForSdkProbe(bot)
     return origin[2] > 1.0;
 }
 
-bool:NativeAvailable(const String:native[])
+bool:NativeAvailable(const String:nativeName[])
 {
-    return GetFeatureStatus(FeatureType_Native, native) == FeatureStatus_Available;
+    return GetFeatureStatus(FeatureType_Native, nativeName) == FeatureStatus_Available;
 }
 
 bool:SdkToolsReady()
