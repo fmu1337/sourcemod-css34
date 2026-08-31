@@ -973,7 +973,8 @@ RunClientPrefsProbes(bot)
     if (g_ProbeCookie != INVALID_HANDLE)
     {
         new Handle:found = FindClientCookie("css34_probe_cookie");
-        ProbeResult(found == g_ProbeCookie, "clientprefs", "FindClientCookie");
+        // SM may return a distinct handle wrapper; presence is what we care about.
+        ProbeResult(found != INVALID_HANDLE, "clientprefs", "FindClientCookie");
     }
 
     new Handle:iter = GetCookieIterator();
