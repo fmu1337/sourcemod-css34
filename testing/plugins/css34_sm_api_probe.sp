@@ -28,7 +28,6 @@ new bool:g_Hooked[MAXPLAYERS + 1];
 new bool:g_PlayerHurtSeen;
 new bool:g_ProbeRunning;
 new bool:g_ProbeSuiteFinished;
-new bool:g_ProbeDeferredPending;
 
 public Plugin:myinfo =
 {
@@ -131,13 +130,12 @@ ResetProbeTriggerCvar()
 
 ScheduleProbeRun()
 {
-    if (g_ProbeRunning || g_ProbeSuiteFinished || g_ProbeDeferredPending)
+    if (g_ProbeRunning || g_ProbeSuiteFinished)
     {
         return;
     }
 
     LogMessage("%s probe_scheduled", PLUGIN_TAG);
-    g_ProbeDeferredPending = true;
     CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -151,7 +149,6 @@ public Action:Timer_DeferredProbe(Handle:timer, any:retry)
 {
     if (g_ProbeSuiteFinished || g_ProbeRunning)
     {
-        g_ProbeDeferredPending = false;
         return Plugin_Stop;
     }
 
@@ -162,7 +159,8 @@ public Action:Timer_DeferredProbe(Handle:timer, any:retry)
             CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
             return Plugin_Stop;
         }
-        g_ProbeDeferredPending = false;
+        LogMessage("%s probe_deferred_giveup reason=extensions retry=%d sdktools=%d sdkhooks=%d cstrike=%d",
+            PLUGIN_TAG, retry, LibraryExists("sdktools"), LibraryExists("sdkhooks"), LibraryExists("cstrike"));
         return Plugin_Stop;
     }
 
@@ -174,11 +172,11 @@ public Action:Timer_DeferredProbe(Handle:timer, any:retry)
             CreateTimer(PROBE_RETRY_DELAY, Timer_DeferredProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
             return Plugin_Stop;
         }
-        g_ProbeDeferredPending = false;
+        LogMessage("%s probe_deferred_giveup reason=no_bot retry=%d bots=%d",
+            PLUGIN_TAG, retry, GetClientCount());
         return Plugin_Stop;
     }
 
-    g_ProbeDeferredPending = false;
     g_RoundRuns++;
     RunFullProbeSuite(bot);
     return Plugin_Stop;

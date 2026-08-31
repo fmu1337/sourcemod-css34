@@ -95,7 +95,8 @@ TriggerSmApiProbe()
         return;
     }
 
-    SetConVarInt(cv, 1, false, false);
+    // notify=true so HookConVarChange runs (false silently skips the hook).
+    SetConVarInt(cv, 1, true, false);
 }
 
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast)

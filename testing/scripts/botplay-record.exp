@@ -134,16 +134,7 @@ sleep 8
 send "mp_restartgame 1\r"
 sleep 5
 
-# Give bots time to spawn, then trigger the API probe from the server console.
-sleep 20
-send "sm_css34_api_probe_trigger 1\r"
-expect {
-    -re {probe_scheduled|probe_begin|css34_sm_probe} {}
-    eof { puts stderr "srcds exited during api probe trigger"; exit 10 }
-    timeout {}
-}
-sleep 5
-
+# API probe is triggered by css34_botplay_stress after ABI checks pass (bots + extensions ready).
 puts stderr "Recording botplay session for ${record_secs}s..."
 set end_at [expr {[clock seconds] + $record_secs}]
 while {[clock seconds] < $end_at} {
