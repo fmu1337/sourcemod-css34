@@ -11,8 +11,9 @@
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_TAG "[css34_sm_probe]"
-#define PROBE_ROUND_DELAY 3.0
-#define PROBE_MIN_ROUND 2
+#define PROBE_RETRY_MAX 12
+#define PROBE_RETRY_DELAY 1.5
+#define PROBE_MAP_SETTLE 12.0
 
 new Handle:g_CvarAuto;
 new Handle:g_CvarVerbose;
@@ -27,7 +28,7 @@ new bool:g_Hooked[MAXPLAYERS + 1];
 new bool:g_PlayerHurtSeen;
 new bool:g_ProbeRunning;
 new bool:g_ProbeSuiteFinished;
-new g_ProbeRoundWaits;
+new Float:g_MapLoadTime;
 
 public Plugin:myinfo =
 {
@@ -80,6 +81,11 @@ public OnConfigsExecuted()
     LoadTranslations("common.phrases");
 }
 
+public OnMapStart()
+{
+    g_MapLoadTime = GetGameTime();
+}
+
 public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 {
     if (GetConVarInt(g_CvarAuto) < 1 || g_ProbeSuiteFinished || g_ProbeRunning)
@@ -87,13 +93,7 @@ public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
         return;
     }
 
-    g_ProbeRoundWaits++;
-    if (g_ProbeRoundWaits < PROBE_MIN_ROUND)
-    {
-        return;
-    }
-
-    CreateTimer(PROBE_ROUND_DELAY, Timer_MapStartProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(PROBE_RETRY_DELAY, Timer_MapStartProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public OnPluginEnd()
@@ -128,16 +128,29 @@ public Action:Timer_DeferredProbe(Handle:timer, any:data)
     return Plugin_Stop;
 }
 
-public Action:Timer_MapStartProbe(Handle:timer, any:unused)
+public Action:Timer_MapStartProbe(Handle:timer, any:retry)
 {
     if (g_ProbeSuiteFinished || g_ProbeRunning)
     {
         return Plugin_Stop;
     }
 
+    if (!MapReadyForProbe())
+    {
+        if (retry < PROBE_RETRY_MAX)
+        {
+            CreateTimer(PROBE_RETRY_DELAY, Timer_MapStartProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
+        }
+        return Plugin_Stop;
+    }
+
     new bot = FindProbeBot();
     if (!BotReadyForSdkProbe(bot))
     {
+        if (retry < PROBE_RETRY_MAX)
+        {
+            CreateTimer(PROBE_RETRY_DELAY, Timer_MapStartProbe, retry + 1, TIMER_FLAG_NO_MAPCHANGE);
+        }
         return Plugin_Stop;
     }
 
@@ -170,7 +183,12 @@ FindProbeBot()
 
 bool:BotReadyForSdkProbe(bot)
 {
-    if (bot < 1 || !IsClientInGame(bot) || !IsPlayerAlive(bot))
+    if (bot < 1 || !IsClientInGame(bot) || !IsFakeClient(bot))
+    {
+        return false;
+    }
+
+    if (!IsPlayerAlive(bot))
     {
         return false;
     }
@@ -178,6 +196,23 @@ bool:BotReadyForSdkProbe(bot)
     new Float:origin[3];
     GetClientAbsOrigin(bot, origin);
     return origin[2] > 1.0;
+}
+
+bool:ExtensionsReady()
+{
+    return LibraryExists("sdktools")
+        && LibraryExists("sdkhooks")
+        && LibraryExists("cstrike");
+}
+
+bool:MapReadyForProbe()
+{
+    if (g_MapLoadTime <= 0.0)
+    {
+        return true;
+    }
+
+    return (GetGameTime() - g_MapLoadTime) >= PROBE_MAP_SETTLE;
 }
 
 ProbeResult(bool:pass, const String:category[], const String:name[])
@@ -230,6 +265,12 @@ RunFullProbeSuite(bot)
     {
         return;
     }
+
+    if (!ExtensionsReady() || !MapReadyForProbe())
+    {
+        return;
+    }
+
     g_ProbeRunning = true;
 
     new startOk = g_TotalOk;
@@ -479,6 +520,12 @@ RunEntityProbes(bot)
 
 RunSdkToolsProbes(bot)
 {
+    if (!LibraryExists("sdktools"))
+    {
+        ProbeSkip("sdktools", "extension_missing");
+        return;
+    }
+
     ProbeResult(GetTeamCount() >= 2, "sdktools", "GetTeamCount");
 
     new String:tname[32];
