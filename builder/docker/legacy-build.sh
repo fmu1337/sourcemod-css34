@@ -68,7 +68,7 @@ EOF
       elif [[ "${VERSION_ID:-}" == "11" || "${VERSION_CODENAME:-}" == "bullseye" ]]; then
         # deb.debian.org/debian-security pool intermittently 404s superseded .debs
         # while Packages still references them; pin a known-good snapshot instead.
-        local snap="${BULLSEYE_APT_SNAPSHOT:-20260813T000000Z}"
+        snap="${BULLSEYE_APT_SNAPSHOT:-20260813T000000Z}"
         echo "==> Pinning bullseye apt to snapshot.debian.org/${snap}" >&2
         rm -f /etc/apt/sources.list.d/* 2>/dev/null || true
         cat >/etc/apt/sources.list <<EOF
