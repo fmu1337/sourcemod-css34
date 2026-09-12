@@ -123,6 +123,9 @@ new_ext = """  def ExtLibrary(self, context, compiler, name):
     binary = self.Library(context, compiler, name)
     SetArchFlags(compiler)
     self.ConfigureForExtension(context, binary.compiler)
+    _khook_inc = os.path.join(self.mms_root, 'third_party', 'khook', 'include')
+    if os.path.isdir(_khook_inc):
+      binary.compiler.cxxincludes += [_khook_inc]  # css34: MM 2.0+ KHook (ISmmPlugin.h)
     # css34: pthread/rt DT_NEEDED on pre-2.34 glibc
     if compiler.target.platform == 'linux':
       for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
@@ -130,7 +133,22 @@ new_ext = """  def ExtLibrary(self, context, compiler, name):
           binary.compiler.linkflags += [flag]
     return binary
 """
-if 'css34: pthread/rt DT_NEEDED on pre-2.34' not in text:
+if 'css34: MM 2.0+ KHook (ISmmPlugin.h)' in text and 'def ExtLibrary' in text and 'css34: pthread/rt DT_NEEDED on pre-2.34' in text:
+    print('==> ExtLibrary KHook include already patched')
+elif 'css34: pthread/rt DT_NEEDED on pre-2.34' in text and 'css34: MM 2.0+ KHook (ISmmPlugin.h)' not in text:
+    ext_khook_old = """    self.ConfigureForExtension(context, binary.compiler)
+    # css34: pthread/rt DT_NEEDED on pre-2.34 glibc"""
+    ext_khook_new = """    self.ConfigureForExtension(context, binary.compiler)
+    _khook_inc = os.path.join(self.mms_root, 'third_party', 'khook', 'include')
+    if os.path.isdir(_khook_inc):
+      binary.compiler.cxxincludes += [_khook_inc]  # css34: MM 2.0+ KHook (ISmmPlugin.h)
+    # css34: pthread/rt DT_NEEDED on pre-2.34 glibc"""
+    if ext_khook_old in text:
+        text = text.replace(ext_khook_old, ext_khook_new, 1)
+        print('==> Patched ExtLibrary for MM 2.0+ KHook include path')
+    else:
+        print('==> WARN: ExtLibrary pthread block not found for KHook include patch')
+elif 'css34: pthread/rt DT_NEEDED on pre-2.34' not in text:
     if old_ext not in text:
         print('==> WARN: ExtLibrary pattern not found (continuing)')
     else:
