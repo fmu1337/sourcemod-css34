@@ -13,7 +13,7 @@ MMS_DIR="${MMS_DIR:-$DEPS_DIR/$MMS_DIRNAME}"
 
 export BUILD_PLATFORM=windows
 export SOURCEMOD_MAJOR MMS_MODE MMS_DIRNAME MMS_COMMIT MMS_BRANCH
-export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV
+export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV SOURCEMOD_DIR WDIR
 export PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-1}"
 
 if ! command -v cl >/dev/null 2>&1; then
@@ -75,11 +75,15 @@ rm -rf build obj-*
 mkdir -p build
 cd build
 
+# shellcheck source=../db-configure-args.sh
+source "$BUILDER_DIR/db-configure-args.sh"
+mapfile -t DB_PATH_ARGS < <(db_configure_args "$DEPS_DIR" "$SOURCEMOD_DIR")
+
 CONFIGURE_ARGS=(
   --enable-optimize
   --hl2sdk-root="$DEPS_DIR"
   --mms-path="$MMS_DIR"
-  --mysql-path="$DEPS_DIR/mysql-5.5"
+  "${DB_PATH_ARGS[@]}"
   --sdks=episode1
 )
 if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
@@ -89,7 +93,7 @@ elif [ "$SOURCEMOD_MAJOR" -lt 12 ]; then
     --enable-optimize
     --hl2sdk-root="$DEPS_DIR"
     --mms-path="$MMS_DIR"
-    --mysql-path="$DEPS_DIR/mysql-5.5"
+    "${DB_PATH_ARGS[@]}"
     --sdks=ep1,episode1
   )
 fi

@@ -40,11 +40,12 @@ else:
 PYMAN
 
 # --- AMBuildScript / SdkHelpers (1.12 structure) ---
-SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+SOURCEMOD_DIR="$sourcemod_dir" BUILDER_DIR="$builder_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 
 sm = Path(os.environ['SOURCEMOD_DIR'])
+builder_dir = os.environ.get('BUILDER_DIR', '')
 ambuild = sm / 'AMBuildScript'
 text = ambuild.read_text()
 
@@ -91,6 +92,26 @@ else:
     else:
         print('==> ConfigureForHL2 css34 link patch present')
 
+# MM 2.0+ bleeding (KHook): ISmmPlugin.h includes khook.hpp from third_party/khook/include.
+khook_inc_old = """    compiler.cxxincludes += [
+      os.path.join(self.mms_root, 'core'),
+      os.path.join(self.mms_root, 'core', 'sourcehook'),
+    ]"""
+khook_inc_new = """    compiler.cxxincludes += [
+      os.path.join(self.mms_root, 'core'),
+      os.path.join(self.mms_root, 'core', 'sourcehook'),
+    ]
+    _khook_inc = os.path.join(self.mms_root, 'third_party', 'khook', 'include')
+    if os.path.isdir(_khook_inc):
+      compiler.cxxincludes += [_khook_inc]  # css34: MM 2.0+ KHook (ISmmPlugin.h)"""
+if 'css34: MM 2.0+ KHook (ISmmPlugin.h)' in text:
+    print('==> ConfigureForHL2 KHook include already patched')
+elif khook_inc_old in text:
+    text = text.replace(khook_inc_old, khook_inc_new, 1)
+    print('==> Patched ConfigureForHL2 for MM 2.0+ KHook include path')
+else:
+    print('==> WARN: ConfigureForHL2 cxxincludes block not found for KHook patch')
+
 # ExtLibrary pthread/rt + leave META_NO_HL2SDK happy against Metamod 1.12 headers
 old_ext = """  def ExtLibrary(self, context, compiler, name):
     binary = self.Library(context, compiler, name)
@@ -102,6 +123,9 @@ new_ext = """  def ExtLibrary(self, context, compiler, name):
     binary = self.Library(context, compiler, name)
     SetArchFlags(compiler)
     self.ConfigureForExtension(context, binary.compiler)
+    _khook_inc = os.path.join(self.mms_root, 'third_party', 'khook', 'include')
+    if os.path.isdir(_khook_inc):
+      binary.compiler.cxxincludes += [_khook_inc]  # css34: MM 2.0+ KHook (ISmmPlugin.h)
     # css34: pthread/rt DT_NEEDED on pre-2.34 glibc
     if compiler.target.platform == 'linux':
       for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
@@ -109,7 +133,22 @@ new_ext = """  def ExtLibrary(self, context, compiler, name):
           binary.compiler.linkflags += [flag]
     return binary
 """
-if 'css34: pthread/rt DT_NEEDED on pre-2.34' not in text:
+if 'css34: MM 2.0+ KHook (ISmmPlugin.h)' in text and 'def ExtLibrary' in text and 'css34: pthread/rt DT_NEEDED on pre-2.34' in text:
+    print('==> ExtLibrary KHook include already patched')
+elif 'css34: pthread/rt DT_NEEDED on pre-2.34' in text and 'css34: MM 2.0+ KHook (ISmmPlugin.h)' not in text:
+    ext_khook_old = """    self.ConfigureForExtension(context, binary.compiler)
+    # css34: pthread/rt DT_NEEDED on pre-2.34 glibc"""
+    ext_khook_new = """    self.ConfigureForExtension(context, binary.compiler)
+    _khook_inc = os.path.join(self.mms_root, 'third_party', 'khook', 'include')
+    if os.path.isdir(_khook_inc):
+      binary.compiler.cxxincludes += [_khook_inc]  # css34: MM 2.0+ KHook (ISmmPlugin.h)
+    # css34: pthread/rt DT_NEEDED on pre-2.34 glibc"""
+    if ext_khook_old in text:
+        text = text.replace(ext_khook_old, ext_khook_new, 1)
+        print('==> Patched ExtLibrary for MM 2.0+ KHook include path')
+    else:
+        print('==> WARN: ExtLibrary pthread block not found for KHook include patch')
+elif 'css34: pthread/rt DT_NEEDED on pre-2.34' not in text:
     if old_ext not in text:
         print('==> WARN: ExtLibrary pattern not found (continuing)')
     else:
@@ -168,6 +207,44 @@ if "CSS34 SDK compatibility" not in text:
 else:
     print('==> CSS34 compiler flags already present')
 
+# SM 7461+ sets -std=c++20; css34 uses gcc-9/clang-9 (max c++17).
+if "cxx.cxxflags += ['-std=c++20']" in text:
+    text = text.replace(
+        "cxx.cxxflags += ['-std=c++20']",
+        "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+        1,
+    )
+    print('==> Downgraded AMBuildScript c++20 -> c++17 for css34 toolchain')
+elif "css34: gcc-9/clang-9 lack c++20" in text:
+    print('==> AMBuildScript c++17 downgrade already present')
+
+# SM 7461+ SourcePawn uses std::span (C++20); provide a polyfill via -I cxx17-compat.
+pool_allocator = sm / 'sourcepawn/utils/pool-allocator.h'
+if pool_allocator.exists() and '#include <span>' in pool_allocator.read_text():
+    compat_inc = os.path.join(builder_dir, 'patches', 'cxx17-compat')
+    span_marker = "cxx.cxxflags += ['-I"  # css34: C++17 std::span polyfill
+    if span_marker not in text:
+        cxx17_markers = [
+            "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+            "cxx.cxxflags += ['-std=c++17']",
+        ]
+        inserted = False
+        for marker in cxx17_markers:
+            if marker in text:
+                text = text.replace(
+                    marker,
+                    marker + f"\n    cxx.cxxflags += ['-I{compat_inc}']  # css34: C++17 std::span polyfill",
+                    1,
+                )
+                inserted = True
+                break
+        if inserted:
+            print('==> Added cxx17-compat include path for std::span polyfill')
+        else:
+            raise SystemExit('Failed to locate cxx std flag for span polyfill include')
+    else:
+        print('==> cxx17-compat span polyfill include already present')
+
 ambuild.write_text(text, encoding='utf-8')
 
 # SourcePawn sign-compare under -Werror on gcc-9
@@ -211,38 +288,46 @@ if sp.exists():
     else:
         print('==> WARN: sourcepawn linux pthread postlink not found')
 
-    # Embedded under SM: libsourcepawn.so is built via SPRoot.Library(SM) using
-    # SM.all_targets (no SP Configure postlink). Force DT_NEEDED on the shared lib
-    # that package.sh renames to sourcepawn.jit.x86.so.
+    # SM 1.13.7461+ builds static libsourcepawn_static only (no shared jit .so).
+    # SM 1.12–1.13.7404 may still use BuildDynamicCoreLib → sourcepawn.jit.x86.so.
     dyn_marker = 'css34: libsourcepawn pthread/rt DT_NEEDED'
     if dyn_marker not in sp_text:
-        dyn_old = (
-            "    def BuildDynamicCoreLib(self, builder):\n"
-            "        cxx = builder.cxx\n"
-            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
-            "        self.SetupBinForArch(binary, builder)\n"
-        )
-        dyn_new = (
-            "    def BuildDynamicCoreLib(self, builder):\n"
-            "        cxx = builder.cxx\n"
-            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
-            "        self.SetupBinForArch(binary, builder)\n"
-            "        # css34: libsourcepawn pthread/rt DT_NEEDED (packaged as sourcepawn.jit.x86.so)\n"
+        pthread_block = (
+            "        # css34: libsourcepawn pthread/rt DT_NEEDED\n"
             "        if binary.compiler.target.platform == 'linux':\n"
             "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):\n"
             "            if flag not in binary.compiler.linkflags:\n"
             "              binary.compiler.linkflags += [flag]\n"
         )
-        if dyn_old not in sp_text:
-            print('==> WARN: BuildDynamicCoreLib pattern not found')
-        else:
-            sp.write_text(sp_text.replace(dyn_old, dyn_new, 1))
-            print('==> Patched BuildDynamicCoreLib for pthread/rt DT_NEEDED')
-            # Must re-read: the ABI0 block below previously overwrote this write
-            # using a stale sp_text and dropped pthread/rt from libsourcepawn.so.
+        dyn_targets = [
+            (
+                'BuildDynamicCoreLib',
+                "    def BuildDynamicCoreLib(self, builder):\n"
+                "        cxx = builder.cxx\n"
+                "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
+                "        self.SetupBinForArch(binary, builder)\n",
+            ),
+            (
+                'BuildStaticCoreLib',
+                "    def BuildStaticCoreLib(self, builder):\n"
+                "        cxx = builder.cxx\n"
+                "        binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')\n\n"
+                "        self.SetupBinForArch(binary, builder)\n",
+            ),
+        ]
+        patched_dyn = False
+        for fn, dyn_old in dyn_targets:
+            if dyn_old not in sp_text:
+                continue
+            sp_text = sp_text.replace(dyn_old, dyn_old + pthread_block, 1)
+            sp.write_text(sp_text)
+            print(f'==> Patched {fn} for pthread/rt DT_NEEDED')
+            patched_dyn = True
             sp_text = sp.read_text()
+        if not patched_dyn:
+            print('==> WARN: BuildDynamicCoreLib/BuildStaticCoreLib pattern not found')
     else:
-        print('==> BuildDynamicCoreLib pthread/rt already patched')
+        print('==> libsourcepawn pthread/rt already patched')
 
     # css34: static libsourcepawn is linked into logic.so — must use ABI0.
     sp_text = sp.read_text()
@@ -270,6 +355,23 @@ if logic_am.exists():
     lt = logic_am.read_text()
     pv_parts = (sm / 'product.version').read_text().strip().split('.')
     sm_minor = int(pv_parts[1]) if len(pv_parts) > 1 else 11
+    # SM 1.13.7461+ indexes SP.static_libsp by Target, not arch string.
+    uses_sp_target_key = 'SP.static_libsp[target]' in lt
+    sp_idx_var = 'target' if uses_sp_target_key else 'arch'
+    sp_idx_decl = (
+        '    target = binary.compiler.target\n'
+        if uses_sp_target_key else
+        '    arch = binary.compiler.target.arch\n'
+    )
+    mimalloc_link = (
+        '      SP.mimalloc[target],\n' if uses_sp_target_key else ''
+    )
+    mimalloc_nested_link = (
+        '      SP.mimalloc[target],\n' if uses_sp_target_key else ''
+    )
+    mimalloc_tail_link = (
+        '    SP.mimalloc[target],\n' if uses_sp_target_key else ''
+    )
     if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in lt and 'SM_LOGIC_CXX_SYSROOT gcc-9 g++-9' not in lt:
         loop_old = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
         # SM 1.12: gcc-4.9 sysroot + strptime ParseTime shim.
@@ -389,13 +491,12 @@ if logic_am.exists():
         # BuildScripts). SM 1.13+ embeds SP.static_libsp into logic.so.
         sp_link = ""
         if sm_minor >= 13:
-            sp_link = """    arch = binary.compiler.target.arch
-    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
+            sp_link = f"""{sp_idx_decl}    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_link}    ]
 """
         exclude_libs = ""
         if sm_minor >= 13:
@@ -490,21 +591,21 @@ if logic_am.exists():
 
     # SM 1.13+: static SourcePawn was appended after libstdc++.a; reorder so std::thread resolves.
     # SM 1.12 has no SP in logic AMBuilder / BuildScripts — skip entirely.
-    if sm_minor >= 13 and 'css34: static SP before libstdc++ for std::thread' not in lt:
-        sp_before_old = """    for flag in ('-static-libgcc',):
+    if sm_minor >= 13:
+        if 'css34: static SP before libstdc++ for std::thread' not in lt:
+            sp_before_old = """    for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
     _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
     if _sup and _os.path.isfile(_sup):
       _static.append(_sup)
     if _os.path.isfile(_gcc_eh):"""
-        sp_before_new = """    arch = binary.compiler.target.arch
-    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
+            sp_before_new = f"""{sp_idx_decl}    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_link}    ]
     for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
@@ -512,7 +613,7 @@ if logic_am.exists():
     if _sup and _os.path.isfile(_sup):
       _static.append(_sup)
     if _os.path.isfile(_gcc_eh):"""
-        sp_before_old_wa = """    for flag in ('-static-libgcc',):
+            sp_before_old_wa = """    for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
     _static = ['-nodefaultlibs', '-Wl,-Bstatic', '-Wl,--whole-archive', _stdcxx]
@@ -520,45 +621,78 @@ if logic_am.exists():
       _static.append(_sup)
     _static.append('-Wl,-no-whole-archive')  # css34: static SP needs full libstdc++ (std::thread)
     if _os.path.isfile(_gcc_eh):"""
-        if sp_before_old_wa in lt:
-            lt = lt.replace(sp_before_old_wa, sp_before_new, 1)
-            print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
-        elif sp_before_old in lt:
-            lt = lt.replace(sp_before_old, sp_before_new, 1)
-            print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
-        sp_tail_old = """  arch = binary.compiler.target.arch
+            if sp_before_old_wa in lt:
+                lt = lt.replace(sp_before_old_wa, sp_before_new, 1)
+                print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
+            elif sp_before_old in lt:
+                lt = lt.replace(sp_before_old, sp_before_new, 1)
+                print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
+
+        if 'css34: skip duplicate logic static SP on linux' not in lt:
+            sp_tail_old = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   binary.compiler.linkflags += [
-    SP.static_libsp[arch],
-    SP.libamtl[arch],
-    SP.zlib[arch],
-  ]
+    SP.static_libsp[{sp_idx_var}],
+    SP.libamtl[{sp_idx_var}],
+    SP.zlib[{sp_idx_var}],
+{mimalloc_tail_link}  ]
   if binary.compiler.target.platform == 'linux':"""
-        sp_tail_new = """  arch = binary.compiler.target.arch
+            sp_tail_new = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
+  # css34: skip duplicate logic static SP on linux (linked inside linux block above)
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
   if binary.compiler.target.platform == 'linux':"""
-        if sp_tail_old in lt:
-            lt = lt.replace(sp_tail_old, sp_tail_new, 1)
-            print('==> logic AMBuilder: skip duplicate static SP on linux')
+            if sp_tail_old in lt:
+                lt = lt.replace(sp_tail_old, sp_tail_new, 1)
+                print('==> logic AMBuilder: skip duplicate static SP on linux')
+            elif uses_sp_target_key:
+                sp_tail_after_mac = f"""  elif binary.compiler.target.platform == 'mac':
+    binary.compiler.cflags += ['-Wno-deprecated-declarations']
+    binary.compiler.postlink += ['-framework', 'CoreServices', '-lm']
+
+  {sp_idx_var} = binary.compiler.target
+  binary.compiler.linkflags += [
+    SP.static_libsp[{sp_idx_var}],
+    SP.libamtl[{sp_idx_var}],
+    SP.zlib[{sp_idx_var}],
+{mimalloc_tail_link}  ]
+
+  if binary.compiler.family == 'gcc' or binary.compiler.family == 'clang':"""
+                sp_tail_after_mac_new = f"""  elif binary.compiler.target.platform == 'mac':
+    binary.compiler.cflags += ['-Wno-deprecated-declarations']
+    binary.compiler.postlink += ['-framework', 'CoreServices', '-lm']
+
+  {sp_idx_var} = binary.compiler.target
+  # css34: skip duplicate logic static SP on linux (linked inside linux block above)
+  if binary.compiler.target.platform != 'linux':
+    binary.compiler.linkflags += [
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
+
+  if binary.compiler.family == 'gcc' or binary.compiler.family == 'clang':"""
+                if sp_tail_after_mac in lt:
+                    lt = lt.replace(sp_tail_after_mac, sp_tail_after_mac_new, 1)
+                    print('==> logic AMBuilder: skip duplicate static SP on linux (7461 layout)')
 
     if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt:
-        sp_libs_anchor = """  arch = binary.compiler.target.arch
+        sp_libs_anchor = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   binary.compiler.linkflags += [
-    SP.static_libsp[arch],
-    SP.libamtl[arch],
-    SP.zlib[arch],
-  ]"""
-        sp_libs_new = """  arch = binary.compiler.target.arch
+    SP.static_libsp[{sp_idx_var}],
+    SP.libamtl[{sp_idx_var}],
+    SP.zlib[{sp_idx_var}],
+{mimalloc_tail_link}  ]"""
+        sp_libs_new = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
   if binary.compiler.target.platform == 'linux':
     # css34: logic postlink pthread after static SP archives (DT_NEEDED on glibc < 2.34)
     for flag in list(binary.compiler.linkflags):
@@ -568,13 +702,13 @@ if logic_am.exists():
       if flag not in binary.compiler.postlink:
         binary.compiler.postlink += [flag]
 """
-        sp_libs_anchor_linux = """  arch = binary.compiler.target.arch
+        sp_libs_anchor_linux = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
   if binary.compiler.target.platform == 'linux':"""
         if sp_libs_anchor_linux in lt:
             if 'binary.compiler.postlink += [flag]' not in lt:
@@ -876,6 +1010,64 @@ if shell.exists() and 'if (index > params[0])' in shell.read_text():
         'if (index > (size_t)params[0])',
     ))
 PY
+
+# MM 2.0+ bleeding (KHook): ISmmPlugin.h no longer includes sourcehook.h, but SM
+# core and extensions still use SourceHook::CallClass and SH_DECL_* macros.
+patch_mm_khook_sourcehook_globals() {
+  local hdr="$1"
+  local cpp="$2"
+  local label="$3"
+
+  for _f in "$hdr" "$cpp"; do
+    [ -f "$_f" ] && sed -i 's/\r$//' "$_f"
+  done
+
+  if [ -f "$hdr" ] && ! grep -q 'css34: MM 2.0+ still needs sourcehook.h for SM compile' "$hdr"; then
+    sed -i '/#include <ISmmPlugin.h>/a #include <sourcehook.h>  /* css34: MM 2.0+ still needs sourcehook.h for SM compile */' \
+      "$hdr"
+    if ! grep -q 'css34: MM 2.0+ still needs sourcehook.h for SM compile' "$hdr"; then
+      echo "==> ERROR: sourcehook.h include patch did not apply to $label" >&2
+      exit 1
+    fi
+    echo "==> Patched $label to include sourcehook.h for MM 2.0+ KHook"
+  elif [ -f "$hdr" ]; then
+    echo "==> $label sourcehook include already patched"
+  fi
+
+  if [ -f "$hdr" ] && ! grep -q 'css34: g_SHPtr extern for MM 1467+' "$hdr"; then
+    sed -i '/PLUGIN_GLOBALVARS();/a extern SourceHook::ISourceHook *g_SHPtr;  /* css34: g_SHPtr extern for MM 1467+ */' \
+      "$hdr"
+    if ! grep -q 'css34: g_SHPtr extern for MM 1467+' "$hdr"; then
+      echo "==> ERROR: g_SHPtr extern patch did not apply to $label" >&2
+      exit 1
+    fi
+    echo "==> Patched $label with g_SHPtr extern for MM 1467+ KHook"
+  elif [ -f "$hdr" ]; then
+    echo "==> $label g_SHPtr extern already patched"
+  fi
+
+  if [ -f "$cpp" ] && ! grep -q 'css34: init g_SHPtr for MM 1467+' "$cpp"; then
+    sed -i '/PLUGIN_SAVEVARS();/a\
+\tif (!g_SHPtr) { g_SHPtr = static_cast<SourceHook::ISourceHook *>(ismm->MetaFactory(MMIFACE_SOURCEHOOK, NULL, NULL)); }  /* css34: init g_SHPtr for MM 1467+ */' \
+      "$cpp"
+    if ! grep -q 'css34: init g_SHPtr for MM 1467+' "$cpp"; then
+      echo "==> ERROR: g_SHPtr init patch did not apply to ${label%.h}.cpp" >&2
+      exit 1
+    fi
+    echo "==> Patched ${label%.h}.cpp to init g_SHPtr via MetaFactory for MM 1467+"
+  elif [ -f "$cpp" ]; then
+    echo "==> ${label%.h}.cpp g_SHPtr init already patched"
+  fi
+}
+
+patch_mm_khook_sourcehook_globals \
+  "$sourcemod_dir/public/smsdk_ext.h" \
+  "$sourcemod_dir/public/smsdk_ext.cpp" \
+  "smsdk_ext.h"
+patch_mm_khook_sourcehook_globals \
+  "$sourcemod_dir/core/sourcemm_api.h" \
+  "$sourcemod_dir/core/sourcemm_api.cpp" \
+  "sourcemm_api.h"
 
 # --- Source-level patches ---
 while IFS= read -r -d '' file; do

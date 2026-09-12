@@ -112,16 +112,67 @@ patch_file('core/logic_bridge.cpp', [
     ),
 ])
 
-patch_file('core/sourcemod.cpp', [
-    (
-        '\tif (!sCoreProviderImpl.LoadBridge(error, maxlength))\n\t{\n\t\treturn false;\n\t}',
+def patch_sourcemod_cpp():
+    rel = 'core/sourcemod.cpp'
+    path = sm / rel
+    if not path.exists():
+        print(f'skip missing {rel}')
+        return
+    text = path.read_text()
+    if marker in text:
+        print(f'==> boot trace already in {rel}')
+        return
+
+    new_flow_old = (
+        '\tif (!sCoreProviderImpl.LoadBridge(error, maxlength))\n\t{\n\t\treturn false;\n\t}\n\n'
+        '\tsCoreProviderImpl.InitializeBridge();'
+    )
+    new_flow_new = (
         f'\tsm_boot_trace("{marker} InitializeSourceMod: before LoadBridge");\n'
         '\tif (!sCoreProviderImpl.LoadBridge(error, maxlength))\n\t{\n'
         f'\t\tsm_boot_trace("{marker} InitializeSourceMod: LoadBridge failed");\n'
         '\t\treturn false;\n\t}\n'
-        f'\tsm_boot_trace("{marker} InitializeSourceMod: LoadBridge ok");',
-        'InitializeSourceMod LoadBridge',
-    ),
+        f'\tsm_boot_trace("{marker} InitializeSourceMod: LoadBridge ok");\n\n'
+        f'\tsm_boot_trace("{marker} InitializeSourceMod: before InitializeBridge");\n'
+        '\tsCoreProviderImpl.InitializeBridge();\n'
+        f'\tsm_boot_trace("{marker} InitializeSourceMod: after InitializeBridge");'
+    )
+    legacy_load_old = (
+        '\tif (!sCoreProviderImpl.LoadBridge(error, maxlength))\n\t{\n\t\treturn false;\n\t}\n\n'
+        '\t/* There will always be a path by this point, since it was force-set above. */'
+    )
+    legacy_load_new = (
+        f'\tsm_boot_trace("{marker} InitializeSourceMod: before LoadBridge");\n'
+        '\tif (!sCoreProviderImpl.LoadBridge(error, maxlength))\n\t{\n'
+        f'\t\tsm_boot_trace("{marker} InitializeSourceMod: LoadBridge failed");\n'
+        '\t\treturn false;\n\t}\n'
+        f'\tsm_boot_trace("{marker} InitializeSourceMod: LoadBridge ok");\n\n'
+        '\t/* There will always be a path by this point, since it was force-set above. */'
+    )
+    legacy_bridge_old = (
+        '\tsCoreProviderImpl.InitializeBridge();\n\n'
+        '\t/* Initialize CoreConfig to get the SourceMod base path properly - this parses core.cfg */'
+    )
+    legacy_bridge_new = (
+        f'\tsm_boot_trace("{marker} StartSourceMod: before InitializeBridge");\n'
+        '\tsCoreProviderImpl.InitializeBridge();\n'
+        f'\tsm_boot_trace("{marker} StartSourceMod: after InitializeBridge");\n\n'
+        '\t/* Initialize CoreConfig to get the SourceMod base path properly - this parses core.cfg */'
+    )
+
+    if new_flow_old in text:
+        text = text.replace(new_flow_old, new_flow_new, 1)
+        flow = '7461'
+    elif legacy_load_old in text:
+        text = text.replace(legacy_load_old, legacy_load_new, 1)
+        if legacy_bridge_old not in text:
+            raise SystemExit(f'{rel}: legacy InitializeBridge anchor missing')
+        text = text.replace(legacy_bridge_old, legacy_bridge_new, 1)
+        flow = 'legacy'
+    else:
+        raise SystemExit(f'{rel}: unknown InitializeSourceMod init flow')
+
+    edits = [
     (
         '\tif (!late)\n\t{\n\t\tStartSourceMod(false);\n\t}',
         f'\tsm_boot_tracef("{marker} InitializeSourceMod: before StartSourceMod late=%d", (int)late);\n'
@@ -134,14 +185,6 @@ patch_file('core/sourcemod.cpp', [
         'void SourceModBase::StartSourceMod(bool late)\n{\n'
         f'\tsm_boot_tracef("{marker} StartSourceMod: enter late=%d loaded=%d", (int)late, (int)g_Loaded);',
         'StartSourceMod enter',
-    ),
-    (
-        '\tsCoreProviderImpl.InitializeBridge();\n\n\t/* Initialize CoreConfig',
-        f'\tsm_boot_trace("{marker} StartSourceMod: before InitializeBridge");\n'
-        '\tsCoreProviderImpl.InitializeBridge();\n'
-        f'\tsm_boot_trace("{marker} StartSourceMod: after InitializeBridge");\n\n'
-        '\t/* Initialize CoreConfig',
-        'StartSourceMod InitializeBridge',
     ),
     (
         '\tg_CoreConfig.Initialize();\n\n\t/* Notify! */\n\tSMGlobalClass *pBase = SMGlobalClass::head;\n\twhile (pBase)\n\t{\n\t\tpBase->OnSourceModStartup(false);',
@@ -201,7 +244,16 @@ patch_file('core/sourcemod.cpp', [
         '\tm_IsMapLoading = false;',
         'LevelInit DoGlobalPluginLoads',
     ),
-])
+    ]
+    for old, new, label in edits:
+        if old not in text:
+            raise SystemExit(f'{rel}: anchor not found for {label}')
+        text = text.replace(old, new, 1)
+    text = ensure_include(text)
+    path.write_text(text)
+    print(f'==> patched boot trace in {rel} ({flow} init flow)')
+
+patch_sourcemod_cpp()
 
 patch_file('core/logic/common_logic.cpp', [
     (

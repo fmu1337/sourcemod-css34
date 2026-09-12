@@ -31,13 +31,22 @@
       "metamod_commit": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
       "metamod_binary": "metamod.2.ep1",
       "role": "experimental"
+    },
+    "sm13-bleeding": {
+      "sourcemod": "1.13.0.7461",
+      "sourcemod_commit": "809392d1dc0436b064f1d2d03cc498551f2a97b9",
+      "metamod": "2.0.0-dev+1467",
+      "metamod_commit": "7e24ce9e7a03bfeb5c8ab1e4dd55d5d5747f3d33",
+      "metamod_binary": "metamod.2.ep1",
+      "role": "bleeding"
     }
   },
   "metamod_pins": {
     "1.10-dev": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
     "1.11-dev": "7ff2d97bdad1493b809c5ec91bbfc7abc6ae5445",
     "1.12-1224": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
-    "2.0-1407": "0084b86af4b08614ed6b95485d072b5aa2e88cdc"
+    "2.0-1407": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
+    "2.0-1467": "7e24ce9e7a03bfeb5c8ab1e4dd55d5d5747f3d33"
   },
   "releases": {
     "1.11.0.6970-mm1.10.7": {

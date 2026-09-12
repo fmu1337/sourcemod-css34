@@ -65,6 +65,20 @@ Acquire::Check-Valid-Until "false";
 Acquire::AllowInsecureRepositories "true";
 Acquire::AllowDowngradeToInsecureRepositories "true";
 EOF
+      elif [[ "${VERSION_ID:-}" == "11" || "${VERSION_CODENAME:-}" == "bullseye" ]]; then
+        # deb.debian.org/debian-security pool intermittently 404s superseded .debs
+        # while Packages still references them; pin a known-good snapshot instead.
+        snap="${BULLSEYE_APT_SNAPSHOT:-20260813T000000Z}"
+        echo "==> Pinning bullseye apt to snapshot.debian.org/${snap}" >&2
+        rm -f /etc/apt/sources.list.d/* 2>/dev/null || true
+        cat >/etc/apt/sources.list <<EOF
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${snap} bullseye-security main contrib non-free
+EOF
+        cat >/etc/apt/apt.conf.d/99snapshot <<EOF
+Acquire::Check-Valid-Until "false";
+EOF
       fi
     fi
     apt_retry() {
@@ -83,6 +97,9 @@ EOF
         attempt=$((attempt + 1))
       done
     }
+    # debian:11 images ship stale /var/lib/apt/lists; without a purge apt-get
+    # install keeps requesting superseded security .deb versions (404 on CI).
+    rm -rf /var/lib/apt/lists/* 2>/dev/null || true
     apt_retry apt-get update -qq
     apt_retry apt-get install -y -qq \
       curl git python3 python3-pip \
