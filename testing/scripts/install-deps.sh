@@ -74,6 +74,7 @@ install_debian() {
   export DEBIAN_FRONTEND=noninteractive
   fix_debian_archives
   dpkg --add-architecture i386 || true
+  rm -rf /var/lib/apt/lists/* 2>/dev/null || true
   apt-get update -y || apt-get update -y --allow-unauthenticated || true
 
   local pkgs=(

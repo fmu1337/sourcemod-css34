@@ -83,6 +83,9 @@ EOF
         attempt=$((attempt + 1))
       done
     }
+    # debian:11 images ship stale /var/lib/apt/lists; without a purge apt-get
+    # install keeps requesting superseded security .deb versions (404 on CI).
+    rm -rf /var/lib/apt/lists/* 2>/dev/null || true
     apt_retry apt-get update -qq
     apt_retry apt-get install -y -qq \
       curl git python3 python3-pip \
