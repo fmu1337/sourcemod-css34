@@ -75,11 +75,16 @@ rm -rf build obj-*
 mkdir -p build
 cd build
 
+DB_PATH_ARGS=(--mysql-path="$DEPS_DIR/mysql-5.5")
+if [ "$SOURCEMOD_MAJOR" -ge 13 ]; then
+  DB_PATH_ARGS=(--mariadb-path="$DEPS_DIR/mariadb-connector-c-3.4.9-x86")
+fi
+
 CONFIGURE_ARGS=(
   --enable-optimize
   --hl2sdk-root="$DEPS_DIR"
   --mms-path="$MMS_DIR"
-  --mysql-path="$DEPS_DIR/mysql-5.5"
+  "${DB_PATH_ARGS[@]}"
   --sdks=episode1
 )
 if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
@@ -89,7 +94,7 @@ elif [ "$SOURCEMOD_MAJOR" -lt 12 ]; then
     --enable-optimize
     --hl2sdk-root="$DEPS_DIR"
     --mms-path="$MMS_DIR"
-    --mysql-path="$DEPS_DIR/mysql-5.5"
+    "${DB_PATH_ARGS[@]}"
     --sdks=ep1,episode1
   )
 fi

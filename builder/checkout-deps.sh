@@ -79,6 +79,28 @@ else
   fi
 fi
 
+# SM 1.13.7461+ configure.py expects MariaDB Connector/C (--mariadb-path).
+MARIADB_CONNECTOR_VERSION="${MARIADB_CONNECTOR_VERSION:-3.4.9}"
+MARIADB_CONNECTOR_RELEASE="${MARIADB_CONNECTOR_RELEASE:-3.4.9-sm.5}"
+if [ "${SOURCEMOD_MAJOR:-11}" -ge 13 ]; then
+  echo "==> Fetching MariaDB Connector/C ${MARIADB_CONNECTOR_VERSION} (SM 1.13+)"
+  MARIADB_DIR="$DEPS/mariadb-connector-c-${MARIADB_CONNECTOR_VERSION}-x86"
+  if [ "$BUILD_PLATFORM" = "windows" ]; then
+    if [ ! -f "$MARIADB_DIR/lib/mariadbclient.lib" ] && [ ! -f "$MARIADB_DIR/lib/libmariadb.lib" ]; then
+      curl -fsSL -o "$DEPS/mariadb-connector.zip" \
+        "https://github.com/alliedmodders/mariadb-connector-c/releases/download/v${MARIADB_CONNECTOR_RELEASE}/mariadb-connector-c-${MARIADB_CONNECTOR_VERSION}-windows-x86.zip"
+      rm -rf "$MARIADB_DIR"
+      unzip -q -o "$DEPS/mariadb-connector.zip" -d "$DEPS"
+      rm -f "$DEPS/mariadb-connector.zip"
+    fi
+  elif [ ! -f "$MARIADB_DIR/lib/libmariadbclient.a" ]; then
+    curl -fsSL -o "$DEPS/mariadb-connector.tar.gz" \
+      "https://github.com/alliedmodders/mariadb-connector-c/releases/download/v${MARIADB_CONNECTOR_RELEASE}/mariadb-connector-c-${MARIADB_CONNECTOR_VERSION}-linux-x86.tar.gz"
+    tar -C "$DEPS" -xzf "$DEPS/mariadb-connector.tar.gz"
+    rm -f "$DEPS/mariadb-connector.tar.gz"
+  fi
+fi
+
 echo "==> Fetching Metamod:Source"
 # MMS_MODE / MMS_DIRNAME / MMS_COMMIT come from resolve-version.sh (or env).
 MMS_MODE="${MMS_MODE:-}"
