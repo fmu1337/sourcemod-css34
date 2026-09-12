@@ -79,10 +79,21 @@ else
   fi
 fi
 
-# SM 1.13+ links MariaDB Connector/C (--mysql-path on 7404, --mariadb-path on 7461+).
+# MariaDB Connector/C is only needed when configure.py exposes --mariadb-path (7461+).
 MARIADB_CONNECTOR_VERSION="${MARIADB_CONNECTOR_VERSION:-3.4.9}"
 MARIADB_CONNECTOR_RELEASE="${MARIADB_CONNECTOR_RELEASE:-3.4.9-sm.5}"
-if [ "${SOURCEMOD_MAJOR:-11}" -ge 13 ]; then
+need_mariadb=0
+sm_configure=""
+for candidate in "${SOURCEMOD_DIR:-}" "${WDIR:-}/sourcemod"; do
+  if [ -n "$candidate" ] && [ -f "$candidate/configure.py" ]; then
+    sm_configure="$candidate/configure.py"
+    break
+  fi
+done
+if [ -n "$sm_configure" ] && grep -q 'mariadb-path' "$sm_configure"; then
+  need_mariadb=1
+fi
+if [ "$need_mariadb" = 1 ]; then
   echo "==> Fetching MariaDB Connector/C ${MARIADB_CONNECTOR_VERSION} (SM 1.13+)"
   MARIADB_DIR="$DEPS/mariadb-connector-c-${MARIADB_CONNECTOR_VERSION}-x86"
   if [ "$BUILD_PLATFORM" = "windows" ]; then

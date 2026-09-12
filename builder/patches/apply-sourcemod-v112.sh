@@ -168,6 +168,17 @@ if "CSS34 SDK compatibility" not in text:
 else:
     print('==> CSS34 compiler flags already present')
 
+# SM 7461+ sets -std=c++20; css34 uses gcc-9/clang-9 (max c++17).
+if "cxx.cxxflags += ['-std=c++20']" in text:
+    text = text.replace(
+        "cxx.cxxflags += ['-std=c++20']",
+        "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+        1,
+    )
+    print('==> Downgraded AMBuildScript c++20 -> c++17 for css34 toolchain')
+elif "css34: gcc-9/clang-9 lack c++20" in text:
+    print('==> AMBuildScript c++17 downgrade already present')
+
 ambuild.write_text(text, encoding='utf-8')
 
 # SourcePawn sign-compare under -Werror on gcc-9

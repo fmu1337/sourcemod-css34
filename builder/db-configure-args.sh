@@ -10,10 +10,9 @@ db_configure_args() {
   if grep -q "'--mariadb-path'" "$sourcemod_dir/configure.py" 2>/dev/null \
     || grep -q 'mariadb-path' "$sourcemod_dir/configure.py" 2>/dev/null; then
     printf '%s\n' "--mariadb-path=$mariadb_dir"
-  elif [ "${SOURCEMOD_MAJOR:-11}" -ge 13 ]; then
-    # SM 1.13.7404 still names the flag --mysql-path but links MariaDB Connector/C.
-    printf '%s\n' "--mysql-path=$mariadb_dir"
   else
+    # SM 1.13.7404 still uses --mysql-path but expects legacy mysql-5.5 headers
+    # (my_global.h). MariaDB Connector/C is only for 7461+ (--mariadb-path).
     printf '%s\n' "--mysql-path=$deps_dir/mysql-5.5"
   fi
 }
