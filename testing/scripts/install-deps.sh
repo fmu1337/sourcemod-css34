@@ -34,11 +34,16 @@ fix_debian_archives() {
   esac
   case "${codename}" in
     bullseye)
-      echo "Rewriting bullseye apt sources (skip broken debian-security pool)"
+      local snap="${BULLSEYE_APT_SNAPSHOT:-20260813T000000Z}"
+      echo "Pinning bullseye apt to snapshot.debian.org/${snap}"
       rm -f /etc/apt/sources.list.d/* || true
       cat >/etc/apt/sources.list <<EOF
-deb http://deb.debian.org/debian bullseye main contrib non-free
-deb http://deb.debian.org/debian bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${snap} bullseye-security main contrib non-free
+EOF
+      cat >/etc/apt/apt.conf.d/99snapshot <<EOF
+Acquire::Check-Valid-Until "false";
 EOF
       ;;
     jessie|stretch|buster)

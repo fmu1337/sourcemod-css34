@@ -66,13 +66,18 @@ Acquire::AllowInsecureRepositories "true";
 Acquire::AllowDowngradeToInsecureRepositories "true";
 EOF
       elif [[ "${VERSION_ID:-}" == "11" || "${VERSION_CODENAME:-}" == "bullseye" ]]; then
-        # debian-security pool/updates 404s superseded .debs while Packages still
-        # references them; main + updates has working gcc-9-multilib / libc6-i386.
-        echo "==> Rewriting bullseye apt sources (skip broken debian-security pool)" >&2
+        # deb.debian.org/debian-security pool intermittently 404s superseded .debs
+        # while Packages still references them; pin a known-good snapshot instead.
+        local snap="${BULLSEYE_APT_SNAPSHOT:-20260813T000000Z}"
+        echo "==> Pinning bullseye apt to snapshot.debian.org/${snap}" >&2
         rm -f /etc/apt/sources.list.d/* 2>/dev/null || true
         cat >/etc/apt/sources.list <<EOF
-deb http://deb.debian.org/debian bullseye main contrib non-free
-deb http://deb.debian.org/debian bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${snap} bullseye-security main contrib non-free
+EOF
+        cat >/etc/apt/apt.conf.d/99snapshot <<EOF
+Acquire::Check-Valid-Until "false";
 EOF
       fi
     fi
