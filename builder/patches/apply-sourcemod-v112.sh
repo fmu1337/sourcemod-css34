@@ -40,11 +40,12 @@ else:
 PYMAN
 
 # --- AMBuildScript / SdkHelpers (1.12 structure) ---
-SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+SOURCEMOD_DIR="$sourcemod_dir" BUILDER_DIR="$builder_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 
 sm = Path(os.environ['SOURCEMOD_DIR'])
+builder_dir = os.environ.get('BUILDER_DIR', '')
 ambuild = sm / 'AMBuildScript'
 text = ambuild.read_text()
 
@@ -178,6 +179,33 @@ if "cxx.cxxflags += ['-std=c++20']" in text:
     print('==> Downgraded AMBuildScript c++20 -> c++17 for css34 toolchain')
 elif "css34: gcc-9/clang-9 lack c++20" in text:
     print('==> AMBuildScript c++17 downgrade already present')
+
+# SM 7461+ SourcePawn uses std::span (C++20); provide a polyfill via -I cxx17-compat.
+pool_allocator = sm / 'sourcepawn/utils/pool-allocator.h'
+if pool_allocator.exists() and '#include <span>' in pool_allocator.read_text():
+    compat_inc = os.path.join(builder_dir, 'patches', 'cxx17-compat')
+    span_marker = "cxx.cxxflags += ['-I"  # css34: C++17 std::span polyfill
+    if span_marker not in text:
+        cxx17_markers = [
+            "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+            "cxx.cxxflags += ['-std=c++17']",
+        ]
+        inserted = False
+        for marker in cxx17_markers:
+            if marker in text:
+                text = text.replace(
+                    marker,
+                    marker + f"\n    cxx.cxxflags += ['-I{compat_inc}']  # css34: C++17 std::span polyfill",
+                    1,
+                )
+                inserted = True
+                break
+        if inserted:
+            print('==> Added cxx17-compat include path for std::span polyfill')
+        else:
+            raise SystemExit('Failed to locate cxx std flag for span polyfill include')
+    else:
+        print('==> cxx17-compat span polyfill include already present')
 
 ambuild.write_text(text, encoding='utf-8')
 
