@@ -42,6 +42,7 @@ Most commits are **Source 2 / KHook** (CS2, Dota2). css34-relevant:
 - `apply-sourcemod-v112.sh` — `BuildStaticCoreLib` pthread/rt (replaces `BuildDynamicCoreLib` on 7461+)
 - `apply-sourcemod-v112.sh` + `patches/cxx17-compat/span` — C++17 `std::span` polyfill (7461 SourcePawn uses `<span>` but css34 builds at `-std=c++17`)
 - `apply-mmsource-v112.sh` — restores `core/sourcehook/` headers from MM 1407 when MM 1467+ (KHook) removed them; SM 7461 still compiles against SourceHook APIs
+- `apply-sourcemod-v112.sh` — adds `third_party/khook/include` to `ConfigureForHL2` when present (MM 1467 `ISmmPlugin.h` includes `khook.hpp`)
 
 ## Not yet verified on this branch
 

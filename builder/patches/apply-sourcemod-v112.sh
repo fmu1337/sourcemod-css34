@@ -92,6 +92,26 @@ else:
     else:
         print('==> ConfigureForHL2 css34 link patch present')
 
+# MM 2.0+ bleeding (KHook): ISmmPlugin.h includes khook.hpp from third_party/khook/include.
+khook_inc_old = """    compiler.cxxincludes += [
+      os.path.join(self.mms_root, 'core'),
+      os.path.join(self.mms_root, 'core', 'sourcehook'),
+    ]"""
+khook_inc_new = """    compiler.cxxincludes += [
+      os.path.join(self.mms_root, 'core'),
+      os.path.join(self.mms_root, 'core', 'sourcehook'),
+    ]
+    _khook_inc = os.path.join(self.mms_root, 'third_party', 'khook', 'include')
+    if os.path.isdir(_khook_inc):
+      compiler.cxxincludes += [_khook_inc]  # css34: MM 2.0+ KHook (ISmmPlugin.h)"""
+if 'css34: MM 2.0+ KHook (ISmmPlugin.h)' in text:
+    print('==> ConfigureForHL2 KHook include already patched')
+elif khook_inc_old in text:
+    text = text.replace(khook_inc_old, khook_inc_new, 1)
+    print('==> Patched ConfigureForHL2 for MM 2.0+ KHook include path')
+else:
+    print('==> WARN: ConfigureForHL2 cxxincludes block not found for KHook patch')
+
 # ExtLibrary pthread/rt + leave META_NO_HL2SDK happy against Metamod 1.12 headers
 old_ext = """  def ExtLibrary(self, context, compiler, name):
     binary = self.Library(context, compiler, name)
