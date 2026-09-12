@@ -300,4 +300,20 @@ else:
     print('==> Patched MM HL2Library for episode1 tier1-before-vstdlib')
 PYTIER1
 
+# MM 2.0+ (KHook, fc7de97+): core/sourcehook was removed but SM 1.13 still compiles
+# against SourceHook headers (sh_stack.h, sourcehook.h, ...). Restore headers only.
+SH_HEADERS_PIN="${MMS_SOURCEHOOK_HEADERS_COMMIT:-0084b86af4b08614ed6b95485d072b5aa2e88cdc}"
+if [ ! -f "$mms_dir/core/sourcehook/sourcehook.h" ]; then
+  echo "==> Restoring SourceHook headers for SM compile (MM 2.0+ / KHook)"
+  if ! git -C "$mms_dir" cat-file -e "${SH_HEADERS_PIN}:core/sourcehook/sourcehook.h" 2>/dev/null; then
+    git -C "$mms_dir" fetch --depth 1 origin "$SH_HEADERS_PIN"
+  fi
+  git -C "$mms_dir" archive "$SH_HEADERS_PIN" core/sourcehook | tar -x -C "$mms_dir"
+  rm -f "$mms_dir/core/sourcehook/sourcehook.cpp" \
+        "$mms_dir/core/sourcehook/sourcehook_hookmangen"*.cpp
+  echo "==> SourceHook headers restored from ${SH_HEADERS_PIN:0:9}"
+else
+  echo "==> SourceHook headers already present"
+fi
+
 echo "==> Metamod 1.12+ css34 light patches applied"
