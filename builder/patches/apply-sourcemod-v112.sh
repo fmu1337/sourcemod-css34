@@ -993,6 +993,17 @@ if shell.exists() and 'if (index > params[0])' in shell.read_text():
     ))
 PY
 
+# MM 2.0+ bleeding (KHook): ISmmPlugin.h no longer includes sourcehook.h, but SM
+# extensions still use SourceHook::CallClass and SH_DECL_* macros.
+smsdk_ext="$sourcemod_dir/public/smsdk_ext.h"
+if [ -f "$smsdk_ext" ] && ! grep -q 'css34: MM 2.0+ still needs sourcehook.h for SM compile' "$smsdk_ext"; then
+  sed -i '/#include <ISmmPlugin.h>/a #include <sourcehook.h>  /* css34: MM 2.0+ still needs sourcehook.h for SM compile */' \
+    "$smsdk_ext"
+  echo "==> Patched smsdk_ext.h to include sourcehook.h for MM 2.0+ KHook"
+elif [ -f "$smsdk_ext" ]; then
+  echo "==> smsdk_ext.h sourcehook include already patched"
+fi
+
 # --- Source-level patches ---
 while IFS= read -r -d '' file; do
   sed -i 's/\r$//' "$file"
