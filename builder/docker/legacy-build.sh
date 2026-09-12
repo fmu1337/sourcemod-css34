@@ -66,17 +66,18 @@ Acquire::AllowInsecureRepositories "true";
 Acquire::AllowDowngradeToInsecureRepositories "true";
 EOF
       elif [[ "${VERSION_ID:-}" == "11" || "${VERSION_CODENAME:-}" == "bullseye" ]]; then
-        echo "==> Configuring archive.debian.org for bullseye security updates" >&2
+        # deb.debian.org/debian-security pool intermittently 404s superseded .debs
+        # while Packages still references them; pin a known-good snapshot instead.
+        snap="${BULLSEYE_APT_SNAPSHOT:-20260813T000000Z}"
+        echo "==> Pinning bullseye apt to snapshot.debian.org/${snap}" >&2
         rm -f /etc/apt/sources.list.d/* 2>/dev/null || true
         cat >/etc/apt/sources.list <<EOF
-deb http://deb.debian.org/debian bullseye main contrib non-free
-deb http://archive.debian.org/debian-security bullseye-security main contrib non-free
-deb http://deb.debian.org/debian bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${snap} bullseye-security main contrib non-free
 EOF
-        cat >/etc/apt/apt.conf.d/99archive <<EOF
+        cat >/etc/apt/apt.conf.d/99snapshot <<EOF
 Acquire::Check-Valid-Until "false";
-Acquire::AllowInsecureRepositories "true";
-Acquire::AllowDowngradeToInsecureRepositories "true";
 EOF
       fi
     fi

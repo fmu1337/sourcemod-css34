@@ -30,8 +30,22 @@ fix_debian_archives() {
     8) codename=jessie ;;
     9) codename=stretch ;;
     10) codename=buster ;;
+    11) codename=bullseye ;;
   esac
   case "${codename}" in
+    bullseye)
+      local snap="${BULLSEYE_APT_SNAPSHOT:-20260813T000000Z}"
+      echo "Pinning bullseye apt to snapshot.debian.org/${snap}"
+      rm -f /etc/apt/sources.list.d/* || true
+      cat >/etc/apt/sources.list <<EOF
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${snap} bullseye-security main contrib non-free
+EOF
+      cat >/etc/apt/apt.conf.d/99snapshot <<EOF
+Acquire::Check-Valid-Until "false";
+EOF
+      ;;
     jessie|stretch|buster)
       echo "Configuring archive.debian.org for ${codename}"
       rm -f /etc/apt/sources.list.d/* || true
