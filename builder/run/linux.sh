@@ -125,10 +125,9 @@ rm -rf build obj-*
 mkdir -p build
 cd build
 
-DB_PATH_ARGS=(--mysql-path="$DEPS_DIR/mysql-5.5")
-if [ "$SOURCEMOD_MAJOR" -ge 13 ]; then
-  DB_PATH_ARGS=(--mariadb-path="$DEPS_DIR/mariadb-connector-c-3.4.9-x86")
-fi
+# shellcheck source=../db-configure-args.sh
+source "$BUILDER_DIR/db-configure-args.sh"
+mapfile -t DB_PATH_ARGS < <(db_configure_args "$DEPS_DIR" "$SOURCEMOD_DIR")
 
 CONFIGURE_ARGS=(
   --enable-optimize

@@ -278,6 +278,23 @@ if logic_am.exists():
     lt = logic_am.read_text()
     pv_parts = (sm / 'product.version').read_text().strip().split('.')
     sm_minor = int(pv_parts[1]) if len(pv_parts) > 1 else 11
+    # SM 1.13.7461+ indexes SP.static_libsp by Target, not arch string.
+    uses_sp_target_key = 'SP.static_libsp[target]' in lt
+    sp_idx_var = 'target' if uses_sp_target_key else 'arch'
+    sp_idx_decl = (
+        '    target = binary.compiler.target\n'
+        if uses_sp_target_key else
+        '    arch = binary.compiler.target.arch\n'
+    )
+    mimalloc_link = (
+        '      SP.mimalloc[target],\n' if uses_sp_target_key else ''
+    )
+    mimalloc_nested_link = (
+        '      SP.mimalloc[target],\n' if uses_sp_target_key else ''
+    )
+    mimalloc_tail_link = (
+        '    SP.mimalloc[target],\n' if uses_sp_target_key else ''
+    )
     if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in lt and 'SM_LOGIC_CXX_SYSROOT gcc-9 g++-9' not in lt:
         loop_old = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
         # SM 1.12: gcc-4.9 sysroot + strptime ParseTime shim.
@@ -397,13 +414,12 @@ if logic_am.exists():
         # BuildScripts). SM 1.13+ embeds SP.static_libsp into logic.so.
         sp_link = ""
         if sm_minor >= 13:
-            sp_link = """    arch = binary.compiler.target.arch
-    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
+            sp_link = f"""{sp_idx_decl}    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_link}    ]
 """
         exclude_libs = ""
         if sm_minor >= 13:
@@ -498,21 +514,21 @@ if logic_am.exists():
 
     # SM 1.13+: static SourcePawn was appended after libstdc++.a; reorder so std::thread resolves.
     # SM 1.12 has no SP in logic AMBuilder / BuildScripts — skip entirely.
-    if sm_minor >= 13 and 'css34: static SP before libstdc++ for std::thread' not in lt:
-        sp_before_old = """    for flag in ('-static-libgcc',):
+    if sm_minor >= 13:
+        if 'css34: static SP before libstdc++ for std::thread' not in lt:
+            sp_before_old = """    for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
     _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
     if _sup and _os.path.isfile(_sup):
       _static.append(_sup)
     if _os.path.isfile(_gcc_eh):"""
-        sp_before_new = """    arch = binary.compiler.target.arch
-    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
+            sp_before_new = f"""{sp_idx_decl}    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_link}    ]
     for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
@@ -520,7 +536,7 @@ if logic_am.exists():
     if _sup and _os.path.isfile(_sup):
       _static.append(_sup)
     if _os.path.isfile(_gcc_eh):"""
-        sp_before_old_wa = """    for flag in ('-static-libgcc',):
+            sp_before_old_wa = """    for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
     _static = ['-nodefaultlibs', '-Wl,-Bstatic', '-Wl,--whole-archive', _stdcxx]
@@ -528,45 +544,78 @@ if logic_am.exists():
       _static.append(_sup)
     _static.append('-Wl,-no-whole-archive')  # css34: static SP needs full libstdc++ (std::thread)
     if _os.path.isfile(_gcc_eh):"""
-        if sp_before_old_wa in lt:
-            lt = lt.replace(sp_before_old_wa, sp_before_new, 1)
-            print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
-        elif sp_before_old in lt:
-            lt = lt.replace(sp_before_old, sp_before_new, 1)
-            print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
-        sp_tail_old = """  arch = binary.compiler.target.arch
+            if sp_before_old_wa in lt:
+                lt = lt.replace(sp_before_old_wa, sp_before_new, 1)
+                print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
+            elif sp_before_old in lt:
+                lt = lt.replace(sp_before_old, sp_before_new, 1)
+                print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
+
+        if 'css34: skip duplicate logic static SP on linux' not in lt:
+            sp_tail_old = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   binary.compiler.linkflags += [
-    SP.static_libsp[arch],
-    SP.libamtl[arch],
-    SP.zlib[arch],
-  ]
+    SP.static_libsp[{sp_idx_var}],
+    SP.libamtl[{sp_idx_var}],
+    SP.zlib[{sp_idx_var}],
+{mimalloc_tail_link}  ]
   if binary.compiler.target.platform == 'linux':"""
-        sp_tail_new = """  arch = binary.compiler.target.arch
+            sp_tail_new = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
+  # css34: skip duplicate logic static SP on linux (linked inside linux block above)
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
   if binary.compiler.target.platform == 'linux':"""
-        if sp_tail_old in lt:
-            lt = lt.replace(sp_tail_old, sp_tail_new, 1)
-            print('==> logic AMBuilder: skip duplicate static SP on linux')
+            if sp_tail_old in lt:
+                lt = lt.replace(sp_tail_old, sp_tail_new, 1)
+                print('==> logic AMBuilder: skip duplicate static SP on linux')
+            elif uses_sp_target_key:
+                sp_tail_after_mac = f"""  elif binary.compiler.target.platform == 'mac':
+    binary.compiler.cflags += ['-Wno-deprecated-declarations']
+    binary.compiler.postlink += ['-framework', 'CoreServices', '-lm']
+
+  {sp_idx_var} = binary.compiler.target
+  binary.compiler.linkflags += [
+    SP.static_libsp[{sp_idx_var}],
+    SP.libamtl[{sp_idx_var}],
+    SP.zlib[{sp_idx_var}],
+{mimalloc_tail_link}  ]
+
+  if binary.compiler.family == 'gcc' or binary.compiler.family == 'clang':"""
+                sp_tail_after_mac_new = f"""  elif binary.compiler.target.platform == 'mac':
+    binary.compiler.cflags += ['-Wno-deprecated-declarations']
+    binary.compiler.postlink += ['-framework', 'CoreServices', '-lm']
+
+  {sp_idx_var} = binary.compiler.target
+  # css34: skip duplicate logic static SP on linux (linked inside linux block above)
+  if binary.compiler.target.platform != 'linux':
+    binary.compiler.linkflags += [
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
+
+  if binary.compiler.family == 'gcc' or binary.compiler.family == 'clang':"""
+                if sp_tail_after_mac in lt:
+                    lt = lt.replace(sp_tail_after_mac, sp_tail_after_mac_new, 1)
+                    print('==> logic AMBuilder: skip duplicate static SP on linux (7461 layout)')
 
     if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt:
-        sp_libs_anchor = """  arch = binary.compiler.target.arch
+        sp_libs_anchor = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   binary.compiler.linkflags += [
-    SP.static_libsp[arch],
-    SP.libamtl[arch],
-    SP.zlib[arch],
-  ]"""
-        sp_libs_new = """  arch = binary.compiler.target.arch
+    SP.static_libsp[{sp_idx_var}],
+    SP.libamtl[{sp_idx_var}],
+    SP.zlib[{sp_idx_var}],
+{mimalloc_tail_link}  ]"""
+        sp_libs_new = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
   if binary.compiler.target.platform == 'linux':
     # css34: logic postlink pthread after static SP archives (DT_NEEDED on glibc < 2.34)
     for flag in list(binary.compiler.linkflags):
@@ -576,13 +625,13 @@ if logic_am.exists():
       if flag not in binary.compiler.postlink:
         binary.compiler.postlink += [flag]
 """
-        sp_libs_anchor_linux = """  arch = binary.compiler.target.arch
+        sp_libs_anchor_linux = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
   if binary.compiler.target.platform == 'linux':"""
         if sp_libs_anchor_linux in lt:
             if 'binary.compiler.postlink += [flag]' not in lt:

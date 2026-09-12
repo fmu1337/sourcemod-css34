@@ -79,7 +79,7 @@ else
   fi
 fi
 
-# SM 1.13.7461+ configure.py expects MariaDB Connector/C (--mariadb-path).
+# SM 1.13+ links MariaDB Connector/C (--mysql-path on 7404, --mariadb-path on 7461+).
 MARIADB_CONNECTOR_VERSION="${MARIADB_CONNECTOR_VERSION:-3.4.9}"
 MARIADB_CONNECTOR_RELEASE="${MARIADB_CONNECTOR_RELEASE:-3.4.9-sm.5}"
 if [ "${SOURCEMOD_MAJOR:-11}" -ge 13 ]; then
