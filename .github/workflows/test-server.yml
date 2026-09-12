@@ -3,6 +3,11 @@ name: Test Server
 # Packages are handed between jobs via Actions cache (10 GB quota, not the 0.5 GB
 # Actions artifact storage). Failure logs may upload as artifacts briefly; the
 # cleanup-workflow-storage job deletes every artifact from this run when finished.
+#
+# All built jobs are PURE_SOURCE_BUILD=1 (no rom4s / reference .so splice).
+# sm13-mm20 (tag 1.13.0.7404-mm2.0.0) is on the same smoke + botplay surface as
+# sm13-dev: debian:11, debian:latest, Rocky, host runner, botplay-stress matrix.
+# rom4s / GitHub Release botplay stay opt-in (not pure-source).
 
 permissions:
   contents: read
@@ -29,9 +34,9 @@ on:
         required: false
         default: "1"
       css34_line:
-        description: "Optional single CSS34_LINE (sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20); empty = matrix"
+        description: "Optional single CSS34_LINE (sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20); empty = all lines. Use sm13-mm20 for tag 1.13.0.7404-mm2.0.0."
         required: false
-        default: ""
+        default: "sm13-mm20"
       record_secs:
         description: "Botplay recording length in seconds (full matrix uses botplay-stress.cfg)"
         required: false
@@ -47,15 +52,15 @@ on:
         required: false
         default: false
       botplay_extra_distros:
-        description: "Also run botplay on debian:11, debian:12, rockylinux:9"
+        description: "Also run built botplay on debian:11, debian:12, rockylinux:9 (pure-source sm13-dev + sm13-mm20)"
         type: boolean
         required: false
-        default: false
+        default: true
       run_botplay_bisect:
-        description: "Run slow botplay bisect matrix (diagnostics)"
+        description: "Run slow botplay bisect matrix on the selected CSS34_LINE (pure-source)"
         type: boolean
         required: false
-        default: false
+        default: true
 
 concurrency:
   group: test-server-${{ github.workflow }}-${{ github.ref }}
@@ -230,6 +235,12 @@ jobs:
             mm_expect: "1.12.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
             mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+          - line: sm13-mm20
+            image: debian:latest
+            sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -457,6 +468,12 @@ jobs:
             mm_expect: "1.12.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
             mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+          - line: sm13-mm20
+            image: rockylinux:9
+            sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -549,18 +566,44 @@ jobs:
   test-built-smoke:
     needs: [build-linux, prepare-server]
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - line: sm13-dev
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+          - line: sm13-mm20
+            sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
+            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore packages from cache (sm13-dev)
+      - name: Maybe skip
+        id: select
+        run: |
+          want="${{ github.event.inputs.css34_line }}"
+          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore packages from cache
+        if: steps.select.outputs.skip != '1'
         uses: actions/cache/restore@v4
         with:
           path: packages
-          key: css34-pkg-${{ github.run_id }}-sm13-dev
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
+        if: steps.select.outputs.skip != '1'
         uses: actions/cache/restore@v4
         with:
           path: server-art/css34-server.tar.gz
@@ -568,19 +611,21 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Install host 32-bit runtime
+        if: steps.select.outputs.skip != '1'
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get install -y expect lib32gcc-s1 lib32stdc++6 lib32z1 libc6-i386 libstdc++6:i386 zlib1g:i386
 
-      - name: Smoke test built Metamod + built SourceMod
+      - name: Smoke test built ${{ matrix.line }} on host
+        if: steps.select.outputs.skip != '1'
         env:
           SERVER_DIR: ${{ github.workspace }}/.ci-server
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
-          MM_VERSION_EXPECT: "1.12.0"
-          SM_VERSION_EXPECT: "1.13.0.7404"
-          MM_COMMIT_EXPECT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
-          SM_COMMIT_EXPECT: "cdedec7606f1ee9bf3685b2cce3620fbec90efa8"
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
+          SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
           TIMEOUT_SECS: 120
           SMOKE_CONDEBUG: "1"
@@ -596,10 +641,10 @@ jobs:
           testing/scripts/smoke-test.sh
 
       - name: Upload smoke logs on failure
-        if: failure()
+        if: failure() && steps.select.outputs.skip != '1'
         uses: actions/upload-artifact@v4
         with:
-          name: built-smoke-logs
+          name: built-smoke-logs-${{ matrix.line }}
           path: |
             .ci-server/smoke.log
             .ci-server/console-probe.log
@@ -855,39 +900,76 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: debian:11
+          - line: sm13-dev
+            image: debian:11
             image_id: debian11
-          - image: debian:12
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+          - line: sm13-dev
+            image: debian:12
             image_id: debian12
-          - image: rockylinux:9
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+          - line: sm13-dev
+            image: rockylinux:9
             image_id: rocky9
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+          - line: sm13-mm20
+            image: debian:11
+            image_id: debian11
+            sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
+          - line: sm13-mm20
+            image: debian:12
+            image_id: debian12
+            sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
+          - line: sm13-mm20
+            image: rockylinux:9
+            image_id: rocky9
+            sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore packages from cache (sm13-dev)
+      - name: Maybe skip
+        id: select
+        run: |
+          want="${{ github.event.inputs.css34_line }}"
+          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore packages from cache
+        if: steps.select.outputs.skip != '1'
         uses: actions/cache/restore@v4
         with:
           path: packages
-          key: css34-pkg-${{ github.run_id }}-sm13-dev
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
+        if: steps.select.outputs.skip != '1'
         uses: actions/cache/restore@v4
         with:
           path: server-art/css34-server.tar.gz
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Built botplay stress + compare (${{ matrix.image }})
+      - name: Built botplay stress + compare (${{ matrix.line }} / ${{ matrix.image }})
+        if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
           RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
           BOTPLAY_PROFILE: built
           BOTPLAY_CFG: botplay-stress.cfg
           BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
-          MM_VERSION_EXPECT: "1.12.0"
-          SM_VERSION_EXPECT: "1.13.0.7404"
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
@@ -920,7 +1002,7 @@ jobs:
             '
 
       - name: Compare built botplay vs rom4s baseline
-        if: always()
+        if: always() && steps.select.outputs.skip != '1'
         run: |
           set -euo pipefail
           chmod +x testing/scripts/compare-botplay-reports.sh
@@ -935,10 +1017,10 @@ jobs:
           fi
 
       - name: Upload built botplay report on failure
-        if: failure()
+        if: failure() && steps.select.outputs.skip != '1'
         uses: actions/upload-artifact@v4
         with:
-          name: built-botplay-report-${{ matrix.image_id }}
+          name: built-botplay-report-${{ matrix.line }}-${{ matrix.image_id }}
           path: |
             .ci-server/built-botplay-report.json
             .ci-server/built-botplay-report.txt
@@ -1080,11 +1162,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore packages from cache (sm13-dev)
+      - name: Restore packages from cache
         uses: actions/cache/restore@v4
         with:
           path: packages
-          key: css34-pkg-${{ github.run_id }}-sm13-dev
+          key: css34-pkg-${{ github.run_id }}-${{ github.event.inputs.css34_line || 'sm13-mm20' }}
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
