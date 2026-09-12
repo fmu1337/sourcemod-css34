@@ -30,8 +30,17 @@ fix_debian_archives() {
     8) codename=jessie ;;
     9) codename=stretch ;;
     10) codename=buster ;;
+    11) codename=bullseye ;;
   esac
   case "${codename}" in
+    bullseye)
+      echo "Rewriting bullseye apt sources (skip broken debian-security pool)"
+      rm -f /etc/apt/sources.list.d/* || true
+      cat >/etc/apt/sources.list <<EOF
+deb http://deb.debian.org/debian bullseye main contrib non-free
+deb http://deb.debian.org/debian bullseye-updates main contrib non-free
+EOF
+      ;;
     jessie|stretch|buster)
       echo "Configuring archive.debian.org for ${codename}"
       rm -f /etc/apt/sources.list.d/* || true

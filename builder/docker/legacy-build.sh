@@ -65,6 +65,15 @@ Acquire::Check-Valid-Until "false";
 Acquire::AllowInsecureRepositories "true";
 Acquire::AllowDowngradeToInsecureRepositories "true";
 EOF
+      elif [[ "${VERSION_ID:-}" == "11" || "${VERSION_CODENAME:-}" == "bullseye" ]]; then
+        # debian-security pool/updates 404s superseded .debs while Packages still
+        # references them; main + updates has working gcc-9-multilib / libc6-i386.
+        echo "==> Rewriting bullseye apt sources (skip broken debian-security pool)" >&2
+        rm -f /etc/apt/sources.list.d/* 2>/dev/null || true
+        cat >/etc/apt/sources.list <<EOF
+deb http://deb.debian.org/debian bullseye main contrib non-free
+deb http://deb.debian.org/debian bullseye-updates main contrib non-free
+EOF
       fi
     fi
     apt_retry() {
