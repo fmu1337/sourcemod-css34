@@ -114,13 +114,16 @@ patch_file('core/logic_bridge.cpp', [
 
 patch_file('core/sourcemod.cpp', [
     (
-        '\tif (!sCoreProviderImpl.LoadBridge(error, maxlength))\n\t{\n\t\treturn false;\n\t}',
+        '\tif (!sCoreProviderImpl.LoadBridge(error, maxlength))\n\t{\n\t\treturn false;\n\t}\n\n\tsCoreProviderImpl.InitializeBridge();',
         f'\tsm_boot_trace("{marker} InitializeSourceMod: before LoadBridge");\n'
         '\tif (!sCoreProviderImpl.LoadBridge(error, maxlength))\n\t{\n'
         f'\t\tsm_boot_trace("{marker} InitializeSourceMod: LoadBridge failed");\n'
         '\t\treturn false;\n\t}\n'
-        f'\tsm_boot_trace("{marker} InitializeSourceMod: LoadBridge ok");',
-        'InitializeSourceMod LoadBridge',
+        f'\tsm_boot_trace("{marker} InitializeSourceMod: LoadBridge ok");\n\n'
+        f'\tsm_boot_trace("{marker} InitializeSourceMod: before InitializeBridge");\n'
+        '\tsCoreProviderImpl.InitializeBridge();\n'
+        f'\tsm_boot_trace("{marker} InitializeSourceMod: after InitializeBridge");',
+        'InitializeSourceMod LoadBridge+InitializeBridge',
     ),
     (
         '\tif (!late)\n\t{\n\t\tStartSourceMod(false);\n\t}',
@@ -134,14 +137,6 @@ patch_file('core/sourcemod.cpp', [
         'void SourceModBase::StartSourceMod(bool late)\n{\n'
         f'\tsm_boot_tracef("{marker} StartSourceMod: enter late=%d loaded=%d", (int)late, (int)g_Loaded);',
         'StartSourceMod enter',
-    ),
-    (
-        '\tsCoreProviderImpl.InitializeBridge();\n\n\t/* Initialize CoreConfig',
-        f'\tsm_boot_trace("{marker} StartSourceMod: before InitializeBridge");\n'
-        '\tsCoreProviderImpl.InitializeBridge();\n'
-        f'\tsm_boot_trace("{marker} StartSourceMod: after InitializeBridge");\n\n'
-        '\t/* Initialize CoreConfig',
-        'StartSourceMod InitializeBridge',
     ),
     (
         '\tg_CoreConfig.Initialize();\n\n\t/* Notify! */\n\tSMGlobalClass *pBase = SMGlobalClass::head;\n\twhile (pBase)\n\t{\n\t\tpBase->OnSourceModStartup(false);',

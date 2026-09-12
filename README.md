@@ -15,6 +15,7 @@ Why we do **not** chase byte-identical `.so` vs rom4s («SUPER GOLDEN») is in [
 | `sm12-latest` | **1.12.0.7245** (`f8490c810…`) | **1.12 git1224** (`364cb6c…`, `metamod.2.ep1`) | Latest |
 | `sm13-dev` | **1.13.0.7404** (`cdedec760…`) | **1.12 git1224** | DEV (default) |
 | `sm13-mm20` | 1.13.0.7404 | **2.0 git1407** (`0084b86…`) | Experimental |
+| `sm13-bleeding` | **1.13.0.7461** (`809392d…`) | **2.0 git1467** (`7e24ce9…`) | Latest upstream (release branch) |
 | `sm11-mm111` | 1.11.0.6970 | **1.11-dev** (`7ff2d97…`) | Exploratory (PLAPI mix risk) |
 
 Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
@@ -63,6 +64,9 @@ CSS34_LINE=sm12-latest    PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 
 # Experimental SM 1.13 + MM 2.0 (also in CI as sm13-mm20):
 CSS34_LINE=sm13-mm20 PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+
+# Latest upstream SM 7461 + MM 1467 (see docs/BLEEDING_LINE.md):
+CSS34_LINE=sm13-bleeding PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 # Equivalent override on the DEV line:
 CSS34_LINE=sm13-dev MMS_LINE=2.0 PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 ```

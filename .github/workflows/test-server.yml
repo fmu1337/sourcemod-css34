@@ -29,7 +29,7 @@ on:
         required: false
         default: "1"
       css34_line:
-        description: "Optional single CSS34_LINE (sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20); empty = matrix"
+        description: "Optional single CSS34_LINE (sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20|sm13-bleeding); empty = matrix"
         required: false
         default: ""
       record_secs:
@@ -91,6 +91,11 @@ jobs:
             mm_expect: "2.0.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
             mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
+          - line: sm13-bleeding
+            sm_expect: "1.13.0.7461"
+            mm_expect: "2.0.0"
+            sm_commit: 809392d1dc0436b064f1d2d03cc498551f2a97b9
+            mm_commit: 7e24ce9e7a03bfeb5c8ab1e4dd55d5d5747f3d33
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -224,6 +229,12 @@ jobs:
             mm_expect: "2.0.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
             mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
+          - line: sm13-bleeding
+            image: debian:11
+            sm_expect: "1.13.0.7461"
+            mm_expect: "2.0.0"
+            sm_commit: 809392d1dc0436b064f1d2d03cc498551f2a97b9
+            mm_commit: 7e24ce9e7a03bfeb5c8ab1e4dd55d5d5747f3d33
           - line: sm13-dev
             image: debian:latest
             sm_expect: "1.13.0.7404"
@@ -340,6 +351,9 @@ jobs:
             mm_expect: "1.12.0"
           - line: sm13-mm20
             sm_expect: "1.13.0.7404"
+            mm_expect: "2.0.0"
+          - line: sm13-bleeding
+            sm_expect: "1.13.0.7461"
             mm_expect: "2.0.0"
     steps:
       - name: Checkout

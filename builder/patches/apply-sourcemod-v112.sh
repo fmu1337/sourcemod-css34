@@ -211,38 +211,46 @@ if sp.exists():
     else:
         print('==> WARN: sourcepawn linux pthread postlink not found')
 
-    # Embedded under SM: libsourcepawn.so is built via SPRoot.Library(SM) using
-    # SM.all_targets (no SP Configure postlink). Force DT_NEEDED on the shared lib
-    # that package.sh renames to sourcepawn.jit.x86.so.
+    # SM 1.13.7461+ builds static libsourcepawn_static only (no shared jit .so).
+    # SM 1.12–1.13.7404 may still use BuildDynamicCoreLib → sourcepawn.jit.x86.so.
     dyn_marker = 'css34: libsourcepawn pthread/rt DT_NEEDED'
     if dyn_marker not in sp_text:
-        dyn_old = (
-            "    def BuildDynamicCoreLib(self, builder):\n"
-            "        cxx = builder.cxx\n"
-            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
-            "        self.SetupBinForArch(binary, builder)\n"
-        )
-        dyn_new = (
-            "    def BuildDynamicCoreLib(self, builder):\n"
-            "        cxx = builder.cxx\n"
-            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
-            "        self.SetupBinForArch(binary, builder)\n"
-            "        # css34: libsourcepawn pthread/rt DT_NEEDED (packaged as sourcepawn.jit.x86.so)\n"
+        pthread_block = (
+            "        # css34: libsourcepawn pthread/rt DT_NEEDED\n"
             "        if binary.compiler.target.platform == 'linux':\n"
             "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):\n"
             "            if flag not in binary.compiler.linkflags:\n"
             "              binary.compiler.linkflags += [flag]\n"
         )
-        if dyn_old not in sp_text:
-            print('==> WARN: BuildDynamicCoreLib pattern not found')
-        else:
-            sp.write_text(sp_text.replace(dyn_old, dyn_new, 1))
-            print('==> Patched BuildDynamicCoreLib for pthread/rt DT_NEEDED')
-            # Must re-read: the ABI0 block below previously overwrote this write
-            # using a stale sp_text and dropped pthread/rt from libsourcepawn.so.
+        dyn_targets = [
+            (
+                'BuildDynamicCoreLib',
+                "    def BuildDynamicCoreLib(self, builder):\n"
+                "        cxx = builder.cxx\n"
+                "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
+                "        self.SetupBinForArch(binary, builder)\n",
+            ),
+            (
+                'BuildStaticCoreLib',
+                "    def BuildStaticCoreLib(self, builder):\n"
+                "        cxx = builder.cxx\n"
+                "        binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')\n\n"
+                "        self.SetupBinForArch(binary, builder)\n",
+            ),
+        ]
+        patched_dyn = False
+        for fn, dyn_old in dyn_targets:
+            if dyn_old not in sp_text:
+                continue
+            sp_text = sp_text.replace(dyn_old, dyn_old + pthread_block, 1)
+            sp.write_text(sp_text)
+            print(f'==> Patched {fn} for pthread/rt DT_NEEDED')
+            patched_dyn = True
             sp_text = sp.read_text()
+        if not patched_dyn:
+            print('==> WARN: BuildDynamicCoreLib/BuildStaticCoreLib pattern not found')
     else:
-        print('==> BuildDynamicCoreLib pthread/rt already patched')
+        print('==> libsourcepawn pthread/rt already patched')
 
     # css34: static libsourcepawn is linked into logic.so — must use ABI0.
     sp_text = sp.read_text()
