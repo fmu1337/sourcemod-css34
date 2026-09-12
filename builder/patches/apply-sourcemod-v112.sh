@@ -1004,6 +1004,25 @@ elif [ -f "$smsdk_ext" ]; then
   echo "==> smsdk_ext.h sourcehook include already patched"
 fi
 
+# MM 1467+ PLUGIN_GLOBALVARS() no longer declares g_SHPtr; SH_* macros still need it.
+if [ -f "$smsdk_ext" ] && ! grep -q 'css34: g_SHPtr extern for MM 1467+' "$smsdk_ext"; then
+  sed -i '/^PLUGIN_GLOBALVARS();$/a extern SourceHook::ISourceHook *g_SHPtr;  /* css34: g_SHPtr extern for MM 1467+ */' \
+    "$smsdk_ext"
+  echo "==> Patched smsdk_ext.h with g_SHPtr extern for MM 1467+ KHook"
+elif [ -f "$smsdk_ext" ]; then
+  echo "==> smsdk_ext.h g_SHPtr extern already patched"
+fi
+
+smsdk_ext_cpp="$sourcemod_dir/public/smsdk_ext.cpp"
+if [ -f "$smsdk_ext_cpp" ] && ! grep -q 'css34: init g_SHPtr for MM 1467+' "$smsdk_ext_cpp"; then
+  sed -i '/PLUGIN_SAVEVARS();/a\
+\tif (!g_SHPtr) { g_SHPtr = static_cast<SourceHook::ISourceHook *>(ismm->MetaFactory(MMIFACE_SOURCEHOOK, NULL, NULL)); }  /* css34: init g_SHPtr for MM 1467+ */' \
+    "$smsdk_ext_cpp"
+  echo "==> Patched smsdk_ext.cpp to init g_SHPtr via MetaFactory for MM 1467+"
+elif [ -f "$smsdk_ext_cpp" ]; then
+  echo "==> smsdk_ext.cpp g_SHPtr init already patched"
+fi
+
 # --- Source-level patches ---
 while IFS= read -r -d '' file; do
   sed -i 's/\r$//' "$file"
