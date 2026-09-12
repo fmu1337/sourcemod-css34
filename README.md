@@ -30,6 +30,25 @@ Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder
 
 Do **not** install leftover myarena `metamod.2.ep1` / MM 1.11 under SM 1.11 — you get `Older Metamod… (11 < 14)`.
 
+## Releases (matched SM + MM)
+
+Use the **matched** pair from one tag. Do not mix Metamod from one line with SourceMod from another.
+
+| Tag | Line | SourceMod | Metamod | Verified |
+|-----|------|-----------|---------|----------|
+| [`1.11.0.6970-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.10.7) | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | CI smoke + botplay matrix |
+| [`1.12.0.7245-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7245-mm1.12.0) | `sm12-latest` | 1.12.0-git7245 | 1.12.0-dev+1224 | CI smoke + botplay matrix |
+| [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` | 1.13.0-git7404 | 1.12.0-dev+1224 | CI smoke + botplay matrix |
+| [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev+1407 | CI smoke + botplay matrix |
+
+Asset names: `sourcemod-<ver>-css34-{linux.tar.gz|windows.zip}` and `mmsource-<ver>-css34-{linux.tar.gz|windows.zip}`.
+
+**Install traps**
+
+- SM **1.11** expects Metamod **1.10.x / `metamod.1.ep1` / PLAPI 11**. Leftover myarena `metamod.2.ep1.so` → `Older Metamod… (11 < 14)` — not a bad package, a mix. See [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
+- SM **1.12+** needs a GeoIP2 `*.mmdb` under `configs/geoip/` for `geoip.ext` / SMAC (botplay installs it; packages may ship it via `prepare-package.sh`).
+- Historical community URLs (rom4s / myarena) for local compare: [`testing/versions/matrix.json`](testing/versions/matrix.json) (`reference` section).
+
 ## Build (pure-source)
 
 ```bash
@@ -88,4 +107,4 @@ tar -xzf sourcemod-*-css34-linux.tar.gz -C /path/to/cstrike
 
 - Patch strategy: [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md). 6970 carries API/toolchain shims from the old ≥6800 notes.
 - SDKHooks EP1 / PLAPI traps: [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
-- Machine-readable pins: [`testing/versions/matrix.json`](testing/versions/matrix.json) (updated with this matrix when present on the branch).
+- Machine-readable pins, release assets, and mix PASS/FAIL notes: [`testing/versions/matrix.json`](testing/versions/matrix.json).

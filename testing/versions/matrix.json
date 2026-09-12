@@ -39,10 +39,117 @@
     "1.12-1224": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
     "2.0-1407": "0084b86af4b08614ed6b95485d072b5aa2e88cdc"
   },
+  "releases": {
+    "1.11.0.6970-mm1.10.7": {
+      "line": "sm11-oldstable",
+      "role": "oldstable",
+      "sourcemod": "1.11.0-git6970",
+      "metamod": "1.10.7-dev",
+      "metamod_binary": "metamod.1.ep1",
+      "plapi": 11,
+      "assets": {
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/sourcemod-1.11.0-git6970-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/mmsource-1.10.7-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/sourcemod-1.11.0-git6970-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/mmsource-1.10.7-dev-css34-windows.zip"
+      },
+      "verified": ["ci_smoke_debian_rocky_host", "botplay_matrix"]
+    },
+    "1.12.0.7245-mm1.12.0": {
+      "line": "sm12-latest",
+      "role": "latest",
+      "sourcemod": "1.12.0-git7245",
+      "metamod": "1.12.0-dev+1224",
+      "metamod_binary": "metamod.2.ep1",
+      "assets": {
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7245-mm1.12.0/sourcemod-1.12.0-git7245-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7245-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7245-mm1.12.0/sourcemod-1.12.0-git7245-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7245-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
+      },
+      "verified": ["ci_smoke", "botplay_matrix"]
+    },
+    "1.13.0.7404-mm1.12.0": {
+      "line": "sm13-dev",
+      "role": "dev",
+      "sourcemod": "1.13.0-git7404",
+      "metamod": "1.12.0-dev+1224",
+      "metamod_binary": "metamod.2.ep1",
+      "assets": {
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/sourcemod-1.13.0-git7404-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/sourcemod-1.13.0-git7404-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
+      },
+      "verified": ["ci_smoke", "botplay_matrix"]
+    },
+    "1.13.0.7404-mm2.0.0": {
+      "line": "sm13-mm20",
+      "role": "experimental",
+      "sourcemod": "1.13.0-git7404",
+      "metamod": "2.0.0-dev+1407",
+      "metamod_binary": "metamod.2.ep1",
+      "assets": {
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/sourcemod-1.13.0-git7404-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/mmsource-2.0.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/sourcemod-1.13.0-git7404-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/mmsource-2.0.0-dev-css34-windows.zip"
+      },
+      "verified": ["ci_smoke", "botplay_matrix"]
+    }
+  },
+  "compatibility": [
+    {
+      "mm": "MM 1.10 metamod.1.ep1",
+      "sm": "SM 1.11 (sm11-oldstable)",
+      "result": "PASS",
+      "notes": "Matched production line; PLAPI 11"
+    },
+    {
+      "mm": "MM 1.12 git1224",
+      "sm": "SM 1.12 / 1.13 (sm12-latest, sm13-dev)",
+      "result": "PASS",
+      "notes": "Matched release tags; metamod.2.ep1"
+    },
+    {
+      "mm": "MM 2.0 git1407",
+      "sm": "SM 1.13 (sm13-mm20)",
+      "result": "PASS",
+      "notes": "Experimental; CI botplay matrix"
+    },
+    {
+      "mm": "myarena 1.11 metamod.2.ep1",
+      "sm": "our SM 1.11 (PLAPI 11)",
+      "result": "FAIL",
+      "notes": "Older Metamod (11 < 14) — leftover MM, not a package bug"
+    },
+    {
+      "mm": "built/rom4s MM 1.10.x",
+      "sm": "myarena 6522 (2.ep1 only)",
+      "result": "FAIL",
+      "notes": "Expected — myarena SM needs MM 1.11 / CreateInterface_MMS-only bridge"
+    }
+  ],
+  "reference": {
+    "metamod": {
+      "1.10.6": "https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz"
+    },
+    "sourcemod": {
+      "1.6.4-git4626": "https://bitbucket.org/_4/smdrop-1.6/downloads/sourcemod-1.6.4-stable-git4626-css34-linux.tar.gz",
+      "1.9.0-git6224": "https://bitbucket.org/_4/smdrop-1.9/downloads/sourcemod-1.9.0-git6224-linux.tar.gz",
+      "1.11.0-git6490": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6490/sourcemod-1.11.0-git6490-css34-linux.tar.gz",
+      "1.11.0-git6541": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6541/sourcemod-1.11.0-git6541-css34-linux.tar.gz",
+      "1.11.0-git6572": "https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz",
+      "1.9.0-myarena": "https://bitbucket.org/fmu1337/danyas_dl/downloads/SourceMod_1.9.0.6189_css_v34_1.zip",
+      "1.11-myarena-bundle": "https://bitbucket.org/fmu1337/danyas_dl/downloads/mms-1.11.0-1130_sourcemod-1.11.0-6522-css_v34-linux-up-git6541-10.05.2020-fix-gamedata-12.10.2020_1.zip"
+    }
+  },
   "notes": [
     "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
     "CI matrix includes sm13-mm20 (SM 1.13.7404 + MM 2.0 git1407).",
-    "Smoke loads sdkhooks and asserts OnTakeDamage linux offset 61.",
-    "Botplay stress plugin hooks SDKHook_OnTakeDamage and logs hits."
+    "Smoke and check-package.sh assert sdkhooks.games and OnTakeDamage css34 offsets.",
+    "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all four lines.",
+    "Use matched release tags; do not mix MM from one line with SM from another.",
+    "reference.* URLs are historical community drops for local comparison only."
   ]
 }

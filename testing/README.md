@@ -138,4 +138,4 @@ Needs root (or passwordless sudo) inside the target distro for package installs.
 
 ## Version URLs
 
-Historical community SM/MM download URLs are listed in [`versions/matrix.json`](versions/matrix.json) for local comparison only — CI does not pull them.
+Published release pairs (all four `CSS34_LINE` tags), mix PASS/FAIL notes, and historical community URLs live in [`versions/matrix.json`](versions/matrix.json) (`releases`, `compatibility`, `reference`). CI smoke builds only in-tree pure-source packages — it does not download `reference.*` URLs.

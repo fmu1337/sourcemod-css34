@@ -15,6 +15,7 @@ if [[ ! -f "${CORE_SO}" ]]; then
 fi
 LOGIC_SO="${TMP}/addons/sourcemod/bin/sourcemod.logic.so"
 JIT_SO="${TMP}/addons/sourcemod/bin/sourcepawn.jit.x86.so"
+SDKHOOKS_GAMEDATA="${TMP}/addons/sourcemod/gamedata/sdkhooks.games"
 
 fail=0
 STATIC_SP=0
@@ -36,6 +37,30 @@ if [[ ! -f "${JIT_SO}" ]]; then
   STATIC_SP=1
 else
   STATIC_SP=0
+fi
+
+echo "==> Checking CS:S v34 SDKHooks gamedata"
+for file in common.games.txt game.cstrike.txt master.games.txt; do
+  if [[ -f "${SDKHOOKS_GAMEDATA}/${file}" ]]; then
+    echo "OK: sdkhooks.games/${file} present"
+  else
+    echo "FAIL: missing sdkhooks.games/${file}" >&2
+    fail=1
+  fi
+done
+if [[ -f "${SDKHOOKS_GAMEDATA}/master.games.txt" ]] \
+  && grep -Fq '"game.cstrike.txt"' "${SDKHOOKS_GAMEDATA}/master.games.txt"; then
+  echo "OK: SDKHooks master loads game.cstrike.txt"
+else
+  echo "FAIL: SDKHooks master does not load game.cstrike.txt" >&2
+  fail=1
+fi
+if [[ -f "${SDKHOOKS_GAMEDATA}/game.cstrike.txt" ]] \
+  && grep -Fq '"OnTakeDamage"' "${SDKHOOKS_GAMEDATA}/game.cstrike.txt"; then
+  echo "OK: SDKHooks CS:S gamedata contains OnTakeDamage"
+else
+  echo "FAIL: SDKHooks CS:S gamedata lacks OnTakeDamage" >&2
+  fail=1
 fi
 
 echo "==> Checking Metamod bridge exports"
