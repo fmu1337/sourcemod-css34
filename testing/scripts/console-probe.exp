@@ -53,7 +53,7 @@ eval spawn $spawn_args
 # Exact/glob match — some expect builds produced false -re hits before map load.
 set map_pat "Mapchange to ${map}"
 expect {
-    -gl $map_pat {
+    -re $map_pat {
         puts stderr "OK: matched map load ($map_pat)"
     }
     eof {

@@ -271,22 +271,32 @@ if sp.exists():
     # dropped by --as-needed when nothing in the .o files references it directly.
     # Note: when SourcePawn is built under SourceMod, Configure() is skipped and
     # SM.all_targets is used - so also patch BuildDynamicCoreLib below.
-    old_pl = "                cxx.postlink += ['-lpthread', '-lrt']"
-    new_pl = (
-        "                # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
-        "                cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
-    )
     sp_text = sp.read_text()
-    if 'css34: force pthread/rt NEEDED for Debian 11' in sp_text and 'BuildDynamicCoreLib' in sp_text:
-        pass  # may still need BuildDynamicCoreLib below
-    if old_pl in sp_text and 'css34: force pthread/rt NEEDED for Debian 11' not in sp_text:
-        sp.write_text(sp_text.replace(old_pl, new_pl, 1))
-        print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt DT_NEEDED')
-        sp_text = sp.read_text()
-    elif 'css34: force pthread/rt NEEDED for Debian 11' in sp_text:
-        print('==> sourcepawn Configure pthread/rt already patched')
+    if "'-lgcc_s'" not in sp_text and "cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']" in sp_text:
+        sp_text = sp_text.replace(
+            "cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']",
+            "cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']",
+        )
+        sp.write_text(sp_text)
+        print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt/-lgcc_s')
+    elif "'-lgcc_s'" not in sp_text and "cxx.postlink += ['-lpthread', '-lrt']" in sp_text:
+        sp_text = sp_text.replace(
+            "cxx.postlink += ['-lpthread', '-lrt']",
+            "cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']",
+        )
+        sp.write_text(sp_text)
+        print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt/-lgcc_s')
     else:
-        print('==> WARN: sourcepawn linux pthread postlink not found')
+        print('==> sourcepawn Configure pthread/rt/-lgcc_s already patched')
+
+    sp_text = sp.read_text()
+    if 'css34: AddStaticLibraries lgcc_s' not in sp_text:
+        old_add_static = "        if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':\n            binary.compiler.linkflags += ['-Wl,--end-group']"
+        new_add_static = "        if binary.compiler.target.platform == 'linux':\n            # css34: AddStaticLibraries lgcc_s for 32-bit __mulodi4 in spcomp\n            binary.compiler.linkflags += ['-lgcc', '-lgcc_s', '-Wl,--end-group']"
+        if old_add_static in sp_text:
+            sp.write_text(sp_text.replace(old_add_static, new_add_static, 1))
+            print('==> Patched AddStaticLibraries in sourcepawn for lgcc_s')
+            sp_text = sp.read_text()
 
     # SM 1.13.7461+ builds static libsourcepawn_static only (no shared jit .so).
     # SM 1.12–1.13.7404 may still use BuildDynamicCoreLib → sourcepawn.jit.x86.so.
@@ -295,7 +305,7 @@ if sp.exists():
         pthread_block = (
             "        # css34: libsourcepawn pthread/rt DT_NEEDED\n"
             "        if binary.compiler.target.platform == 'linux':\n"
-            "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):\n"
+            "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):\n"
             "            if flag not in binary.compiler.linkflags:\n"
             "              binary.compiler.linkflags += [flag]\n"
         )
@@ -1046,6 +1056,27 @@ patch_mm_khook_sourcehook_globals() {
     echo "==> $label g_SHPtr extern already patched"
   fi
 
+  if [ -f "$cpp" ] && ! grep -q 'css34: define g_SHPtr for MM 1467+' "$cpp"; then
+    "${PY[@]}" - "$cpp" <<'PYCPP'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if p.exists():
+    text = p.read_text()
+    if 'css34: define g_SHPtr for MM 1467+' not in text:
+        patch = """#if defined(METAMOD_PLAPI_VERSION) && METAMOD_PLAPI_VERSION >= 18
+SourceHook::ISourceHook *g_SHPtr = nullptr; /* css34: define g_SHPtr for MM 1467+ */
+#endif
+"""
+        idx = text.find('#include')
+        if idx != -1:
+            endline = text.find('\n', idx)
+            text = text[:endline+1] + patch + text[endline+1:]
+            p.write_text(text)
+PYCPP
+    echo "==> Defined g_SHPtr in $cpp for MM 1467+"
+  fi
+
   if [ -f "$cpp" ] && ! grep -q 'css34: init g_SHPtr for MM 1467+' "$cpp"; then
     sed -i '/PLUGIN_SAVEVARS();/a\
 \tif (!g_SHPtr) { g_SHPtr = static_cast<SourceHook::ISourceHook *>(ismm->MetaFactory(MMIFACE_SOURCEHOOK, NULL, NULL)); }  /* css34: init g_SHPtr for MM 1467+ */' \
@@ -1068,6 +1099,149 @@ patch_mm_khook_sourcehook_globals \
   "$sourcemod_dir/core/sourcemm_api.h" \
   "$sourcemod_dir/core/sourcemm_api.cpp" \
   "sourcemm_api.h"
+
+# --- CheckedMul __mulodi4 patch for 32-bit spcomp ---
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMUL'
+from pathlib import Path
+import os
+cf_cpp = Path(os.environ['SOURCEMOD_DIR']) / 'sourcepawn/compiler/constant-fold.cpp'
+if cf_cpp.exists():
+    text = cf_cpp.read_text()
+    old_mul = """template <typename T>
+static inline bool CheckedMul(T a, T b, T* result) {
+#if defined(__clang__) || defined(__GNUC__)
+    return !__builtin_mul_overflow(a, b, result);
+#elif defined(_MSC_VER)
+    if (a == 0 || b == 0) {"""
+    new_mul = """template <typename T>
+static inline bool CheckedMul(T a, T b, T* result) {
+    if (a == 0 || b == 0) {"""
+    if old_mul in text:
+        # Also remove trailing #endif for the #elif
+        old_full = """template <typename T>
+static inline bool CheckedMul(T a, T b, T* result) {
+#if defined(__clang__) || defined(__GNUC__)
+    return !__builtin_mul_overflow(a, b, result);
+#elif defined(_MSC_VER)
+    if (a == 0 || b == 0) {
+        *result = 0;
+        return true;
+    }
+    // INT_MIN * -1 breaks the round-trip check below.
+    if ((a == std::numeric_limits<T>::min() && b == T(-1)) ||
+        (b == std::numeric_limits<T>::min() && a == T(-1))) {
+        return false;
+    }
+    T product = a * b;
+    *result = product;
+    return product / b == a;
+#endif
+}"""
+        new_full = """template <typename T>
+static inline bool CheckedMul(T a, T b, T* result) {
+    if (a == 0 || b == 0) {
+        *result = 0;
+        return true;
+    }
+    // INT_MIN * -1 breaks the round-trip check below.
+    if ((a == std::numeric_limits<T>::min() && b == T(-1)) ||
+        (b == std::numeric_limits<T>::min() && a == T(-1))) {
+        return false;
+    }
+    T product = a * b;
+    *result = product;
+    return product / b == a;
+}"""
+        cf_cpp.write_text(text.replace(old_full, new_full, 1))
+        print('==> Patched CheckedMul in constant-fold.cpp (avoid __mulodi4)')
+    elif 'css34: avoid __mulodi4' in text or 'return product / b == a;' in text:
+        print('==> CheckedMul in constant-fold.cpp already patched')
+PYMUL
+
+# --- Safe GET_V_IFACE macros in sourcemm_api.cpp ---
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYIFACE'
+from pathlib import Path
+import os
+sm_api = Path(os.environ['SOURCEMOD_DIR']) / 'core/sourcemm_api.cpp'
+if sm_api.exists():
+    text = sm_api.read_text()
+    if 'CSS34_SAFE_GET_V_IFACE' not in text:
+        macro_patch = """/* CSS34_SAFE_GET_V_IFACE: null factory guard */
+#undef GET_V_IFACE_ANY
+#define GET_V_IFACE_ANY(v_factory, v_var, v_type, v_name) \
+	do { \
+		CreateInterfaceFn _fn = ismm->v_factory(); \
+		if (!_fn) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Factory %s returned NULL for %s", #v_factory, v_name); \
+			return false; \
+		} \
+		v_var = (v_type *)ismm->VInterfaceMatch(_fn, v_name, 0); \
+		if (!v_var) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Could not find interface: %s", v_name); \
+			return false; \
+		} \
+	} while (0)
+
+#undef GET_V_IFACE_CURRENT
+#define GET_V_IFACE_CURRENT(v_factory, v_var, v_type, v_name) \
+	do { \
+		CreateInterfaceFn _fn = ismm->v_factory(); \
+		if (!_fn) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Factory %s returned NULL for %s", #v_factory, v_name); \
+			return false; \
+		} \
+		v_var = (v_type *)ismm->VInterfaceMatch(_fn, v_name); \
+		if (!v_var) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Could not find interface: %s", v_name); \
+			return false; \
+		} \
+	} while (0)
+
+bool SourceMod_Core::Load"""
+        text = text.replace('bool SourceMod_Core::Load', macro_patch, 1)
+        sm_api.write_text(text)
+        print('==> Patched GET_V_IFACE macros in core/sourcemm_api.cpp')
+PYIFACE
+
+# --- ISmmAPI GetShVersions patch for MM 2.0 ---
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYSH'
+from pathlib import Path
+import os
+sm_cpp = Path(os.environ['SOURCEMOD_DIR']) / 'core/sourcemod.cpp'
+if sm_cpp.exists():
+    text = sm_cpp.read_text().replace('\r\n', '\n')
+    old_sh = """int SourceModBase::GetShApiVersion()
+{
+\tint api, impl;
+\tg_SMAPI->GetShVersions(api, impl);
+
+\treturn api;
+}"""
+    new_sh = """int SourceModBase::GetShApiVersion()
+{
+\tint api = 0, impl = 0;
+#if defined(METAMOD_PLAPI_VERSION) && METAMOD_PLAPI_VERSION >= 18
+\tapi = 5;
+#else
+\tg_SMAPI->GetShVersions(api, impl);
+#endif
+
+\treturn api;
+}"""
+    if old_sh in text:
+        sm_cpp.write_text(text.replace(old_sh, new_sh, 1))
+        print('==> Patched GetShApiVersion in core/sourcemod.cpp for MM 2.0')
+    elif 'METAMOD_PLAPI_VERSION >= 18' in text:
+        print('==> GetShApiVersion in core/sourcemod.cpp already patched for MM 2.0')
+PYSH
 
 # --- Source-level patches ---
 while IFS= read -r -d '' file; do
