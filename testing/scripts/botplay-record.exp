@@ -63,7 +63,7 @@ eval spawn $spawn_args
 
 set map_pat "Mapchange to ${map}"
 expect {
-    -gl $map_pat {
+    -re $map_pat {
         puts stderr "OK: matched map load ($map_pat)"
     }
     eof {

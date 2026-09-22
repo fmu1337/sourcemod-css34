@@ -1056,6 +1056,27 @@ patch_mm_khook_sourcehook_globals() {
     echo "==> $label g_SHPtr extern already patched"
   fi
 
+  if [ -f "$cpp" ] && ! grep -q 'css34: define g_SHPtr for MM 1467+' "$cpp"; then
+    "${PY[@]}" - "$cpp" <<'PYCPP'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if p.exists():
+    text = p.read_text()
+    if 'css34: define g_SHPtr for MM 1467+' not in text:
+        patch = """#if defined(METAMOD_PLAPI_VERSION) && METAMOD_PLAPI_VERSION >= 18
+SourceHook::ISourceHook *g_SHPtr = nullptr; /* css34: define g_SHPtr for MM 1467+ */
+#endif
+"""
+        idx = text.find('#include')
+        if idx != -1:
+            endline = text.find('\n', idx)
+            text = text[:endline+1] + patch + text[endline+1:]
+            p.write_text(text)
+PYCPP
+    echo "==> Defined g_SHPtr in $cpp for MM 1467+"
+  fi
+
   if [ -f "$cpp" ] && ! grep -q 'css34: init g_SHPtr for MM 1467+' "$cpp"; then
     sed -i '/PLUGIN_SAVEVARS();/a\
 \tif (!g_SHPtr) { g_SHPtr = static_cast<SourceHook::ISourceHook *>(ismm->MetaFactory(MMIFACE_SOURCEHOOK, NULL, NULL)); }  /* css34: init g_SHPtr for MM 1467+ */' \
@@ -1137,13 +1158,66 @@ static inline bool CheckedMul(T a, T b, T* result) {
         print('==> CheckedMul in constant-fold.cpp already patched')
 PYMUL
 
+# --- Safe GET_V_IFACE macros in sourcemm_api.cpp ---
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYIFACE'
+from pathlib import Path
+import os
+sm_api = Path(os.environ['SOURCEMOD_DIR']) / 'core/sourcemm_api.cpp'
+if sm_api.exists():
+    text = sm_api.read_text()
+    if 'CSS34_SAFE_GET_V_IFACE' not in text:
+        macro_patch = """/* CSS34_SAFE_GET_V_IFACE: null factory guard */
+#undef GET_V_IFACE_ANY
+#define GET_V_IFACE_ANY(v_factory, v_var, v_type, v_name) \
+	do { \
+		CreateInterfaceFn _fn = ismm->v_factory(); \
+		if (!_fn) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Factory %s returned NULL for %s", #v_factory, v_name); \
+			return false; \
+		} \
+		v_var = (v_type *)ismm->VInterfaceMatch(_fn, v_name, 0); \
+		if (!v_var) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Could not find interface: %s", v_name); \
+			return false; \
+		} \
+	} while (0)
+
+#undef GET_V_IFACE_CURRENT
+#define GET_V_IFACE_CURRENT(v_factory, v_var, v_type, v_name) \
+	do { \
+		CreateInterfaceFn _fn = ismm->v_factory(); \
+		if (!_fn) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Factory %s returned NULL for %s", #v_factory, v_name); \
+			return false; \
+		} \
+		v_var = (v_type *)ismm->VInterfaceMatch(_fn, v_name); \
+		if (!v_var) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Could not find interface: %s", v_name); \
+			return false; \
+		} \
+	} while (0)
+
+bool SourceMod_Core::Load"""
+        text = text.replace('bool SourceMod_Core::Load', macro_patch, 1)
+        sm_api.write_text(text)
+        print('==> Patched GET_V_IFACE macros in core/sourcemm_api.cpp')
+PYIFACE
+
 # --- ISmmAPI GetShVersions patch for MM 2.0 ---
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYSH'
 from pathlib import Path
 import os
 sm_cpp = Path(os.environ['SOURCEMOD_DIR']) / 'core/sourcemod.cpp'
 if sm_cpp.exists():
-    text = sm_cpp.read_text()
+    text = sm_cpp.read_text().replace('\r\n', '\n')
     old_sh = """int SourceModBase::GetShApiVersion()
 {
 \tint api, impl;
