@@ -43,6 +43,8 @@ docker run --rm --platform linux/amd64 \
   -e DEPS_DIR=/workspace/deps \
   -e PACKAGES_DIR=/workspace/packages \
   -e SM_LOGIC_CXX_SYSROOT=/workspace/deps/sysroot-i386 \
+  -e HOST_UID="$(id -u)" \
+  -e HOST_GID="$(id -g)" \
   "$IMAGE" \
   bash -lc '
     set -euo pipefail
@@ -131,7 +133,12 @@ EOF
     source /workspace/deps/sysroot-i386.env
     export DEPS_DIR=/workspace/deps SM_LOGIC_CXX_SYSROOT
     builder/run/linux.sh
+    if [[ -n "${HOST_UID:-}" && -n "${HOST_GID:-}" ]]; then
+      chown -R "${HOST_UID}:${HOST_GID}" /workspace/deps /workspace/packages /workspace/sourcemod 2>/dev/null || true
+    fi
   '
+
+sudo chown -R "$(id -u):$(id -g)" "$ROOT/deps" "$ROOT/packages" "$ROOT/sourcemod" 2>/dev/null || true
 
 ARTIFACT="$(ls -1 "$PACKAGES_DIR"/sourcemod-*-css34-linux.tar.gz 2>/dev/null | head -n1)"
 if [[ -z "${ARTIFACT}" || ! -f "${ARTIFACT}" ]]; then

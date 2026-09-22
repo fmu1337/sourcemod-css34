@@ -73,6 +73,7 @@ cd "$WDIR"
 if [ ! -e "$SOURCEMOD_DIR/.git" ]; then
   git submodule update --init sourcemod
 fi
+git -C "$SOURCEMOD_DIR" submodule foreach --recursive "git reset --hard && git clean -fd" 2>/dev/null || true
 git -C "$SOURCEMOD_DIR" fetch --depth=8192 origin "$SOURCEMOD_COMMIT"
 git -C "$SOURCEMOD_DIR" reset --hard "$SOURCEMOD_COMMIT"
 git -C "$SOURCEMOD_DIR" submodule update --init --recursive
