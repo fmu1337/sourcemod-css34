@@ -108,7 +108,8 @@ EOF
       lib32stdc++6 lib32z1-dev libc6-dev-i386 linux-libc-dev \
       binutils ca-certificates \
       g++-9-multilib gcc-9-multilib \
-      lib32stdc++-9-dev libstdc++-9-dev
+      lib32stdc++-9-dev libstdc++-9-dev \
+      libssl-dev:i386
     # Volume mount is owned by the host UID; git 2.35+ blocks submodule ops otherwise.
     # bullseye ships git 2.30 (no safe.directory=*); register mounted repos explicitly.
     register_git_safe_dirs() {

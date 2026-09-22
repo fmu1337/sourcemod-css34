@@ -64,7 +64,7 @@ else
 fi
 
 echo "==> Checking Metamod bridge exports"
-if nm -D "${MM_SO}" 2>/dev/null | grep -q ' T CreateInterface$'; then
+if nm -D "${MM_SO}" 2>/dev/null | grep -Eq ' T CreateInterface([[:space:]]|$)'; then
   echo "OK: CreateInterface export present (MM:S 1.10 V1 bridge)"
 elif nm -D "${MM_SO}" 2>/dev/null | grep -q 'CreateInterface_MMS'; then
   echo "OK: CreateInterface_MMS present (MM:S 1.12 modern load path; no V1 CreateInterface needed)"

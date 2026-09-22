@@ -36,7 +36,8 @@ if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
     lib32stdc++6 \
     lib32z1-dev \
     libc6-dev-i386 \
-    linux-libc-dev
+    linux-libc-dev \
+    libssl-dev:i386
 fi
 
 # rom4s SM 1.11.0.6572 was built with clang-9; gcc-9 produces a core that
