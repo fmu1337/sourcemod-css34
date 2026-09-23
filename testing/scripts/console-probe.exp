@@ -50,11 +50,10 @@ if {[info exists env(SMOKE_VERBOSE)] && $env(SMOKE_VERBOSE) ne "" && $env(SMOKE_
 }
 eval spawn $spawn_args
 
-# Exact/glob match — some expect builds produced false -re hits before map load.
-set map_pat "Mapchange to ${map}"
+# Match either SourceMod's mapchange log string or the engine's loading map log line
 expect {
-    -re $map_pat {
-        puts stderr "OK: matched map load ($map_pat)"
+    -re "Mapchange to ${map}|Loading map \"${map}\"" {
+        puts stderr "OK: matched map load (${map})"
     }
     eof {
         puts stderr "srcds exited before map $map loaded"
