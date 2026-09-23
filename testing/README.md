@@ -6,9 +6,9 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 
 | Job | Images | Packages under test |
 |---|---|---|
-| `test-built-debian` | `debian:11` … `13` / `latest` | **built** MM 1.10.7 + SM 6572 |
-| `test-built-rhel` | `rockylinux:9` | **built** MM 1.10.7 + SM 6572 |
-| `test-built-smoke` | ubuntu-22.04 host | **built** MM 1.10.7 + SM 6572 |
+| `test-built-debian` | `debian:11` … `13` / `latest` | **built** matrix (sm11-oldstable, sm12-latest, sm13-dev, sm13-mm20, sm13-bleeding) |
+| `test-built-rhel` | `rockylinux:9` | **built** SM 1.13.0.7404 + MM 1.12.0 (`sm13-dev`) |
+| `test-built-smoke` | ubuntu-22.04 host | **built** SM 1.13.0.7404 + MM 1.12.0 (`sm13-dev`) |
 | `build-linux` ABI step | ubuntu-22.04 | freshly built SM/MM packages (CreateInterface + DT_NEEDED) |
 
 CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` from `build-linux` (handed to later jobs via Actions cache, not artifacts). rom4s reference drops are not used in this workflow.
@@ -54,7 +54,7 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 
 `test-rom4s-botplay` boots the css34 server with **rom4s** Metamod 1.10.6 + SourceMod 6572, compiles [smac_v34](https://github.com/fmu1337/smac_v34), spawns 4 bots (`botplay-server.cfg`), records **600s** by default, then parses `cstrike/console.log` for `round_start`, `round_end`, and kills.
 
-`test-built-botplay` runs the same session with **built** MM 1.10.7 + SM 6572 and compares against `testing/botplay/rom4s-baseline.json` (candidate must reach ≥75% of baseline event counts).
+`test-built-botplay` runs the same session with **built** MM 1.12.0 + SM 1.13.0.7404 (or current line) and compares against `testing/botplay/rom4s-baseline.json` (candidate must reach ≥75% of baseline event counts).
 
 `test-release-botplay` downloads published GitHub Release packages and runs the same stress session for:
 
@@ -82,8 +82,8 @@ Local short run (built):
 
 ```bash
 chmod +x testing/scripts/*.sh
-SM_PACKAGE=$PWD/packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz \
-MM_PACKAGE=$PWD/packages/mmsource-1.10.7-dev-css34-linux.tar.gz \
+SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7404-css34-linux.tar.gz \
+MM_PACKAGE=$PWD/packages/mmsource-1.12.0-dev-css34-linux.tar.gz \
 BOTPLAY_PROFILE=built \
 REPORT_JSON=$PWD/.ci-server/built-botplay-report.json \
 RECORD_SECS=120 \
@@ -122,15 +122,13 @@ Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary;
 chmod +x testing/scripts/*.sh
 
 # Test freshly built SM + MM from builder/run/linux.sh (primary path):
-MM_PACKAGE=$PWD/packages/mmsource-1.10.7-dev-css34-linux.tar.gz \
-SM_PACKAGE=$PWD/packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz \
-MM_VERSION_EXPECT=1.10.7 \
+MM_PACKAGE=$PWD/packages/mmsource-1.12.0-dev-css34-linux.tar.gz \
+SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7404-css34-linux.tar.gz \
   testing/scripts/run-smoke.sh
 
-# Or USE_BUILT_MM against deps/mmsource-1.10/build/package + local SM tarball:
+# Or USE_BUILT_MM against deps/mmsource-1.12/build/package + local SM tarball:
 USE_BUILT_MM=1 \
-SM_PACKAGE=$PWD/packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz \
-MM_VERSION_EXPECT=1.10.7 \
+SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7404-css34-linux.tar.gz \
   testing/scripts/run-smoke.sh
 ```
 
