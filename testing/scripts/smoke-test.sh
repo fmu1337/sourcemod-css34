@@ -17,13 +17,40 @@ SMOKE_VERBOSE="${SMOKE_VERBOSE:-0}"
 SMOKE_CONDEBUG="${SMOKE_CONDEBUG:-1}"
 ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 
-# Expected versions. Defaults match our in-tree packages (MM 1.10.7 + SM 6572).
-# Override to 1.10.6 for rom4s reference legacy jobs.
+# Expected versions. Resolve dynamically if not set.
+if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" || -z "${MM_COMMIT_EXPECT:-}" || -z "${SM_COMMIT_EXPECT:-}" ]]; then
+  if [[ -f "${ROOT}/builder/resolve-version.sh" ]]; then
+    eval "$(
+      CSS34_LINE="${CSS34_LINE:-sm13-dev}" bash -c "
+        source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
+        echo \"RESOLVED_SM_COMMIT='\${SOURCEMOD_COMMIT}'\"
+        echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"
+        echo \"RESOLVED_SM_MAJOR='\${SOURCEMOD_MAJOR}'\"
+        echo \"RESOLVED_MM_COMMIT='\${MMS_COMMIT}'\"
+        echo \"RESOLVED_MM_MODE='\${MMS_MODE}'\"
+      "
+    )"
+    if [[ -n "${RESOLVED_SM_REV:-}" ]]; then
+      SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.${RESOLVED_SM_MAJOR}.0.${RESOLVED_SM_REV}}"
+      SM_COMMIT_EXPECT="${SM_COMMIT_EXPECT:-${RESOLVED_SM_COMMIT}}"
+      MM_COMMIT_EXPECT="${MM_COMMIT_EXPECT:-${RESOLVED_MM_COMMIT}}"
+      if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
+        case "${RESOLVED_MM_MODE:-}" in
+          1.10) MM_VERSION_EXPECT="1.10.7" ;;
+          1.11) MM_VERSION_EXPECT="1.11.0" ;;
+          1.12) MM_VERSION_EXPECT="1.12.0" ;;
+          2.0)  MM_VERSION_EXPECT="2.0.0" ;;
+          *)    MM_VERSION_EXPECT="1.12.0" ;;
+        esac
+      fi
+    fi
+  fi
+fi
+
 MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
-SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
-# Explicit upstream commits baked into `meta version` / `sm version` Built from.
+SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6970}"
 MM_COMMIT_EXPECT="${MM_COMMIT_EXPECT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-SM_COMMIT_EXPECT="${SM_COMMIT_EXPECT:-832519ab647cdecb85763918dbfed1cb5e79c6cb}"
+SM_COMMIT_EXPECT="${SM_COMMIT_EXPECT:-f53cb134ef83b580c83e1f4bf35f60d11c4571dd}"
 # Packaging repo commit (CSS34 pack line). Empty skips the check.
 CSS34_PACK_COMMIT_EXPECT="${CSS34_PACK_COMMIT_EXPECT:-}"
 

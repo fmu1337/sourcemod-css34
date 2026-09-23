@@ -19,6 +19,7 @@ ROM4S_SM="${ROM4S_SM:-${CACHE_DIR}/rom4s-sm.tar.gz}"
 MYARENA_SM_DIR="${MYARENA_SM_DIR:-${CACHE_DIR}/extract/myarena}"
 
 chmod +x "${ROOT}/testing/scripts/"*.sh
+mkdir -p "${CACHE_DIR}" "${SERVER_DIR}"
 
 : >"${RESULTS}"
 
@@ -89,7 +90,12 @@ fail=0
 
 # Primary: our packaged MM + our packaged SM (same combo as CI test-built-*).
 if [[ -n "${BUILT_SM}" && -f "${BUILT_SM}" && -n "${BUILT_MM}" && -f "${BUILT_MM}" ]]; then
-  run_case "built-MM-package + built-SM-6572" "${BUILT_SM}" "1.11.0.6572" "package" || fail=1
+  built_sm_ver="1.11.0.6970"
+  if [[ "${BUILT_SM}" =~ sourcemod-([0-9]+\.[0-9]+\.[0-9]+\-git[0-9]+|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+    built_sm_ver="${BASH_REMATCH[1]}"
+    built_sm_ver="${built_sm_ver/-git/.}"
+  fi
+  run_case "built-MM-package + built-SM" "${BUILT_SM}" "${built_sm_ver}" "package" || fail=1
 else
   echo "NOTE: packages/*.tar.gz not found; skipping primary built-package case" | tee -a "${RESULTS}"
 fi

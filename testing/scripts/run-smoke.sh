@@ -22,7 +22,32 @@ if [[ -z "${MM_PACKAGE:-}" && -z "${MM_URL:-}" && "${USE_BUILT_MM:-0}" != "1" ]]
   fi
 fi
 
-# Version expects: our packages → 1.10.7; rom4s reference download → 1.10.6.
+# Version expects: resolve dynamically if not set
+if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" ]]; then
+  if [[ -f "${ROOT}/builder/resolve-version.sh" ]]; then
+    eval "$(
+      CSS34_LINE="${CSS34_LINE:-sm13-dev}" bash -c "
+        source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
+        echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"
+        echo \"RESOLVED_SM_MAJOR='\${SOURCEMOD_MAJOR}'\"
+        echo \"RESOLVED_MM_MODE='\${MMS_MODE}'\"
+      "
+    )"
+    if [[ -n "${RESOLVED_SM_REV:-}" ]]; then
+      export SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.${RESOLVED_SM_MAJOR}.0.${RESOLVED_SM_REV}}"
+      if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
+        case "${RESOLVED_MM_MODE:-}" in
+          1.10) export MM_VERSION_EXPECT="1.10.7" ;;
+          1.11) export MM_VERSION_EXPECT="1.11.0" ;;
+          1.12) export MM_VERSION_EXPECT="1.12.0" ;;
+          2.0)  export MM_VERSION_EXPECT="2.0.0" ;;
+          *)    export MM_VERSION_EXPECT="1.12.0" ;;
+        esac
+      fi
+    fi
+  fi
+fi
+
 if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
   if [[ -n "${MM_PACKAGE:-}" || "${USE_BUILT_MM:-0}" == "1" || -n "${BUILT_MM_PACKAGE:-}" || -n "${BUILT_MM_DIR:-}" ]]; then
     export MM_VERSION_EXPECT=1.10.7
@@ -30,7 +55,7 @@ if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
     export MM_VERSION_EXPECT=1.10.6
   fi
 fi
-export SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
+export SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6970}"
 
 chmod +x "${ROOT}/testing/scripts/"*.sh
 

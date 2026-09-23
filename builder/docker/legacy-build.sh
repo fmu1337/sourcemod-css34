@@ -43,6 +43,8 @@ docker run --rm --platform linux/amd64 \
   -e DEPS_DIR=/workspace/deps \
   -e PACKAGES_DIR=/workspace/packages \
   -e SM_LOGIC_CXX_SYSROOT=/workspace/deps/sysroot-i386 \
+  -e HOST_UID="$(id -u)" \
+  -e HOST_GID="$(id -g)" \
   "$IMAGE" \
   bash -lc '
     set -euo pipefail
@@ -66,17 +68,18 @@ Acquire::AllowInsecureRepositories "true";
 Acquire::AllowDowngradeToInsecureRepositories "true";
 EOF
       elif [[ "${VERSION_ID:-}" == "11" || "${VERSION_CODENAME:-}" == "bullseye" ]]; then
-        echo "==> Configuring archive.debian.org for bullseye security updates" >&2
+        # deb.debian.org/debian-security pool intermittently 404s superseded .debs
+        # while Packages still references them; pin a known-good snapshot instead.
+        snap="${BULLSEYE_APT_SNAPSHOT:-20260813T000000Z}"
+        echo "==> Pinning bullseye apt to snapshot.debian.org/${snap}" >&2
         rm -f /etc/apt/sources.list.d/* 2>/dev/null || true
         cat >/etc/apt/sources.list <<EOF
-deb http://deb.debian.org/debian bullseye main contrib non-free
-deb http://archive.debian.org/debian-security bullseye-security main contrib non-free
-deb http://deb.debian.org/debian bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye-updates main contrib non-free
+deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${snap} bullseye-security main contrib non-free
 EOF
-        cat >/etc/apt/apt.conf.d/99archive <<EOF
+        cat >/etc/apt/apt.conf.d/99snapshot <<EOF
 Acquire::Check-Valid-Until "false";
-Acquire::AllowInsecureRepositories "true";
-Acquire::AllowDowngradeToInsecureRepositories "true";
 EOF
       fi
     fi
@@ -96,13 +99,17 @@ EOF
         attempt=$((attempt + 1))
       done
     }
+    # debian:11 images ship stale /var/lib/apt/lists; without a purge apt-get
+    # install keeps requesting superseded security .deb versions (404 on CI).
+    rm -rf /var/lib/apt/lists/* 2>/dev/null || true
     apt_retry apt-get update -qq
     apt_retry apt-get install -y -qq \
       curl git python3 python3-pip \
       lib32stdc++6 lib32z1-dev libc6-dev-i386 linux-libc-dev \
       binutils ca-certificates \
       g++-9-multilib gcc-9-multilib \
-      lib32stdc++-9-dev libstdc++-9-dev
+      lib32stdc++-9-dev libstdc++-9-dev \
+      libssl-dev:i386
     # Volume mount is owned by the host UID; git 2.35+ blocks submodule ops otherwise.
     # bullseye ships git 2.30 (no safe.directory=*); register mounted repos explicitly.
     register_git_safe_dirs() {
@@ -127,7 +134,12 @@ EOF
     source /workspace/deps/sysroot-i386.env
     export DEPS_DIR=/workspace/deps SM_LOGIC_CXX_SYSROOT
     builder/run/linux.sh
+    if [[ -n "${HOST_UID:-}" && -n "${HOST_GID:-}" ]]; then
+      chown -R "${HOST_UID}:${HOST_GID}" /workspace/deps /workspace/packages /workspace/sourcemod 2>/dev/null || true
+    fi
   '
+
+sudo chown -R "$(id -u):$(id -g)" "$ROOT/deps" "$ROOT/packages" "$ROOT/sourcemod" 2>/dev/null || true
 
 ARTIFACT="$(ls -1 "$PACKAGES_DIR"/sourcemod-*-css34-linux.tar.gz 2>/dev/null | head -n1)"
 if [[ -z "${ARTIFACT}" || ! -f "${ARTIFACT}" ]]; then
