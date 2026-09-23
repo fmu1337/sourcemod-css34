@@ -3,7 +3,7 @@
 ## Cursor Cloud specific instructions
 
 This repo is a **build system** (not a long-running app). It compiles patched
-**Metamod:Source 1.10.7 + SourceMod 1.11.0.6572** packages for **Counter-Strike:
+**Metamod:Source 1.10.7 + SourceMod 1.11.0.6970** packages (or 1.12/1.13 lines) for **Counter-Strike:
 Source v34** and smoke-tests them on a real `srcds` dedicated server. See
 `README.md`, `testing/README.md`, and `.github/workflows/` for the canonical
 commands; the notes below only cover non-obvious environment caveats.
