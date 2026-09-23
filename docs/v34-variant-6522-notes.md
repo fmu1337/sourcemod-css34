@@ -1,38 +1,38 @@
-﻿# CS:S v34 ΓÇö ╨╖╨░╨╝╨╡╤é╨║╨╕ ╨┐╨╛ ╨▓╨░╤Ç╨╕╨░╨╜╤é╤â SM 6522
+# CS:S v34 — заметки по варианту SM 6522
 
-╨í╤Ç╨░╨▓╨╜╨╡╨╜╨╕╨╡ ╨░╤Ç╤à╨╕╨▓╨░ `mms-1.11.0-1130_sourcemod-1.11.0-6522-css_v34-linux-up-git6541-10.05.2020-fix-gamedata-12.10.2020.zip` ╤ü ╤é╨╡╨║╤â╤ë╨╡╨╣ ╤ü╨▒╨╛╤Ç╨║╨╛╨╣ (SM **6572**).
+Сравнение архива `mms-1.11.0-1130_sourcemod-1.11.0-6522-css_v34-linux-up-git6541-10.05.2020-fix-gamedata-12.10.2020.zip` с текущей сборкой (SM **6572**).
 
-╨ö╨░╤é╨░ ╨░╨╜╨░╨╗╨╕╨╖╨░: 2026-07-12.
+Дата анализа: 2026-07-12.
 
-## ╨ÿ╨┤╨╡╨╜╤é╨╕╤ä╨╕╨║╨░╤å╨╕╤Å ╨┐╨░╨║╨╡╤é╨░
+## Идентификация пакета
 
-| | ╨É╤Ç╤à╨╕╨▓ 6522 | ╨¥╨░╤ê builder |
+| | Архив 6522 | Наш builder |
 |---|---|---|
 | SourceMod | 1.11.0-6522 (git6541) | 1.11.0-6572 |
-| Metamod | 1.11.0-1130 (╨▓ ╨║╨╛╨╝╨┐╨╗╨╡╨║╤é╨╡) | ╨╜╨╡ ╨▓╤à╨╛╨┤╨╕╤é |
-| ╨æ╨╕╨╜╨░╤Ç╨╜╨╕╨║ SM | ╤é╨╛╨╗╤î╨║╨╛ `sourcemod.2.ep1.so` | `sourcemod.1/2.ep1.so` + extensions |
-| ╨¢╨╕╨╜╨║╨╛╨▓╨║╨░ | `tier0_i486.so`, `vstdlib_i486.so` | ╤é╨╛ ╨╢╨╡ (ep1/v34) |
-| Gamedata fix | 12.10.2020 | assets ╨╕╨╖ ╤Ç╨╡╨╗╨╕╨╖╨░ 6572 |
+| Metamod | 1.11.0-1130 (в комплекте) | не входит |
+| Бинарник SM | только `sourcemod.2.ep1.so` | `sourcemod.1/2.ep1.so` + extensions |
+| Линковка | `tier0_i486.so`, `vstdlib_i486.so` | то же (ep1/v34) |
+| Gamedata fix | 12.10.2020 | assets из релиза 6572 |
 
-## Gamedata ΓÇö ╤é╤Ç╨╡╨▒╤â╨╡╤é ╤Ç╤â╤ç╨╜╨╛╨╣ ╨┐╤Ç╨╛╨▓╨╡╤Ç╨║╨╕
+## Gamedata — требует ручной проверки
 
-### sm-cstrike (`game.css.txt` ╨▓ ╨░╤Ç╤à╨╕╨▓╨╡ ΓåÆ `game.cstrike.txt` ╤â ╨╜╨░╤ü)
+### sm-cstrike (`game.css.txt` в архиве → `game.cstrike.txt` у нас)
 
-| ╨ƒ╨╛╨╗╨╡ | ╨É╤Ç╤à╨╕╨▓ 6522 | ╨¥╨░╤ê assets (6572) | ╨í╤é╨░╤é╤â╤ü |
+| Поле | Архив 6522 | Наш assets (6572) | Статус |
 |---|---|---|---|
-| `WeaponPrice` | **2064** | **2308** | **╨ƒ╤Ç╨╛╨▓╨╡╤Ç╨╕╤é╤î ╨▓╤Ç╤â╤ç╨╜╤â╤Ä ╨╜╨░ ╤å╨╡╨╗╨╡╨▓╨╛╨╝ server.so** |
-| `WeaponName` | 6 | 6 | ╤ü╨╛╨▓╨┐╨░╨┤╨░╨╡╤é |
-| `CTTeamScoreOffset` | linux 23 | linux 23 | ╤ü╨╛╨▓╨┐╨░╨┤╨░╨╡╤é |
-| `TTeamScoreOffset` | linux 34 | linux 34 | ╤ü╨╛╨▓╨┐╨░╨┤╨░╨╡╤é |
-| Buy-╤ä╤â╨╜╨║╤å╨╕╤Å | `HandleCommand_Buy` | `HandleCommand_Buy_Internal` | ╤Ç╨░╨╖╨╜╤ï╨╡ ╨╕╨╝╨╡╨╜╨░/╤ü╨╕╨│╨╜╨░╤é╤â╤Ç╤ï |
-| Linux sigs | `@_ZN...` mangled | `@_ZN...` mangled | ╤ü╨╛╨▓╨┐╨░╨┤╨░╤Ä╤é |
-| Windows sigs | ╤ü╤é╨░╤Ç╤ï╨╣ prologue (`55 8B EC`) | post-OB ╤ü╤é╨╕╨╗╤î | **╤Ç╨░╨╖╨╜╤ï╨╡ ╨▒╨╕╨╗╨┤╤ï v34** |
+| `WeaponPrice` | **2064** | **2308** | **Проверить вручную на целевом server.so** |
+| `WeaponName` | 6 | 6 | совпадает |
+| `CTTeamScoreOffset` | linux 23 | linux 23 | совпадает |
+| `TTeamScoreOffset` | linux 34 | linux 34 | совпадает |
+| Buy-функция | `HandleCommand_Buy` | `HandleCommand_Buy_Internal` | разные имена/сигнатуры |
+| Linux sigs | `@_ZN...` mangled | `@_ZN...` mangled | совпадают |
+| Windows sigs | старый prologue (`55 8B EC`) | post-OB стиль | **разные билды v34** |
 
-Linux-╤ü╨╕╨│╨╜╨░╤é╤â╤Ç╤ï ╨▓ sm-cstrike ╤ü╨╛╨▓╨┐╨░╨┤╨░╤Ä╤é. ╨á╨░╤ü╤à╨╛╨╢╨┤╨╡╨╜╨╕╨╡ ╨▓ `WeaponPrice` ╨╕ Windows-╤ü╨╕╨│╨╜╨░╤é╤â╤Ç╨░╤à ╤â╨║╨░╨╖╤ï╨▓╨░╨╡╤é ╨╜╨░ **╤Ç╨░╨╖╨╜╤ï╨╡ ╨▒╨╕╨╗╨┤╤ï CS:S v34** ΓÇö ╨║╨░╨║╨╛╨╣ offset ╨▓╨╡╤Ç╨╜╤ï╨╣, ╨╛╨┐╤Ç╨╡╨┤╨╡╨╗╤Å╨╡╤é╤ü╤Å ╤é╨╛╨╗╤î╨║╨╛ ╤ü╨▓╨╡╤Ç╨║╨╛╨╣ ╤ü ╨║╨╛╨╜╨║╤Ç╨╡╤é╨╜╤ï╨╝ `server.so` / `server_i486.so` ╨╜╨░ ╤ü╨╡╤Ç╨▓╨╡╤Ç╨╡.
+Linux-сигнатуры в sm-cstrike совпадают. Расхождение в `WeaponPrice` и Windows-сигнатурах указывает на **разные билды CS:S v34** — какой offset верный, определяется только сверкой с конкретным `server.so` / `server_i486.so` на сервере.
 
 ### sdktools.games/game.cstrike.txt (Linux vtable offsets)
 
-╨ÿ╨╖ ╨░╤Ç╤à╨╕╨▓╨░ 6522 (upstream SM ╤é╨╛╨│╨╛ ╨▓╤Ç╨╡╨╝╨╡╨╜╨╕, ╨╜╨╡ ╨┐╨╡╤Ç╨╡╨╛╨┐╤Ç╨╡╨┤╨╡╨╗╤Å╨╗╤ü╤Å):
+Из архива 6522 (upstream SM того времени, не переопределялся):
 
 | Offset | Linux |
 |---|---|
@@ -55,128 +55,128 @@ Linux-╤ü╨╕╨│╨╜╨░╤é╤â╤Ç╤ï ╨▓ sm-cstrike ╤ü�
 | DispatchKeyValueFloat | 31 |
 | DispatchKeyValueVector | 32 |
 
-╨ú ╨╜╨░╤ü ╤ì╤é╨╛╤é ╤ä╨░╨╣╨╗ ╨╕╨┤╤æ╤é ╨╕╨╖ upstream SM **6572** ╨┐╤Ç╨╕ ╤ü╨▒╨╛╤Ç╨║╨╡ (`prepare-package.sh` ╨╡╨│╨╛ ╨╜╨╡ ╨┐╨╡╤Ç╨╡╨╖╨░╨┐╨╕╤ü╤ï╨▓╨░╨╡╤é). ╨ƒ╤Ç╨╕ ╨┐╤Ç╨╛╨▒╨╗╨╡╨╝╨░╤à ╤ü sdktools ╨╜╨░ Linux ΓÇö **╤ü╨▓╨╡╤Ç╨╕╤é╤î vtable offsets ╨▓╤Ç╤â╤ç╨╜╤â╤Ä** ╤ü `server.so` ╨╕ ╨┐╤Ç╨╕ ╨╜╨╡╨╛╨▒╤à╨╛╨┤╨╕╨╝╨╛╤ü╤é╨╕ ╨╖╨░╤ä╨╕╨║╤ü╨╕╤Ç╨╛╨▓╨░╤é╤î ╨▓ `builder/assets/gamedata/`.
+У нас этот файл идёт из upstream SM **6572** при сборке (`prepare-package.sh` его не перезаписывает). При проблемах с sdktools на Linux — **сверить vtable offsets вручную** с `server.so` и при необходимости зафиксировать в `builder/assets/gamedata/`.
 
 ### sdkhooks.games/game.cstrike.txt
 
-╨É╤Ç╤à╨╕╨▓ ╤ü╨╛╨┤╨╡╤Ç╨╢╨╕╤é vtable offsets ╨┤╨╗╤Å ╤à╤â╨║╨╛╨▓ (`OnTakeDamage`, `FireBullets`, `Weapon_Switch` ╨╕ ╤é.╨┤.) ΓÇö ╤é╨╛╨╗╤î╨║╨╛ Linux/Windows ╤ç╨╕╤ü╨╗╨░, ╨▒╨╡╨╖ ╤ü╨╕╨│╨╜╨░╤é╤â╤Ç. ╨ú ╨╜╨░╤ü ╤é╨╛╨╢╨╡ ╨╕╨╖ upstream 6572. ╨ƒ╤Ç╨╕ ╤ü╨▒╨╛╤Å╤à sdkhooks ΓÇö ╤ü╨▓╨╡╤Ç╨╕╤é╤î ╨░╨╜╨░╨╗╨╛╨│╨╕╤ç╨╜╨╛ sdktools.
+Архив содержит vtable offsets для хуков (`OnTakeDamage`, `FireBullets`, `Weapon_Switch` и т.д.) — только Linux/Windows числа, без сигнатур. У нас тоже из upstream 6572. При сбоях sdkhooks — сверить аналогично sdktools.
 
-## ╨ƒ╨╛╨╗╨╡╨╖╨╜╨╛╨╡ ╨╕╨╖ ╨░╤Ç╤à╨╕╨▓╨░ (╨╜╨╡ ╨┐╨╡╤Ç╨╡╨╜╨╛╤ü╨╕╨╝ ╨▓ ╤ü╨▒╨╛╤Ç╨║╤â)
+## Полезное из архива (не переносим в сборку)
 
-╨ù╨░╤ä╨╕╨║╤ü╨╕╤Ç╨╛╨▓╨░╨╜╨╛ ╨┤╨╗╤Å ╤ü╨┐╤Ç╨░╨▓╨║╨╕; ╨▓ builder ╨╜╨╡ ╨╕╨╜╤é╨╡╨│╤Ç╨╕╤Ç╨╛╨▓╨░╨╗╨╕ ╨┐╨╛ ╤Ç╨╡╤ê╨╡╨╜╨╕╤Ä 2026-07-12.
+Зафиксировано для справки; в builder не интегрировали по решению 2026-07-12.
 
-- **Cleaner** (`cleaner.ext.2.ep1.so`, `"Cleaner" "on"` ╨▓ core.cfg, `cleaner.cfg`) ΓÇö ╤ä╨╕╨╗╤î╤é╤Ç ╤ü╨┐╨░╨╝╨░ `CreateFragmentsFromFile`, `DataTable warning`
-- **CSSDM** (`cssdm.ext.2.ep1.so`, `cssdm.games.txt`) ΓÇö FFA/deathmatch, ╨┐╨╡╤Ç╨╡╤ü╨▒╨╛╤Ç 2022-03-12
+- **Cleaner** (`cleaner.ext.2.ep1.so`, `"Cleaner" "on"` в core.cfg, `cleaner.cfg`) — фильтр спама `CreateFragmentsFromFile`, `DataTable warning`
+- **CSSDM** (`cssdm.ext.2.ep1.so`, `cssdm.games.txt`) — FFA/deathmatch, пересбор 2022-03-12
 - **Warmode configs** (`cfg/sourcemod/sm_warmode_on.cfg`, `sm_warmode_off.cfg`)
 - **Extra extensions**: flashtools, filenetmessages, bintools, sendproxy
-- **Metamod bundle** MMS 1.11.0-1130 + `server_i486.so` ΓÇö ╤Ç╨╡╤ä╨╡╤Ç╨╡╨╜╤ü ╤ü╨╛╨▓╨╝╨╡╤ü╤é╨╕╨╝╨╛╨╣ ╨▓╨╡╤Ç╤ü╨╕╨╕
-- **ServerLang `"ru"`** ╨▓ core.cfg ╨░╤Ç╤à╨╕╨▓╨░
+- **Metamod bundle** MMS 1.11.0-1130 + `server_i486.so` — референс совместимой версии
+- **ServerLang `"ru"`** в core.cfg архива
 
-## ╨º╤é╨╛ ╤â ╨╜╨░╤ê╨╡╨╣ ╤ü╨▒╨╛╤Ç╨║╨╕ ╨╗╤â╤ç╤ê╨╡
+## Что у нашей сборки лучше
 
-- SM **6572** + ╨┐╨╛╨╗╨╜╤ï╨╣ ╨╜╨░╨▒╨╛╤Ç CSS34-╨┐╨░╤é╤ç╨╡╨╣ (`builder/patches/apply-sourcemod.sh`)
-- `DisableAutoUpdate "yes"` ╨▓ core.cfg (`builder/prepare-package.sh`)
-- Gamedata sm-cstrike ╨╕╨╖ ╤Ç╨╡╨╗╨╕╨╖╨░ 6572 (╨░╨║╤é╤â╨░╨╗╤î╨╜╨╡╨╡ ╨┤╨╗╤Å ╤å╨╡╨╗╨╡╨▓╨╛╨│╨╛ v34)
-- ╨í╨▒╨╛╤Ç╨║╨░ Linux + Windows, upstream translations
+- SM **6572** + полный набор CSS34-патчей (`builder/patches/apply-sourcemod.sh`)
+- `DisableAutoUpdate "yes"` в core.cfg (`builder/prepare-package.sh`)
+- Gamedata sm-cstrike из релиза 6572 (актуальнее для целевого v34)
+- Сборка Linux + Windows, upstream translations
 
-## ╨ñ╨░╨╣╨╗╤ï ╨┤╨╗╤Å ╤Ç╤â╤ç╨╜╨╛╨╣ ╨▓╨╡╤Ç╨╕╤ä╨╕╨║╨░╤å╨╕╨╕ offsets
+## Файлы для ручной верификации offsets
 
-╨ƒ╤Ç╨╕ ╨┐╤Ç╨╛╨▓╨╡╤Ç╨║╨╡ ╨╜╨░ ╨╢╨╕╨▓╨╛╨╝ ╤ü╨╡╤Ç╨▓╨╡╤Ç╨╡:
+При проверке на живом сервере:
 
-1. `addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt` ΓÇö `WeaponPrice`, Windows sigs
-2. `addons/sourcemod/gamedata/sdktools.games/game.cstrike.txt` ΓÇö vtable offsets (Linux)
-3. `addons/sourcemod/gamedata/sdkhooks.games/game.cstrike.txt` ΓÇö hook vtable offsets
+1. `addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt` — `WeaponPrice`, Windows sigs
+2. `addons/sourcemod/gamedata/sdktools.games/game.cstrike.txt` — vtable offsets (Linux)
+3. `addons/sourcemod/gamedata/sdkhooks.games/game.cstrike.txt` — hook vtable offsets
 
-╨¡╤é╨░╨╗╨╛╨╜╨╜╤ï╨╣ server binary: `cstrike/bin/server.so` ╨╕╨╗╨╕ `server_i486.so` ╤é╨╛╨│╨╛ ╨▒╨╕╨╗╨┤╨░ v34, ╨┐╨╛╨┤ ╨║╨╛╤é╨╛╤Ç╤ï╨╣ ╨╜╨░╤ü╤é╤Ç╨░╨╕╨▓╨░╨╡╤é╤ü╤Å ╤ü╨╡╤Ç╨▓╨╡╤Ç.
+Эталонный server binary: `cstrike/bin/server.so` или `server_i486.so` того билда v34, под который настраивается сервер.
 
 ---
 
-## ╨ó╨╡╨╝╨░ MyArena (╤ä╨╛╤Ç╤â╨╝)
+## Тема MyArena (форум)
 
-╨ÿ╤ü╤é╨╛╤ç╨╜╨╕╨║: [╨ó╨╡╤ü╤é╨╕╤Ç╨╛╨▓╨░╨╜╨╕╨╡ SourceMod 1.11.0.6541 ╨┤╨╗╤Å CS:S v34](https://forum.myarena.ru/index.php?/topic/44234-testirovanie-sourcemod-versii-11106541-dlia-css-v34-10052020/) (GoDtm666, ~190 ╨┐╨╛╤ü╤é╨╛╨▓, ╨░╨┐╤Ç 2020 ΓÇö 2022).
+Источник: [Тестирование SourceMod 1.11.0.6541 для CS:S v34](https://forum.myarena.ru/index.php?/topic/44234-testirovanie-sourcemod-versii-11106541-dlia-css-v34-10052020/) (GoDtm666, ~190 постов, апр 2020 — 2022).
 
-╨¡╤é╨╛ **╤é╨╛╤é ╨╢╨╡ ╨░╤Ç╤à╨╕╨▓**, ╤ç╤é╨╛ ╨╗╨╡╨╢╨╕╤é ╨▓ ╤Ç╨╡╨┐╨╛╨╖╨╕╤é╨╛╤Ç╨╕╨╕. ╨É╨▓╤é╨╛╤Ç ΓÇö ╤Ç╨░╨╖╤Ç╨░╨▒╨╛╤é╤ç╨╕╨║ MyArena, ╤ü╨▒╨╛╤Ç╨║╨░ ╨┤╨╗╤Å ╨┐/╤â ╤à╨╛╤ü╤é╨╕╨╜╨│╨░.
+Это **тот же архив**, что лежит в репозитории. Автор — разработчик MyArena, сборка для п/у хостинга.
 
-### ╨Ü╨╗╤Ä╤ç╨╡╨▓╨╛╨╡ ╨╕╨╖ FAQ (╨┐╨╛╤ü╤é #1)
+### Ключевое из FAQ (пост #1)
 
-| # | ╨ƒ╤Ç╨╛╨▒╨╗╨╡╨╝╨░ | ╨á╨╡╤ê╨╡╨╜╨╕╨╡ ╨░╨▓╤é╨╛╤Ç╨░ |
+| # | Проблема | Решение автора |
 |---|---|---|
-| ΓÇö | ╨₧╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╨╡ | ╨º╨╕╤ü╤é╤ï╨╣ ╤ü╨╡╤Ç╨▓╨╡╤Ç + ╨▓╨╡╤ü╤î ╨░╤Ç╤à╨╕╨▓ ╤å╨╡╨╗╨╕╨║╨╛╨╝ (╨▓╨║╨╗╤Ä╤ç╨░╤Å MMS) |
-| 6 | ╨í╤é╨░╤Ç╤ï╨╡ MM/ext ╨╜╨╡ ╤Ç╨░╨▒╨╛╤é╨░╤Ä╤é | ╨ó╨╛╨╗╤î╨║╨╛ **Metamod core 2** (MMS 1.11.0-1130); core-legacy ╨╜╨╡╤ü╨╛╨▓╨╝╨╡╤ü╤é╨╕╨╝ |
-| 9 | ╨ƒ╨╗╨░╨│╨╕╨╜╤ï SM 1.9/1.10 | **╨ƒ╨╡╤Ç╨╡╨║╨╛╨╝╨┐╨╕╨╗╤Å╤å╨╕╤Å** ╨┐╨╛╨┤ SM 1.11 (╨║╨╛╨╝╨┐╨╕╨╗╤Å╤é╨╛╤Ç ╨▓ ╨░╤Ç╤à╨╕╨▓╨╡) |
-| 12 | Stripper ╤ü ╨┐╨░╨╜╨╡╨╗╨╕ | ╨¥╤â╨╢╨╡╨╜ **stripper-1.2.2** ╨┐╨╛╨┤ ╨╜╨╛╨▓╤ï╨╣ MMS (╨╜╨╡ ╨╕╨╖ ╨┐/╤â) |
-| 14 | SourceBans 1.5.1 | ╨ù╨░╨╝╨╡╨╜╨╕╤é╤î ╨╜╨░ ╨▓╨╡╤Ç╤ü╨╕╤Ä ╨╕╨╖ ╤é╨╡╨╝╤ï |
-| **15** | `[CSTRIKE] Could not locate HandleCommand_Buy` | **╨ú╨┤╨░╨╗╨╕╤é╤î** `addons/sourcemod/gamedata/sm-cstrike.games.txt` ΓÇö ╨▓ ╨░╤Ç╤à╨╕╨▓╨╡ ╨╡╨│╨╛ ╨╜╨╡╤é, gamedata ╨╗╨╡╨╢╨╕╤é ╨▓ `sm-cstrike.games/game.css.txt` |
-| 17 | ╨ú╤ü╤é╨░╨╜╨╛╨▓╨║╨░ ╨┐╨╛╨▓╨╡╤Ç╤à ╤ü╤é╨░╤Ç╨╛╨│╨╛ SM | ╨í╨╝. ╨┐.15 ΓÇö ╨║╨╛╨╜╤ä╨╗╨╕╨║╤é gamedata |
-| 18 | ╨Ü╤Ç╨░╤ê╨╕ | `-debug` ╨▓ ╨┐╨░╤Ç╨░╨╝╨╡╤é╤Ç╨░╤à ╨╖╨░╨┐╤â╤ü╨║╨░ |
-| 20 | ╨ƒ╨╗╨░╨│╨╕╨╜╤ï ╨╜╨╡ ╨│╤Ç╤â╨╖╤Å╤é╤ü╤Å (debug) | ╨ƒ╨╡╤Ç╨╡╤ü╨▒╨╛╤Ç╨║╨░ ╨┐╨╛╨┤ SM 1.11 |
+| — | Обновление | Чистый сервер + весь архив целиком (включая MMS) |
+| 6 | Старые MM/ext не работают | Только **Metamod core 2** (MMS 1.11.0-1130); core-legacy несовместим |
+| 9 | Плагины SM 1.9/1.10 | **Перекомпиляция** под SM 1.11 (компилятор в архиве) |
+| 12 | Stripper с панели | Нужен **stripper-1.2.2** под новый MMS (не из п/у) |
+| 14 | SourceBans 1.5.1 | Заменить на версию из темы |
+| **15** | `[CSTRIKE] Could not locate HandleCommand_Buy` | **Удалить** `addons/sourcemod/gamedata/sm-cstrike.games.txt` — в архиве его нет, gamedata лежит в `sm-cstrike.games/game.css.txt` |
+| 17 | Установка поверх старого SM | См. п.15 — конфликт gamedata |
+| 18 | Краши | `-debug` в параметрах запуска |
+| 20 | Плагины не грузятся (debug) | Пересборка под SM 1.11 |
 
-╨Æ ╨┐╨░╨║╨╡╤é╨╡ ╨╕╨╖ ╨║╨╛╤Ç╨╛╨▒╨║╨╕: `cssdm.ext.2.ep1`, `sendproxy.ext.2.ep1`, `dhooks.ext`, `flashtools.ext.2.ep1`, MMS 1.11.0-dev+1130.
+В пакете из коробки: `cssdm.ext.2.ep1`, `sendproxy.ext.2.ep1`, `dhooks.ext`, `flashtools.ext.2.ep1`, MMS 1.11.0-dev+1130.
 
-╨Æ╨╡╤Ç╤ü╨╕╤Å ╨▓ ╨╜╨░╨╖╨▓╨░╨╜╨╕╨╕ ╤ä╨░╨╣╨╗╨░ **6522**, ╨▓ FAQ ΓÇö **6541**: ╨░╨▓╤é╨╛╤Ç ╨┐╨╕╤ê╨╡╤é, ╤ç╤é╨╛ git-╨║╨╛╨╝╨╝╨╕╤é╤ï ╨╜╨╡ ╨▓╨╡╨┤╤â╤é╤ü╤Å, ╨╜╨╛╨╝╨╡╤Ç ╨▓ ╨╕╨╝╨╡╨╜╨╕ ╨░╤Ç╤à╨╕╨▓╨░ ╨╜╨╡ ╨╛╨▒╨╜╨╛╨▓╨╗╤Å╨╡╤é╤ü╤Å.
+Версия в названии файла **6522**, в FAQ — **6541**: автор пишет, что git-коммиты не ведутся, номер в имени архива не обновляется.
 
-### Gamedata ╨╕╨╖ ╨╛╨▒╤ü╤â╨╢╨┤╨╡╨╜╨╕╤Å (╨▓╨░╨╢╨╜╨╛ ╨┤╨╗╤Å ╤Ç╤â╤ç╨╜╨╛╨╣ ╨┐╤Ç╨╛╨▓╨╡╤Ç╨║╨╕)
+### Gamedata из обсуждения (важно для ручной проверки)
 
-**GetWeaponPrice sigscan failed** (mifka, ╨╕╤Ä╨╗╤î 2020):
+**GetWeaponPrice sigscan failed** (mifka, июль 2020):
 
 ```
 [CSTRIKE] Sigscan for GetWeaponPrice failed
 ```
 
-╨á╨╡╤ê╨╡╨╜╨╕╨╡ (GoDtm666 ╨┐╨╛╨┤╤é╨▓╨╡╤Ç╨┤╨╕╨╗): ╨┐╤Ç╨░╨▓╨║╨░ ╤ü╨╕╨│╨╜╨░╤é╤â╤Ç╤ï **`GetWeaponPrice`** ╨▓ `gamedata/sm-cstrike.games/game.css.txt`. ╨í╨▓╤Å╨╖╨░╨╜╨╛ ╤ü offset **`WeaponPrice`** ΓÇö ╨┐╤Ç╨╕ ╨╛╤ê╨╕╨▒╨║╨╡ CS_GetWeaponPrice ╨┐╨╗╨░╨│╨╕╨╜╤ï (restrict, shop ╨╕ ╤é.╨┤.) ╨┐╨░╨┤╨░╤Ä╤é ╨▓ native trace.
+Решение (GoDtm666 подтвердил): правка сигнатуры **`GetWeaponPrice`** в `gamedata/sm-cstrike.games/game.css.txt`. Связано с offset **`WeaponPrice`** — при ошибке CS_GetWeaponPrice плагины (restrict, shop и т.д.) падают в native trace.
 
-**HandleCommand_Buy** (FAQ + ╤é╨╕╨┐╨╕╤ç╨╜╨░╤Å ╨╛╤ê╨╕╨▒╨║╨░ ╨┐╤Ç╨╕ ╨╝╨╕╨│╤Ç╨░╤å╨╕╨╕): ╤ü╤é╨░╤Ç╤ï╨╣ ╤ä╨░╨╣╨╗ `sm-cstrike.games.txt` (flat layout) ╨║╨╛╨╜╤ä╨╗╨╕╨║╤é╤â╨╡╤é ╤ü ╨╜╨╛╨▓╤ï╨╝ layout `sm-cstrike.games/game.css.txt`. ╨ú ╨╜╨░╤ü ╨▓ `prepare-package.sh` ╤â╨╢╨╡ ╨╕╤ü╨┐╨╛╨╗╤î╨╖╤â╨╡╤é╤ü╤Å `game.cstrike.txt` ΓÇö ╨╜╨╛ ╨┐╤Ç╨╕ ╤â╤ü╤é╨░╨╜╨╛╨▓╨║╨╡ ╨┐╨╛╨▓╨╡╤Ç╤à ╤ç╤â╨╢╨╛╨│╨╛ SM ╤ü╤é╨░╤Ç╤ï╨╣ flat-╤ä╨░╨╣╨╗ ╨╜╤â╨╢╨╜╨╛ ╤â╨┤╨░╨╗╤Å╤é╤î ╨▓╤Ç╤â╤ç╨╜╤â╤Ä.
+**HandleCommand_Buy** (FAQ + типичная ошибка при миграции): старый файл `sm-cstrike.games.txt` (flat layout) конфликтует с новым layout `sm-cstrike.games/game.css.txt`. У нас в `prepare-package.sh` уже используется `game.cstrike.txt` — но при установке поверх чужого SM старый flat-файл нужно удалять вручную.
 
-**HudTextMsg / HUD ╤ü╨▓╨╡╤Ç╤à╤â** (GoDtm666, ╨┤╨╡╨║ 2021): ╨╡╤ü╨╗╨╕ ╨┐╨╡╤Ç╨╡╤ü╤é╨░╨╗ ╤Ç╨░╨▒╨╛╤é╨░╤é╤î HUD-╤é╨╡╨║╤ü╤é ΓÇö ╨▓ `gamedata/core.games/common.games.txt` **╤â╨▒╤Ç╨░╤é╤î ╨║╨╛╨╝╨╝╨╡╨╜╤é╨░╤Ç╨╕╨╣** ╨╜╨░ `HudTextMsg`.
+**HudTextMsg / HUD сверху** (GoDtm666, дек 2021): если перестал работать HUD-текст — в `gamedata/core.games/common.games.txt` **убрать комментарий** на `HudTextMsg`.
 
-### ╨ú╤ü╤é╨░╨╜╨╛╨▓╨║╨░ ╨╕ ╤ü╨╛╨▓╨╝╨╡╤ü╤é╨╕╨╝╨╛╤ü╤é╤î
+### Установка и совместимость
 
-- **VDS / ╨┤╤Ç╤â╨│╨╛╨╣ ╤à╨╛╤ü╤é╨╕╨╜╨│**: ╤ç╨░╤ü╤é╤î ╨┐╨╛╨╗╤î╨╖╨╛╨▓╨░╤é╨╡╨╗╨╡╨╣ ╨╜╨╡ ╨▓╨╕╨┤╨╡╨╗╨░ SM ╨▓ `meta list` ΓÇö ╨░╨▓╤é╨╛╤Ç ╤ü╨╛╨▓╨╡╤é╤â╨╡╤é ╤â╨┤╨░╨╗╨╕╤é╤î ╨▓╤ü╤Ä `addons/` ╨╕ ╨╖╨░╨╗╨╕╤é╤î ╨░╤Ç╤à╨╕╨▓ **╨▒╨╡╨╖ ╨╕╤ü╨║╨╗╤Ä╤ç╨╡╨╜╨╕╨╣** (MMS ╨╕╨╖ ╨┐╨░╨║╨╡╤é╨░ ╨╛╨▒╤Å╨╖╨░╤é╨╡╨╗╨╡╨╜). ╨¢╨╛╨│╨╕: `+developer 1 +log on`.
-- **Ubuntu 18.04**: `undefined symbol: pthread_mutex_trylock` ╨▓ `sourcepawn.jit.x86.so` / `clientprefs.ext.so` ΓÇö ╨┐╤Ç╨╛╨▒╨╗╨╡╨╝╨░ ╨╛╨║╤Ç╤â╨╢╨╡╨╜╨╕╤Å (glibc/pthread), ╨╜╨╡ gamedata.
-- **6572 vs MyArena 6541** (KURTSEITOV, ╨┤╨╡╨║ 2021): ╨▓ ╤é╨╡╨╝╨╡ ╤ü╨┐╤Ç╨░╤ê╨╕╨▓╨░╨╗╨╕, ╤ç╤é╨╛ ╨╗╤â╤ç╤ê╨╡ ΓÇö MyArena ╨╕╨╗╨╕ `sourcemod-1.11.0-git6572-css34` (rom4s). ╨»╨▓╨╜╨╛╨│╨╛ ╨╛╤é╨▓╨╡╤é╨░ ╨░╨▓╤é╨╛╤Ç╨░ ╨▓ ╤é╨╡╨╝╨╡ ╨╜╨╡╤é; rom4s 6572 ΓÇö ╨▒╨╛╨╗╨╡╨╡ ╨┐╨╛╨╖╨┤╨╜╤Å╤Å community-╤ü╨▒╨╛╤Ç╨║╨░ ╤ü ╨╛╤é╨┤╨╡╨╗╤î╨╜╤ï╨╝ gamedata.
+- **VDS / другой хостинг**: часть пользователей не видела SM в `meta list` — автор советует удалить всю `addons/` и залить архив **без исключений** (MMS из пакета обязателен). Логи: `+developer 1 +log on`.
+- **Ubuntu 18.04**: `undefined symbol: pthread_mutex_trylock` в `sourcepawn.jit.x86.so` / `clientprefs.ext.so` — проблема окружения (glibc/pthread), не gamedata.
+- **6572 vs MyArena 6541** (KURTSEITOV, дек 2021): в теме спрашивали, что лучше — MyArena или `sourcemod-1.11.0-git6572-css34` (rom4s). Явного ответа автора в теме нет; rom4s 6572 — более поздняя community-сборка с отдельным gamedata.
 
-### ╨ƒ╤Ç╨╛╤ç╨╡╨╡ ╨╕╨╖ ╤é╨╡╨╝╤ï (╤ü╨┐╤Ç╨░╨▓╨╛╤ç╨╜╨╛)
+### Прочее из темы (справочно)
 
-- CSSDM: ╨▓ ╨┐╨░╨║╨╡╤é╨╡ ╤ü╨▓╨╛╨╣ `cssdm.ext.2.ep1`; ╨╛╤é╨┤╨╡╨╗╤î╨╜╤ï╨╣ `cssdm-2.1.6-dev-git226-css34-linux` ╤â ╨╜╨╡╨║╨╛╤é╨╛╤Ç╤ï╤à ╨║╤Ç╨░╤ê╨╕╨╗ ΓÇö ╨╜╤â╨╢╨╡╨╜ ext ╨╕╨╖ ╨░╤Ç╤à╨╕╨▓╨░.
-- Stripper 1.2.2 ╤ü ╤ä╨╛╤Ç╤â╨╝╨░ ╤Ç╨░╨▒╨╛╤é╨░╨╡╤é ╤ü MMS core 2; stripper ╤ü ╨┐╨░╨╜╨╡╨╗╨╕ ΓÇö ╨╜╨╡╤é.
-- Windows: ╨░╨▓╤é╨╛╤Ç **╨╜╨╡ ╨▓╤ï╨║╨╗╨░╨┤╤ï╨▓╨░╨╗** Windows-╤ü╨▒╨╛╤Ç╨║╤â (╤é╨╛╨╗╤î╨║╨╛ Linux ╨┤╨╗╤Å ╤é╨╡╤ü╤é╨░ ╨┐/╤â).
-- ╨ƒ╨╗╨░╨│╨╕╨╜╤ï SM 1.10 API ╨╜╨░ SM 1.9 ╨╜╨╡ ╤Ç╨░╨▒╨╛╤é╨░╤Ä╤é ΓÇö ╨│╨╗╨░╨▓╨╜╨░╤Å ╨┐╤Ç╨╕╤ç╨╕╨╜╨░ ╨┐╨╡╤Ç╨╡╤à╨╛╨┤╨░ ╨╜╨░ 1.11 ╨┤╨╗╤Å v34 (Nekro).
+- CSSDM: в пакете свой `cssdm.ext.2.ep1`; отдельный `cssdm-2.1.6-dev-git226-css34-linux` у некоторых крашил — нужен ext из архива.
+- Stripper 1.2.2 с форума работает с MMS core 2; stripper с панели — нет.
+- Windows: автор **не выкладывал** Windows-сборку (только Linux для теста п/у).
+- Плагины SM 1.10 API на SM 1.9 не работают — главная причина перехода на 1.11 для v34 (Nekro).
 
-### ╨º╤é╨╛ ╤Ç╨╡╨╗╨╡╨▓╨░╨╜╤é╨╜╨╛ ╨╜╨░╤ê╨╡╨╝╤â builder
+### Что релевантно нашему builder
 
-| ╨¥╨░╤à╨╛╨┤╨║╨░ | ╨ö╨╡╨╣╤ü╤é╨▓╨╕╨╡ |
+| Находка | Действие |
 |---|---|
-| `WeaponPrice` / `GetWeaponPrice` sig | **╨ƒ╤Ç╨╛╨▓╨╡╤Ç╨╕╤é╤î ╨▓╤Ç╤â╤ç╨╜╤â╤Ä** ╨╜╨░ ╤å╨╡╨╗╨╡╨▓╨╛╨╝ server.so |
-| Flat `sm-cstrike.games.txt` vs `game.cstrike.txt` | ╨ƒ╤Ç╨╕ ╨╝╨╕╨│╤Ç╨░╤å╨╕╨╕ ╤â╨┤╨░╨╗╤Å╤é╤î ╤ü╤é╨░╤Ç╤ï╨╣ flat-╤ä╨░╨╣╨╗ |
-| `HudTextMsg` ╨▓ common.games.txt | ╨ƒ╤Ç╨╛╨▓╨╡╤Ç╨╕╤é╤î, ╨╡╤ü╨╗╨╕ HUD-╤é╨╡╨║╤ü╤é ╨╜╨╡ ╤Ç╨░╨▒╨╛╤é╨░╨╡╤é |
-| MyArena 6541 vs rom4s 6572 | ╨¥╨░╤ê builder = 6572; gamedata ╨╜╨╛╨▓╨╡╨╡ |
-| MMS 1.11.0-1130 | ╨á╨╡╤ä╨╡╤Ç╨╡╨╜╤ü ╨┤╨╗╤Å ╤ü╨╛╨▓╨╝╨╡╤ü╤é╨╕╨╝╨╛╤ü╤é╨╕, ╨▓ ╨┐╨░╨║╨╡╤é ╨╜╨╡ ╨▓╤à╨╛╨┤╨╕╤é |
+| `WeaponPrice` / `GetWeaponPrice` sig | **Проверить вручную** на целевом server.so |
+| Flat `sm-cstrike.games.txt` vs `game.cstrike.txt` | При миграции удалять старый flat-файл |
+| `HudTextMsg` в common.games.txt | Проверить, если HUD-текст не работает |
+| MyArena 6541 vs rom4s 6572 | Наш builder = 6572; gamedata новее |
+| MMS 1.11.0-1130 | Референс для совместимости, в пакет не входит |
 
 ---
 
-## ╨ó╨╡╨╝╨░ HLmod ΓÇö FrozDark SM 1.7.1 (2015)
+## Тема HLmod — FrozDark SM 1.7.1 (2015)
 
-╨ÿ╤ü╤é╨╛╤ç╨╜╨╕╨║: [[CS:S v34] Metamod 1.10.4 + Sourcemod 1.7.1 + FlashTools (Windows only)](https://hlmod.net/threads/cs-s-v34-metamod-1-10-4-sourcemod-1-7-1-flashtools-windows-only.28468/) (FrozDark, ╨░╨┐╤Ç 2015).
+Источник: [[CS:S v34] Metamod 1.10.4 + Sourcemod 1.7.1 + FlashTools (Windows only)](https://hlmod.net/threads/cs-s-v34-metamod-1-10-4-sourcemod-1-7-1-flashtools-windows-only.28468/) (FrozDark, апр 2015).
 
-╨á╨░╨╜╨╜╤Å╤Å community-╤ü╨▒╨╛╤Ç╨║╨░ ╨┐╨╛╨┤ v34. Windows-only zip + ╨╛╤é╨┤╨╡╨╗╤î╨╜╤ï╨╣ **`game.css.txt`** (╨▓╨╗╨╛╨╢╨╡╨╜╨╕╨╡ ╨▓ ╤é╨╡╨╝╨╡). ╨í╨▓╤Å╨╖╨░╨╜╨╜╨░╤Å ╤é╨╡╨╝╨░: [[CS:S v34] Virtual Offsets](https://hlmod.net/threads/cs-s-v34-virtual-offsets.28417/) (FrozDark, ╨░╨┐╤Ç 2015).
+Ранняя community-сборка под v34. Windows-only zip + отдельный **`game.css.txt`** (вложение в теме). Связанная тема: [[CS:S v34] Virtual Offsets](https://hlmod.net/threads/cs-s-v34-virtual-offsets.28417/) (FrozDark, апр 2015).
 
-### ╨º╤é╨╛ ╨┤╨╡╨╗╨░╨╗ FrozDark (╤Ç╨╡╨╗╨╡╨▓╨░╨╜╤é╨╜╨╛ ╨┤╨╗╤Å ╨┐╨░╤é╤ç╨╡╨╣)
+### Что делал FrozDark (релевантно для патчей)
 
-| ╨ÿ╨╖╨╝╨╡╨╜╨╡╨╜╨╕╨╡ | ╨ö╨╡╤é╨░╨╗╨╕ |
+| Изменение | Детали |
 |---|---|
-| **cstrike extension** | ╨Æ╤ï╤Ç╨╡╨╖╨░╨╜╤ï natives ╤é╨╛╨╗╤î╨║╨╛ ╨┤╨╗╤Å OB/CS:GO: `Set/GetMVPCount`, `Set/GetContributionScore`, `Set/GetAssists`, `Set/GetClanTag` |
-| **cstrike.inc** | ╨É╨┤╨░╨┐╤é╨╕╤Ç╨╛╨▓╨░╨╜ `CSRoundEndReason`; ╤â╨┤╨░╨╗╨╡╨╜╤ï ╤ä╤â╨╜╨║╤å╨╕╨╕, ╨╜╨╡╨┤╨╛╤ü╤é╤â╨┐╨╜╤ï╨╡ ╨╜╨░ v34 |
+| **cstrike extension** | Вырезаны natives только для OB/CS:GO: `Set/GetMVPCount`, `Set/GetContributionScore`, `Set/GetAssists`, `Set/GetClanTag` |
+| **cstrike.inc** | Адаптирован `CSRoundEndReason`; удалены функции, недоступные на v34 |
 | **Extensions** | Flashbang Tools, CBaseServer Tools (Windows) |
-| **core.cfg** | ┬½╨¥╨╡ ╨╕╨╖╨╝╨╡╨╜╤Å╨╣╤é╨╡┬╗ ΓÇö ╨║╨░╤ü╤é╨╛╨╝╨╜╤ï╨╣ ╨║╨╛╨╜╤ä╨╕╨│ ╨▓ ╨┐╨░╨║╨╡╤é╨╡ |
-| **Gamedata** | ╨ƒ╨╛╨┤╨║╨╛╤Ç╤Ç╨╡╨║╤é╨╕╤Ç╨╛╨▓╨░╨╜╤ï ╤ü╨╕╨│╨╜╨░╤é╤â╤Ç╤ï **`GetWeaponPrice`** ╨╕ **`GetTranslatedWeaponAlias`** ╨▓ `game.css.txt` (╨╛╤é╨┤╨╡╨╗╤î╨╜╨╛╨╡ ╨▓╨╗╨╛╨╢╨╡╨╜╨╕╨╡ ╨┐╨╛╤ü╨╗╨╡ ╨┐╨╡╤Ç╨▓╨╛╨│╨╛ ╤Ç╨╡╨╗╨╕╨╖╨░) |
+| **core.cfg** | «Не изменяйте» — кастомный конфиг в пакете |
+| **Gamedata** | Подкорректированы сигнатуры **`GetWeaponPrice`** и **`GetTranslatedWeaponAlias`** в `game.css.txt` (отдельное вложение после первого релиза) |
 
-### Gamedata / offsets (╤Ç╤â╤ç╨╜╨░╤Å ╨┐╤Ç╨╛╨▓╨╡╤Ç╨║╨░)
+### Gamedata / offsets (ручная проверка)
 
-1. **`GetWeaponPrice` + `GetTranslatedWeaponAlias`** ΓÇö FrozDark ╤Å╨▓╨╜╨╛ ╨┐╤Ç╨░╨▓╨╕╨╗ ╤ü╨╕╨│╨╜╨░╤é╤â╤Ç╤ï ╨┐╨╛╨┤ v34 Windows. ╨¡╤é╨╛ **╤é╨╛╤é ╨╢╨╡ ╨║╨╗╨░╤ü╤ü ╨┐╤Ç╨╛╨▒╨╗╨╡╨╝**, ╤ç╤é╨╛ `WeaponPrice` offset ╨╕ sigscan failed ╨▓ MyArena-╤é╨╡╨╝╨╡. ╨ƒ╤Ç╨╕ ╨┐╤Ç╨╛╨▓╨╡╤Ç╨║╨╡ ╤ü╨▓╨╡╤Ç╤Å╤é╤î ╨╛╨▒╨░ ╨┐╨╛╨╗╤Å ╨▓ `sm-cstrike.games/game.cstrike.txt`.
+1. **`GetWeaponPrice` + `GetTranslatedWeaponAlias`** — FrozDark явно правил сигнатуры под v34 Windows. Это **тот же класс проблем**, что `WeaponPrice` offset и sigscan failed в MyArena-теме. При проверке сверять оба поля в `sm-cstrike.games/game.cstrike.txt`.
 
-2. **Virtual offsets (Linux)** ΓÇö FrozDark ╨▓╤ï╨╗╨╛╨╢╨╕╨╗ ╨┐╨╛╨╗╨╜╤ï╨╣ vtable-╤ü╨┐╨╕╤ü╨╛╨║ CCSPlayer. ╨Ü╨╗╤Ä╤ç╨╡╨▓╤ï╨╡ ╨╕╨╜╨┤╨╡╨║╤ü╤ï ╤ü╨╛╨▓╨┐╨░╨┤╨░╤Ä╤é ╤ü sdktools gamedata ╨╕╨╖ ╨░╤Ç╤à╨╕╨▓╨░ MyArena 6522:
+2. **Virtual offsets (Linux)** — FrozDark выложил полный vtable-список CCSPlayer. Ключевые индексы совпадают с sdktools gamedata из архива MyArena 6522:
 
-   | ╨ñ╤â╨╜╨║╤å╨╕╤Å | Linux vtable |
+   | Функция | Linux vtable |
    |---|---|
    | GiveNamedItem | **330** |
    | RemovePlayerItem | 227 |
@@ -186,28 +186,28 @@ Linux-╤ü╨╕╨│╨╜╨░╤é╤â╤Ç╤ï ╨▓ sm-cstrike ╤ü�
    | Ignite / Extinguish | 189 / 190 |
    | Teleport | 99 |
 
-   **Windows: `offset - 1`** ╨╛╤é Linux-╨╖╨╜╨░╤ç╨╡╨╜╨╕╤Å (╨┐╤Ç╨░╨▓╨╕╨╗╨╛ FrozDark ╨┤╨╗╤Å v34).
+   **Windows: `offset - 1`** от Linux-значения (правило FrozDark для v34).
 
-3. **Linux + ╨╜╨╛╨▓╤ï╨╡ ╨▒╨╕╨╜╨░╤Ç╨╜╨╕╨║╨╕ SM/MM** ΓÇö FrozDark ╨┐╨╕╤ü╨░╨╗: ╨╝╨╛╨╢╨╜╨╛ ╤ü╤é╨░╨▓╨╕╤é╤î ╤ü╨▓╨╡╨╢╨╕╨╡ Linux-╨▒╨╕╨╜╨░╤Ç╨╜╨╕╨║╨╕ SM/MM **╨▒╨╡╨╖ ╨╖╨░╨╝╨╡╨╜╤ï gamedata**, ╨╜╨╛ **╨╜╨╡ ╨▒╤â╨┤╤â╤é ╤Ç╨░╨▒╨╛╤é╨░╤é╤î** flashtools ╨╕ cstrike extension ╨▒╨╡╨╖ ╨┐╨╡╤Ç╨╡╤ü╨▒╨╛╤Ç╨║╨╕ ╨┐╨╛╨┤ v34 (Release - Old Metamod).
+3. **Linux + новые бинарники SM/MM** — FrozDark писал: можно ставить свежие Linux-бинарники SM/MM **без замены gamedata**, но **не будут работать** flashtools и cstrike extension без пересборки под v34 (Release - Old Metamod).
 
-### Windows-╤ü╨┐╨╡╤å╨╕╤ä╨╕╨║╨░ (╨╕╨╖ ╨╛╨▒╤ü╤â╨╢╨┤╨╡╨╜╨╕╤Å ╨▒╨░╨│╨╛╨▓)
+### Windows-специфика (из обсуждения багов)
 
-| ╨æ╨░╨│ | ╨ƒ╤Ç╨╕╤ç╨╕╨╜╨░ / workaround |
+| Баг | Причина / workaround |
 |---|---|
-| `game.cstrike.ext` ╨╜╨╡ ╨│╤Ç╤â╨╖╨╕╤é╤ü╤Å ╨╜╨░ Win2003 | `InitOnceExecuteOnce` ╨╜╨╡╤é ╨▓ KERNEL32.dll (SM ╤ü╨╛╨▒╤Ç╨░╨╜ ╨┐╨╛╨┤ Win7+) |
-| `exit`/`quit` ╨║╤Ç╨░╤ê╨╕╤é ╤ü╨╡╤Ç╨▓╨╡╤Ç | ╨ù╨░╨╝╨╡╤ç╨╡╨╜╨╛ ╨╜╨░ Win2003; ╨╜╨░ Win8.1 ╤â ╨░╨▓╤é╨╛╤Ç╨░ ╨╜╨╡ ╨▓╨╛╤ü╨┐╤Ç╨╛╨╕╨╖╨▓╨╛╨┤╨╕╨╗╨╛╤ü╤î |
-| `PrintHintText` + ╨║╨╕╤Ç╨╕╨╗╨╗╨╕╤å╨░ | ╨Ü╤Ç╨░╨║╨╛╨╖╤Å╨▒╤Ç╤ï ΓÇö workaround: ╨┐╤Ç╨╛╨▒╨╡╨╗ ╨▓ ╨╜╨░╤ç╨░╨╗╨╡ ╤ü╤é╤Ç╨╛╨║╨╕ |
-| ╨Ü╤Ç╨░╤ê ╨┐╤Ç╨╕ ╨┤╨╡╤é╨╛╨╜╨░╤å╨╕╨╕ C4 | ╨Ü╨╛╨╜╤ä╨╗╨╕╨║╤é weapon limit (wS) + SMAC; ╨┐╨╛ ╨╛╤é╨┤╨╡╨╗╤î╨╜╨╛╤ü╤é╨╕ ╤Ç╨░╨▒╨╛╤é╨░╨╗╨╕ |
-| Rename ╤ç╨╡╤Ç╨╡╨╖ admin menu | ╨Ü╤Ç╨░╤ê ΓÇö ┬½╨╛╤ü╨╛╨▒╨╡╨╜╨╜╨╛╤ü╤é╤î Orangebox┬╗; ╤ü╤é╨░╤Ç╤ï╨╣ basecommands ╨╕╨╗╨╕ ╨╖╨░╨║╨╛╨╝╨╝╨╡╨╜╤é╨╕╤Ç╨╛╨▓╨░╤é╤î 3 ╤ü╤é╤Ç╨╛╨║╨╕ |
+| `game.cstrike.ext` не грузится на Win2003 | `InitOnceExecuteOnce` нет в KERNEL32.dll (SM собран под Win7+) |
+| `exit`/`quit` крашит сервер | Замечено на Win2003; на Win8.1 у автора не воспроизводилось |
+| `PrintHintText` + кириллица | Кракозябры — workaround: пробел в начале строки |
+| Краш при детонации C4 | Конфликт weapon limit (wS) + SMAC; по отдельности работали |
+| Rename через admin menu | Краш — «особенность Orangebox»; старый basecommands или закомментировать 3 строки |
 
-### ╨º╤é╨╛ ╤Ç╨╡╨╗╨╡╨▓╨░╨╜╤é╨╜╨╛ ╨╜╨░╤ê╨╡╨╝╤â builder (6572)
+### Что релевантно нашему builder (6572)
 
-| ╨¥╨░╤à╨╛╨┤╨║╨░ | ╨í╤é╨░╤é╤â╤ü ╤â ╨╜╨░╤ü |
+| Находка | Статус у нас |
 |---|---|
-| ╨Æ╤ï╤Ç╨╡╨╖ OB-only cstrike natives | ╨º╨░╤ü╤é╨╕╤ç╨╜╨╛ ╤ç╨╡╤Ç╨╡╨╖ `#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS` ╨▓ `apply-sourcemod.sh` |
-| `GetWeaponPrice` / `GetTranslatedWeaponAlias` sigs | ╨Æ `builder/assets/gamedata/.../game.cstrike.txt` ΓÇö **╨┐╤Ç╨╛╨▓╨╡╤Ç╨╕╤é╤î ╨▓╤Ç╤â╤ç╨╜╤â╤Ä** |
-| sdktools vtable offsets (Linux 330/348/ΓÇª) | ╨ÿ╨╖ upstream 6572; ╤ü╨╛╨▓╨┐╨░╨┤╨░╤Ä╤é ╤ü FrozDark/MyArena 6522 ΓÇö ╤à╨╛╤Ç╨╛╤ê╨╕╨╣ ╨╖╨╜╨░╨║ ╨┤╨╗╤Å Linux |
-| Windows vtable = Linux ΓêÆ 1 | ╨ú╤ç╨╕╤é╤ï╨▓╨░╤é╤î ╨┐╤Ç╨╕ ╨▓╨╡╤Ç╨╕╤ä╨╕╨║╨░╤å╨╕╨╕ Windows gamedata |
-| FrozDark `game.css.txt` (2015) | ╨ÿ╤ü╤é╨╛╤Ç╨╕╤ç╨╡╤ü╨║╨╕╨╣ ╤Ç╨╡╤ä╨╡╤Ç╨╡╨╜╤ü; ╨╜╨░╤ê╨╕ sigs ╨╜╨╛╨▓╨╡╨╡ (6572), ╨╜╨╛ offset/signature logic ╤é╨╛╤é ╨╢╨╡ |
+| Вырез OB-only cstrike natives | Частично через `#if SOURCE_ENGINE >= SE_ORANGEBOX && SOURCE_ENGINE != SE_CSS` в `apply-sourcemod.sh` |
+| `GetWeaponPrice` / `GetTranslatedWeaponAlias` sigs | В `builder/assets/gamedata/.../game.cstrike.txt` — **проверить вручную** |
+| sdktools vtable offsets (Linux 330/348/…) | Из upstream 6572; совпадают с FrozDark/MyArena 6522 — хороший знак для Linux |
+| Windows vtable = Linux − 1 | Учитывать при верификации Windows gamedata |
+| FrozDark `game.css.txt` (2015) | Исторический референс; наши sigs новее (6572), но offset/signature logic тот же |
 
-╨í╨▓╤Å╨╖╨░╨╜╨╜╨░╤Å ╤é╨╡╨╝╨░ (╨╜╨╡ ╨┐╤Ç╨╛╤ç╨╕╤é╨░╨╜╨░ ΓÇö Cloudflare): `[CS:S v34] ╨í╨╕╨│╨╜╨░╤é╤â╤Ç╤ï ╤ä╤â╨╜╨║╤å╨╕╨╕` (FrozDark, ╨░╨┐╤Ç 2015) ΓÇö ╨▓╨╡╤Ç╨╛╤Å╤é╨╜╨╛ ╤Ç╨░╤ü╤ê╨╕╤Ç╨╡╨╜╨╜╤ï╨╣ ╤ü╨┐╨╕╤ü╨╛╨║ sigs.
+Связанная тема (не прочитана — Cloudflare): `[CS:S v34] Сигнатуры функции` (FrozDark, апр 2015) — вероятно расширенный список sigs.
