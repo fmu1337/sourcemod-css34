@@ -27,8 +27,32 @@ case "${BOTPLAY_PROFILE}" in
   built|release)
     # "built" = CI artifacts or local tarballs; "release" = same install path
     # (pass SM_PACKAGE + MM_PACKAGE from a GitHub Release tag).
+    if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" ]]; then
+      if [[ -f "${ROOT}/builder/resolve-version.sh" ]]; then
+        eval "$(
+          CSS34_LINE="${CSS34_LINE:-sm13-dev}" bash -c "
+            source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
+            echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"
+            echo \"RESOLVED_SM_MAJOR='\${SOURCEMOD_MAJOR}'\"
+            echo \"RESOLVED_MM_MODE='\${MMS_MODE}'\"
+          "
+        )"
+        if [[ -n "${RESOLVED_SM_REV:-}" ]]; then
+          SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.${RESOLVED_SM_MAJOR}.0.${RESOLVED_SM_REV}}"
+          if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
+            case "${RESOLVED_MM_MODE:-}" in
+              1.10) MM_VERSION_EXPECT="1.10.7" ;;
+              1.11) MM_VERSION_EXPECT="1.11.0" ;;
+              1.12) MM_VERSION_EXPECT="1.12.0" ;;
+              2.0)  MM_VERSION_EXPECT="2.0.0" ;;
+              *)    MM_VERSION_EXPECT="1.12.0" ;;
+            esac
+          fi
+        fi
+      fi
+    fi
     MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
-    SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
+    SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6970}"
     BOTPLAY_PROFILE=built
     ;;
   rom4s)

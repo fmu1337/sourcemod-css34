@@ -82,8 +82,8 @@ Local short run (built):
 
 ```bash
 chmod +x testing/scripts/*.sh
-SM_PACKAGE=$PWD/packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz \
-MM_PACKAGE=$PWD/packages/mmsource-1.10.7-dev-css34-linux.tar.gz \
+SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7404-css34-linux.tar.gz \
+MM_PACKAGE=$PWD/packages/mmsource-1.12.0-dev-css34-linux.tar.gz \
 BOTPLAY_PROFILE=built \
 REPORT_JSON=$PWD/.ci-server/built-botplay-report.json \
 RECORD_SECS=120 \
@@ -122,15 +122,13 @@ Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary;
 chmod +x testing/scripts/*.sh
 
 # Test freshly built SM + MM from builder/run/linux.sh (primary path):
-MM_PACKAGE=$PWD/packages/mmsource-1.10.7-dev-css34-linux.tar.gz \
-SM_PACKAGE=$PWD/packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz \
-MM_VERSION_EXPECT=1.10.7 \
+MM_PACKAGE=$PWD/packages/mmsource-1.12.0-dev-css34-linux.tar.gz \
+SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7404-css34-linux.tar.gz \
   testing/scripts/run-smoke.sh
 
-# Or USE_BUILT_MM against deps/mmsource-1.10/build/package + local SM tarball:
+# Or USE_BUILT_MM against deps/mmsource-1.12/build/package + local SM tarball:
 USE_BUILT_MM=1 \
-SM_PACKAGE=$PWD/packages/sourcemod-1.11.0-git6572-css34-linux.tar.gz \
-MM_VERSION_EXPECT=1.10.7 \
+SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7404-css34-linux.tar.gz \
   testing/scripts/run-smoke.sh
 ```
 
