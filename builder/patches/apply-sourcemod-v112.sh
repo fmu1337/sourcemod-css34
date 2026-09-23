@@ -40,11 +40,12 @@ else:
 PYMAN
 
 # --- AMBuildScript / SdkHelpers (1.12 structure) ---
-SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+SOURCEMOD_DIR="$sourcemod_dir" BUILDER_DIR="$builder_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 
 sm = Path(os.environ['SOURCEMOD_DIR'])
+builder_dir = os.environ.get('BUILDER_DIR', '')
 ambuild = sm / 'AMBuildScript'
 text = ambuild.read_text()
 
@@ -168,6 +169,44 @@ if "CSS34 SDK compatibility" not in text:
 else:
     print('==> CSS34 compiler flags already present')
 
+# SM 7461+ sets -std=c++20; css34 uses gcc-9/clang-9 (max c++17).
+if "cxx.cxxflags += ['-std=c++20']" in text:
+    text = text.replace(
+        "cxx.cxxflags += ['-std=c++20']",
+        "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+        1,
+    )
+    print('==> Downgraded AMBuildScript c++20 -> c++17 for css34 toolchain')
+elif "css34: gcc-9/clang-9 lack c++20" in text:
+    print('==> AMBuildScript c++17 downgrade already present')
+
+# SM 7461+ SourcePawn uses std::span (C++20); provide a polyfill via -I cxx17-compat.
+pool_allocator = sm / 'sourcepawn/utils/pool-allocator.h'
+if pool_allocator.exists() and '#include <span>' in pool_allocator.read_text():
+    compat_inc = os.path.join(builder_dir, 'patches', 'cxx17-compat')
+    span_marker = "cxx.cxxflags += ['-I"  # css34: C++17 std::span polyfill
+    if span_marker not in text:
+        cxx17_markers = [
+            "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+            "cxx.cxxflags += ['-std=c++17']",
+        ]
+        inserted = False
+        for marker in cxx17_markers:
+            if marker in text:
+                text = text.replace(
+                    marker,
+                    marker + f"\n    cxx.cxxflags += ['-I{compat_inc}']  # css34: C++17 std::span polyfill",
+                    1,
+                )
+                inserted = True
+                break
+        if inserted:
+            print('==> Added cxx17-compat include path for std::span polyfill')
+        else:
+            raise SystemExit('Failed to locate cxx std flag for span polyfill include')
+    else:
+        print('==> cxx17-compat span polyfill include already present')
+
 ambuild.write_text(text, encoding='utf-8')
 
 # SourcePawn sign-compare under -Werror on gcc-9
@@ -194,55 +233,73 @@ if sp.exists():
     # dropped by --as-needed when nothing in the .o files references it directly.
     # Note: when SourcePawn is built under SourceMod, Configure() is skipped and
     # SM.all_targets is used - so also patch BuildDynamicCoreLib below.
-    old_pl = "                cxx.postlink += ['-lpthread', '-lrt']"
-    new_pl = (
-        "                # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc\n"
-        "                cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']"
-    )
     sp_text = sp.read_text()
-    if 'css34: force pthread/rt NEEDED for Debian 11' in sp_text and 'BuildDynamicCoreLib' in sp_text:
-        pass  # may still need BuildDynamicCoreLib below
-    if old_pl in sp_text and 'css34: force pthread/rt NEEDED for Debian 11' not in sp_text:
-        sp.write_text(sp_text.replace(old_pl, new_pl, 1))
-        print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt DT_NEEDED')
-        sp_text = sp.read_text()
-    elif 'css34: force pthread/rt NEEDED for Debian 11' in sp_text:
-        print('==> sourcepawn Configure pthread/rt already patched')
+    if "'-lgcc_s'" not in sp_text and "cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']" in sp_text:
+        sp_text = sp_text.replace(
+            "cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']",
+            "cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']",
+        )
+        sp.write_text(sp_text)
+        print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt/-lgcc_s')
+    elif "'-lgcc_s'" not in sp_text and "cxx.postlink += ['-lpthread', '-lrt']" in sp_text:
+        sp_text = sp_text.replace(
+            "cxx.postlink += ['-lpthread', '-lrt']",
+            "cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']",
+        )
+        sp.write_text(sp_text)
+        print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt/-lgcc_s')
     else:
-        print('==> WARN: sourcepawn linux pthread postlink not found')
+        print('==> sourcepawn Configure pthread/rt/-lgcc_s already patched')
 
-    # Embedded under SM: libsourcepawn.so is built via SPRoot.Library(SM) using
-    # SM.all_targets (no SP Configure postlink). Force DT_NEEDED on the shared lib
-    # that package.sh renames to sourcepawn.jit.x86.so.
+    sp_text = sp.read_text()
+    if 'css34: AddStaticLibraries lgcc_s' not in sp_text:
+        old_add_static = "        if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':\n            binary.compiler.linkflags += ['-Wl,--end-group']"
+        new_add_static = "        if binary.compiler.target.platform == 'linux':\n            # css34: AddStaticLibraries lgcc_s for 32-bit __mulodi4 in spcomp\n            binary.compiler.linkflags += ['-lgcc', '-lgcc_s', '-Wl,--end-group']"
+        if old_add_static in sp_text:
+            sp.write_text(sp_text.replace(old_add_static, new_add_static, 1))
+            print('==> Patched AddStaticLibraries in sourcepawn for lgcc_s')
+            sp_text = sp.read_text()
+
+    # SM 1.13.7461+ builds static libsourcepawn_static only (no shared jit .so).
+    # SM 1.12–1.13.7404 may still use BuildDynamicCoreLib → sourcepawn.jit.x86.so.
     dyn_marker = 'css34: libsourcepawn pthread/rt DT_NEEDED'
     if dyn_marker not in sp_text:
-        dyn_old = (
-            "    def BuildDynamicCoreLib(self, builder):\n"
-            "        cxx = builder.cxx\n"
-            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
-            "        self.SetupBinForArch(binary, builder)\n"
-        )
-        dyn_new = (
-            "    def BuildDynamicCoreLib(self, builder):\n"
-            "        cxx = builder.cxx\n"
-            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
-            "        self.SetupBinForArch(binary, builder)\n"
-            "        # css34: libsourcepawn pthread/rt DT_NEEDED (packaged as sourcepawn.jit.x86.so)\n"
+        pthread_block = (
+            "        # css34: libsourcepawn pthread/rt DT_NEEDED\n"
             "        if binary.compiler.target.platform == 'linux':\n"
-            "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):\n"
+            "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):\n"
             "            if flag not in binary.compiler.linkflags:\n"
             "              binary.compiler.linkflags += [flag]\n"
         )
-        if dyn_old not in sp_text:
-            print('==> WARN: BuildDynamicCoreLib pattern not found')
-        else:
-            sp.write_text(sp_text.replace(dyn_old, dyn_new, 1))
-            print('==> Patched BuildDynamicCoreLib for pthread/rt DT_NEEDED')
-            # Must re-read: the ABI0 block below previously overwrote this write
-            # using a stale sp_text and dropped pthread/rt from libsourcepawn.so.
+        dyn_targets = [
+            (
+                'BuildDynamicCoreLib',
+                "    def BuildDynamicCoreLib(self, builder):\n"
+                "        cxx = builder.cxx\n"
+                "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
+                "        self.SetupBinForArch(binary, builder)\n",
+            ),
+            (
+                'BuildStaticCoreLib',
+                "    def BuildStaticCoreLib(self, builder):\n"
+                "        cxx = builder.cxx\n"
+                "        binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')\n\n"
+                "        self.SetupBinForArch(binary, builder)\n",
+            ),
+        ]
+        patched_dyn = False
+        for fn, dyn_old in dyn_targets:
+            if dyn_old not in sp_text:
+                continue
+            sp_text = sp_text.replace(dyn_old, dyn_old + pthread_block, 1)
+            sp.write_text(sp_text)
+            print(f'==> Patched {fn} for pthread/rt DT_NEEDED')
+            patched_dyn = True
             sp_text = sp.read_text()
+        if not patched_dyn:
+            print('==> WARN: BuildDynamicCoreLib/BuildStaticCoreLib pattern not found')
     else:
-        print('==> BuildDynamicCoreLib pthread/rt already patched')
+        print('==> libsourcepawn pthread/rt already patched')
 
     # css34: static libsourcepawn is linked into logic.so — must use ABI0.
     sp_text = sp.read_text()
@@ -270,6 +327,23 @@ if logic_am.exists():
     lt = logic_am.read_text()
     pv_parts = (sm / 'product.version').read_text().strip().split('.')
     sm_minor = int(pv_parts[1]) if len(pv_parts) > 1 else 11
+    # SM 1.13.7461+ indexes SP.static_libsp by Target, not arch string.
+    uses_sp_target_key = 'SP.static_libsp[target]' in lt
+    sp_idx_var = 'target' if uses_sp_target_key else 'arch'
+    sp_idx_decl = (
+        '    target = binary.compiler.target\n'
+        if uses_sp_target_key else
+        '    arch = binary.compiler.target.arch\n'
+    )
+    mimalloc_link = (
+        '      SP.mimalloc[target],\n' if uses_sp_target_key else ''
+    )
+    mimalloc_nested_link = (
+        '      SP.mimalloc[target],\n' if uses_sp_target_key else ''
+    )
+    mimalloc_tail_link = (
+        '    SP.mimalloc[target],\n' if uses_sp_target_key else ''
+    )
     if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in lt and 'SM_LOGIC_CXX_SYSROOT gcc-9 g++-9' not in lt:
         loop_old = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
         # SM 1.12: gcc-4.9 sysroot + strptime ParseTime shim.
@@ -389,13 +463,12 @@ if logic_am.exists():
         # BuildScripts). SM 1.13+ embeds SP.static_libsp into logic.so.
         sp_link = ""
         if sm_minor >= 13:
-            sp_link = """    arch = binary.compiler.target.arch
-    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
+            sp_link = f"""{sp_idx_decl}    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_link}    ]
 """
         exclude_libs = ""
         if sm_minor >= 13:
@@ -490,21 +563,21 @@ if logic_am.exists():
 
     # SM 1.13+: static SourcePawn was appended after libstdc++.a; reorder so std::thread resolves.
     # SM 1.12 has no SP in logic AMBuilder / BuildScripts — skip entirely.
-    if sm_minor >= 13 and 'css34: static SP before libstdc++ for std::thread' not in lt:
-        sp_before_old = """    for flag in ('-static-libgcc',):
+    if sm_minor >= 13:
+        if 'css34: static SP before libstdc++ for std::thread' not in lt:
+            sp_before_old = """    for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
     _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
     if _sup and _os.path.isfile(_sup):
       _static.append(_sup)
     if _os.path.isfile(_gcc_eh):"""
-        sp_before_new = """    arch = binary.compiler.target.arch
-    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
+            sp_before_new = f"""{sp_idx_decl}    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_link}    ]
     for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
@@ -512,7 +585,7 @@ if logic_am.exists():
     if _sup and _os.path.isfile(_sup):
       _static.append(_sup)
     if _os.path.isfile(_gcc_eh):"""
-        sp_before_old_wa = """    for flag in ('-static-libgcc',):
+            sp_before_old_wa = """    for flag in ('-static-libgcc',):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
     _static = ['-nodefaultlibs', '-Wl,-Bstatic', '-Wl,--whole-archive', _stdcxx]
@@ -520,45 +593,78 @@ if logic_am.exists():
       _static.append(_sup)
     _static.append('-Wl,-no-whole-archive')  # css34: static SP needs full libstdc++ (std::thread)
     if _os.path.isfile(_gcc_eh):"""
-        if sp_before_old_wa in lt:
-            lt = lt.replace(sp_before_old_wa, sp_before_new, 1)
-            print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
-        elif sp_before_old in lt:
-            lt = lt.replace(sp_before_old, sp_before_new, 1)
-            print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
-        sp_tail_old = """  arch = binary.compiler.target.arch
+            if sp_before_old_wa in lt:
+                lt = lt.replace(sp_before_old_wa, sp_before_new, 1)
+                print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
+            elif sp_before_old in lt:
+                lt = lt.replace(sp_before_old, sp_before_new, 1)
+                print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
+
+        if 'css34: skip duplicate logic static SP on linux' not in lt:
+            sp_tail_old = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   binary.compiler.linkflags += [
-    SP.static_libsp[arch],
-    SP.libamtl[arch],
-    SP.zlib[arch],
-  ]
+    SP.static_libsp[{sp_idx_var}],
+    SP.libamtl[{sp_idx_var}],
+    SP.zlib[{sp_idx_var}],
+{mimalloc_tail_link}  ]
   if binary.compiler.target.platform == 'linux':"""
-        sp_tail_new = """  arch = binary.compiler.target.arch
+            sp_tail_new = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
+  # css34: skip duplicate logic static SP on linux (linked inside linux block above)
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
   if binary.compiler.target.platform == 'linux':"""
-        if sp_tail_old in lt:
-            lt = lt.replace(sp_tail_old, sp_tail_new, 1)
-            print('==> logic AMBuilder: skip duplicate static SP on linux')
+            if sp_tail_old in lt:
+                lt = lt.replace(sp_tail_old, sp_tail_new, 1)
+                print('==> logic AMBuilder: skip duplicate static SP on linux')
+            elif uses_sp_target_key:
+                sp_tail_after_mac = f"""  elif binary.compiler.target.platform == 'mac':
+    binary.compiler.cflags += ['-Wno-deprecated-declarations']
+    binary.compiler.postlink += ['-framework', 'CoreServices', '-lm']
+
+  {sp_idx_var} = binary.compiler.target
+  binary.compiler.linkflags += [
+    SP.static_libsp[{sp_idx_var}],
+    SP.libamtl[{sp_idx_var}],
+    SP.zlib[{sp_idx_var}],
+{mimalloc_tail_link}  ]
+
+  if binary.compiler.family == 'gcc' or binary.compiler.family == 'clang':"""
+                sp_tail_after_mac_new = f"""  elif binary.compiler.target.platform == 'mac':
+    binary.compiler.cflags += ['-Wno-deprecated-declarations']
+    binary.compiler.postlink += ['-framework', 'CoreServices', '-lm']
+
+  {sp_idx_var} = binary.compiler.target
+  # css34: skip duplicate logic static SP on linux (linked inside linux block above)
+  if binary.compiler.target.platform != 'linux':
+    binary.compiler.linkflags += [
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
+
+  if binary.compiler.family == 'gcc' or binary.compiler.family == 'clang':"""
+                if sp_tail_after_mac in lt:
+                    lt = lt.replace(sp_tail_after_mac, sp_tail_after_mac_new, 1)
+                    print('==> logic AMBuilder: skip duplicate static SP on linux (7461 layout)')
 
     if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt:
-        sp_libs_anchor = """  arch = binary.compiler.target.arch
+        sp_libs_anchor = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   binary.compiler.linkflags += [
-    SP.static_libsp[arch],
-    SP.libamtl[arch],
-    SP.zlib[arch],
-  ]"""
-        sp_libs_new = """  arch = binary.compiler.target.arch
+    SP.static_libsp[{sp_idx_var}],
+    SP.libamtl[{sp_idx_var}],
+    SP.zlib[{sp_idx_var}],
+{mimalloc_tail_link}  ]"""
+        sp_libs_new = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
   if binary.compiler.target.platform == 'linux':
     # css34: logic postlink pthread after static SP archives (DT_NEEDED on glibc < 2.34)
     for flag in list(binary.compiler.linkflags):
@@ -568,13 +674,13 @@ if logic_am.exists():
       if flag not in binary.compiler.postlink:
         binary.compiler.postlink += [flag]
 """
-        sp_libs_anchor_linux = """  arch = binary.compiler.target.arch
+        sp_libs_anchor_linux = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
-      SP.static_libsp[arch],
-      SP.libamtl[arch],
-      SP.zlib[arch],
-    ]
+      SP.static_libsp[{sp_idx_var}],
+      SP.libamtl[{sp_idx_var}],
+      SP.zlib[{sp_idx_var}],
+{mimalloc_nested_link}    ]
   if binary.compiler.target.platform == 'linux':"""
         if sp_libs_anchor_linux in lt:
             if 'binary.compiler.postlink += [flag]' not in lt:
@@ -876,6 +982,117 @@ if shell.exists() and 'if (index > params[0])' in shell.read_text():
         'if (index > (size_t)params[0])',
     ))
 PY
+
+# --- CheckedMul __mulodi4 patch for 32-bit spcomp ---
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMUL'
+from pathlib import Path
+import os
+cf_cpp = Path(os.environ['SOURCEMOD_DIR']) / 'sourcepawn/compiler/constant-fold.cpp'
+if cf_cpp.exists():
+    text = cf_cpp.read_text()
+    old_mul = """template <typename T>
+static inline bool CheckedMul(T a, T b, T* result) {
+#if defined(__clang__) || defined(__GNUC__)
+    return !__builtin_mul_overflow(a, b, result);
+#elif defined(_MSC_VER)
+    if (a == 0 || b == 0) {"""
+    new_mul = """template <typename T>
+static inline bool CheckedMul(T a, T b, T* result) {
+    if (a == 0 || b == 0) {"""
+    if old_mul in text:
+        # Also remove trailing #endif for the #elif
+        old_full = """template <typename T>
+static inline bool CheckedMul(T a, T b, T* result) {
+#if defined(__clang__) || defined(__GNUC__)
+    return !__builtin_mul_overflow(a, b, result);
+#elif defined(_MSC_VER)
+    if (a == 0 || b == 0) {
+        *result = 0;
+        return true;
+    }
+    // INT_MIN * -1 breaks the round-trip check below.
+    if ((a == std::numeric_limits<T>::min() && b == T(-1)) ||
+        (b == std::numeric_limits<T>::min() && a == T(-1))) {
+        return false;
+    }
+    T product = a * b;
+    *result = product;
+    return product / b == a;
+#endif
+}"""
+        new_full = """template <typename T>
+static inline bool CheckedMul(T a, T b, T* result) {
+    if (a == 0 || b == 0) {
+        *result = 0;
+        return true;
+    }
+    // INT_MIN * -1 breaks the round-trip check below.
+    if ((a == std::numeric_limits<T>::min() && b == T(-1)) ||
+        (b == std::numeric_limits<T>::min() && a == T(-1))) {
+        return false;
+    }
+    T product = a * b;
+    *result = product;
+    return product / b == a;
+}"""
+        cf_cpp.write_text(text.replace(old_full, new_full, 1))
+        print('==> Patched CheckedMul in constant-fold.cpp (avoid __mulodi4)')
+    elif 'css34: avoid __mulodi4' in text or 'return product / b == a;' in text:
+        print('==> CheckedMul in constant-fold.cpp already patched')
+PYMUL
+
+# --- Safe GET_V_IFACE macros in sourcemm_api.cpp ---
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYIFACE'
+from pathlib import Path
+import os
+sm_api = Path(os.environ['SOURCEMOD_DIR']) / 'core/sourcemm_api.cpp'
+if sm_api.exists():
+    text = sm_api.read_text()
+    if 'CSS34_SAFE_GET_V_IFACE' not in text:
+        macro_patch = """/* CSS34_SAFE_GET_V_IFACE: null factory guard */
+#undef GET_V_IFACE_ANY
+#define GET_V_IFACE_ANY(v_factory, v_var, v_type, v_name) \
+	do { \
+		CreateInterfaceFn _fn = ismm->v_factory(); \
+		if (!_fn) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Factory %s returned NULL for %s", #v_factory, v_name); \
+			return false; \
+		} \
+		v_var = (v_type *)ismm->VInterfaceMatch(_fn, v_name, 0); \
+		if (!v_var) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Could not find interface: %s", v_name); \
+			return false; \
+		} \
+	} while (0)
+
+#undef GET_V_IFACE_CURRENT
+#define GET_V_IFACE_CURRENT(v_factory, v_var, v_type, v_name) \
+	do { \
+		CreateInterfaceFn _fn = ismm->v_factory(); \
+		if (!_fn) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Factory %s returned NULL for %s", #v_factory, v_name); \
+			return false; \
+		} \
+		v_var = (v_type *)ismm->VInterfaceMatch(_fn, v_name); \
+		if (!v_var) \
+		{ \
+			if (error && maxlen) \
+				ke::SafeSprintf(error, maxlen, "Could not find interface: %s", v_name); \
+			return false; \
+		} \
+	} while (0)
+
+bool SourceMod_Core::Load"""
+        text = text.replace('bool SourceMod_Core::Load', macro_patch, 1)
+        sm_api.write_text(text)
+        print('==> Patched GET_V_IFACE macros in core/sourcemm_api.cpp')
+PYIFACE
 
 # --- Source-level patches ---
 while IFS= read -r -d '' file; do

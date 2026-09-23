@@ -31,6 +31,14 @@
       "metamod_commit": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
       "metamod_binary": "metamod.2.ep1",
       "role": "experimental"
+    },
+    "sm13-latest": {
+      "sourcemod": "1.13.0.7461",
+      "sourcemod_commit": "809392d1dc0436b064f1d2d03cc498551f2a97b9",
+      "metamod": "1.12.0-dev+1224",
+      "metamod_commit": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
+      "metamod_binary": "metamod.2.ep1",
+      "role": "latest-sm13"
     }
   },
   "metamod_pins": {
@@ -148,7 +156,7 @@
     "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
     "CI matrix includes sm13-mm20 (SM 1.13.7404 + MM 2.0 git1407).",
     "Smoke and check-package.sh assert sdkhooks.games and OnTakeDamage css34 offsets.",
-    "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all four lines.",
+    "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all CI lines.",
     "Use matched release tags; do not mix MM from one line with SM from another.",
     "reference.* URLs are historical community drops for local comparison only."
   ]
