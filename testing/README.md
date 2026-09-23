@@ -37,7 +37,7 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 7. **sdkhooks.games** `OnTakeDamage` linux offset **61** (css34)
 8. No segfault; not flooded with `Unknown command` (buffer bug signature)
 
-The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs). Runs for all four `CSS34_LINE` builds on every `master` push.
+The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs). Runs for every `CSS34_LINE` build on every `master` push.
 
 ## `srcds_run` / engine launch flags
 

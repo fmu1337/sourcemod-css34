@@ -64,9 +64,9 @@ else
 fi
 
 echo "==> Checking Metamod bridge exports"
-if nm -D "${MM_SO}" 2>/dev/null | grep -Eq ' T CreateInterface([[:space:]]|$)'; then
+if nm -D "${MM_SO}" 2>/dev/null | grep -E ' T CreateInterface([[:space:]]|$)' >/dev/null; then
   echo "OK: CreateInterface export present (MM:S 1.10 V1 bridge)"
-elif nm -D "${MM_SO}" 2>/dev/null | grep -q 'CreateInterface_MMS'; then
+elif nm -D "${MM_SO}" 2>/dev/null | grep 'CreateInterface_MMS' >/dev/null; then
   echo "OK: CreateInterface_MMS present (MM:S 1.12 modern load path; no V1 CreateInterface needed)"
 else
   echo "FAIL: sourcemod_mm_i486.so missing CreateInterface / CreateInterface_MMS" >&2
@@ -75,7 +75,7 @@ else
   fail=1
 fi
 
-if nm -D "${MM_SO}" 2>/dev/null | grep -q 'CreateInterface_MMS'; then
+if nm -D "${MM_SO}" 2>/dev/null | grep 'CreateInterface_MMS' >/dev/null; then
   echo "OK: CreateInterface_MMS present"
 else
   echo "FAIL: missing CreateInterface_MMS" >&2

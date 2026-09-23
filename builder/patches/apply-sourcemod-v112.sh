@@ -12,6 +12,10 @@ builder_dir="$(cd "$script_dir/.." && pwd)"
 
 echo "==> Applying SourceMod 1.12+ css34 patches (Metamod 1.12 / 2.ep1)"
 
+# SourceMod KHook port (Metamod 2.0 without SourceHook). Runs first: the
+# cstrike port patch expects pristine upstream sources.
+bash "$script_dir/apply-sourcemod-khook.sh" "$sourcemod_dir"
+
 # --- manifests ---
 manifests_dir="$sourcemod_dir/hl2sdk-manifests/manifests"
 if [ ! -d "$manifests_dir" ]; then

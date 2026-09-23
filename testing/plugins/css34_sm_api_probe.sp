@@ -69,7 +69,7 @@ public OnPluginStart()
 
     RegServerCmd("css34_api_probe_run", Cmd_RunProbe, "Run SourceMod API probe suite now");
     HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
-    HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_PostNoCopy);
+    HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_Post);
 
     if (LibraryExists("clientprefs"))
     {
