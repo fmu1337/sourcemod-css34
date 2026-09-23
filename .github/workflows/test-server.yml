@@ -77,25 +77,25 @@ jobs:
             sm_commit: f53cb134ef83b580c83e1f4bf35f60d11c4571dd
             mm_commit: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
           - line: sm12-latest
-            sm_expect: "1.12.0.7245"
+            sm_expect: "1.12.0.7253"
             mm_expect: "1.12.0"
-            sm_commit: f8490c8104a844fbf1826cd8b8f22900b86adf8a
-            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+            sm_commit: 2e229b111534b1be007dc3bd9acfcf2fc472e893
+            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-dev
             sm_expect: "1.13.0.7404"
             mm_expect: "1.12.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
-            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-mm20
             sm_expect: "1.13.0.7404"
             mm_expect: "2.0.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
             mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
           - line: sm13-latest
-            sm_expect: "1.13.0.7461"
+            sm_expect: "1.13.0.7472"
             mm_expect: "1.12.0"
-            sm_commit: 809392d1dc0436b064f1d2d03cc498551f2a97b9
-            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
+            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -213,16 +213,16 @@ jobs:
             mm_commit: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
           - line: sm12-latest
             image: debian:11
-            sm_expect: "1.12.0.7245"
+            sm_expect: "1.12.0.7253"
             mm_expect: "1.12.0"
-            sm_commit: f8490c8104a844fbf1826cd8b8f22900b86adf8a
-            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+            sm_commit: 2e229b111534b1be007dc3bd9acfcf2fc472e893
+            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-dev
             image: debian:11
             sm_expect: "1.13.0.7404"
             mm_expect: "1.12.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
-            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-mm20
             image: debian:11
             sm_expect: "1.13.0.7404"
@@ -231,16 +231,16 @@ jobs:
             mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
           - line: sm13-latest
             image: debian:11
-            sm_expect: "1.13.0.7461"
+            sm_expect: "1.13.0.7472"
             mm_expect: "1.12.0"
-            sm_commit: 809392d1dc0436b064f1d2d03cc498551f2a97b9
-            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
+            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-dev
             image: debian:latest
             sm_expect: "1.13.0.7404"
             mm_expect: "1.12.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
-            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -344,7 +344,7 @@ jobs:
             sm_expect: "1.11.0.6970"
             mm_expect: "1.10.7"
           - line: sm12-latest
-            sm_expect: "1.12.0.7245"
+            sm_expect: "1.12.0.7253"
             mm_expect: "1.12.0"
           - line: sm13-dev
             sm_expect: "1.13.0.7404"
@@ -353,7 +353,7 @@ jobs:
             sm_expect: "1.13.0.7404"
             mm_expect: "2.0.0"
           - line: sm13-latest
-            sm_expect: "1.13.0.7461"
+            sm_expect: "1.13.0.7472"
             mm_expect: "1.12.0"
     steps:
       - name: Checkout
@@ -470,7 +470,7 @@ jobs:
             sm_expect: "1.13.0.7404"
             mm_expect: "1.12.0"
             sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
-            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
+            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -593,7 +593,7 @@ jobs:
           CACHE_DIR: ${{ github.workspace }}/.ci-cache
           MM_VERSION_EXPECT: "1.12.0"
           SM_VERSION_EXPECT: "1.13.0.7404"
-          MM_COMMIT_EXPECT: "364cb6c26f66f7d9254d95a2fc533eac3557166b"
+          MM_COMMIT_EXPECT: "9fd977df3b49ec76cdf865a4af13a90c0f5c8814"
           SM_COMMIT_EXPECT: "cdedec7606f1ee9bf3685b2cce3620fbec90efa8"
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
           TIMEOUT_SECS: 120
@@ -974,10 +974,10 @@ jobs:
       matrix:
         include:
           - line: sm12
-            tag: 1.12.0.7245-mm1.12.0
-            sm_asset: sourcemod-1.12.0-git7245-css34-linux.tar.gz
+            tag: 1.12.0.7253-mm1.12.0
+            sm_asset: sourcemod-1.12.0-git7253-css34-linux.tar.gz
             mm_asset: mmsource-1.12.0-dev-css34-linux.tar.gz
-            sm_expect: "1.12.0.7245"
+            sm_expect: "1.12.0.7253"
             mm_expect: "1.12.0"
           - line: sm13
             tag: 1.13.0.7404-mm1.12.0
