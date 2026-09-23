@@ -89,6 +89,7 @@ sm_log_files=0
 sm_log_errors=0
 probe_ok=0
 probe_fail=0
+probe_clean=0
 map_rotations=0
 otd_hits=0
 otd_hooks=0
