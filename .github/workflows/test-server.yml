@@ -93,9 +93,9 @@ jobs:
             mm_commit: 0084b86af4b08614ed6b95485d072b5aa2e88cdc
           - line: sm13-bleeding
             sm_expect: "1.13.0.7461"
-            mm_expect: "2.0.0"
+            mm_expect: "1.12.0"
             sm_commit: 809392d1dc0436b064f1d2d03cc498551f2a97b9
-            mm_commit: 7e24ce9e7a03bfeb5c8ab1e4dd55d5d5747f3d33
+            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -232,9 +232,9 @@ jobs:
           - line: sm13-bleeding
             image: debian:11
             sm_expect: "1.13.0.7461"
-            mm_expect: "2.0.0"
+            mm_expect: "1.12.0"
             sm_commit: 809392d1dc0436b064f1d2d03cc498551f2a97b9
-            mm_commit: 7e24ce9e7a03bfeb5c8ab1e4dd55d5d5747f3d33
+            mm_commit: 364cb6c26f66f7d9254d95a2fc533eac3557166b
           - line: sm13-dev
             image: debian:latest
             sm_expect: "1.13.0.7404"
@@ -354,7 +354,7 @@ jobs:
             mm_expect: "2.0.0"
           - line: sm13-bleeding
             sm_expect: "1.13.0.7461"
-            mm_expect: "2.0.0"
+            mm_expect: "1.12.0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
