@@ -27,8 +27,8 @@
     "sm13-mm20": {
       "sourcemod": "1.13.0.7404",
       "sourcemod_commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
-      "metamod": "2.0.0-dev+1407",
-      "metamod_commit": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
+      "metamod": "2.0.0-dev+1469",
+      "metamod_commit": "fa6f80e4662e5b96cc2e97722d812f374581dfd8",
       "metamod_binary": "metamod.2.ep1",
       "role": "experimental"
     }
@@ -37,7 +37,7 @@
     "1.10-dev": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
     "1.11-dev": "7ff2d97bdad1493b809c5ec91bbfc7abc6ae5445",
     "1.12-1224": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
-    "2.0-1407": "0084b86af4b08614ed6b95485d072b5aa2e88cdc"
+    "2.0-1469": "fa6f80e4662e5b96cc2e97722d812f374581dfd8"
   },
   "releases": {
     "1.11.0.6970-mm1.10.7": {
@@ -96,6 +96,20 @@
         "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/mmsource-2.0.0-dev-css34-windows.zip"
       },
       "verified": ["ci_smoke", "botplay_matrix"]
+    },
+    "1.13.0.7404-mm2.0.1": {
+      "line": "sm13-mm20",
+      "role": "experimental",
+      "sourcemod": "1.13.0-git7404",
+      "metamod": "2.0.0-dev+1469",
+      "metamod_binary": "metamod.2.ep1",
+      "assets": {
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.1/sourcemod-1.13.0-git7404-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.1/mmsource-2.0.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.1/sourcemod-1.13.0-git7404-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.1/mmsource-2.0.0-dev-css34-windows.zip"
+      },
+      "verified": ["ci_smoke", "botplay_matrix"]
     }
   },
   "compatibility": [
@@ -112,7 +126,7 @@
       "notes": "Matched release tags; metamod.2.ep1"
     },
     {
-      "mm": "MM 2.0 git1407",
+      "mm": "MM 2.0 git1469 (KHook)",
       "sm": "SM 1.13 (sm13-mm20)",
       "result": "PASS",
       "notes": "Experimental; CI botplay matrix"
@@ -146,7 +160,7 @@
   },
   "notes": [
     "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
-    "CI matrix includes sm13-mm20 (SM 1.13.7404 + MM 2.0 git1407).",
+    "CI matrix includes sm13-mm20 (SM 1.13.7404 + MM 2.0 git1469 / KHook).",
     "Smoke and check-package.sh assert sdkhooks.games and OnTakeDamage css34 offsets.",
     "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all four lines.",
     "Use matched release tags; do not mix MM from one line with SM from another.",

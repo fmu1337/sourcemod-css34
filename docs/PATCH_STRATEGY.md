@@ -236,3 +236,17 @@ sudo bash testing/scripts/run-built-mm-matrix.sh
 | `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
 | Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |
 | Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Эксперимент major-апгрейда поверх модели B |
+
+## Metamod 2.0 KHook Integration & SourceHook Compatibility Shim
+
+Starting with Metamod:Source 2.0 git1460+ (pinned to `2.0.0-dev+1469` / commit `fa6f80e4662e5b96cc2e97722d812f374581dfd8`), AlliedModders introduced **KHook** (`third_party/khook`) as the native detour and hooking engine for Metamod 2.0 and deprecated internal `core/sourcehook/` sources.
+
+To maintain full compatibility with SourceMod 1.13 and core extensions (DHooks, SDKHooks, MySQL) on CS:S v34 under `sm13-mm20`:
+
+1. **SourceHook Header Shim**:
+   - SourceHook compatibility headers (`sh_string.h`, `sourcehook.h`, etc.) are provided under `builder/assets/sourcehook/` and automatically placed into `mmsource-2.0/core/sourcehook/` during the build (`builder/patches/apply-mmsource-v112.sh`).
+   - `#include <sourcehook.h>` and `extern SourceHook::ISourceHook *g_SHPtr;` are declared in `ISmmPlugin.h` / `sourcemm_api.h`.
+   - `ISmmAPI::GetShVersions(api, impl)` is stubbed in `ISmmAPI.h` to satisfy SourceMod core initialization.
+
+2. **KHook Header Export**:
+   - `khook.hpp` is made accessible in `$mms_dir/core/khook.hpp` so that plugins and extensions compiling against Metamod 2.0 have access to both KHook and SourceHook APIs.

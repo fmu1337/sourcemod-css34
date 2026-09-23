@@ -14,7 +14,7 @@ Why we do **not** chase byte-identical `.so` vs rom4s («SUPER GOLDEN») is in [
 | `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev** (`80e8ff0…`, `metamod.1.ep1`) | OldStable |
 | `sm12-latest` | **1.12.0.7245** (`f8490c810…`) | **1.12 git1224** (`364cb6c…`, `metamod.2.ep1`) | Latest |
 | `sm13-dev` | **1.13.0.7404** (`cdedec760…`) | **1.12 git1224** | DEV (default) |
-| `sm13-mm20` | 1.13.0.7404 | **2.0 git1407** (`0084b86…`) | Experimental |
+| `sm13-mm20` | 1.13.0.7404 | **2.0 git1469** (KHook `fa6f80e…`) | Experimental |
 
 Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
 
@@ -39,6 +39,7 @@ Use the **matched** pair from one tag. Do not mix Metamod from one line with Sou
 | [`1.12.0.7245-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7245-mm1.12.0) | `sm12-latest` | 1.12.0-git7245 | 1.12.0-dev+1224 | CI smoke + botplay matrix |
 | [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` | 1.13.0-git7404 | 1.12.0-dev+1224 | CI smoke + botplay matrix |
 | [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev+1407 | CI smoke + botplay matrix |
+| [`1.13.0.7404-mm2.0.1`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.1) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev+1469 | CI smoke + botplay matrix |
 
 Asset names: `sourcemod-<ver>-css34-{linux.tar.gz|windows.zip}` and `mmsource-<ver>-css34-{linux.tar.gz|windows.zip}`.
 
@@ -89,7 +90,7 @@ CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/run/windows.sh
 git tag 1.11.0.6970-mm1.10.7   # sm11-oldstable
 git tag 1.12.0.7245-mm1.12.0   # sm12-latest
 git tag 1.13.0.7404-mm1.12.0   # sm13-dev
-git tag 1.13.0.7404-mm2.0.0    # sm13-mm20
+git tag 1.13.0.7404-mm2.0.1    # sm13-mm20
 git push origin --tags
 ```
 
