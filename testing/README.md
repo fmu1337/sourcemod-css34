@@ -6,9 +6,9 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 
 | Job | Images | Packages under test |
 |---|---|---|
-| `test-built-debian` | `debian:11` … `13` / `latest` | **built** MM 1.10.7 + SM 6572 |
-| `test-built-rhel` | `rockylinux:9` | **built** MM 1.10.7 + SM 6572 |
-| `test-built-smoke` | ubuntu-22.04 host | **built** MM 1.10.7 + SM 6572 |
+| `test-built-debian` | `debian:11` … `13` / `latest` | **built** MM + SM line matrix |
+| `test-built-rhel` | `rockylinux:9` | **built** MM + SM line matrix |
+| `test-built-smoke` | ubuntu-22.04 host | **built** MM + SM line matrix |
 | `build-linux` ABI step | ubuntu-22.04 | freshly built SM/MM packages (CreateInterface + DT_NEEDED) |
 
 CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` from `build-linux` (handed to later jobs via Actions cache, not artifacts). rom4s reference drops are not used in this workflow.
@@ -54,7 +54,7 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 
 `test-rom4s-botplay` boots the css34 server with **rom4s** Metamod 1.10.6 + SourceMod 6572, compiles [smac_v34](https://github.com/fmu1337/smac_v34), spawns 4 bots (`botplay-server.cfg`), records **600s** by default, then parses `cstrike/console.log` for `round_start`, `round_end`, and kills.
 
-`test-built-botplay` runs the same session with **built** MM 1.10.7 + SM 6572 and compares against `testing/botplay/rom4s-baseline.json` (candidate must reach ≥75% of baseline event counts).
+`test-built-botplay` runs the same session with **built** MM + SM package and compares against `testing/botplay/rom4s-baseline.json` (candidate must reach ≥75% of baseline event counts).
 
 `test-release-botplay` downloads published GitHub Release packages and runs the same stress session for:
 

@@ -48,7 +48,7 @@ docker run --rm --platform linux/amd64 \
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
     dpkg --add-architecture i386
-    # buster is EOL; deb.debian.org no longer serves Release files.
+    # buster & bullseye are EOL/archived or security updates moved to archive.
     if [[ -f /etc/os-release ]]; then
       # shellcheck disable=SC1091
       . /etc/os-release
@@ -59,6 +59,19 @@ docker run --rm --platform linux/amd64 \
 deb http://archive.debian.org/debian buster main contrib non-free
 deb http://archive.debian.org/debian-security buster/updates main contrib non-free
 deb http://archive.debian.org/debian buster-updates main contrib non-free
+EOF
+        cat >/etc/apt/apt.conf.d/99archive <<EOF
+Acquire::Check-Valid-Until "false";
+Acquire::AllowInsecureRepositories "true";
+Acquire::AllowDowngradeToInsecureRepositories "true";
+EOF
+      elif [[ "${VERSION_ID:-}" == "11" || "${VERSION_CODENAME:-}" == "bullseye" ]]; then
+        echo "==> Configuring archive.debian.org for bullseye security updates" >&2
+        rm -f /etc/apt/sources.list.d/* 2>/dev/null || true
+        cat >/etc/apt/sources.list <<EOF
+deb http://deb.debian.org/debian bullseye main contrib non-free
+deb http://archive.debian.org/debian-security bullseye-security main contrib non-free
+deb http://deb.debian.org/debian bullseye-updates main contrib non-free
 EOF
         cat >/etc/apt/apt.conf.d/99archive <<EOF
 Acquire::Check-Valid-Until "false";

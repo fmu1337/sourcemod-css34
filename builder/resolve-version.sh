@@ -13,10 +13,6 @@ resolve_mm() {
       MMS_COMMIT="$MM_110_COMMIT"; MMS_BRANCH="$MM_110_BRANCH"
       MMS_DIRNAME="$MM_110_DIRNAME"; MMS_MODE="$MM_110_MODE"
       ;;
-    1.11)
-      MMS_COMMIT="$MM_111_COMMIT"; MMS_BRANCH="$MM_111_BRANCH"
-      MMS_DIRNAME="$MM_111_DIRNAME"; MMS_MODE="$MM_111_MODE"
-      ;;
     1.12)
       MMS_COMMIT="$MM_112_COMMIT"; MMS_BRANCH="$MM_112_BRANCH"
       MMS_DIRNAME="$MM_112_DIRNAME"; MMS_MODE="$MM_112_MODE"
@@ -59,14 +55,8 @@ apply_sm_line() {
       SOURCEMOD_MAJOR="$SM_DEV_MAJOR"
       resolve_mm 2.0
       ;;
-    sm11-mm111)
-      SOURCEMOD_COMMIT="$SM_OLDSTABLE_COMMIT"
-      SOURCEMOD_GIT_REV="$SM_OLDSTABLE_REV"
-      SOURCEMOD_MAJOR="$SM_OLDSTABLE_MAJOR"
-      resolve_mm 1.11
-      ;;
     *)
-      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20|sm11-mm111)" >&2
+      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20)" >&2
       exit 1
       ;;
   esac
@@ -87,7 +77,6 @@ elif [[ -n "${SOURCEMOD_COMMIT:-}" && -n "${SOURCEMOD_GIT_REV:-}" ]]; then
     if [[ -n "${MMS_LINE:-}" ]]; then
       case "${MMS_LINE}" in
         1.10|mm110|mm10) resolve_mm 1.10 ;;
-        1.11|mm111|mm11) resolve_mm 1.11 ;;
         1.12|mm112|mm12) resolve_mm 1.12 ;;
         2.0|mm20|mm2) resolve_mm 2.0 ;;
         *) echo "Unknown MMS_LINE='${MMS_LINE}'" >&2; exit 1 ;;
@@ -106,7 +95,6 @@ fi
 if [[ -n "${MMS_LINE:-}" && -n "${CSS34_LINE:-}" ]]; then
   case "${MMS_LINE}" in
     1.10|mm110|mm10) resolve_mm 1.10 ;;
-    1.11|mm111|mm11) resolve_mm 1.11 ;;
     1.12|mm112|mm12) resolve_mm 1.12 ;;
     2.0|mm20|mm2) resolve_mm 2.0 ;;
   esac
