@@ -13,7 +13,7 @@ Build:
 CSS34_LINE=sm13-latest PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 ```
 
-MM 2.0 git1467+ (KHook) experiments live on branch `cursor/mm20-khook-c33d`, not in this line.
+MM 2.0 git1469+ (KHook) experiments live on branch `cursor/mm20-khook-c33d`, not in this line.
 
 ## Upgrade from sm13-dev (7404)
 

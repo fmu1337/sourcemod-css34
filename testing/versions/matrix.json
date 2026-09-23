@@ -39,13 +39,22 @@
       "metamod_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
       "metamod_binary": "metamod.2.ep1",
       "role": "latest-sm13"
+    },
+    "sm13-mm20-khook": {
+      "sourcemod": "1.13.0.7472",
+      "sourcemod_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "metamod": "2.0.0-dev+1469",
+      "metamod_commit": "fa6f80e4662e5b96cc2e97722d812f374581dfd8",
+      "metamod_binary": "metamod.2.ep1",
+      "role": "experimental-khook"
     }
   },
   "metamod_pins": {
     "1.10-dev": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
     "1.11-dev": "7ff2d97bdad1493b809c5ec91bbfc7abc6ae5445",
     "1.12-1226": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-    "2.0-1407": "0084b86af4b08614ed6b95485d072b5aa2e88cdc"
+    "2.0-1407": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
+    "2.0-1469": "fa6f80e4662e5b96cc2e97722d812f374581dfd8"
   },
   "releases": {
     "1.11.0.6970-mm1.10.7": {

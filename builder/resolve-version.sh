@@ -55,6 +55,15 @@ apply_sm_line() {
       SOURCEMOD_MAJOR="$SM_DEV_MAJOR"
       resolve_mm 2.0
       ;;
+    sm13-mm20-khook|mm20-khook)
+      SOURCEMOD_COMMIT="$SM_LATEST_13_COMMIT"
+      SOURCEMOD_GIT_REV="$SM_LATEST_13_REV"
+      SOURCEMOD_MAJOR="$SM_LATEST_13_MAJOR"
+      MMS_COMMIT="$MM_20_KHOOK_COMMIT"
+      MMS_BRANCH="$MM_20_KHOOK_BRANCH"
+      MMS_DIRNAME="$MM_20_KHOOK_DIRNAME"
+      MMS_MODE="$MM_20_KHOOK_MODE"
+      ;;
     sm13-latest|bleeding)
       SOURCEMOD_COMMIT="$SM_LATEST_13_COMMIT"
       SOURCEMOD_GIT_REV="$SM_LATEST_13_REV"
@@ -62,7 +71,7 @@ apply_sm_line() {
       resolve_mm 1.12
       ;;
     *)
-      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20|sm13-latest)" >&2
+      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20|sm13-latest|sm13-mm20-khook)" >&2
       exit 1
       ;;
   esac

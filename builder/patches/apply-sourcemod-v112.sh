@@ -92,6 +92,26 @@ else:
     else:
         print('==> ConfigureForHL2 css34 link patch present')
 
+# MM 2.0+ bleeding (KHook): ISmmPlugin.h includes khook.hpp from third_party/khook/include.
+khook_inc_old = """    compiler.cxxincludes += [
+      os.path.join(self.mms_root, 'core'),
+      os.path.join(self.mms_root, 'core', 'sourcehook'),
+    ]"""
+khook_inc_new = """    compiler.cxxincludes += [
+      os.path.join(self.mms_root, 'core'),
+      os.path.join(self.mms_root, 'core', 'sourcehook'),
+    ]
+    _khook_inc = os.path.join(self.mms_root, 'third_party', 'khook', 'include')
+    if os.path.isdir(_khook_inc):
+      compiler.cxxincludes += [_khook_inc]  # css34: MM 2.0+ KHook (ISmmPlugin.h)"""
+if 'css34: MM 2.0+ KHook (ISmmPlugin.h)' in text:
+    print('==> ConfigureForHL2 KHook include already patched')
+elif khook_inc_old in text:
+    text = text.replace(khook_inc_old, khook_inc_new, 1)
+    print('==> Patched ConfigureForHL2 for MM 2.0+ KHook include path')
+else:
+    print('==> WARN: ConfigureForHL2 cxxincludes block not found for KHook patch')
+
 # ExtLibrary pthread/rt + leave META_NO_HL2SDK happy against Metamod 1.12 headers
 old_ext = """  def ExtLibrary(self, context, compiler, name):
     binary = self.Library(context, compiler, name)
@@ -103,6 +123,9 @@ new_ext = """  def ExtLibrary(self, context, compiler, name):
     binary = self.Library(context, compiler, name)
     SetArchFlags(compiler)
     self.ConfigureForExtension(context, binary.compiler)
+    _khook_inc = os.path.join(self.mms_root, 'third_party', 'khook', 'include')
+    if os.path.isdir(_khook_inc):
+      binary.compiler.cxxincludes += [_khook_inc]  # css34: MM 2.0+ KHook (ISmmPlugin.h)
     # css34: pthread/rt DT_NEEDED on pre-2.34 glibc
     if compiler.target.platform == 'linux':
       for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
@@ -110,7 +133,22 @@ new_ext = """  def ExtLibrary(self, context, compiler, name):
           binary.compiler.linkflags += [flag]
     return binary
 """
-if 'css34: pthread/rt DT_NEEDED on pre-2.34' not in text:
+if 'css34: MM 2.0+ KHook (ISmmPlugin.h)' in text and 'def ExtLibrary' in text and 'css34: pthread/rt DT_NEEDED on pre-2.34' in text:
+    print('==> ExtLibrary KHook include already patched')
+elif 'css34: pthread/rt DT_NEEDED on pre-2.34' in text and 'css34: MM 2.0+ KHook (ISmmPlugin.h)' not in text:
+    ext_khook_old = """    self.ConfigureForExtension(context, binary.compiler)
+    # css34: pthread/rt DT_NEEDED on pre-2.34 glibc"""
+    ext_khook_new = """    self.ConfigureForExtension(context, binary.compiler)
+    _khook_inc = os.path.join(self.mms_root, 'third_party', 'khook', 'include')
+    if os.path.isdir(_khook_inc):
+      binary.compiler.cxxincludes += [_khook_inc]  # css34: MM 2.0+ KHook (ISmmPlugin.h)
+    # css34: pthread/rt DT_NEEDED on pre-2.34 glibc"""
+    if ext_khook_old in text:
+        text = text.replace(ext_khook_old, ext_khook_new, 1)
+        print('==> Patched ExtLibrary for MM 2.0+ KHook include path')
+    else:
+        print('==> WARN: ExtLibrary pthread block not found for KHook include patch')
+elif 'css34: pthread/rt DT_NEEDED on pre-2.34' not in text:
     if old_ext not in text:
         print('==> WARN: ExtLibrary pattern not found (continuing)')
     else:
@@ -983,6 +1021,85 @@ if shell.exists() and 'if (index > params[0])' in shell.read_text():
     ))
 PY
 
+# MM 2.0+ bleeding (KHook): ISmmPlugin.h no longer includes sourcehook.h, but SM
+# core and extensions still use SourceHook::CallClass and SH_DECL_* macros.
+patch_mm_khook_sourcehook_globals() {
+  local hdr="$1"
+  local cpp="$2"
+  local label="$3"
+
+  for _f in "$hdr" "$cpp"; do
+    [ -f "$_f" ] && sed -i 's/\r$//' "$_f"
+  done
+
+  if [ -f "$hdr" ] && ! grep -q 'css34: MM 2.0+ still needs sourcehook.h for SM compile' "$hdr"; then
+    sed -i '/#include <ISmmPlugin.h>/a #include <sourcehook.h>  /* css34: MM 2.0+ still needs sourcehook.h for SM compile */' \
+      "$hdr"
+    if ! grep -q 'css34: MM 2.0+ still needs sourcehook.h for SM compile' "$hdr"; then
+      echo "==> ERROR: sourcehook.h include patch did not apply to $label" >&2
+      exit 1
+    fi
+    echo "==> Patched $label to include sourcehook.h for MM 2.0+ KHook"
+  elif [ -f "$hdr" ]; then
+    echo "==> $label sourcehook include already patched"
+  fi
+
+  if [ -f "$hdr" ] && ! grep -q 'css34: g_SHPtr extern for MM 1467+' "$hdr"; then
+    sed -i '/PLUGIN_GLOBALVARS();/a extern SourceHook::ISourceHook *g_SHPtr;  /* css34: g_SHPtr extern for MM 1467+ */' \
+      "$hdr"
+    if ! grep -q 'css34: g_SHPtr extern for MM 1467+' "$hdr"; then
+      echo "==> ERROR: g_SHPtr extern patch did not apply to $label" >&2
+      exit 1
+    fi
+    echo "==> Patched $label with g_SHPtr extern for MM 1467+ KHook"
+  elif [ -f "$hdr" ]; then
+    echo "==> $label g_SHPtr extern already patched"
+  fi
+
+  if [ -f "$cpp" ] && ! grep -q 'css34: define g_SHPtr for MM 1467+' "$cpp"; then
+    "${PY[@]}" - "$cpp" <<'PYCPP'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if p.exists():
+    text = p.read_text()
+    if 'css34: define g_SHPtr for MM 1467+' not in text:
+        patch = """#if defined(METAMOD_PLAPI_VERSION) && METAMOD_PLAPI_VERSION >= 18
+SourceHook::ISourceHook *g_SHPtr = nullptr; /* css34: define g_SHPtr for MM 1467+ */
+#endif
+"""
+        idx = text.find('#include')
+        if idx != -1:
+            endline = text.find('\n', idx)
+            text = text[:endline+1] + patch + text[endline+1:]
+            p.write_text(text)
+PYCPP
+    echo "==> Defined g_SHPtr in $cpp for MM 1467+"
+  fi
+
+  if [ -f "$cpp" ] && ! grep -q 'css34: init g_SHPtr for MM 1467+' "$cpp"; then
+    sed -i '/PLUGIN_SAVEVARS();/a\
+\tif (!g_SHPtr) { g_SHPtr = static_cast<SourceHook::ISourceHook *>(ismm->MetaFactory(MMIFACE_SOURCEHOOK, NULL, NULL)); }  /* css34: init g_SHPtr for MM 1467+ */' \
+      "$cpp"
+    if ! grep -q 'css34: init g_SHPtr for MM 1467+' "$cpp"; then
+      echo "==> ERROR: g_SHPtr init patch did not apply to ${label%.h}.cpp" >&2
+      exit 1
+    fi
+    echo "==> Patched ${label%.h}.cpp to init g_SHPtr via MetaFactory for MM 1467+"
+  elif [ -f "$cpp" ]; then
+    echo "==> ${label%.h}.cpp g_SHPtr init already patched"
+  fi
+}
+
+patch_mm_khook_sourcehook_globals \
+  "$sourcemod_dir/public/smsdk_ext.h" \
+  "$sourcemod_dir/public/smsdk_ext.cpp" \
+  "smsdk_ext.h"
+patch_mm_khook_sourcehook_globals \
+  "$sourcemod_dir/core/sourcemm_api.h" \
+  "$sourcemod_dir/core/sourcemm_api.cpp" \
+  "sourcemm_api.h"
+
 # --- CheckedMul __mulodi4 patch for 32-bit spcomp ---
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMUL'
 from pathlib import Path
@@ -1093,6 +1210,38 @@ bool SourceMod_Core::Load"""
         sm_api.write_text(text)
         print('==> Patched GET_V_IFACE macros in core/sourcemm_api.cpp')
 PYIFACE
+
+# --- ISmmAPI GetShVersions patch for MM 2.0 ---
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYSH'
+from pathlib import Path
+import os
+sm_cpp = Path(os.environ['SOURCEMOD_DIR']) / 'core/sourcemod.cpp'
+if sm_cpp.exists():
+    text = sm_cpp.read_text().replace('\r\n', '\n')
+    old_sh = """int SourceModBase::GetShApiVersion()
+{
+\tint api, impl;
+\tg_SMAPI->GetShVersions(api, impl);
+
+\treturn api;
+}"""
+    new_sh = """int SourceModBase::GetShApiVersion()
+{
+\tint api = 0, impl = 0;
+#if defined(METAMOD_PLAPI_VERSION) && METAMOD_PLAPI_VERSION >= 18
+\tapi = 5;
+#else
+\tg_SMAPI->GetShVersions(api, impl);
+#endif
+
+\treturn api;
+}"""
+    if old_sh in text:
+        sm_cpp.write_text(text.replace(old_sh, new_sh, 1))
+        print('==> Patched GetShApiVersion in core/sourcemod.cpp for MM 2.0')
+    elif 'METAMOD_PLAPI_VERSION >= 18' in text:
+        print('==> GetShApiVersion in core/sourcemod.cpp already patched for MM 2.0')
+PYSH
 
 # --- Source-level patches ---
 while IFS= read -r -d '' file; do
