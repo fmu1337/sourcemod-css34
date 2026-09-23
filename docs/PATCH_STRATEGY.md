@@ -183,6 +183,8 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 
 Итог: myarena-SM заточен под **Metamod 1.11 / 2.ep1 path**. Наш/rom4s путь — **MM 1.10 + CreateInterface + 1.ep1**. Смешивать built/rom4s MM 1.10 с myarena SM не надо.
 
+Подробный разбор архива myarena **6522** (gamedata offsets, FAQ форума, FrozDark 1.7.1): [v34-variant-6522-notes.md](v34-variant-6522-notes.md). Архив для локального сравнения — `reference.1.11-myarena-bundle` в [`testing/versions/matrix.json`](../testing/versions/matrix.json).
+
 Доп. наблюдение из compare: `myarena sourcemod.logic.so` + rom4s `sourcemod.1.ep1.so` → hang до mapchange (не наш текущий CI-путь, но ловушка при ручных миксах).
 
 ### Ориентиры размеров (на момент #17)

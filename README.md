@@ -107,4 +107,5 @@ tar -xzf sourcemod-*-css34-linux.tar.gz -C /path/to/cstrike
 
 - Patch strategy: [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md). 6970 carries API/toolchain shims from the old ≥6800 notes.
 - SDKHooks EP1 / PLAPI traps: [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
+- myarena SM 6522 vs our 6572 (gamedata / forum notes): [docs/v34-variant-6522-notes.md](docs/v34-variant-6522-notes.md).
 - Machine-readable pins, release assets, and mix PASS/FAIL notes: [`testing/versions/matrix.json`](testing/versions/matrix.json).
