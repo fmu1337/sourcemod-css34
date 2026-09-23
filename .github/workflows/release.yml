@@ -5,7 +5,7 @@ name: Release
 #   1.12.0.7245-mm1.12.0   → sm12-latest
 #   1.13.0.7404-mm1.12.0   → sm13-dev
 #   1.13.0.7404-mm2.0.0    → sm13-mm20
-#   1.13.0.7461-mm2.0.0    → sm13-bleeding
+#   1.13.0.7461-mm1.12.0   → sm13-bleeding
 #
 # Linux/Windows jobs attach packages directly to the GitHub Release.
 # No Actions artifacts (those count against the 0.5 GB storage quota).
@@ -43,7 +43,7 @@ jobs:
               1.12.0.7245-mm1.12.0) line=sm12-latest ;;
               1.13.0.7404-mm1.12.0) line=sm13-dev ;;
               1.13.0.7404-mm2.0.0)  line=sm13-mm20 ;;
-              1.13.0.7461-mm2.0.0)  line=sm13-bleeding ;;
+              1.13.0.7461-mm1.12.0) line=sm13-bleeding ;;
               *)
                 echo "Unknown release tag '${tag}' — add a mapping in release.yml" >&2
                 exit 1

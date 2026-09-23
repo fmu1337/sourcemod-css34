@@ -5,7 +5,7 @@ Experimental release line tracking **latest AlliedMods master** (Sep 2026):
 | Component | Pin | Commit |
 |-----------|-----|--------|
 | SourceMod | **1.13.0-git7461** | `809392d1dc0436b064f1d2d03cc498551f2a97b9` |
-| Metamod:Source | **2.0.0-git1467** | `7e24ce9e7a03bfeb5c8ab1e4dd55d5d5747f3d33` |
+| Metamod:Source | **1.12.0-git1224** | `364cb6c26f66f7d9254d95a2fc533eac3557166b` |
 
 Build: `CSS34_LINE=sm13-bleeding PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh`
 
@@ -53,8 +53,8 @@ Full `legacy-build` + smoke + botplay matrix requires **debian:11 docker** (host
 ## Release tag (when green)
 
 ```
-git tag 1.13.0.7461-mm2.0.0
-git push origin 1.13.0.7461-mm2.0.0
+git tag 1.13.0.7461-mm1.12.0
+git push origin 1.13.0.7461-mm1.12.0
 ```
 
 Maps to `CSS34_LINE=sm13-bleeding` in `release.yml`.
