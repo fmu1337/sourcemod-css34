@@ -17,16 +17,16 @@
       "role": "latest"
     },
     "sm13-dev": {
-      "sourcemod": "1.13.0.7404",
-      "sourcemod_commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
+      "sourcemod": "1.13.0.7472",
+      "sourcemod_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
       "metamod": "1.12.0-dev+1224",
       "metamod_commit": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
       "metamod_binary": "metamod.2.ep1",
       "role": "dev"
     },
     "sm13-mm20": {
-      "sourcemod": "1.13.0.7404",
-      "sourcemod_commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
+      "sourcemod": "1.13.0.7472",
+      "sourcemod_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
       "metamod": "2.0.0-dev+1469",
       "metamod_commit": "fa6f80e4662e5b96cc2e97722d812f374581dfd8",
       "metamod_binary": "metamod.2.ep1",
@@ -69,45 +69,31 @@
       },
       "verified": ["ci_smoke", "botplay_matrix"]
     },
-    "1.13.0.7404-mm1.12.0": {
+    "1.13.0.7472-mm1.12.0": {
       "line": "sm13-dev",
       "role": "dev",
-      "sourcemod": "1.13.0-git7404",
+      "sourcemod": "1.13.0-git7472",
       "metamod": "1.12.0-dev+1224",
       "metamod_binary": "metamod.2.ep1",
       "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/sourcemod-1.13.0-git7404-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/sourcemod-1.13.0-git7404-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/sourcemod-1.13.0-git7472-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/sourcemod-1.13.0-git7472-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
       },
       "verified": ["ci_smoke", "botplay_matrix"]
     },
-    "1.13.0.7404-mm2.0.0": {
+    "1.13.0.7472-mm2.0.1": {
       "line": "sm13-mm20",
       "role": "experimental",
-      "sourcemod": "1.13.0-git7404",
-      "metamod": "2.0.0-dev+1407",
-      "metamod_binary": "metamod.2.ep1",
-      "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/sourcemod-1.13.0-git7404-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/mmsource-2.0.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/sourcemod-1.13.0-git7404-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/mmsource-2.0.0-dev-css34-windows.zip"
-      },
-      "verified": ["ci_smoke", "botplay_matrix"]
-    },
-    "1.13.0.7404-mm2.0.1": {
-      "line": "sm13-mm20",
-      "role": "experimental",
-      "sourcemod": "1.13.0-git7404",
+      "sourcemod": "1.13.0-git7472",
       "metamod": "2.0.0-dev+1469",
       "metamod_binary": "metamod.2.ep1",
       "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.1/sourcemod-1.13.0-git7404-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.1/mmsource-2.0.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.1/sourcemod-1.13.0-git7404-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.1/mmsource-2.0.0-dev-css34-windows.zip"
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm2.0.1/sourcemod-1.13.0-git7472-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm2.0.1/mmsource-2.0.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm2.0.1/sourcemod-1.13.0-git7472-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm2.0.1/mmsource-2.0.0-dev-css34-windows.zip"
       },
       "verified": ["ci_smoke", "botplay_matrix"]
     }
@@ -160,7 +146,7 @@
   },
   "notes": [
     "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
-    "CI matrix includes sm13-mm20 (SM 1.13.7404 + MM 2.0 git1469 / KHook).",
+    "CI matrix includes sm13-mm20 (SM 1.13.7472 + MM 2.0 git1469 / KHook).",
     "Smoke and check-package.sh assert sdkhooks.games and OnTakeDamage css34 offsets.",
     "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all four lines.",
     "Use matched release tags; do not mix MM from one line with SM from another.",

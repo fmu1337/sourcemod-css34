@@ -43,6 +43,8 @@ jobs:
               1.13.0.7404-mm1.12.0) line=sm13-dev ;;
               1.13.0.7404-mm2.0.0)  line=sm13-mm20 ;;
               1.13.0.7404-mm2.0.1)  line=sm13-mm20 ;;
+              1.13.0.7472-mm1.12.0) line=sm13-dev ;;
+              1.13.0.7472-mm2.0.1)  line=sm13-mm20 ;;
               *)
                 echo "Unknown release tag '${tag}' — add a mapping in release.yml" >&2
                 exit 1
