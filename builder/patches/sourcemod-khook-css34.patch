@@ -1,0 +1,580 @@
+diff -ruN a/AMBuildScript b/AMBuildScript
+--- a/AMBuildScript
++++ b/AMBuildScript
+@@ -683,10 +683,10 @@
+     'extensions/bintools/AMBuilder',
+     'extensions/clientprefs/AMBuilder',
+     'extensions/curl/AMBuilder',
+-    #'extensions/cstrike/AMBuilder',
++    'extensions/cstrike/AMBuilder',
+     'extensions/dhooks/AMBuilder',
+     'extensions/geoip/AMBuilder',
+-    #'extensions/mysql/AMBuilder',
++    'extensions/mysql/AMBuilder',
+     'extensions/pgsql/AMBuilder',
+     'extensions/regex/AMBuilder',
+     'extensions/sdkhooks/AMBuilder',
+diff -ruN a/extensions/cstrike/AMBuilder b/extensions/cstrike/AMBuilder
+--- a/extensions/cstrike/AMBuilder
++++ b/extensions/cstrike/AMBuilder
+@@ -26,7 +26,6 @@
+ 
+     cxx.defines += ['HAVE_STRING_H']
+     binary = SM.HL2ExtConfig(project, builder, cxx, 'game.cstrike.ext.' + sdk['extension'], sdk)
+-    SM.AddCDetour(binary)
+ 
+     if sdk_name == 'csgo':
+       compiler = binary.compiler
+diff -ruN a/extensions/cstrike/extension.cpp b/extensions/cstrike/extension.cpp
+--- a/extensions/cstrike/extension.cpp
++++ b/extensions/cstrike/extension.cpp
+@@ -46,7 +46,13 @@
+  * @brief Implement extension code here.
+  */
+ 
+-SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, false, bool, const char *, const char *, const char *, const char *, bool, bool);
++static KHook::Return<bool> Hook_LevelInitPost(IServerGameDLL *, const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background)
++{
++	g_TimeLeftEvents.LevelInit(pMapName, pMapEntities, pOldLevel, pLandmarkName, loadGame, background);
++	return { KHook::Action::Ignore, true };
++}
++
++KHook::Virtual g_HookLevelInit(&IServerGameDLL::LevelInit, nullptr, Hook_LevelInitPost);
+ 
+ CStrike g_CStrike;		/**< Global singleton for extension's main interface */
+ IBinTools *g_pBinTools = NULL;
+@@ -95,8 +101,6 @@
+ 	rulesfix.OnLoad();
+ #endif
+ 
+-	CDetourManager::Init(g_pSM->GetScriptingEngine(), g_pGameConf);
+-
+ 	g_pHandleBuyForward = forwards->CreateForward("CS_OnBuyCommand", ET_Event, 2, NULL, Param_Cell, Param_String);
+ 	g_pPriceForward = forwards->CreateForward("CS_OnGetWeaponPrice", ET_Event, 3, NULL, Param_Cell, Param_String, Param_CellByRef);
+ 	g_pTerminateRoundForward = forwards->CreateForward("CS_OnTerminateRound", ET_Event, 2, NULL, Param_FloatByRef, Param_CellByRef);
+@@ -131,7 +135,7 @@
+ 	if (hooked_everything)
+ 	{
+ 		gameevents->RemoveListener(&g_TimeLeftEvents);
+-		SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(&g_TimeLeftEvents, &TimeLeftEvents::LevelInit), true);
++		g_HookLevelInit.Remove(gamedll);
+ 		hooked_everything = false;
+ 	}
+ 
+@@ -185,7 +189,7 @@
+ 	}
+ 	gameevents->AddListener(&g_TimeLeftEvents, "round_start", true);
+ 	gameevents->AddListener(&g_TimeLeftEvents, "round_end", true);
+-	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(&g_TimeLeftEvents, &TimeLeftEvents::LevelInit), true);
++	g_HookLevelInit.Add(gamedll);
+ 	hooked_everything = true;
+ 
+ 	SM_GET_LATE_IFACE(BINTOOLS, g_pBinTools);
+diff -ruN a/extensions/cstrike/extension.h b/extensions/cstrike/extension.h
+--- a/extensions/cstrike/extension.h
++++ b/extensions/cstrike/extension.h
+@@ -38,7 +38,6 @@
+  */
+ 
+ #include "smsdk_ext.h"
+-#include "CDetour/detours.h"
+ #include <IBinTools.h>
+ #include <ISDKTools.h>
+ 
+diff -ruN a/extensions/cstrike/forwards.cpp b/extensions/cstrike/forwards.cpp
+--- a/extensions/cstrike/forwards.cpp
++++ b/extensions/cstrike/forwards.cpp
+@@ -16,31 +16,66 @@
+ IForward *g_pPriceForward = NULL;
+ IForward *g_pTerminateRoundForward = NULL;
+ IForward *g_pCSWeaponDropForward = NULL;
+-CDetour *DHandleBuy = NULL;
+-CDetour *DWeaponPrice = NULL;
+-CDetour *DTerminateRound = NULL;
+-CDetour *DCSWeaponDrop = NULL;
++// KHook port: CDetour (safetyhook) is gone from SourceMod on Metamod 2.0 KHook.
++// Each detour is a KHook::Member PRE callback that calls the original itself
++// (CallOriginal) and supersedes, which matches the old DETOUR_MEMBER_CALL flow.
++class CCSPlayerDetour {};
++class CCSGameRulesDetour {};
++class CCSWeaponInfoDetour {};
++
++#if SOURCE_ENGINE == SE_CSGO
++using HandleBuyHook = KHook::Member<CCSPlayerDetour, int, int, void *, bool, bool>;
++#else
++using HandleBuyHook = KHook::Member<CCSPlayerDetour, int, const char *>;
++using WeaponPriceHook = KHook::Member<CCSWeaponInfoDetour, int>;
++#endif
++#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE
++using TerminateRoundHook = KHook::Member<CCSGameRulesDetour, void, float, int>;
++#elif SOURCE_ENGINE == SE_CSGO && !defined(WIN32)
++using TerminateRoundHook = KHook::Member<CCSGameRulesDetour, void, float, int, int, int>;
++#else
++// Windows CS:GO passes delay in xmm1 (__userpurge); KHook cannot express that.
++using TerminateRoundHook = KHook::Member<CCSGameRulesDetour, void, int, int, int>;
++#endif
++using CSWeaponDropHook = KHook::Member<CCSPlayerDetour, void, CBaseEntity *, bool, bool>;
++
++HandleBuyHook *DHandleBuy = NULL;
++#if SOURCE_ENGINE != SE_CSGO
++WeaponPriceHook *DWeaponPrice = NULL;
++#endif
++TerminateRoundHook *DTerminateRound = NULL;
++CSWeaponDropHook *DCSWeaponDrop = NULL;
+ 
+ int weaponNameOffset = -1;
+ 
++template <typename HOOK, typename PRE>
++static HOOK *CreateMemberDetour(const char *name, PRE pre)
++{
++	void *addr = nullptr;
++	if (!g_pGameConf->GetMemSig(name, &addr) || addr == nullptr)
++		return NULL;
++
++	return new HOOK(addr, pre, nullptr);
++}
++
+ #if SOURCE_ENGINE == SE_CSGO
+-DETOUR_DECL_MEMBER4(DetourHandleBuy, int, int, iLoadoutSlot, void *, pWpnDataRef, bool, bRebuy, bool, bDrop)
++static KHook::Return<int> DetourHandleBuy(CCSPlayerDetour *pThis, int iLoadoutSlot, void *pWpnDataRef, bool bRebuy, bool bDrop)
+ {
+-	CBaseEntity *pEntity = reinterpret_cast<CBaseEntity *>(this);
++	CBaseEntity *pEntity = reinterpret_cast<CBaseEntity *>(pThis);
+ 	int client = gamehelpers->EntityToBCompatRef(pEntity);
+ 
+ 	CEconItemView *pView = GetEconItemView(pEntity, iLoadoutSlot);
+ 
+ 	if (!pView)
+ 	{
+-		return DETOUR_MEMBER_CALL(DetourHandleBuy)(iLoadoutSlot, pWpnDataRef, bRebuy, bDrop);
++		return { KHook::Action::Ignore, 0 };
+ 	}
+ 
+ 	CCSWeaponData *pWpnData = GetCCSWeaponData(pView);
+ 
+ 	if (!pWpnData)
+ 	{
+-		return DETOUR_MEMBER_CALL(DetourHandleBuy)(iLoadoutSlot, pWpnDataRef, bRebuy, bDrop);
++		return { KHook::Action::Ignore, 0 };
+ 	}
+ 
+ 	const char *szClassname = *(const char **)((intptr_t)pWpnData + weaponNameOffset);
+@@ -64,9 +99,9 @@
+ 
+ 	if (result != Pl_Continue)
+ 	{
+-		return 0;
++		return { KHook::Action::Supersede, 0 };
+ 	}
+-	
++
+ 	int originalPrice = 0;
+ 
+ 	if (g_iPriceOffset != -1)
+@@ -79,17 +114,17 @@
+ 			*(int *)((intptr_t)pWpnData + g_iPriceOffset) = changedPrice;
+ 	}
+ 
+-	int ret = DETOUR_MEMBER_CALL(DetourHandleBuy)(iLoadoutSlot, pWpnDataRef, bRebuy, bDrop);
++	int ret = DHandleBuy->CallOriginal(pThis, iLoadoutSlot, pWpnDataRef, bRebuy, bDrop);
+ 
+ 	if (g_iPriceOffset != -1)
+ 		*(int *)((intptr_t)pWpnData + g_iPriceOffset) = originalPrice;
+ 
+-	return ret;
++	return { KHook::Action::Supersede, ret };
+ }
+ #else
+-DETOUR_DECL_MEMBER1(DetourHandleBuy, int, const char *, weapon)
++static KHook::Return<int> DetourHandleBuy(CCSPlayerDetour *pThis, const char *weapon)
+ {
+-	int client = gamehelpers->EntityToBCompatRef(reinterpret_cast<CBaseEntity *>(this));
++	int client = gamehelpers->EntityToBCompatRef(reinterpret_cast<CBaseEntity *>(pThis));
+ 
+ 	lastclient = client;
+ 
+@@ -102,138 +137,102 @@
+ 	if (result != Pl_Continue)
+ 	{
+ 		lastclient = -1;
+-		return 0;
++		return { KHook::Action::Supersede, 0 };
+ 	}
+ 
+-	int val = DETOUR_MEMBER_CALL(DetourHandleBuy)(weapon);
++	int val = DHandleBuy->CallOriginal(pThis, weapon);
+ 
+ 	lastclient = -1;
+-	return val;
++	return { KHook::Action::Supersede, val };
+ }
+ #endif
+ 
+ #if SOURCE_ENGINE != SE_CSGO
+-DETOUR_DECL_MEMBER0(DetourWeaponPrice, int)
++static KHook::Return<int> DetourWeaponPrice(CCSWeaponInfoDetour *pThis)
+ {
+-	int price = DETOUR_MEMBER_CALL(DetourWeaponPrice)();
+-	
++	int price = DWeaponPrice->CallOriginal(pThis);
++
+ 	if (lastclient == -1)
+-		return price;
++		return { KHook::Action::Supersede, price };
+ 
+-	const char *weapon_name = reinterpret_cast<char *>(this+weaponNameOffset);
++	const char *weapon_name = reinterpret_cast<char *>(pThis) + weaponNameOffset;
+ 
+-	return CallPriceForward(lastclient, weapon_name, price);
++	return { KHook::Action::Supersede, CallPriceForward(lastclient, weapon_name, price) };
+ }
+ #endif
+ 
+-#if SOURCE_ENGINE == SE_CSS
+-DETOUR_DECL_MEMBER2(DetourTerminateRound, void, float, delay, int, reason)
++#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE
++static KHook::Return<void> DetourTerminateRound(CCSGameRulesDetour *pThis, float delay, int reason)
+ {
+ 	if (g_pIgnoreTerminateDetour)
+ 	{
+ 		g_pIgnoreTerminateDetour = false;
+-		DETOUR_MEMBER_CALL(DetourTerminateRound)(delay, reason);
+-		return;
++		return { KHook::Action::Ignore };
+ 	}
+ #elif SOURCE_ENGINE == SE_CSGO && !defined(WIN32)
+-DETOUR_DECL_MEMBER4(DetourTerminateRound, void, float, delay, int, reason, int, unknown, int, unknown2)
++static KHook::Return<void> DetourTerminateRound(CCSGameRulesDetour *pThis, float delay, int reason, int unknown, int unknown2)
+ {
+ 	if (g_pIgnoreTerminateDetour)
+ 	{
+ 		g_pIgnoreTerminateDetour = false;
+-		DETOUR_MEMBER_CALL(DetourTerminateRound)(delay, reason, unknown, unknown2);
+-		return;
++		return { KHook::Action::Ignore };
+ 	}
+ #else
+-//Windows CSGO
+-//char __userpurge TerminateRound(int a1@<ecx>, float a2@<xmm1>, int *a3)
+-// a1 - this
+-// a2 - delay
+-// a3 - reason
+-// a4 - unknown
+-// a5 - unknown
+-DETOUR_DECL_MEMBER3(DetourTerminateRound, void, int, reason, int, unknown, int, unknown2)
++static KHook::Return<void> DetourTerminateRound(CCSGameRulesDetour *pThis, int reason, int unknown, int unknown2)
+ {
+-	float delay;
++	// Windows CS:GO: delay lives in xmm1 and cannot be read or rewritten here.
++	float delay = 0.0f;
+ 
+ 	if (g_pIgnoreTerminateDetour)
+ 	{
+ 		g_pIgnoreTerminateDetour = false;
+-		return DETOUR_MEMBER_CALL(DetourTerminateRound)(reason, unknown, unknown2);
+-	}
+-
+-	//Save the delay
+-	__asm
+-	{
+-		movss delay, xmm1
++		return { KHook::Action::Ignore };
+ 	}
+ #endif
+ 
+-	float orgdelay = delay;
+-	int orgreason = reason;
+-
+ 	cell_t result = Pl_Continue;
+ 
+ #if SOURCE_ENGINE == SE_CSGO
+ 	reason--;
+ #endif
+-	
++
+ 	g_pTerminateRoundForward->PushFloatByRef(&delay);
+ 	g_pTerminateRoundForward->PushCellByRef(&reason);
+ 	g_pTerminateRoundForward->Execute(&result);
+ 
+ 	if (result >= Pl_Handled)
+-		return;
++		return { KHook::Action::Supersede };
+ 
+ #if SOURCE_ENGINE == SE_CSGO
+ 	reason++;
+ #endif
+-	
+-#if SOURCE_ENGINE == SE_CSS
+-	if (result == Pl_Changed)
+-		return DETOUR_MEMBER_CALL(DetourTerminateRound)(delay, reason);
+ 
+-	return DETOUR_MEMBER_CALL(DetourTerminateRound)(orgdelay, orgreason);
+-#elif SOURCE_ENGINE == SE_CSGO && !defined(WIN32)
+-	if (result == Pl_Changed)
+-		return DETOUR_MEMBER_CALL(DetourTerminateRound)(delay, reason, unknown, unknown2);
++	if (result != Pl_Changed)
++		return { KHook::Action::Ignore };
+ 
+-	return DETOUR_MEMBER_CALL(DetourTerminateRound)(orgdelay, orgreason, unknown, unknown2);
++#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE
++	DTerminateRound->CallOriginal(pThis, delay, reason);
++#elif SOURCE_ENGINE == SE_CSGO && !defined(WIN32)
++	DTerminateRound->CallOriginal(pThis, delay, reason, unknown, unknown2);
+ #else
+-	if (result == Pl_Changed)
+-	{
+-		__asm
+-		{
+-			movss xmm1, delay
+-		}
+-		return DETOUR_MEMBER_CALL(DetourTerminateRound)(reason, unknown, unknown2);
+-	}
+-	__asm
+-	{
+-		movss xmm1, orgdelay
+-	}
+-	return DETOUR_MEMBER_CALL(DetourTerminateRound)(orgreason, unknown, unknown2);
++	DTerminateRound->CallOriginal(pThis, reason, unknown, unknown2);
+ #endif
++	return { KHook::Action::Supersede };
+ }
+ 
+ #if SOURCE_ENGINE == SE_CSGO
+-DETOUR_DECL_MEMBER3(DetourCSWeaponDrop, void, CBaseEntity *, weapon, bool, bThrowForward, bool, bDonated)
++static KHook::Return<void> DetourCSWeaponDrop(CCSPlayerDetour *pThis, CBaseEntity *weapon, bool bThrowForward, bool bDonated)
+ #else
+-DETOUR_DECL_MEMBER3(DetourCSWeaponDrop, void, CBaseEntity *, weapon, bool, bDropShield, bool, bThrowForward)
++static KHook::Return<void> DetourCSWeaponDrop(CCSPlayerDetour *pThis, CBaseEntity *weapon, bool bDropShield, bool bThrowForward)
+ #endif
+ {
+ 	if (g_pIgnoreCSWeaponDropDetour)
+ 	{
+ 		g_pIgnoreCSWeaponDropDetour = false;
+-#if SOURCE_ENGINE == SE_CSGO
+-		DETOUR_MEMBER_CALL(DetourCSWeaponDrop)(weapon, bThrowForward, bDonated);
+-#else
+-		DETOUR_MEMBER_CALL(DetourCSWeaponDrop)(weapon, bDropShield, bThrowForward);
+-#endif
+-		return;
++		return { KHook::Action::Ignore };
+ 	}
+ 
+-	int client = gamehelpers->EntityToBCompatRef(reinterpret_cast<CBaseEntity *>(this));
++	int client = gamehelpers->EntityToBCompatRef(reinterpret_cast<CBaseEntity *>(pThis));
+ 	int weaponIndex = gamehelpers->EntityToBCompatRef(weapon);
+ 
+ 	cell_t result = Pl_Continue;
+@@ -246,17 +245,10 @@
+ #endif
+ 	g_pCSWeaponDropForward->Execute(&result);
+ 
+-
+ 	if (result == Pl_Continue)
+-	{
+-#if SOURCE_ENGINE == SE_CSGO
+-		DETOUR_MEMBER_CALL(DetourCSWeaponDrop)(weapon, bThrowForward, bDonated);
+-#else
+-		DETOUR_MEMBER_CALL(DetourCSWeaponDrop)(weapon, bDropShield, bThrowForward);
+-#endif
+-	}
++		return { KHook::Action::Ignore };
+ 
+-	return;
++	return { KHook::Action::Supersede };
+ }
+ 
+ bool CreateWeaponPriceDetour()
+@@ -271,15 +263,16 @@
+ 		}
+ 	}
+ 
+-	DWeaponPrice = DETOUR_CREATE_MEMBER(DetourWeaponPrice, "GetWeaponPrice");
++	DWeaponPrice = CreateMemberDetour<WeaponPriceHook>("GetWeaponPrice", &DetourWeaponPrice);
+ 	if (DWeaponPrice != NULL)
+ 	{
+ 		if (!CreateHandleBuyDetour())
+ 		{
++			delete DWeaponPrice;
++			DWeaponPrice = NULL;
+ 			g_pSM->LogError(myself, "GetWeaponPrice detour could not be initialized - HandleCommand_Buy_Internal failed to detour, disabled OnGetWeaponPrice forward.");
+ 			return false;
+ 		}
+-		DWeaponPrice->EnableDetour();
+ 		g_PriceDetoured = true;
+ 		return true;
+ 	}
+@@ -311,11 +304,10 @@
+ 
+ bool CreateTerminateRoundDetour()
+ {
+-	DTerminateRound = DETOUR_CREATE_MEMBER(DetourTerminateRound, "TerminateRound");
++	DTerminateRound = CreateMemberDetour<TerminateRoundHook>("TerminateRound", &DetourTerminateRound);
+ 
+ 	if (DTerminateRound != NULL)
+ 	{
+-		DTerminateRound->EnableDetour();
+ 		g_pTerminateRoundDetoured = true;
+ 		return true;
+ 	}
+@@ -338,11 +330,10 @@
+ 		}
+ 	}
+ #endif
+-	DHandleBuy = DETOUR_CREATE_MEMBER(DetourHandleBuy, "HandleCommand_Buy_Internal");
++	DHandleBuy = CreateMemberDetour<HandleBuyHook>("HandleCommand_Buy_Internal", &DetourHandleBuy);
+ 
+ 	if (DHandleBuy != NULL)
+ 	{
+-		DHandleBuy->EnableDetour();
+ 		g_HandleBuyDetoured = true;
+ 		return true;
+ 	}
+@@ -352,11 +343,10 @@
+ 
+ bool CreateCSWeaponDropDetour()
+ {
+-	DCSWeaponDrop = DETOUR_CREATE_MEMBER(DetourCSWeaponDrop, WEAPONDROP_GAMEDATA_NAME);
++	DCSWeaponDrop = CreateMemberDetour<CSWeaponDropHook>(WEAPONDROP_GAMEDATA_NAME, &DetourCSWeaponDrop);
+ 
+ 	if (DCSWeaponDrop != NULL)
+ 	{
+-		DCSWeaponDrop->EnableDetour();
+ 		g_pCSWeaponDropDetoured = true;
+ 		return true;
+ 	}
+@@ -365,44 +355,46 @@
+ 	return false;
+ }
+ 
+-void RemoveWeaponPriceDetour()	
++void RemoveWeaponPriceDetour()
+ {
++#if SOURCE_ENGINE != SE_CSGO
+ 	if (DWeaponPrice != NULL)
+ 	{
+-		DWeaponPrice->Destroy();
++		delete DWeaponPrice;
+ 		DWeaponPrice = NULL;
+ 	}
++#endif
+ 	g_PriceDetoured = false;
+ }
+ 
+-void RemoveHandleBuyDetour()	
++void RemoveHandleBuyDetour()
+ {
+ 	if (g_PriceDetoured)
+ 		return;
+ 
+ 	if (DHandleBuy != NULL)
+ 	{
+-		DHandleBuy->Destroy();
++		delete DHandleBuy;
+ 		DHandleBuy = NULL;
+ 	}
+ 	g_HandleBuyDetoured = false;
+ }
+ 
+-void RemoveTerminateRoundDetour()	
++void RemoveTerminateRoundDetour()
+ {
+ 	if (DTerminateRound != NULL)
+ 	{
+-		DTerminateRound->Destroy();
++		delete DTerminateRound;
+ 		DTerminateRound = NULL;
+ 	}
+ 	g_pTerminateRoundDetoured = false;
+ }
+ 
+-void RemoveCSWeaponDropDetour()	
++void RemoveCSWeaponDropDetour()
+ {
+ 	if (DCSWeaponDrop != NULL)
+ 	{
+-		DCSWeaponDrop->Destroy();
++		delete DCSWeaponDrop;
+ 		DCSWeaponDrop = NULL;
+ 	}
+ 	g_pCSWeaponDropDetoured = false;
+diff -ruN a/extensions/mysql/mysql/MyDatabase.h b/extensions/mysql/mysql/MyDatabase.h
+--- a/extensions/mysql/mysql/MyDatabase.h
++++ b/extensions/mysql/mysql/MyDatabase.h
+@@ -80,10 +80,10 @@
+ 
+ 	/* ---------- */
+ 	DatabaseInfo m_Info;
+-	String m_Host;
+-	String m_Database;
+-	String m_User;
+-	String m_Pass;
++	std::string m_Host;
++	std::string m_Database;
++	std::string m_User;
++	std::string m_Pass;
+ 	bool m_bPersistent;
+ };
+ 
+diff -ruN a/extensions/mysql/mysql/MyDriver.cpp b/extensions/mysql/mysql/MyDriver.cpp
+--- a/extensions/mysql/mysql/MyDriver.cpp
++++ b/extensions/mysql/mysql/MyDriver.cpp
+@@ -41,9 +41,9 @@
+ 	m_MyHandle = BAD_HANDLE;
+ }
+ 
+-void CloseDBList(List<MyDatabase *> &l)
++void CloseDBList(std::list<MyDatabase *> &l)
+ {
+-	List<MyDatabase *>::iterator iter;
++	std::list<MyDatabase *>::iterator iter;
+ 	for (iter=l.begin(); iter!=l.end(); iter++)
+ 	{
+ 		MyDatabase *db = (*iter);
+@@ -57,7 +57,7 @@
+ 
+ void MyDriver::Shutdown()
+ {
+-	List<MyDatabase *>::iterator iter;
++	std::list<MyDatabase *>::iterator iter;
+ 	CloseDBList(m_PermDbs);
+ 
+ 	if (m_MyHandle != BAD_HANDLE)
+@@ -172,7 +172,7 @@
+ 	if (persistent)
+ 	{
+ 		/* Try to find a matching persistent connection */
+-		List<MyDatabase *>::iterator iter;
++		std::list<MyDatabase *>::iterator iter;
+ 		for (iter=m_PermDbs.begin();
+ 			 iter!=m_PermDbs.end();
+ 			 iter++)
+diff -ruN a/extensions/mysql/mysql/MyDriver.h b/extensions/mysql/mysql/MyDriver.h
+--- a/extensions/mysql/mysql/MyDriver.h
++++ b/extensions/mysql/mysql/MyDriver.h
+@@ -49,13 +49,12 @@
+ # undef max
+ #endif
+ 
+-#include <sh_string.h>
+-#include <sh_list.h>
++#include <string>
++#include <list>
+ 
+ #include <mutex>
+ 
+ using namespace SourceMod;
+-using namespace SourceHook;
+ 
+ #define M_CLIENT_MULTI_RESULTS    ((1) << 17)  /* Enable/disable multi-results */
+ 
+@@ -80,8 +79,8 @@
+ private:
+ 	std::mutex m_Lock;
+ 	Handle_t m_MyHandle;
+-	List<MyDatabase *> m_TempDbs;
+-	List<MyDatabase *> m_PermDbs;
++	std::list<MyDatabase *> m_TempDbs;
++	std::list<MyDatabase *> m_PermDbs;
+ };
+ 
+ extern MyDriver g_MyDriver;

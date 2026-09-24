@@ -16,6 +16,7 @@ Why we do **not** chase byte-identical `.so` vs rom4s («SUPER GOLDEN») is in [
 | `sm13-dev` | **1.13.0.7404** (`cdedec760…`) | **1.12 git1226** | DEV (default) |
 | `sm13-mm20` | 1.13.0.7404 | **2.0 git1407** (`0084b86…`) | Experimental |
 | `sm13-latest` | **1.13.0.7472** (`6eb5f8fa…`) | **1.12 git1226** (`9fd977d…`) | Latest SM pin |
+| `sm13-mm20-khook` | **1.13.0.7565** KHook branch + master (`25954d4…`) | **2.0 git1469** KHook (`fa6f80e…`) | Experimental ([docs](docs/MM20_KHOOK.md)) |
 
 Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
 
@@ -27,6 +28,7 @@ Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder
 | **MM 1.11** (`metamod.2.ep1`) | exploratory only | not a release path |
 | **MM 1.12** git1226 | no | **matched** (`sm12-latest`, `sm13-dev`, `sm13-latest`) |
 | **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
+| **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
 
 Do **not** install leftover myarena `metamod.2.ep1` / MM 1.11 under SM 1.11 — you get `Older Metamod… (11 < 14)`.
 
@@ -67,6 +69,8 @@ CSS34_LINE=sm13-mm20 PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 
 # Latest SM 7472 + MM 1.12 (see docs/SM13_LATEST.md):
 CSS34_LINE=sm13-latest PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+# Experimental KHook: SM KHook branch + MM 2.0 master (docs/MM20_KHOOK.md):
+CSS34_LINE=sm13-mm20-khook PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 # Equivalent override on the DEV line:
 CSS34_LINE=sm13-dev MMS_LINE=2.0 PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 ```
@@ -86,7 +90,7 @@ CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/run/windows.sh
 ## CI
 
 - `.github/workflows/build.yml` — default `CSS34_LINE=sm13-dev`, pure-source Linux + Windows (no Actions artifacts)
-- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**, **sm13-mm20**, **sm13-latest**; smoke on Debian 11 (all lines) + Debian latest / Rocky / host for sm13-dev; **botplay-stress matrix** on Debian 11 (SMAC + SDKHooks OnTakeDamage); forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata. Packages pass between jobs via **Actions cache**; log artifacts only on **failure** and are **deleted at end of run** by `cleanup-workflow-storage`
+- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**, **sm13-mm20**, **sm13-latest**, **sm13-mm20-khook** (SM KHook branch + MM 2.0 KHook); smoke on Debian 11 (all lines) + Debian latest / Rocky / host for sm13-dev; **botplay-stress matrix** on Debian 11 (SMAC + SDKHooks OnTakeDamage); forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata. Packages pass between jobs via **Actions cache**; log artifacts only on **failure** and are **deleted at end of run** by `cleanup-workflow-storage`
 - `.github/workflows/release.yml` — tag-driven; tag maps to `CSS34_LINE`; packages attach with `gh release upload` (**GitHub Releases**, not Actions artifacts)
 - `.github/workflows/cleanup-artifacts.yml` — purge leftover Actions artifacts (`keep_hours=0`) if quota is still full
 

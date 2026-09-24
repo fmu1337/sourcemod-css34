@@ -23,7 +23,7 @@ if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" || -z "${MM_COM
     eval "$(
       CSS34_LINE="${CSS34_LINE:-sm13-dev}" bash -c "
         source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
-        echo \"RESOLVED_SM_COMMIT='\${SOURCEMOD_COMMIT}'\"
+        echo \"RESOLVED_SM_COMMIT='\${SOURCEMOD_BUILD_COMMIT:-\$SOURCEMOD_COMMIT}'\"
         echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"
         echo \"RESOLVED_SM_MAJOR='\${SOURCEMOD_MAJOR}'\"
         echo \"RESOLVED_MM_COMMIT='\${MMS_COMMIT}'\"

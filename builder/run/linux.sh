@@ -77,6 +77,7 @@ fi
 git -C "$SOURCEMOD_DIR" submodule foreach --recursive "git reset --hard && git clean -fd" 2>/dev/null || true
 git -C "$SOURCEMOD_DIR" fetch --depth=8192 origin "$SOURCEMOD_COMMIT"
 git -C "$SOURCEMOD_DIR" reset --hard "$SOURCEMOD_COMMIT"
+bash "$BUILDER_DIR/sourcemod-khook-merge.sh" "$SOURCEMOD_DIR"
 git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"

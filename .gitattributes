@@ -1,0 +1,4 @@
+# Patches and take lists are applied byte for byte (some hunks carry CRLF
+# SourceMod lines); keep Windows checkouts (core.autocrlf) from rewriting them.
+builder/patches/*.patch -text
+builder/patches/*.take -text

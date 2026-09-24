@@ -21,6 +21,10 @@ resolve_mm() {
       MMS_COMMIT="$MM_20_COMMIT"; MMS_BRANCH="$MM_20_BRANCH"
       MMS_DIRNAME="$MM_20_DIRNAME"; MMS_MODE="$MM_20_MODE"
       ;;
+    2.0k)
+      MMS_COMMIT="$MM_20K_COMMIT"; MMS_BRANCH="$MM_20K_BRANCH"
+      MMS_DIRNAME="$MM_20K_DIRNAME"; MMS_MODE="$MM_20K_MODE"
+      ;;
     *)
       echo "Unknown MM mode '$mode'" >&2
       exit 1
@@ -61,8 +65,16 @@ apply_sm_line() {
       SOURCEMOD_MAJOR="$SM_LATEST_13_MAJOR"
       resolve_mm 1.12
       ;;
+    sm13-mm20-khook|sm13-khook|khook)
+      SOURCEMOD_COMMIT="$SM_KHOOK_COMMIT"
+      SOURCEMOD_GIT_REV="$SM_KHOOK_REV"
+      SOURCEMOD_MAJOR="$SM_KHOOK_MAJOR"
+      SOURCEMOD_MERGE_MASTER="$SM_KHOOK_MERGE_MASTER"
+      SOURCEMOD_BUILD_COMMIT="$SM_KHOOK_BUILD_COMMIT"
+      resolve_mm 2.0k
+      ;;
     *)
-      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20|sm13-latest)" >&2
+      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20|sm13-latest|sm13-mm20-khook)" >&2
       exit 1
       ;;
   esac
@@ -85,6 +97,7 @@ elif [[ -n "${SOURCEMOD_COMMIT:-}" && -n "${SOURCEMOD_GIT_REV:-}" ]]; then
         1.10|mm110|mm10) resolve_mm 1.10 ;;
         1.12|mm112|mm12) resolve_mm 1.12 ;;
         2.0|mm20|mm2) resolve_mm 2.0 ;;
+        2.0k|mm20k|khook) resolve_mm 2.0k ;;
         *) echo "Unknown MMS_LINE='${MMS_LINE}'" >&2; exit 1 ;;
       esac
     elif [[ "$SOURCEMOD_MAJOR" -ge 12 ]]; then
@@ -103,10 +116,13 @@ if [[ -n "${MMS_LINE:-}" && -n "${CSS34_LINE:-}" ]]; then
     1.10|mm110|mm10) resolve_mm 1.10 ;;
     1.12|mm112|mm12) resolve_mm 1.12 ;;
     2.0|mm20|mm2) resolve_mm 2.0 ;;
+    2.0k|mm20k|khook) resolve_mm 2.0k ;;
   esac
 fi
 
-export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV SOURCEMOD_MAJOR
+SOURCEMOD_MERGE_MASTER="${SOURCEMOD_MERGE_MASTER:-}"
+SOURCEMOD_BUILD_COMMIT="${SOURCEMOD_BUILD_COMMIT:-}"
+export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV SOURCEMOD_MAJOR SOURCEMOD_MERGE_MASTER SOURCEMOD_BUILD_COMMIT
 export MMS_COMMIT MMS_BRANCH MMS_DIRNAME MMS_MODE
 export CSS34_LINE="${CSS34_LINE:-custom}"
 
