@@ -73,10 +73,12 @@ if [ -d "$GAMEDATA_ROOT" ]; then
     cp -f "$BUILDER_DIR/assets/gamedata/core.games/blacklist.plugins.txt" \
       "$GAMEDATA_ROOT/core.games/blacklist.plugins.txt"
   fi
-  if [ -f "$BUILDER_DIR/assets/gamedata/sdktools.games/engine.ep1.txt" ]; then
+  # engine.ep1.txt + game.cstrike.txt: upstream CS:S vtable offsets do not
+  # match v34 (see builder/assets/gamedata/sdktools.games/game.cstrike.txt).
+  if [ -d "$BUILDER_DIR/assets/gamedata/sdktools.games" ]; then
     mkdir -p "$GAMEDATA_ROOT/sdktools.games"
-    cp -f "$BUILDER_DIR/assets/gamedata/sdktools.games/engine.ep1.txt" \
-      "$GAMEDATA_ROOT/sdktools.games/engine.ep1.txt"
+    cp -f "$BUILDER_DIR/assets/gamedata/sdktools.games/"*.txt \
+      "$GAMEDATA_ROOT/sdktools.games/"
   fi
   if [ -d "$BUILDER_DIR/assets/gamedata/sdkhooks.games" ]; then
     mkdir -p "$GAMEDATA_ROOT/sdkhooks.games"
