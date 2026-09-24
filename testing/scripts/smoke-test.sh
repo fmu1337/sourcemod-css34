@@ -222,6 +222,21 @@ else
   fail=1
 fi
 
+# Every SDKTools / SDKHooks vtable offset must match the v34 CCSPlayer vtable
+# (upstream CS:S offsets crash GivePlayerItem / GetPlayerWeaponSlot on v34).
+server_so="${SERVER_DIR}/cstrike/bin/server_i486.so"
+vtable_check="${ROOT}/testing/scripts/check-css34-vtables.py"
+if command -v python3 >/dev/null 2>&1 && command -v c++filt >/dev/null 2>&1 && [[ -f "${server_so}" ]]; then
+  if python3 "${vtable_check}" "${server_so}" "${SERVER_DIR}/cstrike/addons/sourcemod/gamedata"; then
+    echo "OK: css34 SDKTools/SDKHooks vtable offsets match server_i486.so"
+  else
+    echo "FAIL: css34 gamedata vtable offsets do not match server_i486.so" >&2
+    fail=1
+  fi
+else
+  echo "SKIP: css34 vtable check (needs python3 + c++filt + ${server_so})"
+fi
+
 if grep -Eiq '<FAILED>' "${CONSOLE_PROBE_LOG}"; then
   echo "FAIL: failed extension(s) in sm exts list" >&2
   grep -Ei '<FAILED>' "${CONSOLE_PROBE_LOG}" >&2 || true

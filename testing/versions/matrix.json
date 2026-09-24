@@ -9,18 +9,18 @@
       "role": "oldstable"
     },
     "sm12-latest": {
-      "sourcemod": "1.12.0.7245",
-      "sourcemod_commit": "f8490c8104a844fbf1826cd8b8f22900b86adf8a",
-      "metamod": "1.12.0-dev+1224",
-      "metamod_commit": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
+      "sourcemod": "1.12.0.7253",
+      "sourcemod_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "metamod": "1.12.0-dev+1226",
+      "metamod_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
       "metamod_binary": "metamod.2.ep1",
       "role": "latest"
     },
     "sm13-dev": {
       "sourcemod": "1.13.0.7404",
       "sourcemod_commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
-      "metamod": "1.12.0-dev+1224",
-      "metamod_commit": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
+      "metamod": "1.12.0-dev+1226",
+      "metamod_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
       "metamod_binary": "metamod.2.ep1",
       "role": "dev"
     },
@@ -31,6 +31,14 @@
       "metamod_commit": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
       "metamod_binary": "metamod.2.ep1",
       "role": "experimental"
+    },
+    "sm13-latest": {
+      "sourcemod": "1.13.0.7472",
+      "sourcemod_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "metamod": "1.12.0-dev+1226",
+      "metamod_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "metamod_binary": "metamod.2.ep1",
+      "role": "latest-sm13"
     },
     "sm13-mm20-khook": {
       "sourcemod": "1.13.0.7519",
@@ -46,7 +54,7 @@
   "metamod_pins": {
     "1.10-dev": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
     "1.11-dev": "7ff2d97bdad1493b809c5ec91bbfc7abc6ae5445",
-    "1.12-1224": "364cb6c26f66f7d9254d95a2fc533eac3557166b",
+    "1.12-1226": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
     "2.0-1407": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
     "2.0-1469-khook": "fa6f80e4662e5b96cc2e97722d812f374581dfd8"
   },
@@ -66,17 +74,17 @@
       },
       "verified": ["ci_smoke_debian_rocky_host", "botplay_matrix"]
     },
-    "1.12.0.7245-mm1.12.0": {
+    "1.12.0.7253-mm1.12.0": {
       "line": "sm12-latest",
       "role": "latest",
-      "sourcemod": "1.12.0-git7245",
-      "metamod": "1.12.0-dev+1224",
+      "sourcemod": "1.12.0-git7253",
+      "metamod": "1.12.0-dev+1226",
       "metamod_binary": "metamod.2.ep1",
       "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7245-mm1.12.0/sourcemod-1.12.0-git7245-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7245-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7245-mm1.12.0/sourcemod-1.12.0-git7245-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7245-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7253-mm1.12.0/sourcemod-1.12.0-git7253-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7253-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7253-mm1.12.0/sourcemod-1.12.0-git7253-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7253-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
       },
       "verified": ["ci_smoke", "botplay_matrix"]
     },
@@ -84,7 +92,7 @@
       "line": "sm13-dev",
       "role": "dev",
       "sourcemod": "1.13.0-git7404",
-      "metamod": "1.12.0-dev+1224",
+      "metamod": "1.12.0-dev+1226",
       "metamod_binary": "metamod.2.ep1",
       "assets": {
         "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/sourcemod-1.13.0-git7404-css34-linux.tar.gz",
@@ -107,6 +115,20 @@
         "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/mmsource-2.0.0-dev-css34-windows.zip"
       },
       "verified": ["ci_smoke", "botplay_matrix"]
+    },
+    "1.13.0.7472-mm1.12.0": {
+      "line": "sm13-latest",
+      "role": "latest-sm13",
+      "sourcemod": "1.13.0-git7472",
+      "metamod": "1.12.0-dev+1226",
+      "metamod_binary": "metamod.2.ep1",
+      "assets": {
+        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/sourcemod-1.13.0-git7472-css34-linux.tar.gz",
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
+        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/sourcemod-1.13.0-git7472-css34-windows.zip",
+        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
+      },
+      "verified": ["ci_smoke", "botplay_matrix"]
     }
   },
   "compatibility": [
@@ -117,8 +139,8 @@
       "notes": "Matched production line; PLAPI 11"
     },
     {
-      "mm": "MM 1.12 git1224",
-      "sm": "SM 1.12 / 1.13 (sm12-latest, sm13-dev)",
+      "mm": "MM 1.12 git1226",
+      "sm": "SM 1.12 / 1.13 (sm12-latest, sm13-dev, sm13-latest)",
       "result": "PASS",
       "notes": "Matched release tags; metamod.2.ep1"
     },

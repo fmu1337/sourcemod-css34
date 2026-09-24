@@ -12,9 +12,10 @@ Why we do **not** chase byte-identical `.so` vs rom4s («SUPER GOLDEN») is in [
 | Line (`CSS34_LINE`) | SourceMod | Metamod | Role |
 |---------------------|-----------|---------|------|
 | `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev** (`80e8ff0…`, `metamod.1.ep1`) | OldStable |
-| `sm12-latest` | **1.12.0.7245** (`f8490c810…`) | **1.12 git1224** (`364cb6c…`, `metamod.2.ep1`) | Latest |
-| `sm13-dev` | **1.13.0.7404** (`cdedec760…`) | **1.12 git1224** | DEV (default) |
+| `sm12-latest` | **1.12.0.7253** (`2e229b11…`) | **1.12 git1226** (`9fd977d…`, `metamod.2.ep1`) | Latest |
+| `sm13-dev` | **1.13.0.7404** (`cdedec760…`) | **1.12 git1226** | DEV (default) |
 | `sm13-mm20` | 1.13.0.7404 | **2.0 git1407** (`0084b86…`) | Experimental |
+| `sm13-latest` | **1.13.0.7472** (`6eb5f8fa…`) | **1.12 git1226** (`9fd977d…`) | Latest SM pin |
 | `sm13-mm20-khook` | **1.13.0.7519** KHook branch (`0cd7f6f…`) | **2.0 git1469** KHook (`fa6f80e…`) | Experimental ([docs](docs/MM20_KHOOK.md)) |
 
 Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
@@ -25,7 +26,7 @@ Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder
 |--|--|--|
 | **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable`) | no |
 | **MM 1.11** (`metamod.2.ep1`) | exploratory only | not a release path |
-| **MM 1.12** git1224 | no | **matched** (`sm12-latest`, `sm13-dev`) |
+| **MM 1.12** git1226 | no | **matched** (`sm12-latest`, `sm13-dev`, `sm13-latest`) |
 | **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
 | **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
 
@@ -38,8 +39,9 @@ Use the **matched** pair from one tag. Do not mix Metamod from one line with Sou
 | Tag | Line | SourceMod | Metamod | Verified |
 |-----|------|-----------|---------|----------|
 | [`1.11.0.6970-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.10.7) | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | CI smoke + botplay matrix |
-| [`1.12.0.7245-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7245-mm1.12.0) | `sm12-latest` | 1.12.0-git7245 | 1.12.0-dev+1224 | CI smoke + botplay matrix |
-| [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` | 1.13.0-git7404 | 1.12.0-dev+1224 | CI smoke + botplay matrix |
+| [`1.12.0.7253-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7253-mm1.12.0) | `sm12-latest` | 1.12.0-git7253 | 1.12.0-dev+1226 | CI smoke + botplay matrix |
+| [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` | 1.13.0-git7404 | 1.12.0-dev+1226 | CI smoke + botplay matrix |
+| [`1.13.0.7472-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0) | `sm13-latest` | 1.13.0-git7472 | 1.12.0-dev+1226 | CI smoke + botplay matrix |
 | [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev+1407 | CI smoke + botplay matrix |
 
 Asset names: `sourcemod-<ver>-css34-{linux.tar.gz|windows.zip}` and `mmsource-<ver>-css34-{linux.tar.gz|windows.zip}`.
@@ -55,7 +57,7 @@ Asset names: `sourcemod-<ver>-css34-{linux.tar.gz|windows.zip}` and `mmsource-<v
 ```bash
 git submodule update --init --recursive
 
-# Default DEV line (SM 1.13.7404 + MM 1.12.1224):
+# Default DEV line (SM 1.13.7404 + MM 1.12.1226):
 CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 
 # OldStable / Latest:
@@ -64,6 +66,9 @@ CSS34_LINE=sm12-latest    PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 
 # Experimental SM 1.13 + MM 2.0 (also in CI as sm13-mm20):
 CSS34_LINE=sm13-mm20 PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+
+# Latest SM 7472 + MM 1.12 (see docs/SM13_LATEST.md):
+CSS34_LINE=sm13-latest PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 # Experimental KHook: SM KHook branch + MM 2.0 master (docs/MM20_KHOOK.md):
 CSS34_LINE=sm13-mm20-khook PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 # Equivalent override on the DEV line:
@@ -85,13 +90,14 @@ CSS34_LINE=sm13-dev PURE_SOURCE_BUILD=1 builder/run/windows.sh
 ## CI
 
 - `.github/workflows/build.yml` — default `CSS34_LINE=sm13-dev`, pure-source Linux + Windows (no Actions artifacts)
-- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**, **sm13-mm20** (SM 1.13 + MM 2.0), **sm13-mm20-khook** (SM KHook branch + MM 2.0 KHook); smoke on Debian 11 (all lines) + Debian latest / Rocky / host for sm13-dev; **botplay-stress matrix** on Debian 11 for all lines (SMAC + SDKHooks OnTakeDamage); forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata. Packages pass between jobs via **Actions cache**; log artifacts only on **failure** and are **deleted at end of run** by `cleanup-workflow-storage`
+- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-dev**, **sm13-mm20**, **sm13-latest**, **sm13-mm20-khook** (SM KHook branch + MM 2.0 KHook); smoke on Debian 11 (all lines) + Debian latest / Rocky / host for sm13-dev; **botplay-stress matrix** on Debian 11 (SMAC + SDKHooks OnTakeDamage); forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata. Packages pass between jobs via **Actions cache**; log artifacts only on **failure** and are **deleted at end of run** by `cleanup-workflow-storage`
 - `.github/workflows/release.yml` — tag-driven; tag maps to `CSS34_LINE`; packages attach with `gh release upload` (**GitHub Releases**, not Actions artifacts)
 - `.github/workflows/cleanup-artifacts.yml` — purge leftover Actions artifacts (`keep_hours=0`) if quota is still full
 
 ```bash
 git tag 1.11.0.6970-mm1.10.7   # sm11-oldstable
-git tag 1.12.0.7245-mm1.12.0   # sm12-latest
+git tag 1.12.0.7253-mm1.12.0   # sm12-latest
+git tag 1.13.0.7472-mm1.12.0   # sm13-latest
 git tag 1.13.0.7404-mm1.12.0   # sm13-dev
 git tag 1.13.0.7404-mm2.0.0    # sm13-mm20
 git push origin --tags

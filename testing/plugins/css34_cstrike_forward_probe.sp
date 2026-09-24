@@ -12,8 +12,11 @@
  *   1 = block "flashbang" buys (Plugin_Handled)
  *   2 = halve weapon prices (Plugin_Changed)
  *   4 = shorten the round end delay (Plugin_Changed)
+ *   8 = at freeze end call GetPlayerWeaponSlot / CS_DropWeapon / GivePlayerItem
+ *       on one bot (sdktools + cstrike natives that use v34 vtable offsets)
  */
 #include <sourcemod>
+#include <sdktools>
 #include <cstrike>
 
 #pragma semicolon 1
@@ -23,7 +26,7 @@ public Plugin myinfo =
 {
 	name = "css34 cstrike forward probe",
 	author = "sourcemod-css34",
-	description = "Counts cstrike.ext detour forwards (buy, price, terminate, drop)",
+	description = "Counts cstrike.ext detour forwards and exercises weapon natives",
 	version = "1.0.0",
 	url = "https://github.com/fmu1337/sourcemod-css34"
 };
@@ -34,12 +37,14 @@ int g_Price;
 int g_Terminate;
 int g_Drop;
 int g_Blocked;
+int g_Natives;
 int g_Rounds;
 
 public void OnPluginStart()
 {
-	g_Mode = CreateConVar("css34_cs_probe_mode", "0", "Bit mask: 1 block flashbang buys, 2 halve prices, 4 shorten round end delay; 0 = passive");
+	g_Mode = CreateConVar("css34_cs_probe_mode", "0", "Bit mask: 1 block flashbang buys, 2 halve prices, 4 shorten round end delay, 8 call weapon natives; 0 = passive");
 	HookEvent("round_end", Event_RoundEnd);
+	HookEvent("round_freeze_end", Event_FreezeEnd);
 }
 
 public Action CS_OnBuyCommand(int client, const char[] weapon)
@@ -81,9 +86,35 @@ public Action CS_OnCSWeaponDrop(int client, int weaponIndex, bool donated)
 	return Plugin_Continue;
 }
 
+public void Event_FreezeEnd(Event event, const char[] name, bool dontBroadcast)
+{
+	if (!(g_Mode.IntValue & 8))
+	{
+		return;
+	}
+
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsClientInGame(client) || !IsPlayerAlive(client))
+		{
+			continue;
+		}
+		int weapon = GetPlayerWeaponSlot(client, CS_SLOT_SECONDARY);
+		if (weapon == -1)
+		{
+			continue;
+		}
+		CS_DropWeapon(client, weapon, true);
+		int given = GivePlayerItem(client, "weapon_deagle");
+		g_Natives++;
+		LogMessage("[css34_cs_probe] natives client=%d dropped=%d given=%d", client, weapon, given);
+		return;
+	}
+}
+
 public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	g_Rounds++;
-	LogMessage("[css34_cs_probe] round=%d mode=%d buy=%d price=%d terminate=%d drop=%d blocked=%d",
-		g_Rounds, g_Mode.IntValue, g_Buy, g_Price, g_Terminate, g_Drop, g_Blocked);
+	LogMessage("[css34_cs_probe] round=%d mode=%d buy=%d price=%d terminate=%d drop=%d blocked=%d natives=%d",
+		g_Rounds, g_Mode.IntValue, g_Buy, g_Price, g_Terminate, g_Drop, g_Blocked, g_Natives);
 }

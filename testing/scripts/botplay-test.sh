@@ -77,6 +77,11 @@ MIN_OTD_HITS="${MIN_OTD_HITS:-1}"
 MIN_MAP_ROTATIONS="${MIN_MAP_ROTATIONS:-1}"
 MIN_SM_PROBE_OK="${MIN_SM_PROBE_OK:-75}"
 MIN_SM_PROBE_FAIL="${MIN_SM_PROBE_FAIL:-0}"
+# css34_cstrike_forward_probe counters (last "[css34_cs_probe] round=" line).
+MIN_CS_TERMINATE="${MIN_CS_TERMINATE:-1}"
+MIN_CS_BUY="${MIN_CS_BUY:-1}"
+MIN_CS_PRICE="${MIN_CS_PRICE:-1}"
+MIN_CS_NATIVES="${MIN_CS_NATIVES:-1}"
 
 cd "${SERVER_DIR}"
 export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
@@ -363,6 +368,25 @@ if [[ "${sm_probe_round_fail}" -gt "${MIN_SM_PROBE_FAIL}" ]]; then
 else
   echo "OK: SM API probe round failures (${sm_probe_round_fail} <= ${MIN_SM_PROBE_FAIL})"
 fi
+
+# cstrike.ext detours (buy / price / TerminateRound) and weapon natives
+# (GetPlayerWeaponSlot, CS_DropWeapon, GivePlayerItem) must actually run.
+cs_probe_line=""
+if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
+  cs_probe_line="$(grep -h '\[css34_cs_probe\] round=' "${sm_probe_sources[@]}" 2>/dev/null | tail -n1 || true)"
+fi
+cs_probe_field() {
+  local v
+  v="$(printf '%s\n' "${cs_probe_line}" | grep -Eo " $1=[0-9]+" | grep -Eo '[0-9]+' | tail -n1 || true)"
+  echo "${v:-0}"
+}
+if [[ -z "${cs_probe_line}" ]]; then
+  echo "DEBUG: no [css34_cs_probe] round= line in SM logs" >&2
+fi
+require_min "cstrike TerminateRound detour hits" "$(cs_probe_field terminate)" "${MIN_CS_TERMINATE}"
+require_min "cstrike HandleCommand_Buy detour hits" "$(cs_probe_field buy)" "${MIN_CS_BUY}"
+require_min "cstrike GetWeaponPrice detour hits" "$(cs_probe_field price)" "${MIN_CS_PRICE}"
+require_min "cstrike/sdktools weapon native rounds" "$(cs_probe_field natives)" "${MIN_CS_NATIVES}"
 
 if [[ "${record_failed}" -ne 0 ]]; then
   echo "Botplay test FAILED"

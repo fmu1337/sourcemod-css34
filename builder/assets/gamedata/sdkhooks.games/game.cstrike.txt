@@ -19,11 +19,6 @@
 				"windows"	"101"
 				"linux"		"102"
 			}
-			"GetMaxHealth"
-			{
-				"windows"	"106"
-				"linux"		"107"		
-			}
 			"GroundEntChanged"
 			{
 				"windows"	"162"
@@ -96,8 +91,8 @@
 			}
 			"VPhysicsUpdate"
 			{
-				"windows"	"130"
-				"linux"		"131"
+				"windows"	"142"
+				"linux"		"143"
 			}
 			"Weapon_CanSwitchTo"
 			{
