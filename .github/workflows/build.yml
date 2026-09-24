@@ -67,6 +67,10 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        line: [sm13-dev, sm13-mm20-khook]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,10 +87,10 @@ jobs:
         with:
           arch: x86
 
-      - name: Build SourceMod + Metamod for CS:S v34
+      - name: Build SourceMod + Metamod for CS:S v34 (${{ matrix.line }})
         shell: bash
         env:
-          CSS34_LINE: ${{ env.CSS34_LINE }}
+          CSS34_LINE: ${{ matrix.line }}
           PURE_SOURCE_BUILD: ${{ env.PURE_SOURCE_BUILD }}
         run: |
           export WDIR="$PWD"
