@@ -57,3 +57,9 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 ### Lint
 There is no dedicated linter/pre-commit config in this repo. The ABI export
 check (`check-package.sh`) is the closest static verification of build output.
+
+### Version pin bumps (Jules / agents)
+Daily SM/MM tip bumps: follow `docs/JULES_DAILY_VERSION_BUMP.md`. After editing
+pins, run `testing/scripts/check-version-pins.sh` (also enforced by
+`.github/workflows/version-pins.yml` on PRs). Upstream tip probe:
+`builder/scripts/resolve-upstream-tips.sh`.

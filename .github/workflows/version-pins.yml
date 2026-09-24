@@ -1,0 +1,38 @@
+name: Version Pins
+
+on:
+  pull_request:
+    paths:
+      - 'builder/versions.env'
+      - 'builder/checkout-deps.sh'
+      - 'builder/write-build-stamps.sh'
+      - 'builder/scripts/**'
+      - 'testing/versions/matrix.json'
+      - 'testing/scripts/check-version-pins.sh'
+      - '.github/workflows/test-server.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/version-pins.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'builder/versions.env'
+      - 'builder/checkout-deps.sh'
+      - 'builder/write-build-stamps.sh'
+      - 'testing/versions/matrix.json'
+      - 'testing/scripts/check-version-pins.sh'
+      - '.github/workflows/test-server.yml'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+jobs:
+  check-pins:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify version pin consistency
+        run: |
+          chmod +x testing/scripts/check-version-pins.sh
+          testing/scripts/check-version-pins.sh
