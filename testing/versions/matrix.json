@@ -41,9 +41,11 @@
       "role": "latest-sm13"
     },
     "sm13-mm20-khook": {
-      "sourcemod": "1.13.0.7519",
-      "sourcemod_branch": "k/sourcehook_alternative",
-      "sourcemod_commit": "0cd7f6fcb4e3f09e0adb136f42dfa12305682bcc",
+      "sourcemod": "1.13.0.7565",
+      "sourcemod_branch": "k/sourcehook_alternative + master",
+      "sourcemod_commit": "25954d4aa4a55ab10c6e2c30699f52358f982fb9",
+      "sourcemod_khook_commit": "0cd7f6fcb4e3f09e0adb136f42dfa12305682bcc",
+      "sourcemod_merge_master": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
       "metamod": "2.0.0-dev+1469",
       "metamod_commit": "fa6f80e4662e5b96cc2e97722d812f374581dfd8",
       "metamod_binary": "metamod.2.ep1",
@@ -152,7 +154,7 @@
     },
     {
       "mm": "MM 2.0 git1469 (KHook, no SourceHook)",
-      "sm": "SM 1.13 KHook branch 7519 (sm13-mm20-khook)",
+      "sm": "SM 1.13 KHook branch + master 7565 (sm13-mm20-khook)",
       "result": "PASS",
       "notes": "Experimental; smoke + botplay stress; cstrike ported to KHook in-tree"
     },
@@ -191,7 +193,7 @@
   },
   "notes": [
     "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
-    "CI matrix includes sm13-mm20 (SM 1.13.7404 + MM 2.0 git1407) and sm13-mm20-khook (SM KHook branch 7519 + MM 2.0 git1469).",
+    "CI matrix includes sm13-mm20 (SM 1.13.7404 + MM 2.0 git1407) and sm13-mm20-khook (SM KHook branch merged with master 7565 + MM 2.0 git1469).",
     "Smoke and check-package.sh assert sdkhooks.games and OnTakeDamage css34 offsets.",
     "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all CI lines.",
     "Use matched release tags; do not mix MM from one line with SM from another.",

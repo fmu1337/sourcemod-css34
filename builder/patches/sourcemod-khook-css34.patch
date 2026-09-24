@@ -1,7 +1,7 @@
 diff -ruN a/AMBuildScript b/AMBuildScript
 --- a/AMBuildScript
 +++ b/AMBuildScript
-@@ -659,10 +659,10 @@
+@@ -683,10 +683,10 @@
      'extensions/bintools/AMBuilder',
      'extensions/clientprefs/AMBuilder',
      'extensions/curl/AMBuilder',
@@ -500,7 +500,7 @@ diff -ruN a/extensions/cstrike/forwards.cpp b/extensions/cstrike/forwards.cpp
 diff -ruN a/extensions/mysql/mysql/MyDatabase.h b/extensions/mysql/mysql/MyDatabase.h
 --- a/extensions/mysql/mysql/MyDatabase.h
 +++ b/extensions/mysql/mysql/MyDatabase.h
-@@ -74,10 +74,10 @@
+@@ -80,10 +80,10 @@
  
  	/* ---------- */
  	DatabaseInfo m_Info;
@@ -515,3 +515,66 @@ diff -ruN a/extensions/mysql/mysql/MyDatabase.h b/extensions/mysql/mysql/MyDatab
  	bool m_bPersistent;
  };
  
+diff -ruN a/extensions/mysql/mysql/MyDriver.cpp b/extensions/mysql/mysql/MyDriver.cpp
+--- a/extensions/mysql/mysql/MyDriver.cpp
++++ b/extensions/mysql/mysql/MyDriver.cpp
+@@ -41,9 +41,9 @@
+ 	m_MyHandle = BAD_HANDLE;
+ }
+ 
+-void CloseDBList(List<MyDatabase *> &l)
++void CloseDBList(std::list<MyDatabase *> &l)
+ {
+-	List<MyDatabase *>::iterator iter;
++	std::list<MyDatabase *>::iterator iter;
+ 	for (iter=l.begin(); iter!=l.end(); iter++)
+ 	{
+ 		MyDatabase *db = (*iter);
+@@ -57,7 +57,7 @@
+ 
+ void MyDriver::Shutdown()
+ {
+-	List<MyDatabase *>::iterator iter;
++	std::list<MyDatabase *>::iterator iter;
+ 	CloseDBList(m_PermDbs);
+ 
+ 	if (m_MyHandle != BAD_HANDLE)
+@@ -172,7 +172,7 @@
+ 	if (persistent)
+ 	{
+ 		/* Try to find a matching persistent connection */
+-		List<MyDatabase *>::iterator iter;
++		std::list<MyDatabase *>::iterator iter;
+ 		for (iter=m_PermDbs.begin();
+ 			 iter!=m_PermDbs.end();
+ 			 iter++)
+diff -ruN a/extensions/mysql/mysql/MyDriver.h b/extensions/mysql/mysql/MyDriver.h
+--- a/extensions/mysql/mysql/MyDriver.h
++++ b/extensions/mysql/mysql/MyDriver.h
+@@ -49,13 +49,12 @@
+ # undef max
+ #endif
+ 
+-#include <sh_string.h>
+-#include <sh_list.h>
++#include <string>
++#include <list>
+ 
+ #include <mutex>
+ 
+ using namespace SourceMod;
+-using namespace SourceHook;
+ 
+ #define M_CLIENT_MULTI_RESULTS    ((1) << 17)  /* Enable/disable multi-results */
+ 
+@@ -80,8 +79,8 @@
+ private:
+ 	std::mutex m_Lock;
+ 	Handle_t m_MyHandle;
+-	List<MyDatabase *> m_TempDbs;
+-	List<MyDatabase *> m_PermDbs;
++	std::list<MyDatabase *> m_TempDbs;
++	std::list<MyDatabase *> m_PermDbs;
+ };
+ 
+ extern MyDriver g_MyDriver;
