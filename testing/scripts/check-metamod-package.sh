@@ -34,7 +34,7 @@ else
 fi
 
 echo "==> Checking loader exports"
-if nm -D "${LOADER_SO}" 2>/dev/null | grep -Eq ' T CreateInterface([[:space:]]|$)'; then
+if nm -D "${LOADER_SO}" 2>/dev/null | grep -E ' T CreateInterface([[:space:]]|$)' >/dev/null; then
   echo "OK: server.so exports CreateInterface"
 else
   echo "FAIL: server.so missing CreateInterface" >&2

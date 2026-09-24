@@ -1,0 +1,144 @@
+/**
+ * CS:S v34 (Source 2007 / episode1 "original" engine) SDKTools offsets.
+ *
+ * Upstream sdktools.games/game.cstrike.txt targets current Steam CS:S; its
+ * vtable offsets are 20-90 slots off on v34 (e.g. GiveNamedItem 409 vs 330,
+ * Weapon_GetSlot 275 vs 225), so GivePlayerItem / GetPlayerWeaponSlot /
+ * RemovePlayerItem / TeleportEntity / ... call the wrong virtual and crash.
+ *
+ * Offsets below come from the rom4s css34 SM 6572 package. Every linux value
+ * was re-checked against the CCSPlayer vtable in the v34 server_i486.so
+ * (testing/scripts/check-css34-vtables.py). Windows values follow the
+ * rom4s file; GetAttachment is linux - 1 like its neighbours.
+ */
+
+"Games"
+{
+	/* Counter-Strike: Source v34 */
+	"cstrike"
+	{
+		"Keys"
+		{
+			"SlapSoundCount"	"3"
+			"SlapSound1"		"player/damage1.wav"
+			"SlapSound2"		"player/damage2.wav"
+			"SlapSound3"		"player/damage3.wav"
+
+			"GameRulesProxy"		"CCSGameRulesProxy"
+			"GameRulesDataTable"	"cs_gamerules_data"
+		}
+
+		"Offsets"
+		{
+			"SetOwnerEntity"
+			{
+				"windows"	"18"
+				"linux"		"19"
+			}
+			"GiveNamedItem"
+			{
+				"windows"	"329"
+				"linux"		"330"
+			}
+			"RemovePlayerItem"
+			{
+				"windows"	"226"
+				"linux"		"227"
+			}
+			"Weapon_GetSlot"
+			{
+				"windows"	"224"
+				"linux"		"225"
+			}
+			"Ignite"
+			{
+				"windows"	"188"
+				"linux"		"189"
+			}
+			"Extinguish"
+			{
+				"windows"	"189"
+				"linux"		"190"
+			}
+			"Teleport"
+			{
+				"windows"	"98"
+				"linux"		"99"
+			}
+			"CommitSuicide"
+			{
+				"windows"	"357"
+				"linux"		"358"
+			}
+			"GetVelocity"
+			{
+				"windows"	"126"
+				"linux"		"127"
+			}
+			"EyeAngles"
+			{
+				"windows"	"118"
+				"linux"		"119"
+			}
+			"AcceptInput"
+			{
+				"windows"	"35"
+				"linux"		"36"
+			}
+			"DispatchKeyValue"
+			{
+				"windows"	"31"
+				"linux"		"30"
+			}
+			"DispatchKeyValueFloat"
+			{
+				"windows"	"30"
+				"linux"		"31"
+			}
+			"DispatchKeyValueVector"
+			{
+				"windows"	"29"
+				"linux"		"32"
+			}
+			"SetEntityModel"
+			{
+				"windows"	"25"
+				"linux"		"26"
+			}
+			"WeaponEquip"
+			{
+				"windows"	"217"
+				"linux"		"218"
+			}
+			"Activate"
+			{
+				"windows"	"32"
+				"linux"		"33"
+			}
+			"PlayerRunCmd"
+			{
+				"windows"	"347"
+				"linux"		"348"
+			}
+			"GiveAmmo"
+			{
+				"windows"	"213"
+				"linux"		"214"
+			}
+			"GetAttachment"
+			{
+				"windows"	"185"
+				"linux"		"186"
+			}
+		}
+
+		"Signatures"
+		{
+			"LookupAttachment"
+			{
+				"library"	"server"
+				"linux"		"@_ZN14CBaseAnimating16LookupAttachmentEPKc"
+			}
+		}
+	}
+}
