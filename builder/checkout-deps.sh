@@ -121,7 +121,7 @@ MMS_BRANCH="${MMS_BRANCH:-}"
 
 if [[ -z "$MMS_MODE" || -z "$MMS_DIRNAME" || -z "$MMS_COMMIT" ]]; then
   if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
-    MMS_COMMIT="${MMS_COMMIT:-364cb6c26f66f7d9254d95a2fc533eac3557166b}"
+    MMS_COMMIT="${MMS_COMMIT:-9fd977df3b49ec76cdf865a4af13a90c0f5c8814}"
     MMS_BRANCH="${MMS_BRANCH:-1.12-dev}"
     MMS_DIRNAME="${MMS_DIRNAME:-mmsource-1.12}"
     MMS_MODE="${MMS_MODE:-1.12}"
