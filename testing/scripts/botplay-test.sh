@@ -388,6 +388,28 @@ require_min "cstrike HandleCommand_Buy detour hits" "$(cs_probe_field buy)" "${M
 require_min "cstrike GetWeaponPrice detour hits" "$(cs_probe_field price)" "${MIN_CS_PRICE}"
 require_min "cstrike/sdktools weapon native rounds" "$(cs_probe_field natives)" "${MIN_CS_NATIVES}"
 
+# css34_dhooks_probe: when dhooks.ext is present, its virtual hook and dynamic
+# detour must install and fire. Lines without DHooks log available=0.
+dh_probe_line=""
+if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
+  dh_probe_line="$(grep -h '\[css34_dhooks_probe\] round=' "${sm_probe_sources[@]}" 2>/dev/null | tail -n1 || true)"
+fi
+dh_probe_field() {
+  local v
+  v="$(printf '%s\n' "${dh_probe_line}" | grep -Eo " $1=[0-9]+" | grep -Eo '[0-9]+' | tail -n1 || true)"
+  echo "${v:-0}"
+}
+if [[ -z "${dh_probe_line}" ]]; then
+  echo "FAIL: no [css34_dhooks_probe] round= line in SM logs" >&2
+  record_failed=1
+elif [[ "$(dh_probe_field available)" == "1" ]]; then
+  require_min "DHooks probe setup" "$(dh_probe_field setup)" 1
+  require_min "DHooks virtual hook hits (OnTakeDamage)" "$(dh_probe_field vhook)" 1
+  require_min "DHooks detour hits (RoundRespawn)" "$(dh_probe_field detour)" 1
+else
+  echo "SKIP: dhooks.ext not shipped on this line (css34_dhooks_probe available=0)"
+fi
+
 if [[ "${record_failed}" -ne 0 ]]; then
   echo "Botplay test FAILED"
   exit 1
