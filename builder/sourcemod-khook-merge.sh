@@ -35,6 +35,7 @@ echo "==> Merging SourceMod master ${master:0:10} into $("${git_sm[@]}" rev-pars
 take_paths=()
 remove_paths=()
 while read -r status path; do
+  path="${path%$'\r'}"
   [[ -z "$status" ]] && continue
   if [[ "$status" == D ]]; then
     remove_paths+=("$path")
