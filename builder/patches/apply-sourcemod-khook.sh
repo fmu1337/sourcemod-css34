@@ -42,6 +42,24 @@ else:
     print('==> KHook GetContextPtr() already in use')
 PY
 
+# SDKTools output.cpp: the Windows x86 definition of Hook_FireOutput lacks the
+# EntityOutputManager:: qualifier, so MSVC builds a free function and the
+# member stays unresolved (LNK2019). Linux takes the other #if branch.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['SOURCEMOD_DIR']) / 'extensions/sdktools/output.cpp'
+old = b'KHook::Return<void> Hook_FireOutput(CBaseEntity* this_ptr, int what'
+new = b'KHook::Return<void> EntityOutputManager::Hook_FireOutput(CBaseEntity* this_ptr, int what'
+data = path.read_bytes() if path.is_file() else b''
+if old in data:
+    path.write_bytes(data.replace(old, new, 1))
+    print('==> SDKTools Hook_FireOutput: added EntityOutputManager:: (Windows x86)')
+else:
+    print('==> SDKTools Hook_FireOutput already qualified')
+PY
+
 # The KHook branch disables cstrike (SourceHook LevelInit hook + CDetour) and
 # mysql in AMBuildScript. Port cstrike to KHook::Virtual / KHook::Member and
 # re-enable both. The patch is written against LF sources (upstream cstrike

@@ -64,7 +64,10 @@ Called first from `apply-sourcemod-v112.sh`; it is a no-op on SourceHook trees.
      arguments or post-processed its return value, the callback now calls
      `CallOriginal()` itself and supersedes, which keeps the CDetour behaviour;
    - drops `SM.AddCDetour` and re-enables the extension.
-3. **mysql.** The branch also disables `dbi.mysql`. Its only SourceHook
+3. **SDKTools `Hook_FireOutput` (Windows).** The branch defines the Windows
+   x86 variant without the `EntityOutputManager::` qualifier, so MSVC fails to
+   link `sdktools.ext` (LNK2019). The patch adds the qualifier.
+4. **mysql.** The branch also disables `dbi.mysql`. Its only SourceHook
    dependencies are `SourceHook::String` and `SourceHook::List` (`sh_string.h`
    / `sh_list.h`, gone from MM), so the patch switches them to `std::string` /
    `std::list` and re-enables it.
