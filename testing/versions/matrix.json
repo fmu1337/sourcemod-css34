@@ -116,7 +116,7 @@
         "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/sourcemod-1.13.0-git7404-css34-windows.zip",
         "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/mmsource-2.0.0-dev-css34-windows.zip"
       },
-      "verified": ["ci_smoke", "botplay_matrix"]
+      "verified": ["ci_smoke_debian11", "botplay_matrix_debian11"]
     },
     "1.13.0.7472-mm1.12.0": {
       "line": "sm13-latest",
