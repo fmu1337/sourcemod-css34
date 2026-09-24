@@ -236,3 +236,4 @@ sudo bash testing/scripts/run-built-mm-matrix.sh
 | `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
 | Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |
 | Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Эксперимент major-апгрейда поверх модели B |
+| [PR #54](https://github.com/fmu1337/sourcemod-css34/pull/54), [PR #55](https://github.com/fmu1337/sourcemod-css34/pull/55) | SourceHook header-graft на MM 2.0 git1469 отвергнут (`g_SHPtr` = NULL на KHook MM); заменены `sm13-mm20-khook` (#59). Детали — [MM20_KHOOK.md](MM20_KHOOK.md), CI-покрытие `sm13-mm20` — [SM13_MM20.md](SM13_MM20.md) |
