@@ -14,7 +14,7 @@ Why we do **not** chase byte-identical `.so` vs rom4s («SUPER GOLDEN») is in [
 | `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev** (`80e8ff0…`, `metamod.1.ep1`) | OldStable |
 | `sm12-latest` | **1.12.0.7253** (`2e229b11…`) | **1.12 git1226** (`9fd977d…`, `metamod.2.ep1`) | Latest |
 | `sm13-dev` | **1.13.0.7404** (`cdedec760…`) | **1.12 git1226** | DEV (default) |
-| `sm13-mm20` | 1.13.0.7404 | **2.0 git1407** (`0084b86…`) | Experimental |
+| `sm13-mm20` | 1.13.0.7404 | **2.0 git1407** (`0084b86…`) | Experimental ([docs](docs/SM13_MM20.md)) |
 | `sm13-latest` | **1.13.0.7472** (`6eb5f8fa…`) | **1.12 git1226** (`9fd977d…`) | Latest SM pin |
 | `sm13-mm20-khook` | **1.13.0.7565** KHook branch + master (`25954d4…`) | **2.0 git1469** KHook (`fa6f80e…`) | Experimental ([docs](docs/MM20_KHOOK.md)) |
 

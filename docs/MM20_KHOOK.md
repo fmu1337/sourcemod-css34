@@ -22,8 +22,26 @@ bumps the plugin API so old SourceHook plugins are rejected.
 
 SourceMod `master` (7472) still builds against `<mms>/core/sourcehook` and
 installs every hook through `g_SHPtr`. Grafting the old SourceHook headers into
-the Metamod tree (the approach in PR #54) makes it compile, but at runtime
-Metamod hands SourceMod no SourceHook instance, so it cannot work.
+the Metamod tree (the approach in PRs #54 and #55) makes it compile, but at
+runtime Metamod hands SourceMod no SourceHook instance, so it cannot work.
+
+What those PRs did, for reference (both closed in favour of this line):
+
+- restore `core/sourcehook/*.h` from git1407 (`git archive 0084b86
+  core/sourcehook`, or a vendored copy under `builder/assets/sourcehook/`)
+  and add `third_party/khook/include` to SM's include paths, since
+  `ISmmPlugin.h` includes `khook.hpp` from git1450+;
+- `#include <sourcehook.h>` plus `extern SourceHook::ISourceHook *g_SHPtr` in
+  `smsdk_ext.h` / `sourcemm_api.h`, and `g_SHPtr` initialised from
+  `ismm->MetaFactory(MMIFACE_SOURCEHOOK, …)` in `SDK_OnMetamodLoad`;
+- `GetShApiVersion()` hard-coded to 5 when `METAMOD_PLAPI_VERSION >= 18`,
+  because `ISmmAPI::GetShVersions` is gone.
+
+The `MetaFactory` call returns NULL on KHook Metamod, so every `SH_ADD_HOOK`
+dereferences a null `g_SHPtr`. On #54 the CI smoke and botplay jobs for that
+line failed while all other lines passed. #55 applied the same shim to the
+released `sm13-mm20` line, so its pin must stay on git1407
+([SM13_MM20.md](SM13_MM20.md)).
 The only SourceMod tree that runs on KHook Metamod is the upstream KHook port,
 `k/sourcehook_alternative`, so this line pins its tip.
 
