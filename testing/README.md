@@ -38,7 +38,7 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 8. Every SDKTools / SDKHooks vtable offset in the installed gamedata matches the `CCSPlayer` / `CWeaponCSBase` vtables of the v34 `server_i486.so` (`check-css34-vtables.py`; needs `python3` + `c++filt`, otherwise SKIP)
 9. No segfault; not flooded with `Unknown command` (buffer bug signature)
 
-The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs) + `css34_cstrike_forward_probe.smx` (requires cstrike TerminateRound / buy / price detour hits and a `GetPlayerWeaponSlot` → `CS_DropWeapon` → `GivePlayerItem` round, `css34_cs_probe_mode 8` in `botplay-stress.cfg`). Runs for all `CSS34_LINE` builds on every `master` push.
+The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs) + `css34_cstrike_forward_probe.smx` (requires cstrike TerminateRound / buy / price detour hits and a `GetPlayerWeaponSlot` → `CS_DropWeapon` → `GivePlayerItem` round, `css34_cs_probe_mode 8` in `botplay-stress.cfg`)) + `css34_dhooks_probe.smx` (where dhooks.ext ships: a DHooks virtual hook on `CCSPlayer::OnTakeDamage` and a dynamic detour on `CCSPlayer::RoundRespawn` must install and fire; lines without DHooks log `available=0` and are skipped). Runs for all `CSS34_LINE` builds on every `master` push.
 
 ## `srcds_run` / engine launch flags
 
