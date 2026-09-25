@@ -145,7 +145,7 @@
         "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook/sourcemod-1.13.0-git7565-css34-windows.zip",
         "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook/mmsource-2.0.0-dev-css34-windows.zip"
       },
-      "verified": ["ci_smoke", "botplay_matrix", "release_asset_smoke"]
+      "verified": ["ci_smoke", "botplay_matrix", "release_asset_smoke", "release_asset_botplay"]
     }
   },
   "compatibility": [
