@@ -60,20 +60,39 @@ else:
     print('==> SDKTools Hook_FireOutput already qualified')
 PY
 
-# The KHook branch disables cstrike (SourceHook LevelInit hook + CDetour) and
-# mysql in AMBuildScript. Port cstrike to KHook::Virtual / KHook::Member and
-# re-enable both. The patch is written against LF sources (upstream cstrike
-# files are CRLF).
-patch_file="$script_dir/sourcemod-khook-css34.patch"
-mapfile -t patched_files < <(sed -n 's#^+++ b/##p' "$patch_file")
-for rel in "${patched_files[@]}"; do
-  [ -f "$sourcemod_dir/$rel" ] && sed -i 's/\r$//' "$sourcemod_dir/$rel"
-done
-if git -C "$sourcemod_dir" apply --reverse --check "$patch_file" >/dev/null 2>&1; then
-  echo "==> cstrike KHook port already applied"
-else
-  git -C "$sourcemod_dir" apply "$patch_file"
-  echo "==> Applied cstrike KHook port + re-enabled cstrike/mysql"
-fi
+# Patches written against LF sources (several upstream files are CRLF):
+#  - sourcemod-khook-css34.patch: the KHook branch disables cstrike (SourceHook
+#    LevelInit hook + CDetour) and mysql in AMBuildScript. Port cstrike to
+#    KHook::Virtual / KHook::Member and re-enable both.
+#  - sourcemod-khook-dhooks-x86.patch: the rewritten DHooks only builds for
+#    linux x86_64. Add the i386 System V ABI (32-bit ep1 / v34) and restore
+#    the legacy API bits the rewrite dropped (library "dhooks",
+#    DHookEnableDetour / DHookDisableDetour / DHookGetParamAddress,
+#    DHookSetFromConf returning true).
+#  - sourcemod-khook-consoledetours.patch: command listeners detour
+#    ConCommand::Dispatch through the vtable; resolve the real function when
+#    a KHook virtual hook already owns that slot.
+apply_khook_patch() {
+  local patch_file="$1" label="$2" rel
+  local -a patched_files
+  mapfile -t patched_files < <(sed -n 's#^+++ b/##p' "$patch_file")
+  for rel in "${patched_files[@]}"; do
+    [ -f "$sourcemod_dir/$rel" ] && sed -i 's/\r$//' "$sourcemod_dir/$rel"
+  done
+  if git -C "$sourcemod_dir" apply --reverse --check "$patch_file" >/dev/null 2>&1; then
+    echo "==> ${label} already applied"
+  else
+    # Files the patch creates survive `git reset --hard` as untracked leftovers
+    while IFS= read -r rel; do
+      rm -f "$sourcemod_dir/$rel"
+    done < <(awk '/^--- \/dev\/null$/ { getline; sub(/^\+\+\+ b\//, ""); print }' "$patch_file")
+    git -C "$sourcemod_dir" apply "$patch_file"
+    echo "==> Applied ${label}"
+  fi
+}
+
+apply_khook_patch "$script_dir/sourcemod-khook-css34.patch" "cstrike KHook port + re-enabled cstrike/mysql"
+apply_khook_patch "$script_dir/sourcemod-khook-dhooks-x86.patch" "DHooks linux x86 (i386 System V ABI)"
+apply_khook_patch "$script_dir/sourcemod-khook-consoledetours.patch" "ConsoleDetours real Dispatch detour"
 
 echo "==> SourceMod KHook css34 patches applied"
