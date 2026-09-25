@@ -43,6 +43,7 @@ Use the **matched** pair from one tag. Do not mix Metamod from one line with Sou
 | [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` | 1.13.0-git7404 | 1.12.0-dev+1226 | CI smoke + botplay matrix |
 | [`1.13.0.7472-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0) | `sm13-latest` | 1.13.0-git7472 | 1.12.0-dev+1226 | CI smoke + botplay matrix |
 | [`1.13.0.7565-mm2.0.0-khook`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook) | `sm13-mm20-khook` | 1.13.0-git7565 (KHook branch + master) | 2.0.0-dev+1469 (KHook) | CI smoke + botplay matrix; release assets smoke + botplay |
+| [`1.13.0.7565-mm2.0.0-khook-dhooks`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks) | `sm13-mm20-khook` | 1.13.0-git7565 (KHook branch + master) | 2.0.0-dev+1469 (KHook), + dhooks.ext linux x86 | CI smoke + botplay matrix; release assets smoke + botplay |
 | [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev+1407 | CI smoke + botplay matrix |
 
 Asset names: `sourcemod-<ver>-css34-{linux.tar.gz|windows.zip}` and `mmsource-<ver>-css34-{linux.tar.gz|windows.zip}`.
@@ -102,6 +103,7 @@ git tag 1.13.0.7472-mm1.12.0   # sm13-latest
 git tag 1.13.0.7404-mm1.12.0   # sm13-dev
 git tag 1.13.0.7404-mm2.0.0    # sm13-mm20
 git tag 1.13.0.7565-mm2.0.0-khook  # sm13-mm20-khook
+git tag 1.13.0.7565-mm2.0.0-khook-dhooks  # sm13-mm20-khook + dhooks.ext (linux x86)
 git push origin --tags
 ```
 
