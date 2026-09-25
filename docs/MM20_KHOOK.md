@@ -85,7 +85,8 @@ Called first from `apply-sourcemod-v112.sh`; it is a no-op on SourceHook trees.
 3. **SDKTools `Hook_FireOutput` (Windows).** The branch defines the Windows
    x86 variant without the `EntityOutputManager::` qualifier, so MSVC fails to
    link `sdktools.ext` (LNK2019). The patch adds the qualifier.
-4. **mysql.** The branch also disables `dbi.mysql`. Its only SourceHook
+4. **DHooks linux x86 + ConsoleDetours** — see [DHooks](#dhooks-linux-x86).
+5. **mysql.** The branch also disables `dbi.mysql`. Its only SourceHook
    dependencies are `SourceHook::String` and `SourceHook::List` (`sh_string.h`
    / `sh_list.h`, gone from MM), so the patch switches them to `std::string` /
    `std::list` and re-enables it.
@@ -111,12 +112,58 @@ log.
 `CS_DropWeapon` from a plugin used to crash srcds v34 on every line; it is
 fixed for all lines by PR #60 (`css34_cs_probe_mode 8` in botplay stress).
 
-## DHooks
+## DHooks (linux x86)
 
-The KHook SourceMod branch rewrote DHooks and only builds it for linux
-x86_64, so no line built for 32-bit ep1 ships `dhooks.ext` here.
-`css34_dhooks_probe.smx` (botplay) logs `available=0` and is skipped; when a
-build does ship DHooks, botplay requires its virtual hook and detour to fire.
+The KHook SourceMod branch rewrote DHooks on top of KHook, but only ships the
+linux x86_64 ABI. `sourcemod-khook-dhooks-x86.patch` adds
+`src/abi/system_v_i386.cpp`, the i386 System V backend used by 32-bit ep1 /
+CS:S v34:
+
+- every parameter, `this` included (`CallConv_THISCALL`), lives on the stack;
+  `CallConv_FASTCALL` puts the first two 32-bit integers in ECX / EDX;
+  `CallConv_STDCALL` / `CallConv_FASTCALL` callees pop their arguments;
+- integers / pointers return in EAX, `float` in x87 ST(0) (FLD / FSTP are
+  emitted directly, the KHook x86 assembler has no x87 / SSE instructions);
+- `Vector` / `string_t` return through the hidden pointer the callee pops
+  (`ret 4`); `HookParamType_Object` by value is copied on the stack;
+- the PRE / POST stubs save every general register and the recall path
+  restores all of them: when a hook changes parameters (`MRES_ChangedHandled`)
+  KHook re-enters the detour and later returns to the original caller with
+  the registers it was re-entered with, EBX / ESI / EDI included.
+
+The same patch restores what the rewrite dropped from the old API:
+`RegisterLibrary("dhooks")` (`LibraryExists` / `OnLibraryAdded`),
+`DHookEnableDetour` / `DHookDisableDetour`, `DHookGetParamAddress` /
+`DHookParam.GetAddress`, and `DHookSetFromConf` returning true on success
+(false, not an error, when the key is missing).
+
+`sourcemod-khook-consoledetours.patch` fixes a shutdown crash those hooks
+exposed: command listeners (`AddCommandListener`) detour `ConCommand::Dispatch`
+read from each command vtable. When a KHook virtual hook already owns that
+slot, SM detoured the KHook JIT stub instead of the function, and Metamod
+crashed restoring the stub's bytes after it had been freed. It now resolves
+the real function with `KHook::FindOriginalVirtual`.
+
+Botplay (`css34_dhooks_probe.smx`, gamedata `css34_dhooks_probe.games`)
+requires on every line that ships DHooks:
+
+| Hook | Covers |
+|------|--------|
+| virtual `CCSPlayer::OnTakeDamage` | entity virtual hook, `ObjectPtr` param |
+| detour `CCSPlayer::RoundRespawn` | address detour (`THISCALL`, void) |
+| POST virtual `CBasePlayer::EyePosition`, `MRES_Override` | `Vector` return through the hidden pointer |
+| PRE virtual `CCSPlayer::PlayStepSound`, `MRES_ChangedHandled` | `float` / `bool` / pointer stack params, recall |
+| POST detour `CWeaponCSBase::GetMaxSpeed`, `MRES_Override` | `float` return in ST(0) |
+
+Returned vectors / floats and the step volume are range-checked; any bad
+value fails the run. Windows (MSVC thiscall / `__fastcall`) is not ported:
+`dhooks.ext` is only built for linux.
+
+Known upstream issue, not fixed here: DHooks hooks each entity class
+destructor through `KHook::SetupVirtualHook` and never removes that hook, so
+unloading `dhooks.ext` (`sm exts unload dhooks`) while the server keeps
+running leaves a vtable pointing at unloaded callbacks. A normal shutdown is
+clean.
 
 ## Windows
 

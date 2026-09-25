@@ -13,5 +13,14 @@ export SERVER_DIR
 mkdir -p "${SM_PLUGINS_DIR}"
 cp -f "${BOTPLAY_OUT}"/*.smx "${SM_PLUGINS_DIR}/"
 
+# Probe gamedata (v34 offsets / symbols the stock gamedata doesn't carry)
+SM_GAMEDATA_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/gamedata"
+shopt -s nullglob
+for gd in "${ROOT}"/testing/plugins/gamedata/*.txt; do
+  mkdir -p "${SM_GAMEDATA_DIR}"
+  cp -f "${gd}" "${SM_GAMEDATA_DIR}/"
+done
+shopt -u nullglob
+
 echo "Installed botplay plugins:"
 ls -la "${SM_PLUGINS_DIR}"/css34_*.smx

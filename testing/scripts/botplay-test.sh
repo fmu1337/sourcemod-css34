@@ -406,6 +406,17 @@ elif [[ "$(dh_probe_field available)" == "1" ]]; then
   require_min "DHooks probe setup" "$(dh_probe_field setup)" 1
   require_min "DHooks virtual hook hits (OnTakeDamage)" "$(dh_probe_field vhook)" 1
   require_min "DHooks detour hits (RoundRespawn)" "$(dh_probe_field detour)" 1
+  require_min "DHooks Vector return hits (EyePosition)" "$(dh_probe_field eye)" 1
+  require_min "DHooks float param + recall hits (PlayStepSound)" "$(dh_probe_field step)" 1
+  require_min "DHooks float return hits (CWeaponCSBase::GetMaxSpeed)" "$(dh_probe_field speed)" 1
+  for bad in eye_bad step_bad speed_bad; do
+    if [[ "$(dh_probe_field "${bad}")" -eq 0 ]]; then
+      echo "OK: DHooks probe ${bad} (0)"
+    else
+      echo "FAIL: DHooks probe ${bad} ($(dh_probe_field "${bad}") > 0)" >&2
+      record_failed=1
+    fi
+  done
 else
   echo "SKIP: dhooks.ext not shipped on this line (css34_dhooks_probe available=0)"
 fi
