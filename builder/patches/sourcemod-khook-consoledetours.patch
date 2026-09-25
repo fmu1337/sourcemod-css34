@@ -1,0 +1,19 @@
+diff --git a/core/ConsoleDetours.cpp b/core/ConsoleDetours.cpp
+index 640fd65..b6cba3e 100644
+--- a/core/ConsoleDetours.cpp
++++ b/core/ConsoleDetours.cpp
+@@ -116,7 +116,13 @@ class GenericCommandHooker : public IConCommandLinkListener
+ 		{
+ 			HackInfo hack;
+ 			hack.vtable = vtable;
+-			hack.hook = new CmdHook(KHook::GetVtableFunction(cmd, &ConCommand::Dispatch), this, &GenericCommandHooker::Dispatch, nullptr);
++			// The vtable entry may already point at a KHook virtual hook's JIT
++			// stub; detouring that stub leaves a dangling inline hook once the
++			// virtual hook goes away (crash when Metamod unloads). Detour the
++			// real Dispatch instead.
++			auto dispatch = KHook::BuildMFP<decltype(&ConCommand::Dispatch)>(
++				KHook::FindOriginalVirtual(vtable, KHook::GetVtableIndex(&ConCommand::Dispatch)));
++			hack.hook = new CmdHook(dispatch, this, &GenericCommandHooker::Dispatch, nullptr);
+ 			hack.refcount = 1;
+ 			vtables.push_back(hack);
+ 		}

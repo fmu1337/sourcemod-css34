@@ -1,0 +1,29 @@
+"Games"
+{
+	// CS:S v34 server_i486.so (checked with testing/scripts/check-css34-vtables.py --dump)
+	"cstrike"
+	{
+		"Offsets"
+		{
+			// Vector CBasePlayer::EyePosition()
+			"EyePosition"
+			{
+				"linux"		"118"
+			}
+			// void CCSPlayer::PlayStepSound(Vector &, surfacedata_t *, float, bool)
+			"PlayStepSound"
+			{
+				"linux"		"296"
+			}
+		}
+		"Signatures"
+		{
+			// float CWeaponCSBase::GetMaxSpeed() const (virtual, shared by most weapons)
+			"CWeaponCSBase::GetMaxSpeed"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK13CWeaponCSBase11GetMaxSpeedEv"
+			}
+		}
+	}
+}

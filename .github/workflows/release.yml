@@ -7,6 +7,7 @@ name: Release
 #   1.13.0.7404-mm2.0.0    → sm13-mm20
 #   1.13.0.7472-mm1.12.0   → sm13-latest
 #   1.13.0.7565-mm2.0.0-khook → sm13-mm20-khook
+#   1.13.0.7565-mm2.0.0-khook-dhooks → sm13-mm20-khook (+ dhooks.ext linux x86)
 #
 # Linux/Windows jobs attach packages directly to the GitHub Release.
 # No Actions artifacts (those count against the 0.5 GB storage quota).
@@ -46,6 +47,7 @@ jobs:
               1.13.0.7404-mm2.0.0)  line=sm13-mm20 ;;
               1.13.0.7472-mm1.12.0) line=sm13-latest ;;
               1.13.0.7565-mm2.0.0-khook) line=sm13-mm20-khook ;;
+              1.13.0.7565-mm2.0.0-khook-dhooks) line=sm13-mm20-khook ;;
               *)
                 echo "Unknown release tag '${tag}' — add a mapping in release.yml" >&2
                 exit 1
