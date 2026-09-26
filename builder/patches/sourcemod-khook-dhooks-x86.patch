@@ -27,10 +27,10 @@ index f8bf104b1..8cbdf32bd 100644
      binary.compiler.defines += ['DHOOKS_X86']
 diff --git a/extensions/dhooks/src/abi/x86.cpp b/extensions/dhooks/src/abi/x86.cpp
 new file mode 100644
-index 000000000..9ef6a591d
+index 000000000..818ccf8b4
 --- /dev/null
 +++ b/extensions/dhooks/src/abi/x86.cpp
-@@ -0,0 +1,548 @@
+@@ -0,0 +1,549 @@
 +#include "../sp_inc.hpp"
 +#include "../capsule.hpp"
 +#include "../sdk_types.hpp"
@@ -75,11 +75,12 @@ index 000000000..9ef6a591d
 +
 +namespace {
 +
++// Not VOID: winnt.h defines it as a macro
 +enum class RetClass {
-+	VOID,
-+	INTEGER,
-+	X87,
-+	MEMORY
++	Void,
++	Integer,
++	X87Float,
++	Memory
 +};
 +
 +std::optional<RetClass> Classify_ReturnType(const ReturnVariable& info) {
@@ -91,14 +92,14 @@ index 000000000..9ef6a591d
 +	case sp::ReturnType_VectorPtr:
 +	case sp::ReturnType_CBaseEntity:
 +	case sp::ReturnType_Edict:
-+		return RetClass::INTEGER;
++		return RetClass::Integer;
 +	case sp::ReturnType_Float:
-+		return RetClass::X87;
++		return RetClass::X87Float;
 +	case sp::ReturnType_String:
 +	case sp::ReturnType_Vector:
-+		return RetClass::MEMORY;
++		return RetClass::Memory;
 +	case sp::ReturnType_Void:
-+		return RetClass::VOID;
++		return RetClass::Void;
 +	default:
 +		break;
 +	}
@@ -215,7 +216,7 @@ index 000000000..9ef6a591d
 +	}
 +
 +#if defined(_WIN32)
-+	if (conv == sp::CallConv_FASTCALL && cls.value() == RetClass::MEMORY) {
++	if (conv == sp::CallConv_FASTCALL && cls.value() == RetClass::Memory) {
 +		// MSVC passes the hidden return pointer in ECX there
 +		globals::sourcemod->LogError(globals::myself, "FASTCALL functions returning Vector / string_t aren't supported!");
 +		return false;
@@ -225,7 +226,7 @@ index 000000000..9ef6a591d
 +	/* Skip the return address */
 +	size_t stack_offset = sizeof(void*);
 +	ret.callee_pop = 0;
-+	if (cls.value() == RetClass::MEMORY) {
++	if (cls.value() == RetClass::Memory) {
 +		if (ret.dhook_size == 0 || (ret.dhook_size % sizeof(std::uint32_t)) != 0) {
 +			globals::sourcemod->LogError(globals::myself, "Unsupported size (%zu) for a return value passed in memory!", ret.dhook_size);
 +			return false;
@@ -296,7 +297,7 @@ index 000000000..9ef6a591d
 +		ret.callee_pop = stack_size;
 +	}
 +#else
-+	else if (cls.value() == RetClass::MEMORY) {
++	else if (cls.value() == RetClass::Memory) {
 +		ret.callee_pop = sizeof(void*);
 +	}
 +#endif
@@ -375,15 +376,15 @@ index 000000000..9ef6a591d
 +	jit.call(eax);
 +	// EAX now contains the return value ptr
 +	switch (cls) {
-+		case RetClass::VOID:
++		case RetClass::Void:
 +		break;
-+		case RetClass::INTEGER:
-+		case RetClass::X87:
++		case RetClass::Integer:
++		case RetClass::X87Float:
 +		// Keep the raw bits, we're gonna call a function which could modify EAX / the FPU stack
 +		jit.mov(eax, eax());
 +		jit.mov(esp(0x8), eax);
 +		break;
-+		case RetClass::MEMORY:
++		case RetClass::Memory:
 +		// Fill the caller's buffer (hidden pointer at [ebp + 8])
 +		jit.mov(ecx, ebp(0x8));
 +		Emit_CopyDwords(jit, ecx, 0, eax, 0, ret.dhook_size, edx);
@@ -395,13 +396,13 @@ index 000000000..9ef6a591d
 +	jit.call(eax);
 +
 +	switch (cls) {
-+		case RetClass::VOID:
++		case RetClass::Void:
 +		break;
-+		case RetClass::INTEGER:
-+		case RetClass::MEMORY:
++		case RetClass::Integer:
++		case RetClass::Memory:
 +		jit.mov(eax, esp(0x8));
 +		break;
-+		case RetClass::X87:
++		case RetClass::X87Float:
 +		Emit_Fld32(jit, esp(0x8));
 +		break;
 +	}
@@ -526,9 +527,9 @@ index 000000000..9ef6a591d
 +	std::uintptr_t deinit_op = 0;
 +	std::size_t return_size = 0;
 +	switch (cls) {
-+		case RetClass::VOID:
++		case RetClass::Void:
 +		break;
-+		case RetClass::INTEGER:
++		case RetClass::Integer:
 +		// Store EAX
 +		jit.mov(esp(0x18), eax);
 +		jit.lea(eax, esp(0x18));
@@ -536,7 +537,7 @@ index 000000000..9ef6a591d
 +		deinit_op = reinterpret_cast<std::uintptr_t>(KHook::deinit_operator<std::uintptr_t>);
 +		return_size = sizeof(std::uintptr_t);
 +		break;
-+		case RetClass::X87:
++		case RetClass::X87Float:
 +		// Pop ST(0), the FPU stack must be empty across calls
 +		Emit_Fstp32(jit, esp(0x18));
 +		jit.lea(eax, esp(0x18));
@@ -544,7 +545,7 @@ index 000000000..9ef6a591d
 +		deinit_op = reinterpret_cast<std::uintptr_t>(KHook::deinit_operator<float>);
 +		return_size = sizeof(float);
 +		break;
-+		case RetClass::MEMORY:
++		case RetClass::Memory:
 +		// EAX holds the hidden pointer the callee filled
 +		if (ret.dhook_type == sp::ReturnType_Vector) {
 +			init_op = reinterpret_cast<std::uintptr_t>(KHook::init_operator<sdk::Vector>);
@@ -560,7 +561,7 @@ index 000000000..9ef6a591d
 +
 +	// KHook::SaveReturnValue(KHook::Action action, void* ptr_to_return, std::size_t return_size, void* init_op, void* delete_op, bool original)
 +	jit.mov(esp(0x0), (std::int32_t)KHook::Action::Ignore);
-+	if (cls == RetClass::VOID) {
++	if (cls == RetClass::Void) {
 +		jit.mov(esp(0x4), 0x0);
 +	} else {
 +		jit.mov(esp(0x4), eax);
@@ -579,11 +580,37 @@ index 000000000..9ef6a591d
 +}
 +
 +}
+diff --git a/extensions/dhooks/src/capsule.cpp b/extensions/dhooks/src/capsule.cpp
+index 52b91b1a5..0f5b37858 100644
+--- a/extensions/dhooks/src/capsule.cpp
++++ b/extensions/dhooks/src/capsule.cpp
+@@ -174,6 +174,12 @@ void Capsule::RemoveCallbackByPlugin(SourcePawn::IPluginContext* default_context
+ 	}
+ }
+ 
++void Capsule::RemoveAll() {
++	// ~Capsule removes the KHook hook, whose stubs call into this library
++	locals::address_detours.clear();
++	locals::virtual_detours.clear();
++}
++
+ Capsule::Capsule(void* address, void** vtable, std::uint32_t vtable_index, sp::CallingConvention conv, const std::vector<Variable>& params, const ReturnVariable& ret) :
+ 	_parameters(params),
+ 	_return(ret),
 diff --git a/extensions/dhooks/src/capsule.hpp b/extensions/dhooks/src/capsule.hpp
-index ffb8c4bc8..c45bb184f 100644
+index ffb8c4bc8..ac681a2d7 100644
 --- a/extensions/dhooks/src/capsule.hpp
 +++ b/extensions/dhooks/src/capsule.hpp
-@@ -62,7 +62,7 @@ protected:
+@@ -39,6 +39,8 @@ public:
+     std::uint32_t AddCallback(SourcePawn::IPluginFunction* callback, SourcePawn::IPluginFunction* remove_callback, sp::HookMode mode, sp::ThisPointerType this_ptr, void* associated_this);
+     static void RemoveCallbackById(std::uint32_t id);
+     static void RemoveCallbackByPlugin(SourcePawn::IPluginContext* default_context);
++    // Removes every KHook hook, before the extension unloads
++    static void RemoveAll();
+ 
+     const std::vector<Variable>& GetParameters() const { return _parameters; };
+     const ReturnVariable& GetReturn() const { return _return; };
+@@ -62,7 +64,7 @@ protected:
      static_assert(KHook::Asm::R15 == (MAX_GENERAL_REGISTERS - 1), "Mismatch in register index");
      static_assert(KHook::Asm::XMM15 == (MAX_FLOAT_REGISTERS - 1), "Mismatch in register index");
  #elif defined(DHOOKS_X86)
@@ -673,7 +700,7 @@ index c013f63ca..d42c0f907 100644
  class ParamReturn {
  public:
 diff --git a/extensions/dhooks/src/main.cpp b/extensions/dhooks/src/main.cpp
-index a8f784436..2936fedc0 100644
+index a8f784436..caf78807a 100644
 --- a/extensions/dhooks/src/main.cpp
 +++ b/extensions/dhooks/src/main.cpp
 @@ -21,6 +21,8 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
@@ -685,10 +712,11 @@ index a8f784436..2936fedc0 100644
  		sharesys->AddDependency(myself, "sdktools.ext", true, true);
  
  		dhooks::globals::gameconfs->AddUserConfigHook("Functions", &dhooks::globals::dhooks_config);
-@@ -34,6 +36,7 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
+@@ -34,6 +36,8 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
  		if (dhooks::globals::sdkhooks) {
  			dhooks::natives::dhookentitylistener::remove_listener(dhooks::globals::sdkhooks);
  		}
++		dhooks::Capsule::RemoveAll();
 +		dhooks::handle::shutdown();
  	}
  

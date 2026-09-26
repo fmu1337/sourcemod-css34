@@ -409,6 +409,8 @@ jobs:
           BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          # Unload dhooks.ext on the live server after the recording (KHook DHooks)
+          DHOOKS_UNLOAD_TEST: ${{ matrix.line == 'sm13-mm20-khook' && '1' || '0' }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
@@ -419,6 +421,7 @@ jobs:
             -e SERVER_DIR=/workspace/.ci-server \
             -e CACHE_DIR=/workspace/.ci-cache \
             -e RECORD_SECS \
+            -e DHOOKS_UNLOAD_TEST \
             -e BOTPLAY_PROFILE \
             -e BOTPLAY_CFG \
             -e BOTPLAY_MAPS \
