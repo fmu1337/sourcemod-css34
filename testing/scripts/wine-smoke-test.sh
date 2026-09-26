@@ -21,7 +21,8 @@ case "$(uname -s)" in
   *) NATIVE=0; PY=python3 ;;
 esac
 # Windows command-line tools take /switches; keep MSYS from turning them into paths
-export MSYS2_ARG_CONV_EXCL='*'
+# (only for these: curl, python and 7z need /c/... paths converted)
+wincmd() { MSYS2_ARG_CONV_EXCL='*' "$@"; }
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SERVER_DIR="${SERVER_DIR:-${ROOT}/.ci-winserver}"
@@ -63,7 +64,7 @@ dump() {
 # Native: WER LocalDumps writes a minidump of a crashed srcds.exe; cdb (Windows SDK
 # debuggers, when installed) prints the faulting stack with the PDBs next to the DLLs
 native_crash_report() {
-  echo "==== srcds.exe process ===="; tasklist /FI "IMAGENAME eq srcds.exe" 2>/dev/null || true
+  echo "==== srcds.exe process ===="; wincmd tasklist /FI "IMAGENAME eq srcds.exe" 2>/dev/null || true
   local dmp cdb
   dmp="$(ls -t "${DUMP_DIR}"/*.dmp 2>/dev/null | head -n1 || true)"
   [[ -n "${dmp}" ]] || { echo "(no crash dump)"; return 0; }
@@ -121,9 +122,9 @@ if [[ "${NATIVE}" == 1 ]]; then
   # No Windows Error Reporting dialog (it would keep a crashed srcds.exe alive), and a
   # minidump of a crash for native_crash_report
   mkdir -p "${DUMP_DIR}"
-  reg add 'HKCU\Software\Microsoft\Windows\Windows Error Reporting' /v DontShowUI /t REG_DWORD /d 1 /f >/dev/null
-  reg add 'HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\srcds.exe' /v DumpFolder /t REG_EXPAND_SZ /d "$(cygpath -w "${DUMP_DIR}")" /f >/dev/null \
-    && reg add 'HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\srcds.exe' /v DumpType /t REG_DWORD /d 1 /f >/dev/null \
+  wincmd reg add 'HKCU\Software\Microsoft\Windows\Windows Error Reporting' /v DontShowUI /t REG_DWORD /d 1 /f >/dev/null
+  wincmd reg add 'HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\srcds.exe' /v DumpFolder /t REG_EXPAND_SZ /d "$(cygpath -w "${DUMP_DIR}")" /f >/dev/null \
+    && wincmd reg add 'HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\srcds.exe' /v DumpType /t REG_DWORD /d 1 /f >/dev/null \
     || echo "(no LocalDumps: not elevated)"
 else
 # Wine prefix without crash dialog, so winedbg --auto prints the backtrace
@@ -145,7 +146,7 @@ if [[ "${DHOOKS_PROBE_SECS}" -gt 0 ]]; then
 fi
 
 if [[ "${NATIVE}" == 1 ]]; then
-  cleanup() { taskkill /F /IM srcds.exe >/dev/null 2>&1 || true; }
+  cleanup() { wincmd taskkill /F /IM srcds.exe >/dev/null 2>&1 || true; }
 else
   Xvfb "${DISPLAY}" -screen 0 800x600x16 >/dev/null 2>&1 &
   XVFB_PID=$!
