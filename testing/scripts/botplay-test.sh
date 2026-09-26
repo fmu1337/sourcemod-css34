@@ -392,7 +392,13 @@ require_min "cstrike/sdktools weapon native rounds" "$(cs_probe_field natives)" 
 # detour must install and fire. Lines without DHooks log available=0.
 dh_probe_line=""
 if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
-  dh_probe_line="$(grep -h '\[css34_dhooks_probe\] round=' "${sm_probe_sources[@]}" 2>/dev/null | tail -n1 || true)"
+  # Counters restart when the probe reloads (DHOOKS_UNLOAD_TEST): take the
+  # DHooks session line with the most virtual hook hits
+  dh_probe_line="$(grep -h '\[css34_dhooks_probe\] round=' "${sm_probe_sources[@]}" 2>/dev/null | grep ' available=1 ' \
+    | awk '{ n = 0; if (match($0, / vhook=[0-9]+/)) n = substr($0, RSTART + 7, RLENGTH - 7) + 0; if (best == "" || n >= max) { max = n; best = $0 } } END { if (best != "") print best }' || true)"
+  if [[ -z "${dh_probe_line}" ]]; then
+    dh_probe_line="$(grep -h '\[css34_dhooks_probe\] round=' "${sm_probe_sources[@]}" 2>/dev/null | tail -n1 || true)"
+  fi
 fi
 dh_probe_field() {
   local v
@@ -417,6 +423,15 @@ elif [[ "$(dh_probe_field available)" == "1" ]]; then
       record_failed=1
     fi
   done
+  # Every DHooks session (also after a reload) must set up and stay clean
+  dh_all="$(grep -h '\[css34_dhooks_probe\] round=' "${sm_probe_sources[@]}" 2>/dev/null | grep ' available=1 ' || true)"
+  if grep -Eq ' setup=0 | (eye|step|speed)_bad=[1-9]' <<<"${dh_all}"; then
+    echo "FAIL: a DHooks probe session failed to set up or saw bad values:" >&2
+    grep -E ' setup=0 | (eye|step|speed)_bad=[1-9]' <<<"${dh_all}" | tail -n 3 >&2
+    record_failed=1
+  else
+    echo "OK: every DHooks probe session set up with clean values"
+  fi
 else
   echo "SKIP: dhooks.ext not shipped on this line (css34_dhooks_probe available=0)"
 fi

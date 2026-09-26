@@ -620,7 +620,7 @@ index ffb8c4bc8..ac681a2d7 100644
  #endif
  
 diff --git a/extensions/dhooks/src/handle.cpp b/extensions/dhooks/src/handle.cpp
-index 1a7c1daef..f3c2f6d25 100644
+index 1a7c1daef..96380b2ab 100644
 --- a/extensions/dhooks/src/handle.cpp
 +++ b/extensions/dhooks/src/handle.cpp
 @@ -19,7 +19,8 @@ SourceMod::HandleType_t DynamicDetour::HANDLE_TYPE = 0;
@@ -669,7 +669,7 @@ index 1a7c1daef..f3c2f6d25 100644
  			}
  		}
  		it->second.push_back(id);
-@@ -380,6 +381,17 @@ class HookSetupDispatch : public SourceMod::IHandleTypeDispatch {
+@@ -380,6 +381,28 @@ class HookSetupDispatch : public SourceMod::IHandleTypeDispatch {
  };
  HookSetupDispatch gHookSetupDispatcher;
  
@@ -682,6 +682,17 @@ index 1a7c1daef..f3c2f6d25 100644
 +	}
 +	locals::class_vtables.clear();
 +	locals::class_dynamichooks.clear();
++
++	// Types outlive the extension otherwise, and CreateType fails on the next load
++	auto ident = globals::myself->GetIdentity();
++	for (auto type : { DynamicHook::HANDLE_TYPE, DynamicDetour::HANDLE_TYPE, HookSetup::HANDLE_TYPE, ParamReturn::HANDLE_TYPE }) {
++		if (type != 0) {
++			globals::handlesys->RemoveType(type, ident);
++		}
++	}
++	DynamicHook::HANDLE_TYPE = DynamicDetour::HANDLE_TYPE = HookSetup::HANDLE_TYPE = ParamReturn::HANDLE_TYPE = 0;
++	delete locals::security;
++	locals::security = nullptr;
 +}
 +
  void init() {
@@ -700,7 +711,7 @@ index c013f63ca..d42c0f907 100644
  class ParamReturn {
  public:
 diff --git a/extensions/dhooks/src/main.cpp b/extensions/dhooks/src/main.cpp
-index a8f784436..caf78807a 100644
+index a8f784436..9f44906df 100644
 --- a/extensions/dhooks/src/main.cpp
 +++ b/extensions/dhooks/src/main.cpp
 @@ -21,6 +21,8 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
@@ -712,12 +723,14 @@ index a8f784436..caf78807a 100644
  		sharesys->AddDependency(myself, "sdktools.ext", true, true);
  
  		dhooks::globals::gameconfs->AddUserConfigHook("Functions", &dhooks::globals::dhooks_config);
-@@ -34,6 +36,8 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
+@@ -34,6 +36,10 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
  		if (dhooks::globals::sdkhooks) {
  			dhooks::natives::dhookentitylistener::remove_listener(dhooks::globals::sdkhooks);
  		}
-+		dhooks::Capsule::RemoveAll();
++		// Handles first: destroying one removes its callbacks from the capsules
 +		dhooks::handle::shutdown();
++		dhooks::Capsule::RemoveAll();
++		dhooks::globals::gameconfs->RemoveUserConfigHook("Functions", &dhooks::globals::dhooks_config);
  	}
  
  	virtual void OnPluginUnloaded(SourceMod::IPlugin* plugin) override {
@@ -887,3 +900,54 @@ index 1e234bc29..56e8383c4 100644
  };
  }
 \ No newline at end of file
+diff --git a/extensions/dhooks/version.rc b/extensions/dhooks/version.rc
+new file mode 100644
+index 000000000..076f97280
+--- /dev/null
++++ b/extensions/dhooks/version.rc
+@@ -0,0 +1,45 @@
++#include "winres.h"
++
++#include <sourcemod_version.h>
++
++#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
++LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
++#pragma code_page(1252)
++#endif
++
++#ifndef SM_GENERATED_BUILD
++#define BINARY_NAME "dhooks.ext.dll\0"
++#endif
++
++VS_VERSION_INFO VERSIONINFO
++ FILEVERSION SM_VERSION_FILE
++ PRODUCTVERSION SM_VERSION_FILE
++ FILEFLAGSMASK 0x17L
++#ifdef _DEBUG
++ FILEFLAGS 0x1L
++#else
++ FILEFLAGS 0x0L
++#endif
++ FILEOS 0x4L
++ FILETYPE 0x2L
++ FILESUBTYPE 0x0L
++BEGIN
++    BLOCK "StringFileInfo"
++    BEGIN
++        BLOCK "040904b0"
++        BEGIN
++            VALUE "Comments", "DHooks Extension"
++            VALUE "FileDescription", "SourceMod Dynamic Hooks Extension"
++            VALUE "FileVersion", SM_VERSION_STRING
++            VALUE "InternalName", "SourceMod DHooks Extension"
++            VALUE "LegalCopyright", "Copyright (c) 2021, AlliedModders LLC"
++            VALUE "OriginalFilename", BINARY_NAME
++            VALUE "ProductName", "SourceMod DHooks Extension"
++            VALUE "ProductVersion", SM_VERSION_STRING
++        END
++    END
++    BLOCK "VarFileInfo"
++    BEGIN
++        VALUE "Translation", 0x0409, 0x04B0
++    END
++END

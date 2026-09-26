@@ -7,7 +7,7 @@ Experimental line built from the newest upstream dev heads that run on KHook:
 | SourceMod | 1.13.0-git7565 (`k/sourcehook_alternative` tip + `master` merged at build time) | `25954d4aa4a55ab10c6e2c30699f52358f982fb9` |
 | ↳ KHook branch tip | 1.13.0-git7519 | `0cd7f6fcb4e3f09e0adb136f42dfa12305682bcc` |
 | ↳ merged `master` | 1.13.0-git7472 | `6eb5f8fa381100ed7cac1ab62a4ece11795a5d92` |
-| Metamod:Source | 2.0.0-dev+1469 (`master` tip) | `fa6f80e4662e5b96cc2e97722d812f374581dfd8` |
+| Metamod:Source | 2.0.0-dev+1472 (`master` tip) | `05c5c63a9d595cb84021c3a51fe38366ba4a12a5` |
 | KHook (MM submodule) | 2026-09-16 | `40d233d160b5bf60cc3e732939142b222fbd8ece` |
 
 ```bash

@@ -125,6 +125,8 @@ jobs:
   # Boots the Windows packages on the Windows CS:S v34 server (srcds.exe) under Wine
   wine-smoke:
     needs: windows
+    # Test each line whose Windows build succeeded (a missing package fails on the cache miss)
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-22.04
     container: ubuntu:22.04
     strategy:

@@ -66,8 +66,8 @@ PY
 #    KHook::Virtual / KHook::Member and re-enable both.
 #  - sourcemod-khook-dhooks-x86.patch: the rewritten DHooks only builds for
 #    linux x86_64. Add the 32-bit x86 ABI (i386 System V on Linux, MSVC on
-#    Windows; ep1 / v34), remove the per-class destructor hooks on unload,
-#    and restore the legacy API bits the rewrite dropped (library "dhooks",
+#    Windows; ep1 / v34, with the version.rc the rewrite deleted), remove
+#    every KHook hook and handle type on unload, and restore the legacy API bits the rewrite dropped (library "dhooks",
 #    DHookEnableDetour / DHookDisableDetour / DHookGetParamAddress,
 #    DHookSetFromConf returning true).
 #  - sourcemod-khook-consoledetours.patch: command listeners detour
