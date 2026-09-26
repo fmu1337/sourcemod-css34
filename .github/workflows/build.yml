@@ -101,4 +101,92 @@ jobs:
 
       - name: Confirm Windows packages exist
         shell: bash
-        run: ls -lh packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip
+        run: |
+          ls -lh packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip
+          if [[ "${{ matrix.line }}" == "sm13-mm20-khook" ]]; then
+            unzip -l packages/sourcemod-*-css34-windows.zip | grep -i 'dhooks.ext.dll'
+          fi
+
+      # Packages + debug symbols for wine-smoke (Actions cache, not artifact storage)
+      - name: Collect packages and PDBs
+        shell: bash
+        run: |
+          mkdir -p win-art/pdb
+          cp packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip win-art/
+          find sourcemod/build deps -name '*.pdb' -path '*build*' -exec cp -f {} win-art/pdb/ \;
+          ls -la win-art win-art/pdb
+
+      - name: Cache packages for wine-smoke
+        uses: actions/cache/save@v4
+        with:
+          path: win-art
+          key: css34-win-${{ github.run_id }}-${{ matrix.line }}
+          # restored by the Linux wine-smoke job
+          enableCrossOsArchive: true
+
+  # Boots the Windows packages on the Windows CS:S v34 server (srcds.exe) under Wine
+  wine-smoke:
+    needs: windows
+    # Test each line whose Windows build succeeded (a missing package fails on the cache miss)
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-22.04
+    container: ubuntu:22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - line: sm13-dev
+            sm_expect: "1.13.0.7404"
+            mm_expect: "1.12.0"
+            exts: "CS Tools,SDK Tools,BinTools"
+            load_exts: ""
+          - line: sm13-mm20-khook
+            sm_expect: "1.13.0.7565"
+            mm_expect: "2.0.0"
+            exts: "CS Tools,SDK Tools,BinTools,SDK Hooks,DHooks"
+            load_exts: "sdkhooks.ext,dhooks.ext"
+    steps:
+      # zstd: actions/cache picks the compression from the tools present, and the
+      # Windows / host-runner entries are zstd (a gzip restore misses them)
+      - name: Install Wine
+        run: |
+          dpkg --add-architecture i386
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            wine32 wine xvfb unzip curl ca-certificates python3 binutils llvm-14 git zstd
+          ln -sf /usr/bin/llvm-symbolizer-14 /usr/local/bin/llvm-symbolizer
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore Windows packages
+        uses: actions/cache/restore@v4
+        with:
+          path: win-art
+          key: css34-win-${{ github.run_id }}-${{ matrix.line }}
+          fail-on-cache-miss: true
+          enableCrossOsArchive: true
+
+      # Game content from test-server.yml prepare-server (same key); downloaded on a miss
+      - name: Restore server tree
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+
+      - name: Wine smoke test (${{ matrix.line }})
+        shell: bash
+        env:
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          EXPECT_EXTS: ${{ matrix.exts }}
+          LOAD_EXTS: ${{ matrix.load_exts }}
+          # css34_dhooks_probe with bots (skipped when the package has no dhooks.ext.dll)
+          DHOOKS_PROBE_SECS: "150"
+        run: |
+          export SM_WIN_PACKAGE="$(ls win-art/sourcemod-*-css34-windows.zip)"
+          export MM_WIN_PACKAGE="$(ls win-art/mmsource-*-css34-windows.zip)"
+          # github.workspace is the host path, not the container's
+          export PDB_DIR="$PWD/win-art/pdb"
+          [[ -f server-art/css34-server.tar.gz ]] && export SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"
+          bash testing/scripts/wine-smoke-test.sh
