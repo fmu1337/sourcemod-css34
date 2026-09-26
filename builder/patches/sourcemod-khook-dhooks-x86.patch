@@ -1,31 +1,36 @@
 diff --git a/extensions/dhooks/AMBuilder b/extensions/dhooks/AMBuilder
-index f8bf104b1..6a71e7b06 100644
+index f8bf104b1..8cbdf32bd 100644
 --- a/extensions/dhooks/AMBuilder
 +++ b/extensions/dhooks/AMBuilder
-@@ -20,7 +20,7 @@ sources = [
+@@ -20,16 +20,16 @@ sources = [
  ]
  
  for cxx in builder.targets:
 -  if cxx.target.platform != 'linux' or cxx.target.arch != 'x86_64':
-+  if cxx.target.platform != 'linux' or cxx.target.arch not in ['x86', 'x86_64']:
++  if cxx.target.platform == 'linux' and cxx.target.arch == 'x86_64':
++    abi = 'src/abi/system_v_amd64.cpp'
++  elif cxx.target.platform in ['linux', 'windows'] and cxx.target.arch == 'x86':
++    abi = 'src/abi/x86.cpp'
++  else:
      continue
  
    binary = SM.ExtLibrary(builder, cxx, 'dhooks.ext')
-@@ -30,6 +30,8 @@ for cxx in builder.targets:
-   if cxx.target.platform == 'linux':
-     if cxx.target.arch == 'x86_64':
-       binary.sources += ['src/abi/system_v_amd64.cpp']
-+    elif cxx.target.arch == 'x86':
-+      binary.sources += ['src/abi/system_v_i386.cpp']
+   binary.compiler.includes += [os.path.join(builder.sourcePath, 'extensions', 'dhooks', 'src')]
+-  binary.sources += sources
+-
+-  if cxx.target.platform == 'linux':
+-    if cxx.target.arch == 'x86_64':
+-      binary.sources += ['src/abi/system_v_amd64.cpp']
++  binary.sources += sources + [abi]
  
    if binary.compiler.target.arch == "x86":
      binary.compiler.defines += ['DHOOKS_X86']
-diff --git a/extensions/dhooks/src/abi/system_v_i386.cpp b/extensions/dhooks/src/abi/system_v_i386.cpp
+diff --git a/extensions/dhooks/src/abi/x86.cpp b/extensions/dhooks/src/abi/x86.cpp
 new file mode 100644
-index 000000000..27802f940
+index 000000000..9ef6a591d
 --- /dev/null
-+++ b/extensions/dhooks/src/abi/system_v_i386.cpp
-@@ -0,0 +1,509 @@
++++ b/extensions/dhooks/src/abi/x86.cpp
+@@ -0,0 +1,548 @@
 +#include "../sp_inc.hpp"
 +#include "../capsule.hpp"
 +#include "../sdk_types.hpp"
@@ -34,9 +39,10 @@ index 000000000..27802f940
 +#include <vector>
 +#include <optional>
 +
-+// i386 System V (GCC / Clang on Linux), as used by 32-bit Source engine games.
-+// Reference: https://www.uclibc.org/docs/psABI-i386.pdf
++// 32-bit x86, as used by 32-bit Source engine games.
 +//
++// Linux: i386 System V (GCC / Clang).
++// Reference: https://www.uclibc.org/docs/psABI-i386.pdf
 +// - Every parameter lives on the stack, including `this` for member functions
 +//   (CallConv_THISCALL). CallConv_FASTCALL passes the first two 32-bit
 +//   integer parameters in ECX / EDX.
@@ -45,6 +51,17 @@ index 000000000..27802f940
 +//   every other argument; the callee pops it (`ret 4`) and returns it in EAX.
 +// - CallConv_STDCALL / CallConv_FASTCALL functions pop their own stack
 +//   arguments.
++//
++// Windows: MSVC.
++// Reference: https://learn.microsoft.com/cpp/cpp/argument-passing-and-naming-conventions
++// - CallConv_THISCALL passes `this` in ECX, the other parameters on the stack,
++//   and the callee pops them. CallConv_FASTCALL passes the first two 32-bit
++//   integer parameters in ECX / EDX.
++// - Integer and pointer values are returned in EAX, float in x87 ST(0).
++// - Vector (user constructors) and string_t (protected member) are never
++//   returned in registers: the hidden pointer is the first stack argument
++//   (after `this` in ECX), the callee returns it in EAX, and it is popped with
++//   the other arguments (callee for THISCALL / STDCALL, caller for CDECL).
 +//
 +// KHook enters the PRE / POST / call-original stubs with `retn`: the return
 +// address back into the detour is on top of the stack, followed by a copy of
@@ -197,6 +214,14 @@ index 000000000..27802f940
 +		return false;
 +	}
 +
++#if defined(_WIN32)
++	if (conv == sp::CallConv_FASTCALL && cls.value() == RetClass::MEMORY) {
++		// MSVC passes the hidden return pointer in ECX there
++		globals::sourcemod->LogError(globals::myself, "FASTCALL functions returning Vector / string_t aren't supported!");
++		return false;
++	}
++#endif
++
 +	/* Skip the return address */
 +	size_t stack_offset = sizeof(void*);
 +	ret.callee_pop = 0;
@@ -211,11 +236,15 @@ index 000000000..27802f940
 +		stack_offset += sizeof(void*);
 +	}
 +
-+	// Linux member functions take `this` as their first stack argument
++	// Linux member functions take `this` as their first stack argument, MSVC ones in ECX
 +	if (conv == sp::CallConv_THISCALL) {
 +		Variable this_ptr;
 +		this_ptr.dhook_type = sp::HookParamType_Int;
++#if defined(_WIN32)
++		this_ptr.dhook_custom_register = sp::DHookRegister_ECX;
++#else
 +		this_ptr.dhook_custom_register = sp::DHookRegister_Default;
++#endif
 +		this_ptr.dhook_pass_flags = sp::DHookPass_ByVal;
 +		this_ptr.dhook_size = sizeof(void*);
 +		params.insert(params.begin(), this_ptr);
@@ -261,9 +290,16 @@ index 000000000..27802f940
 +	stack_size = stack_offset - sizeof(void*);
 +	if (conv == sp::CallConv_STDCALL || conv == sp::CallConv_FASTCALL) {
 +		ret.callee_pop = stack_size;
-+	} else if (cls.value() == RetClass::MEMORY) {
++	}
++#if defined(_WIN32)
++	else if (conv == sp::CallConv_THISCALL) {
++		ret.callee_pop = stack_size;
++	}
++#else
++	else if (cls.value() == RetClass::MEMORY) {
 +		ret.callee_pop = sizeof(void*);
 +	}
++#endif
 +	return true;
 +}
 +
@@ -306,10 +342,18 @@ index 000000000..27802f940
 +	}
 +
 +	// void Capsule::PrePostHookLoop(std::uint8_t* saved_register, bool post)
++#if defined(_WIN32)
++	// __thiscall: `this` in ECX, the callee pops its arguments (ESP is restored from EBP below)
++	jit.mov(ecx, reinterpret_cast<std::uintptr_t>(this_ptr));
++	jit.lea(eax, esp(args_size));
++	jit.mov(esp(0x0), eax);
++	jit.mov(esp(0x4), post ? 1 : 0);
++#else
 +	jit.mov(esp(0x0), reinterpret_cast<std::uintptr_t>(this_ptr));
 +	jit.lea(eax, esp(args_size));
 +	jit.mov(esp(0x4), eax);
 +	jit.mov(esp(0x8), post ? 1 : 0);
++#endif
 +	jit.mov(eax, reinterpret_cast<std::uintptr_t>(mfp));
 +	jit.call(eax);
 +
@@ -548,8 +592,88 @@ index ffb8c4bc8..c45bb184f 100644
      static_assert(KHook::Asm::XMM7 == (MAX_FLOAT_REGISTERS - 1), "Mismatch in register index");
  #endif
  
+diff --git a/extensions/dhooks/src/handle.cpp b/extensions/dhooks/src/handle.cpp
+index 1a7c1daef..f3c2f6d25 100644
+--- a/extensions/dhooks/src/handle.cpp
++++ b/extensions/dhooks/src/handle.cpp
+@@ -19,7 +19,8 @@ SourceMod::HandleType_t DynamicDetour::HANDLE_TYPE = 0;
+ namespace locals {
+ std::unordered_map<std::uint32_t, cell_t> associated_handle;
+ std::unordered_map<void*, std::vector<std::uint32_t>> class_dynamichooks;
+-std::unordered_set<void**> class_vtables;
++// Destructor hook per vtable slot (nullptr key: the CGameRules hook)
++std::unordered_map<void**, KHook::HookID_t> class_vtables;
+ SourceMod::HandleSecurity* security = nullptr;
+ }
+ 
+@@ -215,7 +216,7 @@ std::uint32_t DynamicHook::AddHook(SourcePawn::IPluginFunction* callback, Source
+ 			auto key = vtable + dtor_index;
+ 			if (locals::class_vtables.find(key) == locals::class_vtables.end()) {
+ 				// Hook the virtual destructor, and perform hook cleaning actions under there
+-				KHook::SetupVirtualHook(
++				auto hook_id = KHook::SetupVirtualHook(
+ 					vtable,
+ 					dtor_index,
+ 					nullptr,
+@@ -227,7 +228,7 @@ std::uint32_t DynamicHook::AddHook(SourcePawn::IPluginFunction* callback, Source
+ 					40,
+ 					true
+ 				);
+-				locals::class_vtables.insert(key);
++				locals::class_vtables.emplace(key, hook_id);
+ 			}
+ 		}
+ 		it->second.push_back(id);
+@@ -241,7 +242,7 @@ std::uint32_t DynamicHook::AddHook(SourcePawn::IPluginFunction* callback, Source
+ 
+ 			if (locals::class_vtables.find(nullptr) == locals::class_vtables.end()) {
+ 				// Hook the gamerules shutdown, and perform hook cleaning actions under there
+-				KHook::SetupVirtualHook(
++				auto hook_id = KHook::SetupVirtualHook(
+ 					vtable,
+ 					DTOR_CBASEENTITY_VTABLE_INDEX,
+ 					nullptr,
+@@ -253,7 +254,7 @@ std::uint32_t DynamicHook::AddHook(SourcePawn::IPluginFunction* callback, Source
+ 					40,
+ 					true
+ 				);
+-				locals::class_vtables.insert(nullptr);
++				locals::class_vtables.emplace(nullptr, hook_id);
+ 			}
+ 		}
+ 		it->second.push_back(id);
+@@ -380,6 +381,17 @@ class HookSetupDispatch : public SourceMod::IHandleTypeDispatch {
+ };
+ HookSetupDispatch gHookSetupDispatcher;
+ 
++void shutdown() {
++	// The destructor hooks point into this library; remove them before unload
++	for (const auto& it : locals::class_vtables) {
++		if (it.second != KHook::INVALID_HOOK) {
++			KHook::RemoveHook(it.second, false);
++		}
++	}
++	locals::class_vtables.clear();
++	locals::class_dynamichooks.clear();
++}
++
+ void init() {
+ 	locals::security = new SourceMod::HandleSecurity(globals::myself->GetIdentity(), globals::myself->GetIdentity());
+ 
+diff --git a/extensions/dhooks/src/handle.hpp b/extensions/dhooks/src/handle.hpp
+index c013f63ca..d42c0f907 100644
+--- a/extensions/dhooks/src/handle.hpp
++++ b/extensions/dhooks/src/handle.hpp
+@@ -18,6 +18,7 @@ class Capsule;
+ namespace dhooks::handle {
+ 
+ void init();
++void shutdown();
+ 
+ class ParamReturn {
+ public:
 diff --git a/extensions/dhooks/src/main.cpp b/extensions/dhooks/src/main.cpp
-index a8f784436..99f3fa871 100644
+index a8f784436..2936fedc0 100644
 --- a/extensions/dhooks/src/main.cpp
 +++ b/extensions/dhooks/src/main.cpp
 @@ -21,6 +21,8 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
@@ -561,6 +685,14 @@ index a8f784436..99f3fa871 100644
  		sharesys->AddDependency(myself, "sdktools.ext", true, true);
  
  		dhooks::globals::gameconfs->AddUserConfigHook("Functions", &dhooks::globals::dhooks_config);
+@@ -34,6 +36,7 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
+ 		if (dhooks::globals::sdkhooks) {
+ 			dhooks::natives::dhookentitylistener::remove_listener(dhooks::globals::sdkhooks);
+ 		}
++		dhooks::handle::shutdown();
+ 	}
+ 
+ 	virtual void OnPluginUnloaded(SourceMod::IPlugin* plugin) override {
 diff --git a/extensions/dhooks/src/natives/dhookparam.cpp b/extensions/dhooks/src/natives/dhookparam.cpp
 index 3775e2e3f..49f6b2bc9 100644
 --- a/extensions/dhooks/src/natives/dhookparam.cpp

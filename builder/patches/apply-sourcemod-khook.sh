@@ -65,8 +65,9 @@ PY
 #    LevelInit hook + CDetour) and mysql in AMBuildScript. Port cstrike to
 #    KHook::Virtual / KHook::Member and re-enable both.
 #  - sourcemod-khook-dhooks-x86.patch: the rewritten DHooks only builds for
-#    linux x86_64. Add the i386 System V ABI (32-bit ep1 / v34) and restore
-#    the legacy API bits the rewrite dropped (library "dhooks",
+#    linux x86_64. Add the 32-bit x86 ABI (i386 System V on Linux, MSVC on
+#    Windows; ep1 / v34), remove the per-class destructor hooks on unload,
+#    and restore the legacy API bits the rewrite dropped (library "dhooks",
 #    DHookEnableDetour / DHookDisableDetour / DHookGetParamAddress,
 #    DHookSetFromConf returning true).
 #  - sourcemod-khook-consoledetours.patch: command listeners detour
@@ -92,7 +93,7 @@ apply_khook_patch() {
 }
 
 apply_khook_patch "$script_dir/sourcemod-khook-css34.patch" "cstrike KHook port + re-enabled cstrike/mysql"
-apply_khook_patch "$script_dir/sourcemod-khook-dhooks-x86.patch" "DHooks linux x86 (i386 System V ABI)"
+apply_khook_patch "$script_dir/sourcemod-khook-dhooks-x86.patch" "DHooks x86 (i386 System V / MSVC ABI)"
 apply_khook_patch "$script_dir/sourcemod-khook-consoledetours.patch" "ConsoleDetours real Dispatch detour"
 
 echo "==> SourceMod KHook css34 patches applied"
