@@ -26,7 +26,9 @@ BOOT_SECS="${BOOT_SECS:-180}"
 SM_VERSION_EXPECT="${SM_VERSION_EXPECT:?}"
 MM_VERSION_EXPECT="${MM_VERSION_EXPECT:?}"
 EXPECT_EXTS="${EXPECT_EXTS:-CS Tools,SDK Tools,BinTools}"
-export WINEPREFIX="${WINEPREFIX:-${HOME}/.wine-css34}" WINEARCH=win32 WINEDEBUG="${WINEDEBUG:-err+all,+seh,+loaddll}" DISPLAY="${DISPLAY:-:97}"
+# Own prefix: in a CI job container $HOME and the workspace belong to another uid
+# and wine refuses a prefix it does not own
+export WINEPREFIX="${WINEPREFIX:-/tmp/wine-css34-$(id -u)}" WINEARCH=win32 WINEDEBUG="${WINEDEBUG:-err+all,+seh,+loaddll}" DISPLAY="${DISPLAY:-:97}"
 WINE_LOG="${SERVER_DIR}/wine.log"
 
 fail() { echo "FAIL: $*" >&2; dump; exit 1; }
@@ -79,9 +81,10 @@ fi
 
 # Wine prefix without crash dialog, so winedbg --auto prints the backtrace
 if [[ ! -d "${WINEPREFIX}" ]]; then
-  wineboot -i >/dev/null 2>&1 || true
+  wineboot -i >"${SERVER_DIR}/wineboot.log" 2>&1 || { tail -n 20 "${SERVER_DIR}/wineboot.log"; fail "wineboot failed (WINEPREFIX=${WINEPREFIX})"; }
 fi
-wine reg add 'HKCU\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f >/dev/null 2>&1
+wine reg add 'HKCU\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f >"${SERVER_DIR}/winereg.log" 2>&1 \
+  || { tail -n 20 "${SERVER_DIR}/winereg.log"; fail "wine reg add failed (WINEPREFIX=${WINEPREFIX})"; }
 wineserver -w || true
 
 if [[ "${DHOOKS_PROBE_SECS}" -gt 0 ]]; then
