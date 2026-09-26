@@ -1,8 +1,8 @@
 diff --git a/extensions/dhooks/AMBuilder b/extensions/dhooks/AMBuilder
-index f8bf104b1..8cbdf32bd 100644
+index f8bf104b1..337ab9b8a 100644
 --- a/extensions/dhooks/AMBuilder
 +++ b/extensions/dhooks/AMBuilder
-@@ -20,16 +20,16 @@ sources = [
+@@ -20,16 +20,19 @@ sources = [
  ]
  
  for cxx in builder.targets:
@@ -22,6 +22,9 @@ index f8bf104b1..8cbdf32bd 100644
 -    if cxx.target.arch == 'x86_64':
 -      binary.sources += ['src/abi/system_v_amd64.cpp']
 +  binary.sources += sources + [abi]
++  if binary.compiler.family == 'msvc':
++    # Capsule / natives use dynamic_cast on handle types; SourceMod builds with /GR-
++    binary.compiler.cxxflags = [f for f in binary.compiler.cxxflags if f != '/GR-'] + ['/GR']
  
    if binary.compiler.target.arch == "x86":
      binary.compiler.defines += ['DHOOKS_X86']
