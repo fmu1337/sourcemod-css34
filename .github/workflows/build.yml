@@ -121,6 +121,8 @@ jobs:
         with:
           path: win-art
           key: css34-win-${{ github.run_id }}-${{ matrix.line }}
+          # restored by the Linux wine-smoke job
+          enableCrossOsArchive: true
 
   # Boots the Windows packages on the Windows CS:S v34 server (srcds.exe) under Wine
   wine-smoke:
@@ -161,6 +163,7 @@ jobs:
           path: win-art
           key: css34-win-${{ github.run_id }}-${{ matrix.line }}
           fail-on-cache-miss: true
+          enableCrossOsArchive: true
 
       # Game content from test-server.yml prepare-server (same key); downloaded on a miss
       - name: Restore server tree
