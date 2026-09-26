@@ -157,8 +157,16 @@ sleep 2
 
 cd "${SERVER_DIR}"
 rm -f cstrike/console.log
-winexe ./srcds.exe -console -condebug -game cstrike -insecure -nohltv +maxplayers 12 \
-  +rcon_password "${RCON_PASSWORD}" +ip 127.0.0.1 +map "${MAP}" >"${WINE_LOG}" 2>&1 &
+SRCDS_ARGS=(-console -condebug -game cstrike -insecure -nohltv +maxplayers 12
+  +rcon_password "${RCON_PASSWORD}" +ip 127.0.0.1 +map "${MAP}")
+if [[ "${NATIVE}" == 1 ]]; then
+  # srcds -console needs a real console for input: started from Git Bash its stdin is a
+  # pipe and CTextConsoleWin32 spins on GetNumberOfConsoleInputEvents before the map
+  # loads. Start-Process gives it its own console window (output: -condebug console.log).
+  wincmd powershell.exe -NoProfile -Command "Start-Process -FilePath '$(cygpath -w "${SERVER_DIR}/srcds.exe")' -WorkingDirectory '$(cygpath -w "${SERVER_DIR}")' -ArgumentList '${SRCDS_ARGS[*]}'"
+else
+  wine ./srcds.exe "${SRCDS_ARGS[@]}" >"${WINE_LOG}" 2>&1 &
+fi
 
 rcon() { "${PY}" "${ROOT}/testing/scripts/rcon.py" 127.0.0.1 "${RCON_PASSWORD}" "$@"; }
 deadline=$((SECONDS + BOOT_SECS))
