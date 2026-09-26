@@ -220,6 +220,7 @@ MSVC ABI) and the `sm13-dev` DHooks (SourceHook) give the same result:
 vhook 69, detour 16, EyePosition 239561, PlayStepSound 1018,
 GetMaxSpeed 32116 hits, no bad values (bot play is deterministic there).
 
-The native run on `windows-latest` does the same checks and the same probe.
+The native run on `windows-latest` (`srcds.exe` started in its own console
+window) does the same checks and gives the same probe counts as Wine.
 
 Not covered: Windows botplay stress (SMAC, cstrike natives).

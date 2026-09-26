@@ -132,7 +132,9 @@ Wine log (`WINEDEBUG=+seh,+loaddll`) to module + RVA and symbolizes it with
 
 The same script runs natively under Git Bash on Windows (`uname -s` MINGW /
 MSYS): the `build.yml` `windows` job runs it on `windows-latest` right after
-the build, with `srcds.exe` and `spcomp.exe` started directly, game content
+the build, with `spcomp.exe` run directly and `srcds.exe` started in its own
+console window (`Start-Process`; with a pipe as stdin `-console` spins on
+`GetNumberOfConsoleInputEvents` and never loads the map), game content
 from `srcds_css34_4044.zip` (cached), the Windows Error Reporting dialog off
 and WER LocalDumps writing a minidump of a crash to `.ci-winserver/dumps`
 (printed with `cdb` and the PDBs when the SDK debuggers are installed;
