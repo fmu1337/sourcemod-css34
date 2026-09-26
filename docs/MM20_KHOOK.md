@@ -186,8 +186,9 @@ on the new map; every probe session must set up with clean values.
 
 ## Windows
 
-`build.yml` builds this line for Windows (`windows` job matrix) and
-`wine-smoke` boots the packages on the Windows v34 server (`srcds.exe`, rom4s
+`build.yml` builds this line for Windows (`windows` job matrix), boots the
+packages on the Windows v34 server natively on `windows-latest` right after
+the build, and `wine-smoke` boots the packages on the Windows v34 server (`srcds.exe`, rom4s
 `srcds_css34_w_a.zip`) under Wine: Metamod / SourceMod versions, CS Tools,
 SDK Tools, BinTools, SDK Hooks and DHooks loaded, the DHooks probe with bots
 for 150 s, then a `changelevel` (see [testing/README.md](../testing/README.md)).
@@ -219,5 +220,6 @@ MSVC ABI) and the `sm13-dev` DHooks (SourceHook) give the same result:
 vhook 69, detour 16, EyePosition 239561, PlayStepSound 1018,
 GetMaxSpeed 32116 hits, no bad values (bot play is deterministic there).
 
-Not covered: a real Windows host (only Wine), and Windows botplay stress
-(SMAC, cstrike natives).
+The native run on `windows-latest` does the same checks and the same probe.
+
+Not covered: Windows botplay stress (SMAC, cstrike natives).
