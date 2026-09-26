@@ -711,19 +711,22 @@ index c013f63ca..d42c0f907 100644
  class ParamReturn {
  public:
 diff --git a/extensions/dhooks/src/main.cpp b/extensions/dhooks/src/main.cpp
-index a8f784436..9f44906df 100644
+index a8f784436..d4e7c48ac 100644
 --- a/extensions/dhooks/src/main.cpp
 +++ b/extensions/dhooks/src/main.cpp
-@@ -21,6 +21,8 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
+@@ -21,7 +21,11 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
  		dhooks::natives::init(gNatives);
  		gNatives.push_back({nullptr, nullptr});
  		sharesys->AddNatives(myself, gNatives.data());
 +		// Plugins detect DHooks with LibraryExists("dhooks") / OnLibraryAdded
 +		sharesys->RegisterLibrary(myself, "dhooks");
  		sharesys->AddDependency(myself, "sdktools.ext", true, true);
++		// Entity listeners (DHookAddEntityListener) need SDK Hooks; load it, but optional
++		sharesys->AddDependency(myself, "sdkhooks.ext", false, true);
  
  		dhooks::globals::gameconfs->AddUserConfigHook("Functions", &dhooks::globals::dhooks_config);
-@@ -34,6 +36,10 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
+ 		plsys->AddPluginsListener(this);
+@@ -34,6 +38,10 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
  		if (dhooks::globals::sdkhooks) {
  			dhooks::natives::dhookentitylistener::remove_listener(dhooks::globals::sdkhooks);
  		}
@@ -734,6 +737,18 @@ index a8f784436..9f44906df 100644
  	}
  
  	virtual void OnPluginUnloaded(SourceMod::IPlugin* plugin) override {
+@@ -45,7 +53,10 @@ class ExtensionBridge : public SDKExtension, public SourceMod::IPluginsListener
+ 		SM_GET_LATE_IFACE(SDKTOOLS, dhooks::globals::sdktools);
+ 		SM_GET_LATE_IFACE(SDKHOOKS, dhooks::globals::sdkhooks);
+ 
+-		dhooks::natives::dhookentitylistener::add_listener(dhooks::globals::sdkhooks);
++		// SDK Hooks may not be loaded (no plugin requires it)
++		if (dhooks::globals::sdkhooks) {
++			dhooks::natives::dhookentitylistener::add_listener(dhooks::globals::sdkhooks);
++		}
+ 	}
+ 
+ 	virtual bool QueryInterfaceDrop(SourceMod::SMInterface* interface) override {
 diff --git a/extensions/dhooks/src/natives/dhookparam.cpp b/extensions/dhooks/src/natives/dhookparam.cpp
 index 3775e2e3f..49f6b2bc9 100644
 --- a/extensions/dhooks/src/natives/dhookparam.cpp
