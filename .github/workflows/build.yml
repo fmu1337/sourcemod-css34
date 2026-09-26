@@ -181,11 +181,12 @@ jobs:
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
           EXPECT_EXTS: ${{ matrix.exts }}
           LOAD_EXTS: ${{ matrix.load_exts }}
-          PDB_DIR: ${{ github.workspace }}/win-art/pdb
           # css34_dhooks_probe with bots (skipped when the package has no dhooks.ext.dll)
           DHOOKS_PROBE_SECS: "150"
         run: |
           export SM_WIN_PACKAGE="$(ls win-art/sourcemod-*-css34-windows.zip)"
           export MM_WIN_PACKAGE="$(ls win-art/mmsource-*-css34-windows.zip)"
+          # github.workspace is the host path, not the container's
+          export PDB_DIR="$PWD/win-art/pdb"
           [[ -f server-art/css34-server.tar.gz ]] && export SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"
           bash testing/scripts/wine-smoke-test.sh

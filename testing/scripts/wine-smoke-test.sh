@@ -71,7 +71,9 @@ fi
 if [[ -n "${PDB_DIR:-}" && -d "${PDB_DIR}" ]]; then
   while IFS= read -r dll; do
     pdb="${PDB_DIR}/$(basename "${dll%.dll}").pdb"
-    [[ -f "$pdb" ]] && cp -f "$pdb" "$(dirname "$dll")/"
+    if [[ -f "$pdb" ]]; then
+      cp -f "$pdb" "$(dirname "$dll")/"
+    fi
   done < <(find "${SERVER_DIR}/cstrike/addons" -name '*.dll')
 fi
 
