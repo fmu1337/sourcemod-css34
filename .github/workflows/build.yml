@@ -124,6 +124,42 @@ jobs:
           # restored by the Linux wine-smoke job
           enableCrossOsArchive: true
 
+      # Native Windows smoke: the same test as wine-smoke, srcds.exe run directly
+      - name: Cache CS:S v34 server zips (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-cache/srcds_css34_4044.zip
+            .ci-cache/srcds_css34_w_a.zip
+          key: css34-win-server-zips-v1
+
+      - name: Windows smoke test (${{ matrix.line }})
+        shell: bash
+        env:
+          SM_VERSION_EXPECT: ${{ matrix.line == 'sm13-mm20-khook' && '1.13.0.7565' || '1.13.0.7404' }}
+          MM_VERSION_EXPECT: ${{ matrix.line == 'sm13-mm20-khook' && '2.0.0' || '1.12.0' }}
+          EXPECT_EXTS: ${{ matrix.line == 'sm13-mm20-khook' && 'CS Tools,SDK Tools,BinTools,SDK Hooks,DHooks' || 'CS Tools,SDK Tools,BinTools' }}
+          LOAD_EXTS: ${{ matrix.line == 'sm13-mm20-khook' && 'sdkhooks.ext,dhooks.ext' || '' }}
+          # css34_dhooks_probe with bots (skipped when the package has no dhooks.ext.dll)
+          DHOOKS_PROBE_SECS: "150"
+        run: |
+          export SM_WIN_PACKAGE="$(ls "$PWD"/win-art/sourcemod-*-css34-windows.zip)"
+          export MM_WIN_PACKAGE="$(ls "$PWD"/win-art/mmsource-*-css34-windows.zip)"
+          export PDB_DIR="$PWD/win-art/pdb"
+          bash testing/scripts/wine-smoke-test.sh
+
+      - name: Upload Windows smoke logs and crash dumps
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-smoke-${{ matrix.line }}
+          path: |
+            .ci-winserver/cstrike/console.log
+            .ci-winserver/cstrike/addons/sourcemod/logs/
+            .ci-winserver/dumps/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # Boots the Windows packages on the Windows CS:S v34 server (srcds.exe) under Wine
   wine-smoke:
     needs: windows
