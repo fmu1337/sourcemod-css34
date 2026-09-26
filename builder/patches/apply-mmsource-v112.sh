@@ -300,4 +300,7 @@ else:
     print('==> Patched MM HL2Library for episode1 tier1-before-vstdlib')
 PYTIER1
 
+# Metamod 2.0 KHook: recall fixes for Windows x86 (no-op on SourceHook trees)
+bash "$script_dir/apply-khook-x86-recall.sh" "$mms_dir/third_party/khook"
+
 echo "==> Metamod 1.12+ css34 light patches applied"

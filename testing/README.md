@@ -117,6 +117,27 @@ Artifacts: `botplay-report.json`, `built-botplay-report.json`, `botplay-compare.
 
 Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary; `rom4s` gamedata + built binaries also passes.
 
+## Windows packages under Wine
+
+`build.yml` `wine-smoke` boots the Windows packages on the Windows v34 server:
+game content from the Linux server tree (or `srcds_css34_4044.zip`), Windows
+binaries from rom4s `srcds_css34_w_a.zip` (`srcds.exe`, `bin/*.dll`,
+`cstrike/bin/server.dll`), run with 32-bit Wine under Xvfb.
+`testing/scripts/wine-smoke-test.sh` drives it over RCON
+(`testing/scripts/rcon.py`): Metamod / SourceMod versions, the expected
+extensions (`LOAD_EXTS` are loaded first), then a `changelevel`. On a failure
+`testing/scripts/wine-crash-report.py` maps every access violation in the
+Wine log (`WINEDEBUG=+seh,+loaddll`) to module + RVA and symbolizes it with
+`llvm-symbolizer` when the `.pdb` from the Windows build sits next to the DLL.
+
+```bash
+# needs wine32, xvfb, unzip, python3 (e.g. an ubuntu:22.04 container)
+SM_WIN_PACKAGE="$(ls packages/sourcemod-*-css34-windows.zip)" \
+MM_WIN_PACKAGE="$(ls packages/mmsource-*-css34-windows.zip)" \
+SM_VERSION_EXPECT=1.13.0.7404 MM_VERSION_EXPECT=1.12.0 \
+  testing/scripts/wine-smoke-test.sh
+```
+
 ## Local run
 
 ```bash

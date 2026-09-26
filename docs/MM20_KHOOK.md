@@ -85,7 +85,7 @@ Called first from `apply-sourcemod-v112.sh`; it is a no-op on SourceHook trees.
 3. **SDKTools `Hook_FireOutput` (Windows).** The branch defines the Windows
    x86 variant without the `EntityOutputManager::` qualifier, so MSVC fails to
    link `sdktools.ext` (LNK2019). The patch adds the qualifier.
-4. **DHooks linux x86 + ConsoleDetours** — see [DHooks](#dhooks-linux-x86).
+4. **DHooks x86 + ConsoleDetours** — see [DHooks](#dhooks-x86).
 5. **mysql.** The branch also disables `dbi.mysql`. Its only SourceHook
    dependencies are `SourceHook::String` and `SourceHook::List` (`sh_string.h`
    / `sh_list.h`, gone from MM), so the patch switches them to `std::string` /
@@ -112,12 +112,11 @@ log.
 `CS_DropWeapon` from a plugin used to crash srcds v34 on every line; it is
 fixed for all lines by PR #60 (`css34_cs_probe_mode 8` in botplay stress).
 
-## DHooks (linux x86)
+## DHooks (x86)
 
 The KHook SourceMod branch rewrote DHooks on top of KHook, but only ships the
-linux x86_64 ABI. `sourcemod-khook-dhooks-x86.patch` adds
-`src/abi/system_v_i386.cpp`, the i386 System V backend used by 32-bit ep1 /
-CS:S v34:
+linux x86_64 ABI. `sourcemod-khook-dhooks-x86.patch` adds `src/abi/x86.cpp`,
+the 32-bit backend used by ep1 / CS:S v34. On Linux it follows i386 System V:
 
 - every parameter, `this` included (`CallConv_THISCALL`), lives on the stack;
   `CallConv_FASTCALL` puts the first two 32-bit integers in ECX / EDX;
@@ -130,6 +129,14 @@ CS:S v34:
   restores all of them: when a hook changes parameters (`MRES_ChangedHandled`)
   KHook re-enters the detour and later returns to the original caller with
   the registers it was re-entered with, EBX / ESI / EDI included.
+
+On Windows the same file follows MSVC: `CallConv_THISCALL` passes `this` in
+ECX and the callee pops the stack arguments, the `Vector` / `string_t` hidden
+pointer is the first stack argument after `this` (popped by the callee for
+THISCALL / STDCALL, by the caller for CDECL), and `Capsule::PrePostHookLoop`
+is called as `__thiscall`. `AMBuilder` builds `dhooks.ext.dll` for windows
+x86, and the patch restores `extensions/dhooks/version.rc` (deleted by the
+rewrite, needed by the Windows resource step).
 
 The same patch restores what the rewrite dropped from the old API:
 `RegisterLibrary("dhooks")` (`LibraryExists` / `OnLibraryAdded`),
@@ -156,14 +163,26 @@ requires on every line that ships DHooks:
 | POST detour `CWeaponCSBase::GetMaxSpeed`, `MRES_Override` | `float` return in ST(0) |
 
 Returned vectors / floats and the step volume are range-checked; any bad
-value fails the run. Windows (MSVC thiscall / `__fastcall`) is not ported:
-`dhooks.ext` is only built for linux.
+value fails the run.
 
-Known upstream issue, not fixed here: DHooks hooks each entity class
-destructor through `KHook::SetupVirtualHook` and never removes that hook, so
-unloading `dhooks.ext` (`sm exts unload dhooks`) while the server keeps
-running leaves a vtable pointing at unloaded callbacks. A normal shutdown is
-clean.
+### Unloading DHooks on a running server
+
+Upstream `SDK_OnUnload` left three things behind, all fixed by the patch:
+
+- the per-class destructor hooks (`KHook::SetupVirtualHook`,
+  `HookCleanUp::CBaseEntity`) — `handle::shutdown()` removes them;
+- the detour / virtual hook capsules, whose KHook hooks kept calling
+  `Capsule::PrePostHookLoop` after SourceMod freed the extension's objects
+  (segfault within frames of `sm exts unload dhooks`) —
+  `Capsule::RemoveAll()` destroys them;
+- the handle types and the `Functions` gameconf listener: the next load
+  failed `CreateType` and every `DHookCreate` returned an invalid handle —
+  `handle::shutdown()` removes the types, `SDK_OnUnload` the listener.
+
+The botplay matrix runs `DHOOKS_UNLOAD_TEST=1` for this line: after the
+recording it unloads the probe and `dhooks.ext`, keeps playing through a level
+change, and loads `dhooks` again. SourceMod's autoload brings the probe back
+on the new map; every probe session must set up with clean values.
 
 ## Windows
 
