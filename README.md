@@ -48,6 +48,10 @@ Use the **matched** pair from one tag. Do not mix Metamod from one line with Sou
 
 Asset names: `sourcemod-<ver>-css34-{linux.tar.gz|windows.zip}` and `mmsource-<ver>-css34-{linux.tar.gz|windows.zip}`.
 
+The **Windows** assets of both `1.13.0.7565-mm2.0.0-khook*` tags crash `srcds.exe` on the first
+map load (KHook recall on MSVC x86); use their Linux assets only. The fix and the Wine smoke test
+for the Windows packages are described in [docs/MM20_KHOOK.md](docs/MM20_KHOOK.md#windows).
+
 **Install traps**
 
 - SM **1.11** expects Metamod **1.10.x / `metamod.1.ep1` / PLAPI 11**. Leftover myarena `metamod.2.ep1.so` → `Older Metamod… (11 < 14)` — not a bad package, a mix. See [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).

@@ -186,5 +186,38 @@ on the new map; every probe session must set up with clean values.
 
 ## Windows
 
-`build.yml` builds this line for Windows too (`windows` job matrix). It is
-build-only: there is no Windows srcds smoke test.
+`build.yml` builds this line for Windows (`windows` job matrix) and
+`wine-smoke` boots the packages on the Windows v34 server (`srcds.exe`, rom4s
+`srcds_css34_w_a.zip`) under Wine: Metamod / SourceMod versions, CS Tools,
+SDK Tools, BinTools, SDK Hooks and DHooks loaded, the DHooks probe with bots
+for 150 s, then a `changelevel` (see [testing/README.md](../testing/README.md)).
+
+The `1.13.0.7565-mm2.0.0-khook*` Windows packages (released before the Wine
+test existed) crash `srcds.exe` on the first map load. Fixes:
+
+- **KHook recall on MSVC x86** (`apply-khook-x86-recall.sh`, called from
+  `apply-mmsource-v112.sh`). SourceMod's `LevelInit` hook ends with
+  `KHook::Recall`. KHook returns from a recall with a plain `ret`, but a
+  `__thiscall` callee must pop its stack arguments, so ESP was off and the
+  recall site's epilogue popped arguments into EBX / ESI / EDI. The recall
+  also returned the hooked call's callee-saved registers. `KHook::Recall` now
+  saves and restores ESP / EBX / ESI / EDI around the call on MSVC x86, and
+  `BeginDetour` keeps the original entry's EBX / ESI / EDI (only EAX / ECX /
+  EDX, which may carry parameters, come from the recall). GCC / Clang i386
+  member calls are caller-cleaned; Linux is unchanged.
+- **DHooks on MSVC**: `winnt.h` defines `VOID` (enum rename), the rewrite
+  deleted `version.rc`, SourceMod builds with `/GR-` while DHooks
+  `dynamic_cast`s its handle objects (DHooks gets `/GR`), and
+  `SDK_OnAllLoaded` registered the entity listener on a null `ISDKHooks`
+  when SDK Hooks was not loaded (SDK Hooks is now an optional autoload
+  dependency).
+
+The DHooks probe uses the Windows `server.dll` values of
+`css34_dhooks_probe.games` (vtable offsets from the MSVC RTTI vtables, checked
+against each function's `ret imm`). Under Wine the KHook DHooks (`x86.cpp`,
+MSVC ABI) and the `sm13-dev` DHooks (SourceHook) give the same result:
+vhook 69, detour 16, EyePosition 239561, PlayStepSound 1018,
+GetMaxSpeed 32116 hits, no bad values (bot play is deterministic there).
+
+Not covered: a real Windows host (only Wine), and Windows botplay stress
+(SMAC, cstrike natives).

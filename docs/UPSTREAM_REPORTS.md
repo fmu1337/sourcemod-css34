@@ -101,14 +101,26 @@ recall therefore corrupts the caller's registers (seen as a crash in
 and restores every general register; either document this contract or
 restore the callee-saved registers from the original entry.
 
-## Windows (open)
+## KHook (Windows x86)
 
-### 9. `sm13-mm20-khook` Windows package crashes on the first map load
+### 9. A recall corrupts the recall site's stack and registers on MSVC x86
 
-Seen under Wine with the Windows v34 server (`srcds.exe`, rom4s
-`srcds_css34_w_a.zip`): access violation in `sourcemod.2.ep1.dll`, in the
-KHook context-callback dispatch (`KHook::Member / Virtual::_KHook_Callback_Fixed`,
-copying `_context_ptrs` of the object returned by `KHook::GetContext<Self>()`)
-right after `-------- Mapchange --------`. The Windows `sm13-dev` package
-(SourceHook) boots on the same setup. Under investigation; the `wine-smoke`
-job in `build.yml` reproduces it with a symbolized report.
+The detour returns from a recall to the recall site with a plain `ret` and
+the hooked call's saved registers. `KHook::Recall` calls the recall as a
+`__thiscall` member, whose callee must pop the stack arguments, so the recall
+site's ESP is off by their size and its epilogue pops arguments into
+EBX / ESI / EDI. SourceMod's `LevelInit` hook (and every other hook that
+recalls: `FireEvent`, `ChangeLevel`, sounds, voice) crashes srcds.exe on the
+first map load. Seen under Wine with the v34 Windows server; the KHook unit
+tests pass because their recall sites do not use ESP-relative code or
+callee-saved registers after the call.
+
+Fix: `apply-khook-x86-recall.sh` (restore ESP / EBX / ESI / EDI around the
+recall call on MSVC x86; `BeginDetour` keeps the original entry's
+callee-saved registers).
+
+### 10. DHooks does not build / run on Windows x86
+
+`VOID` enumerator (winnt.h macro), missing `version.rc`, `dynamic_cast` with
+SourceMod's `/GR-`, and `add_listener` on a null `ISDKHooks` when SDK Hooks is
+not loaded. Fixed in `sourcemod-khook-dhooks-x86.patch`.
