@@ -146,12 +146,14 @@ jobs:
             exts: "CS Tools,SDK Tools,BinTools,SDK Hooks,DHooks"
             load_exts: "sdkhooks.ext,dhooks.ext"
     steps:
+      # zstd: actions/cache picks the compression from the tools present, and the
+      # Windows / host-runner entries are zstd (a gzip restore misses them)
       - name: Install Wine
         run: |
           dpkg --add-architecture i386
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-            wine32 wine xvfb unzip curl ca-certificates python3 binutils llvm-14 git
+            wine32 wine xvfb unzip curl ca-certificates python3 binutils llvm-14 git zstd
           ln -sf /usr/bin/llvm-symbolizer-14 /usr/local/bin/llvm-symbolizer
 
       - name: Checkout
