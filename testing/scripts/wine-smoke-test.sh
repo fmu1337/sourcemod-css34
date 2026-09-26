@@ -9,6 +9,9 @@
 #                 backtrace (winedbg --auto) is symbolized
 #   SM_VERSION_EXPECT / MM_VERSION_EXPECT, EXPECT_EXTS (comma list of `sm exts list` names),
 #   LOAD_EXTS     comma list of extensions to `sm exts load` first (no plugin requires them)
+#   DHOOKS_PROBE_SECS  > 0: compile css34_dhooks_probe.sp with the package's spcomp.exe, play
+#                 that long with bots and require the probe's hooks to fire with clean values
+#                 (skipped when the package has no dhooks.ext.dll)
 # Needs: wine32 (i386), xvfb, unzip, python3.
 set -euo pipefail
 
@@ -58,6 +61,13 @@ for z in "${MM_WIN_PACKAGE:?}" "${SM_WIN_PACKAGE:?}"; do
 done
 [[ -f "${SERVER_DIR}/cstrike/addons/metamod.vdf" ]] || fail "metamod.vdf missing after install"
 
+DHOOKS_PROBE_SECS="${DHOOKS_PROBE_SECS:-0}"
+SM_DIR="${SERVER_DIR}/cstrike/addons/sourcemod"
+if [[ "${DHOOKS_PROBE_SECS}" -gt 0 && ! -f "${SM_DIR}/extensions/dhooks.ext.dll" ]]; then
+  echo "==> No dhooks.ext.dll in the package, skipping the DHooks probe"
+  DHOOKS_PROBE_SECS=0
+fi
+
 if [[ -n "${PDB_DIR:-}" && -d "${PDB_DIR}" ]]; then
   while IFS= read -r dll; do
     pdb="${PDB_DIR}/$(basename "${dll%.dll}").pdb"
@@ -71,6 +81,15 @@ if [[ ! -d "${WINEPREFIX}" ]]; then
 fi
 wine reg add 'HKCU\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f >/dev/null 2>&1
 wineserver -w || true
+
+if [[ "${DHOOKS_PROBE_SECS}" -gt 0 ]]; then
+  cp -f "${ROOT}/testing/plugins/css34_dhooks_probe.sp" "${SM_DIR}/scripting/"
+  cp -f "${ROOT}/testing/plugins/gamedata/css34_dhooks_probe.games.txt" "${SM_DIR}/gamedata/"
+  (cd "${SM_DIR}/scripting" && wine spcomp.exe css34_dhooks_probe.sp -i include -o ../plugins/css34_dhooks_probe.smx) \
+    >"${SERVER_DIR}/spcomp.log" 2>&1 || { cat "${SERVER_DIR}/spcomp.log"; fail "spcomp.exe failed for css34_dhooks_probe.sp"; }
+  [[ -f "${SM_DIR}/plugins/css34_dhooks_probe.smx" ]] || { cat "${SERVER_DIR}/spcomp.log"; fail "css34_dhooks_probe.smx missing"; }
+  echo "==> css34_dhooks_probe.smx compiled"
+fi
 
 Xvfb "${DISPLAY}" -screen 0 800x600x16 >/dev/null 2>&1 &
 XVFB_PID=$!
@@ -105,6 +124,29 @@ for e in "${exts[@]}"; do
   grep -q "\] ${e} (" <<<"$out" || fail "extension '${e}' not loaded"
 done
 grep -qi "<FAILED>\|<ERROR>" <<<"$out" && fail "an extension or plugin failed to load"
+
+if [[ "${DHOOKS_PROBE_SECS}" -gt 0 ]]; then
+  echo "==> Playing ${DHOOKS_PROBE_SECS}s with bots (DHooks probe)"
+  cp -f "${ROOT}/testing/cfg/botplay-server.cfg" "${SERVER_DIR}/cstrike/cfg/"
+  rcon "exec botplay-server.cfg" "bot_quota 8" "mp_restartgame 1" >/dev/null
+  end=$((SECONDS + DHOOKS_PROBE_SECS))
+  while (( SECONDS < end )); do
+    rcon "echo css34-alive" 2>/dev/null | grep -q css34-alive || fail "server stopped answering during the DHooks probe"
+    sleep 10
+  done
+  probe="$(grep -h '\[css34_dhooks_probe\] round=' "${SM_DIR}"/logs/L*.log 2>/dev/null | tail -n1 || true)"
+  echo "${probe:-no probe line}"
+  [[ -n "${probe}" ]] || fail "no [css34_dhooks_probe] round= line (no round ended?)"
+  field() { grep -Eo " $1=[0-9]+" <<<"${probe}" | grep -Eo '[0-9]+' | tail -n1; }
+  [[ "$(field available)" == "1" && "$(field setup)" == "1" ]] || fail "DHooks probe did not set up"
+  for f in vhook detour eye step speed; do
+    [[ "$(field "$f")" -ge 1 ]] || fail "DHooks probe: no ${f} hits"
+  done
+  for f in eye_bad step_bad speed_bad; do
+    [[ "$(field "$f")" -eq 0 ]] || fail "DHooks probe: ${f}=$(field "$f")"
+  done
+  echo "==> DHooks probe OK on Windows"
+fi
 
 # Level change: runs LevelShutdown / LevelInit hooks and entity teardown again
 rcon "changelevel ${MAP2}" >/dev/null || true

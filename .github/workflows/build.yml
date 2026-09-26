@@ -177,6 +177,8 @@ jobs:
           EXPECT_EXTS: ${{ matrix.exts }}
           LOAD_EXTS: ${{ matrix.load_exts }}
           PDB_DIR: ${{ github.workspace }}/win-art/pdb
+          # css34_dhooks_probe with bots (skipped when the package has no dhooks.ext.dll)
+          DHOOKS_PROBE_SECS: "150"
         run: |
           export SM_WIN_PACKAGE="$(ls win-art/sourcemod-*-css34-windows.zip)"
           export MM_WIN_PACKAGE="$(ls win-art/mmsource-*-css34-windows.zip)"
