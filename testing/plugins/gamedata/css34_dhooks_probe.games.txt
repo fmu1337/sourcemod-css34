@@ -1,6 +1,7 @@
 "Games"
 {
 	// CS:S v34 server_i486.so (checked with testing/scripts/check-css34-vtables.py --dump)
+	// and server.dll (MSVC RTTI vtables; `ret imm` matches the argument count)
 	"cstrike"
 	{
 		"Offsets"
@@ -8,11 +9,13 @@
 			// Vector CBasePlayer::EyePosition()
 			"EyePosition"
 			{
+				"windows"	"117"
 				"linux"		"118"
 			}
 			// void CCSPlayer::PlayStepSound(Vector &, surfacedata_t *, float, bool)
 			"PlayStepSound"
 			{
+				"windows"	"295"
 				"linux"		"296"
 			}
 		}
@@ -22,6 +25,8 @@
 			"CWeaponCSBase::GetMaxSpeed"
 			{
 				"library"	"server"
+				// call GetWpnData; fld [eax + m_flMaxSpeed]; ret (vtable 322)
+				"windows"	"\xE8\x2A\x2A\x2A\x2A\xD9\x80\x54\x06\x00\x00\xC3"
 				"linux"		"@_ZNK13CWeaponCSBase11GetMaxSpeedEv"
 			}
 		}

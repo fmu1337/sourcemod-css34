@@ -117,6 +117,37 @@ Artifacts: `botplay-report.json`, `built-botplay-report.json`, `botplay-compare.
 
 Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary; `rom4s` gamedata + built binaries also passes.
 
+## Windows packages (Wine and native Windows)
+
+`build.yml` `wine-smoke` boots the Windows packages on the Windows v34 server:
+game content from the Linux server tree (or `srcds_css34_4044.zip`), Windows
+binaries from rom4s `srcds_css34_w_a.zip` (`srcds.exe`, `bin/*.dll`,
+`cstrike/bin/server.dll`), run with 32-bit Wine under Xvfb.
+`testing/scripts/wine-smoke-test.sh` drives it over RCON
+(`testing/scripts/rcon.py`): Metamod / SourceMod versions, the expected
+extensions (`LOAD_EXTS` are loaded first), then a `changelevel`. On a failure
+`testing/scripts/wine-crash-report.py` maps every access violation in the
+Wine log (`WINEDEBUG=+seh,+loaddll`) to module + RVA and symbolizes it with
+`llvm-symbolizer` when the `.pdb` from the Windows build sits next to the DLL.
+
+The same script runs natively under Git Bash on Windows (`uname -s` MINGW /
+MSYS): the `build.yml` `windows` job runs it on `windows-latest` right after
+the build, with `spcomp.exe` run directly and `srcds.exe` started in its own
+console window (`Start-Process`; with a pipe as stdin `-console` spins on
+`GetNumberOfConsoleInputEvents` and never loads the map), game content
+from `srcds_css34_4044.zip` (cached), the Windows Error Reporting dialog off
+and WER LocalDumps writing a minidump of a crash to `.ci-winserver/dumps`
+(printed with `cdb` and the PDBs when the SDK debuggers are installed;
+uploaded as the `windows-smoke-<line>` artifact on a failure).
+
+```bash
+# needs wine32, xvfb, unzip, python3 (e.g. an ubuntu:22.04 container)
+SM_WIN_PACKAGE="$(ls packages/sourcemod-*-css34-windows.zip)" \
+MM_WIN_PACKAGE="$(ls packages/mmsource-*-css34-windows.zip)" \
+SM_VERSION_EXPECT=1.13.0.7404 MM_VERSION_EXPECT=1.12.0 \
+  testing/scripts/wine-smoke-test.sh
+```
+
 ## Local run
 
 ```bash

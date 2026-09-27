@@ -16,7 +16,7 @@ Why we do **not** chase byte-identical `.so` vs rom4s («SUPER GOLDEN») is in [
 | `sm13-dev` | **1.13.0.7404** (`cdedec760…`) | **1.12 git1226** | DEV (default) |
 | `sm13-mm20` | 1.13.0.7404 | **2.0 git1407** (`0084b86…`) | Experimental ([docs](docs/SM13_MM20.md)) |
 | `sm13-latest` | **1.13.0.7472** (`6eb5f8fa…`) | **1.12 git1226** (`9fd977d…`) | Latest SM pin |
-| `sm13-mm20-khook` | **1.13.0.7565** KHook branch + master (`25954d4…`) | **2.0 git1469** KHook (`fa6f80e…`) | Experimental ([docs](docs/MM20_KHOOK.md)) |
+| `sm13-mm20-khook` | **1.13.0.7565** KHook branch + master (`25954d4…`) | **2.0 git1472** KHook (`05c5c63…`) | Experimental ([docs](docs/MM20_KHOOK.md)) |
 
 Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
 
@@ -47,6 +47,10 @@ Use the **matched** pair from one tag. Do not mix Metamod from one line with Sou
 | [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev+1407 | CI smoke + botplay matrix |
 
 Asset names: `sourcemod-<ver>-css34-{linux.tar.gz|windows.zip}` and `mmsource-<ver>-css34-{linux.tar.gz|windows.zip}`.
+
+The **Windows** assets of both `1.13.0.7565-mm2.0.0-khook*` tags crash `srcds.exe` on the first
+map load (KHook recall on MSVC x86); use their Linux assets only. The fix and the Wine smoke test
+for the Windows packages are described in [docs/MM20_KHOOK.md](docs/MM20_KHOOK.md#windows).
 
 **Install traps**
 

@@ -149,6 +149,57 @@ while {[clock seconds] < $end_at} {
     }
 }
 
+# DHOOKS_UNLOAD_TEST=1: unload the DHooks probe and dhooks.ext on the live
+# server, then keep playing through a level change (entity destructors,
+# LevelShutdown) with no DHooks hook left behind, and load dhooks again.
+if {[info exists env(DHOOKS_UNLOAD_TEST)] && $env(DHOOKS_UNLOAD_TEST) eq "1"} {
+    set timeout 10
+    send "sm plugins unload css34_dhooks_probe\r"
+    sleep 2
+    send "sm exts list\r"
+    set dh_index ""
+    expect {
+        -re {\[([0-9]+)\] DHooks \(} { set dh_index $expect_out(1,string) }
+        eof { puts stderr "srcds exited before dhooks unload"; exit 10 }
+        timeout {}
+    }
+    if {$dh_index eq ""} {
+        puts stderr "DHooks is not loaded, cannot run the unload test"
+        exit 10
+    }
+    sleep 1
+    send "sm exts unload $dh_index\r"
+    expect {
+        -re {is now unloaded} {}
+        eof { puts stderr "srcds exited while unloading dhooks"; exit 10 }
+        timeout { puts stderr "timeout unloading dhooks"; exit 10 }
+    }
+    puts stderr "dhooks.ext unloaded (index $dh_index), playing on"
+    set end_at [expr {[clock seconds] + 20}]
+    while {[clock seconds] < $end_at} {
+        expect {
+            eof { puts stderr "srcds exited after dhooks unload"; exit 10 }
+            timeout {}
+        }
+    }
+    # A level change destroys every entity, players included
+    send "changelevel ${map}\r"
+    set end_at [expr {[clock seconds] + 25}]
+    while {[clock seconds] < $end_at} {
+        expect {
+            eof { puts stderr "srcds exited during changelevel after dhooks unload"; exit 10 }
+            timeout {}
+        }
+    }
+    send "sm exts load dhooks\r"
+    expect {
+        -re {Loaded extension dhooks} {}
+        eof { puts stderr "srcds exited while reloading dhooks"; exit 10 }
+        timeout { puts stderr "timeout reloading dhooks"; exit 10 }
+    }
+    puts stderr "OK: DHooks unload / reload on a live server"
+}
+
 send "status\r"
 expect {
     -re {hostname|# [0-9]+} {}
