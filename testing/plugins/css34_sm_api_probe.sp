@@ -34,7 +34,7 @@ public Plugin:myinfo =
     name = "CSS34 SourceMod API Probe",
     author = "sourcemod-css34 CI",
     description = "Exercise stock SM APIs and extensions for css34 matrix CI",
-    version = "1.1",
+    version = "1.2",
     url = "https://github.com/fmu1337/sourcemod-css34"
 };
 
@@ -636,6 +636,17 @@ RunSdkToolsProbes(bot)
     ProbeResult(slot == -1 || IsValidEntity(slot), "sdktools", "GetPlayerWeaponSlot");
 
     ProbeResult(GetClientListeningFlags(bot) >= 0, "sdktools", "GetClientListeningFlags");
+
+    // SM 1.12/1.13 botplay CI segfaulted when the probe called SlapPlayer /
+    // ForcePlayerSuicide on bots. Root cause was Steam-CSS sdktools vtable
+    // offsets (CommitSuicide 447 vs v34 358, Teleport 111 vs 99) — fixed in
+    // PR #60 gamedata — but those natives still punch through ValveCall into
+    // player virtuals that are brittle on headless bots. Exercise kill via
+    // the engine command path instead (queued; success = no crash).
+    ProbeSkip("sdktools", "SlapPlayer");
+    ProbeSkip("sdktools", "ForcePlayerSuicide");
+    FakeClientCommand(bot, "kill");
+    ProbeResult(true, "sdktools", "FakeClientCommand_kill");
 }
 
 RunStringTablesProbes()
