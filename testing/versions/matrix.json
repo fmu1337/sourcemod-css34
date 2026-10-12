@@ -16,14 +16,6 @@
       "metamod_binary": "metamod.2.ep1",
       "role": "latest"
     },
-    "sm13-dev": {
-      "sourcemod": "1.13.0.7404",
-      "sourcemod_commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
-      "metamod": "1.12.0-dev+1226",
-      "metamod_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "metamod_binary": "metamod.2.ep1",
-      "role": "dev"
-    },
     "sm13-mm20": {
       "sourcemod": "1.13.0.7404",
       "sourcemod_commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
@@ -92,7 +84,8 @@
     },
     "1.13.0.7404-mm1.12.0": {
       "line": "sm13-dev",
-      "role": "dev",
+      "role": "legacy",
+      "note": "Retired CI line (use sm13-latest). Tag kept for historical downloads / retags.",
       "sourcemod": "1.13.0-git7404",
       "metamod": "1.12.0-dev+1226",
       "metamod_binary": "metamod.2.ep1",
@@ -173,7 +166,7 @@
     },
     {
       "mm": "MM 1.12 git1226",
-      "sm": "SM 1.12 / 1.13 (sm12-latest, sm13-dev, sm13-latest)",
+      "sm": "SM 1.12 / 1.13 (sm12-latest, sm13-latest)",
       "result": "PASS",
       "notes": "Matched release tags; metamod.2.ep1"
     },
@@ -224,7 +217,7 @@
   },
   "notes": [
     "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
-    "CI matrix includes sm13-mm20 (SM 1.13.7404 + MM 2.0 git1407) and sm13-mm20-khook (SM KHook branch merged with master 7565 + MM 2.0 git1472).",
+    "CI matrix: sm11-oldstable, sm12-latest, sm13-latest, sm13-mm20 (7404 + MM 2.0 git1407), sm13-mm20-khook. sm13-dev (7404 + MM 1.12) retired.",
     "Smoke and check-package.sh assert sdkhooks.games and OnTakeDamage css34 offsets.",
     "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all CI lines.",
     "Use matched release tags; do not mix MM from one line with SM from another.",

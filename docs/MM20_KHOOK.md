@@ -216,7 +216,7 @@ test existed) crash `srcds.exe` on the first map load. Fixes:
 The DHooks probe uses the Windows `server.dll` values of
 `css34_dhooks_probe.games` (vtable offsets from the MSVC RTTI vtables, checked
 against each function's `ret imm`). Under Wine the KHook DHooks (`x86.cpp`,
-MSVC ABI) and the `sm13-dev` DHooks (SourceHook) give the same result:
+MSVC ABI) and the `sm13-latest` DHooks (SourceHook) give the same result:
 vhook 69, detour 16, EyePosition 239561, PlayStepSound 1018,
 GetMaxSpeed 32116 hits, no bad values (bot play is deterministic there).
 

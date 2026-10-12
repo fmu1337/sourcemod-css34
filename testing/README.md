@@ -83,7 +83,7 @@ Local short run (built):
 
 ```bash
 chmod +x testing/scripts/*.sh
-SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7404-css34-linux.tar.gz \
+SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7472-css34-linux.tar.gz \
 MM_PACKAGE=$PWD/packages/mmsource-1.12.0-dev-css34-linux.tar.gz \
 BOTPLAY_PROFILE=built \
 REPORT_JSON=$PWD/.ci-server/built-botplay-report.json \
@@ -144,7 +144,7 @@ uploaded as the `windows-smoke-<line>` artifact on a failure).
 # needs wine32, xvfb, unzip, python3 (e.g. an ubuntu:22.04 container)
 SM_WIN_PACKAGE="$(ls packages/sourcemod-*-css34-windows.zip)" \
 MM_WIN_PACKAGE="$(ls packages/mmsource-*-css34-windows.zip)" \
-SM_VERSION_EXPECT=1.13.0.7404 MM_VERSION_EXPECT=1.12.0 \
+SM_VERSION_EXPECT=1.13.0.7472 MM_VERSION_EXPECT=1.12.0 \
   testing/scripts/wine-smoke-test.sh
 ```
 
@@ -155,12 +155,12 @@ chmod +x testing/scripts/*.sh
 
 # Test freshly built SM + MM from builder/run/linux.sh (primary path):
 MM_PACKAGE=$PWD/packages/mmsource-1.12.0-dev-css34-linux.tar.gz \
-SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7404-css34-linux.tar.gz \
+SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7472-css34-linux.tar.gz \
   testing/scripts/run-smoke.sh
 
 # Or USE_BUILT_MM against deps/mmsource-1.12/build/package + local SM tarball:
 USE_BUILT_MM=1 \
-SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7404-css34-linux.tar.gz \
+SM_PACKAGE=$PWD/packages/sourcemod-1.13.0-git7472-css34-linux.tar.gz \
   testing/scripts/run-smoke.sh
 ```
 

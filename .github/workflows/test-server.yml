@@ -29,7 +29,7 @@ on:
         required: false
         default: "1"
       css34_line:
-        description: "Optional single CSS34_LINE (sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20|sm13-latest|sm13-mm20-khook); empty = matrix"
+        description: "Optional single CSS34_LINE (sm11-oldstable|sm12-latest|sm13-latest|sm13-mm20|sm13-mm20-khook); empty = matrix"
         required: false
         default: ""
       record_secs:
@@ -80,11 +80,6 @@ jobs:
             sm_expect: "1.12.0.7253"
             mm_expect: "1.12.0"
             sm_commit: 2e229b111534b1be007dc3bd9acfcf2fc472e893
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
-          - line: sm13-dev
-            sm_expect: "1.13.0.7404"
-            mm_expect: "1.12.0"
-            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
             mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-mm20
             sm_expect: "1.13.0.7404"
@@ -222,12 +217,6 @@ jobs:
             mm_expect: "1.12.0"
             sm_commit: 2e229b111534b1be007dc3bd9acfcf2fc472e893
             mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
-          - line: sm13-dev
-            image: debian:11
-            sm_expect: "1.13.0.7404"
-            mm_expect: "1.12.0"
-            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-mm20
             image: debian:11
             sm_expect: "1.13.0.7404"
@@ -246,11 +235,11 @@ jobs:
             mm_expect: "2.0.0"
             sm_commit: 25954d4aa4a55ab10c6e2c30699f52358f982fb9
             mm_commit: 05c5c63a9d595cb84021c3a51fe38366ba4a12a5
-          - line: sm13-dev
+          - line: sm13-latest
             image: debian:latest
-            sm_expect: "1.13.0.7404"
+            sm_expect: "1.13.0.7472"
             mm_expect: "1.12.0"
-            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
             mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-mm20
             image: debian:latest
@@ -368,9 +357,6 @@ jobs:
             mm_expect: "1.10.7"
           - line: sm12-latest
             sm_expect: "1.12.0.7253"
-            mm_expect: "1.12.0"
-          - line: sm13-dev
-            sm_expect: "1.13.0.7404"
             mm_expect: "1.12.0"
           - line: sm13-mm20
             sm_expect: "1.13.0.7404"
@@ -494,11 +480,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - line: sm13-dev
+          - line: sm13-latest
             image: rockylinux:9
-            sm_expect: "1.13.0.7404"
+            sm_expect: "1.13.0.7472"
             mm_expect: "1.12.0"
-            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
             mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-mm20
             image: rockylinux:9
@@ -608,10 +594,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - line: sm13-dev
-            sm_expect: "1.13.0.7404"
+          - line: sm13-latest
+            sm_expect: "1.13.0.7472"
             mm_expect: "1.12.0"
-            sm_commit: cdedec7606f1ee9bf3685b2cce3620fbec90efa8
+            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
             mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm13-mm20
             sm_expect: "1.13.0.7404"
@@ -840,7 +826,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
-  # Same botplay session on in-tree SM 1.13.7404 + MM 1.12, compared to rom4s baseline.
+  # Same botplay session on in-tree SM 1.13 (sm13-latest) + MM 1.12, compared to rom4s baseline.
   # Superseded by test-built-botplay-matrix (all lines). Kept for extra-distro dispatch only.
   test-built-botplay:
     if: false
@@ -850,11 +836,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore packages from cache (sm13-dev)
+      - name: Restore packages from cache (sm13-latest)
         uses: actions/cache/restore@v4
         with:
           path: packages
-          key: css34-pkg-${{ github.run_id }}-sm13-dev
+          key: css34-pkg-${{ github.run_id }}-sm13-latest
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
@@ -872,7 +858,7 @@ jobs:
           BOTPLAY_CFG: botplay-stress.cfg
           BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
           MM_VERSION_EXPECT: "1.12.0"
-          SM_VERSION_EXPECT: "1.13.0.7404"
+          SM_VERSION_EXPECT: "1.13.0.7472"
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
@@ -943,7 +929,7 @@ jobs:
       fail-fast: false
       matrix:
         image: [debian:11, debian:12, rockylinux:9]
-        line: [sm13-dev, sm13-mm20]
+        line: [sm13-latest, sm13-mm20]
         include:
           - image: debian:11
             image_id: debian11
@@ -951,8 +937,8 @@ jobs:
             image_id: debian12
           - image: rockylinux:9
             image_id: rocky9
-          - line: sm13-dev
-            sm_expect: "1.13.0.7404"
+          - line: sm13-latest
+            sm_expect: "1.13.0.7472"
             mm_expect: "1.12.0"
           - line: sm13-mm20
             sm_expect: "1.13.0.7404"
@@ -1062,10 +1048,10 @@ jobs:
             sm_expect: "1.12.0.7253"
             mm_expect: "1.12.0"
           - line: sm13
-            tag: 1.13.0.7404-mm1.12.0
-            sm_asset: sourcemod-1.13.0-git7404-css34-linux.tar.gz
+            tag: 1.13.0.7472-mm1.12.0
+            sm_asset: sourcemod-1.13.0-git7472-css34-linux.tar.gz
             mm_asset: mmsource-1.12.0-dev-css34-linux.tar.gz
-            sm_expect: "1.13.0.7404"
+            sm_expect: "1.13.0.7472"
             mm_expect: "1.12.0"
     steps:
       - name: Checkout
@@ -1175,11 +1161,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore packages from cache (sm13-dev)
+      - name: Restore packages from cache (sm13-latest)
         uses: actions/cache/restore@v4
         with:
           path: packages
-          key: css34-pkg-${{ github.run_id }}-sm13-dev
+          key: css34-pkg-${{ github.run_id }}-sm13-latest
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
