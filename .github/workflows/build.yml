@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 env:
-  CSS34_LINE: sm13-dev
+  CSS34_LINE: sm13-latest
   PURE_SOURCE_BUILD: "1"
 
 jobs:
@@ -70,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        line: [sm13-dev, sm13-mm20-khook]
+        line: [sm13-latest, sm13-mm20-khook]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,7 +136,7 @@ jobs:
       - name: Windows smoke test (${{ matrix.line }})
         shell: bash
         env:
-          SM_VERSION_EXPECT: ${{ matrix.line == 'sm13-mm20-khook' && '1.13.0.7565' || '1.13.0.7404' }}
+          SM_VERSION_EXPECT: ${{ matrix.line == 'sm13-mm20-khook' && '1.13.0.7565' || '1.13.0.7472' }}
           MM_VERSION_EXPECT: ${{ matrix.line == 'sm13-mm20-khook' && '2.0.0' || '1.12.0' }}
           EXPECT_EXTS: ${{ matrix.line == 'sm13-mm20-khook' && 'CS Tools,SDK Tools,BinTools,SDK Hooks,DHooks' || 'CS Tools,SDK Tools,BinTools' }}
           LOAD_EXTS: ${{ matrix.line == 'sm13-mm20-khook' && 'sdkhooks.ext,dhooks.ext' || '' }}
@@ -171,8 +171,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - line: sm13-dev
-            sm_expect: "1.13.0.7404"
+          - line: sm13-latest
+            sm_expect: "1.13.0.7472"
             mm_expect: "1.12.0"
             exts: "CS Tools,SDK Tools,BinTools"
             load_exts: ""

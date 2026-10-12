@@ -48,7 +48,6 @@ lines = data["lines"]
 checks = [
     ("sm12-latest", f"1.12.0.{sm12_rev}", sm12_commit, mm_commit),
     ("sm13-latest", f"1.13.0.{sm13_rev}", sm13_commit, mm_commit),
-    ("sm13-dev", "1.13.0.7404", "cdedec7606f1ee9bf3685b2cce3620fbec90efa8", mm_commit),
 ]
 for line, expect_sm, commit, mm in checks:
     row = lines[line]

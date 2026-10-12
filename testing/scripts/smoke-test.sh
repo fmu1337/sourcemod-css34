@@ -21,7 +21,7 @@ ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" || -z "${MM_COMMIT_EXPECT:-}" || -z "${SM_COMMIT_EXPECT:-}" ]]; then
   if [[ -f "${ROOT}/builder/resolve-version.sh" ]]; then
     eval "$(
-      CSS34_LINE="${CSS34_LINE:-sm13-dev}" bash -c "
+      CSS34_LINE="${CSS34_LINE:-sm13-latest}" bash -c "
         source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
         echo \"RESOLVED_SM_COMMIT='\${SOURCEMOD_BUILD_COMMIT:-\$SOURCEMOD_COMMIT}'\"
         echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"

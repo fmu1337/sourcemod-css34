@@ -30,7 +30,7 @@ Repository: fmu1337/sourcemod-css34
    - Rename release key when SM rev changes (e.g. 1.12.0.7245-mm1.12.0 → 1.12.0.7253-mm1.12.0).
    - Add/update 1.13.0.<rev>-mm1.12.0 for sm13-latest.
    - Update metamod_pins "1.12-<rev>" when MM 1.12 moves.
-   - sm13-dev line keeps SM 7404 but shares MM 1.12 pin → update its metamod_commit too.
+   - sm13-mm20 still uses SM 7404 (SM_DEV_*) with MM 2.0; do not reintroduce sm13-dev.
 
 5. Before opening PR, MUST pass locally:
    chmod +x testing/scripts/check-version-pins.sh
@@ -69,9 +69,9 @@ PR #57 updated `versions.env` and CI build matrix but **missed**:
 | Line | SourceMod branch | Metamod |
 |------|------------------|---------|
 | `sm12-latest` | `1.12-dev` on alliedmodders/sourcemod | `1.12-dev` on alliedmodders/metamod-source |
-| `sm13-latest` | `master` on alliedmodders/sourcemod | same MM 1.12 pin as sm12/sm13-dev |
+| `sm13-latest` | `master` on alliedmodders/sourcemod | same MM 1.12 pin as sm12-latest |
 
-Do **not** bump `sm13-dev` (7404) or `sm13-mm20` unless explicitly asked.
+Do **not** bump `sm13-mm20` (7404 + MM 2.0) unless explicitly asked. `sm13-dev` is retired.
 
 ## Verification commands
 

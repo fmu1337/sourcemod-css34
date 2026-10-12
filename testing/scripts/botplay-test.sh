@@ -30,7 +30,7 @@ case "${BOTPLAY_PROFILE}" in
     if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" ]]; then
       if [[ -f "${ROOT}/builder/resolve-version.sh" ]]; then
         eval "$(
-          CSS34_LINE="${CSS34_LINE:-sm13-dev}" bash -c "
+          CSS34_LINE="${CSS34_LINE:-sm13-latest}" bash -c "
             source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
             echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"
             echo \"RESOLVED_SM_MAJOR='\${SOURCEMOD_MAJOR}'\"

@@ -47,7 +47,14 @@ apply_sm_line() {
       SOURCEMOD_MAJOR="$SM_LATEST_MAJOR"
       resolve_mm 1.12
       ;;
-    sm13-dev|sm13|dev)
+    sm13-latest|sm13|bleeding)
+      SOURCEMOD_COMMIT="$SM_LATEST_13_COMMIT"
+      SOURCEMOD_GIT_REV="$SM_LATEST_13_REV"
+      SOURCEMOD_MAJOR="$SM_LATEST_13_MAJOR"
+      resolve_mm 1.12
+      ;;
+    # Retired CI line; kept for release tag 1.13.0.7404-mm1.12.0 retags.
+    sm13-dev|dev)
       SOURCEMOD_COMMIT="$SM_DEV_COMMIT"
       SOURCEMOD_GIT_REV="$SM_DEV_REV"
       SOURCEMOD_MAJOR="$SM_DEV_MAJOR"
@@ -59,12 +66,6 @@ apply_sm_line() {
       SOURCEMOD_MAJOR="$SM_DEV_MAJOR"
       resolve_mm 2.0
       ;;
-    sm13-latest|bleeding)
-      SOURCEMOD_COMMIT="$SM_LATEST_13_COMMIT"
-      SOURCEMOD_GIT_REV="$SM_LATEST_13_REV"
-      SOURCEMOD_MAJOR="$SM_LATEST_13_MAJOR"
-      resolve_mm 1.12
-      ;;
     sm13-mm20-khook|sm13-khook|khook)
       SOURCEMOD_COMMIT="$SM_KHOOK_COMMIT"
       SOURCEMOD_GIT_REV="$SM_KHOOK_REV"
@@ -74,7 +75,7 @@ apply_sm_line() {
       resolve_mm 2.0k
       ;;
     *)
-      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-dev|sm13-mm20|sm13-latest|sm13-mm20-khook)" >&2
+      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-latest|sm13-mm20|sm13-mm20-khook)" >&2
       exit 1
       ;;
   esac
@@ -107,7 +108,7 @@ elif [[ -n "${SOURCEMOD_COMMIT:-}" && -n "${SOURCEMOD_GIT_REV:-}" ]]; then
     fi
   fi
 else
-  apply_sm_line "${CSS34_LINE:-sm13-dev}"
+  apply_sm_line "${CSS34_LINE:-sm13-latest}"
 fi
 
 # Optional MMS_LINE override after a SM line was chosen.

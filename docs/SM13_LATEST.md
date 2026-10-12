@@ -15,7 +15,9 @@ CSS34_LINE=sm13-latest PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 
 MM 2.0 git1450+ (KHook) lives in its own line, `sm13-mm20-khook` ([MM20_KHOOK.md](MM20_KHOOK.md)); SM `master` cannot run on it.
 
-## Upgrade from sm13-dev (7404)
+## Replaces sm13-dev (7404)
+
+`sm13-dev` (7404 + MM 1.12) is retired from the CI matrix; this line is the default SM 1.13 pin.
 
 ### SourceMod 7404 → 7472
 
