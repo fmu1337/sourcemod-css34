@@ -232,6 +232,7 @@ sudo bash testing/scripts/run-built-mm-matrix.sh
 | [PR #15](https://github.com/fmu1337/sourcemod-css34/pull/15) | Mid 6588 отвергнут как merge; pin/ancestry/headers сохранены в секции «Mid-шаг 6588» |
 | [PR #17](https://github.com/fmu1337/sourcemod-css34/pull/17) | Tooling landed via #19; myarena/MM compatibility notes выше |
 | Field report 2026-07-15 | SDKHooks `gEntList` + MM PLAPI 11 vs 1.11 mix — [SDKHOOKS_EP1_RELEASE_BLOCKERS.md](SDKHOOKS_EP1_RELEASE_BLOCKERS.md); sdkhooks vtables → #34 |
+| SlapPlayer / ForcePlayerSuicide on bots | SM 1.12/1.13 botplay CI segfault: Steam-CSS sdktools slots (`CommitSuicide` 447→**358**, `Teleport` 111→**99**) — [#60](https://github.com/fmu1337/sourcemod-css34/pull/60). EP1 `CommitSuicide()` is 0-arg (OB is 2-bool). API probe skips those natives on bots and uses `FakeClientCommand("kill")`. |
 | [PR #4](https://github.com/fmu1337/sourcemod-css34/pull/4), [PR #9](https://github.com/fmu1337/sourcemod-css34/pull/9) | Byte-identical vs rom4s — **не преследуем**; вердикт в [BYTE_MATCH.md](BYTE_MATCH.md) |
 | `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
 | Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |

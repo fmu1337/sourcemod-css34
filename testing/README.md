@@ -75,7 +75,7 @@ SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/` (not shipped
 | `testing/cfg/botplay-server.cfg` | Base bots + fast rounds |
 | `testing/cfg/botplay-stress.cfg` | Stress overlay (more bots, map/plugin cvars) |
 | `testing/plugins/css34_botplay_stress.sp` | Map rotation + ABI probe |
-| `testing/plugins/css34_sm_api_probe.sp` | Broad SM API exerciser: extensions inventory, core/clients/entity/sdktools/sdkhooks/cstrike, menus, usermessages, geoip, clientprefs, dbi/sqlite, regex, adt, sorting, keyvalues, lang |
+| `testing/plugins/css34_sm_api_probe.sp` | Broad SM API exerciser: extensions inventory, core/clients/entity/sdktools/sdkhooks/cstrike, menus, usermessages, geoip, clientprefs, dbi/sqlite, regex, adt, sorting, keyvalues, lang. Skips `SlapPlayer` / `ForcePlayerSuicide` on bots (SM 1.12/1.13 CI segfault; wrong CommitSuicide/Teleport slots before #60); kills via `FakeClientCommand("kill")` instead. |
 
 Override: `BOTPLAY_CFG=botplay-server.cfg` for the lighter profile without extra bots / plugin cvars.
 
