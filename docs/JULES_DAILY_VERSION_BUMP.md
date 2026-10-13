@@ -21,10 +21,18 @@ Repository: fmu1337/sourcemod-css34
    - builder/checkout-deps.sh          ← MM fallback commit (easy to forget)
    - builder/write-build-stamps.sh     ← MM fallback commit (easy to forget)
    - testing/versions/matrix.json      ← lines AND releases AND metamod_pins
-   - .github/workflows/test-server.yml ← build-linux, test-built-debian, botplay matrix, release-botplay tag
-   - .github/workflows/release.yml     ← tag → CSS34_LINE mappings
-   - README.md                         ← version table + releases table + git tag examples
+   - .github/workflows/test-server.yml ← sm_expect / mm_expect / sm_commit / mm_commit in build-linux,
+                                         test-built-debian (debian:11 AND debian:latest rows),
+                                         test-built-botplay-matrix, test-built-rhel, test-built-smoke,
+                                         test-built-botplay-extra; tag + asset names in test-release-botplay
+   - .github/workflows/build.yml       ← windows job SM_VERSION_EXPECT and wine-smoke matrix sm_expect
+                                         (NOT checked by check-version-pins.sh — Windows smoke goes red)
+   - .github/workflows/release.yml     ← tag → CSS34_LINE mappings (new base tag per new SM rev)
+   - README.md                         ← "What to install" + version matrix + releases tables
+   - testing/README.md                 ← test-release-botplay table
    - docs/SM13_LATEST.md               ← if sm13-latest SM pin changed
+   - SM_KHOOK_MERGE_MASTER in versions.env equals the sm13-latest commit today; do NOT bump it
+     with sm13-latest (moving it means redoing the KHook merge, see docs/MM20_KHOOK.md)
 
 4. matrix.json rules:
    - Rename release key when SM rev changes (e.g. 1.12.0.7245-mm1.12.0 → 1.12.0.7253-mm1.12.0).
@@ -47,6 +55,10 @@ Repository: fmu1337/sourcemod-css34
 8. If CI fails on sm12-latest or sm13-latest only, fix patches in builder/patches/ — do not weaken CI checks.
 
 9. Do NOT merge. Leave PR for human review.
+
+10. After a human merges it, the release is a new base tag pushed by a human, e.g.
+    git tag 1.13.0.<rev>-mm1.12.0 && git push origin 1.13.0.<rev>-mm1.12.0
+    release.yml builds it, smokes the public URLs and switches line-sm13-latest.
 ```
 
 ## Why Jules PR #57 was incomplete
@@ -62,7 +74,9 @@ PR #57 updated `versions.env` and CI build matrix but **missed**:
 | `README.md` | No sm13-latest release row |
 | `test-server.yml` `test-release-botplay` | Tag still `1.12.0.7245-mm1.12.0` |
 
-`testing/scripts/check-version-pins.sh` now fails CI if any of these drift.
+`testing/scripts/check-version-pins.sh` now fails CI if any of these drift. It covers only
+`sm12-latest`, `sm13-latest` and MM 1.12 in `versions.env`, `matrix.json`, `test-server.yml`,
+`release.yml` and the two fallbacks — not `build.yml`, the README / docs tables, or the other three lines.
 
 ## Lines to bump daily
 

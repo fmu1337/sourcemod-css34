@@ -15,6 +15,13 @@ release tag [`1.11.0.6572-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/
 
 These notes stay useful as an operator trap guide. They are **not** evidence that the matched release pair refuses to load SDKHooks.
 
+> **Status 2026-10-13 (history doc).** Both repo follow-ups at the end are done: the
+> `1.11.0.6572-mm1.10.7` tag was republished on 2026-07-17 with the css34 `sdkhooks.games`
+> (`OnTakeDamage` linux **61**, checked in the published tarball), and `smoke-test.sh` now requires
+> **SDK Hooks** in `sm exts list` plus the linux 61 offset. SM 1.11 moved on to 6970
+> (`sm11-oldstable`), which is withheld from line pointers for an unrelated startup SIGABRT report
+> (README → Known-bad releases). The PLAPI 11 / `metamod.2.ep1` mix trap below is still current.
+
 ## Environment (reference)
 
 | Item | Value |
@@ -41,8 +48,8 @@ Failed lookup of gEntList - Reverting to networkable entities only
 On the repo’s v34 smoke / botplay tree:
 
 - Stock smoke may **not list** SDKHooks at all — it only autoloads when a plugin
-  requires it, and smoke’s required-ext assert is currently BinTools / SDK Tools /
-  CS Tools (gap; should assert SDK Hooks when an SMAC/botplay plugin is present).
+  requires it, and smoke’s required-ext assert was BinTools / SDK Tools /
+  CS Tools at the time (gap, since closed: smoke now requires SDK Hooks).
 - With SMAC/botplay (#34), **SDK Hooks loads cleanly** for:
   - rom4s SM 6572
   - built master SM 6572 (with #34 css34 `sdkhooks.games` overlay)
@@ -136,9 +143,10 @@ already registered topmenu natives — plugin-set friction, not SDKHooks.
 
 ## Follow-ups for the repo
 
-1. **Retag** (or patch release) so published `1.11.0.6572-*` includes #34 css34
-   `sdkhooks.games` offsets.
-2. Smoke/botplay: assert **SDK Hooks** is loaded when a requiring plugin is
-   installed (smoke alone can pass without ever autoloading it).
+1. ~~**Retag** (or patch release) so published `1.11.0.6572-*` includes #34 css34
+   `sdkhooks.games` offsets.~~ Done (republished 2026-07-17).
+2. ~~Smoke/botplay: assert **SDK Hooks** is loaded when a requiring plugin is
+   installed (smoke alone can pass without ever autoloading it).~~ Done (`smoke-test.sh`
+   requires SDK Hooks and the linux 61 `OnTakeDamage` offset).
 3. Keep this doc linked from README / release notes as the PLAPI **11** contract
-   and “don’t leave `metamod.2.ep1` around” warning.
+   and “don’t leave `metamod.2.ep1` around” warning. (Linked from README → Install traps.)

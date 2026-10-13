@@ -2,55 +2,102 @@
 
 Patched [SourceMod](https://www.sourcemod.net/) + [Metamod:Source](https://www.sourcemm.net/) builds for **Counter-Strike: Source v34** (non-Steam / legacy).
 
-All CI packages are **pure-source** (`PURE_SOURCE_BUILD=1`): no rom4s/reference `.so` splicing. Smoke asserts SDK Hooks load and css34 `OnTakeDamage` gamedata (linux **61** / windows **60**). Botplay hooks `SDKHook_OnTakeDamage` and logs hits.
+All packages are **pure-source** (`PURE_SOURCE_BUILD=1`): no rom4s/reference `.so` splicing. Smoke asserts SDK Hooks load and the css34 `OnTakeDamage` gamedata (linux **61**). Botplay hooks `SDKHook_OnTakeDamage` and logs hits.
 
-How we patch and upgrade SourceMod versions (one pin at a time vs layered patches) is documented in [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md).
-Why we do **not** chase byte-identical `.so` vs rom4s («SUPER GOLDEN») is in [docs/BYTE_MATCH.md](docs/BYTE_MATCH.md).
+Docs: [docs/README.md](docs/README.md) (index — current reference vs. history). Known doc/project inconsistencies and simplification proposals: [docs/REVIEW_2026-10.md](docs/REVIEW_2026-10.md).
+
+## What to install
+
+Use a **line pointer**: one fixed URL per line that always serves the newest build of that line that passed the public-URL smoke test.
+
+```
+https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/mmsource-css34-linux.tar.gz
+https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcemod-css34-linux.tar.gz
+```
+
+| `<line>` | SourceMod | Metamod | Role |
+|----------|-----------|---------|------|
+| `sm13-latest` | 1.13.0.7472 | 1.12.0 git1226 | **Default / recommended** |
+| `sm12-latest` | 1.12.0.7253 | 1.12.0 git1226 | Latest 1.12 |
+| `sm13-mm20-khook` | 1.13.0.7565 (KHook branch + master) | 2.0.0 git1472 (KHook) | Experimental, ships `dhooks.ext` |
+| `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Experimental, frozen |
+
+`sm11-oldstable` (SM 1.11.0.6970 + MM 1.10.7) has **no pointer** — see [Known-bad releases](#known-bad-releases).
+What each pointer serves right now (tag, commits, smoke result) is in
+[`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json).
+
+```bash
+tar -xzf mmsource-css34-linux.tar.gz  -C /path/to/cstrike
+tar -xzf sourcemod-css34-linux.tar.gz -C /path/to/cstrike
+```
+
+Always install MM and SM **from the same line** (same pointer or same tag). Windows packages are only
+attached to the per-tag releases (pointers are Linux-only).
 
 ## Version matrix (current pins)
 
 | Line (`CSS34_LINE`) | SourceMod | Metamod | Role |
 |---------------------|-----------|---------|------|
-| `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev** (`80e8ff0…`, `metamod.1.ep1`) | OldStable |
+| `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev** git976 (`80e8ff0…`, `metamod.1.ep1`) | OldStable, withheld from pointers |
 | `sm12-latest` | **1.12.0.7253** (`2e229b11…`) | **1.12 git1226** (`9fd977d…`, `metamod.2.ep1`) | Latest 1.12 |
 | `sm13-latest` | **1.13.0.7472** (`6eb5f8fa…`) | **1.12 git1226** (`9fd977d…`) | Latest 1.13 (default) |
-| `sm13-mm20` | 1.13.0.7404 | **2.0 git1407** (`0084b86…`) | Experimental ([docs](docs/SM13_MM20.md)) |
+| `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | **2.0 git1407** (`0084b86…`) | Experimental, frozen ([docs](docs/SM13_MM20.md)) |
 | `sm13-mm20-khook` | **1.13.0.7565** KHook branch + master (`25954d4…`) | **2.0 git1472** KHook (`05c5c63…`) | Experimental ([docs](docs/MM20_KHOOK.md)) |
 
-`sm13-dev` (7404 + MM 1.12) is **retired** — use `sm13-latest`. The `1.13.0.7404-mm1.12.0` release tag remains for historical downloads.
+`sm13-dev` (7404 + MM 1.12) is **retired** — use `sm13-latest`. Its alias stays in `resolve-version.sh` /
+`release.yml` only so the `1.13.0.7404-mm1.12.0` tag can be rebuilt.
 
-Pins live in [`builder/versions.env`](builder/versions.env). Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
+Pins live in [`builder/versions.env`](builder/versions.env); resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
+They are also copied into CI matrices and fallbacks — see [docs/JULES_DAILY_VERSION_BUMP.md](docs/JULES_DAILY_VERSION_BUMP.md)
+for the full list and `testing/scripts/check-version-pins.sh` for what is checked automatically.
+
+> `meta version` prints the Metamod build number as `+1` (e.g. `1.12.0-dev+1`): Metamod is cloned
+> shallow and its versioning counts commits. The real revision is in the asset name and in
+> `addons/metamod/css34-package.json` (`mm_version`). See [docs/REVIEW_2026-10.md](docs/REVIEW_2026-10.md).
 
 ### What pairs with what
 
 | | SM 1.11 (PLAPI 11, `1.ep1`) | SM 1.12 / 1.13 (`2.ep1`) |
 |--|--|--|
 | **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable`) | no |
-| **MM 1.11** (`metamod.2.ep1`) | exploratory only | not a release path |
+| **MM 1.11** (`metamod.2.ep1`) | no (myarena bundle; `11 < 14`) | not a release path |
 | **MM 1.12** git1226 | no | **matched** (`sm12-latest`, `sm13-latest`) |
 | **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
 | **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
 
-Do **not** install leftover myarena `metamod.2.ep1` / MM 1.11 under SM 1.11 — you get `Older Metamod… (11 < 14)`.
+## Releases
 
-## Releases (matched SM + MM)
+A tag pins one SM + MM pair; never mix Metamod from one tag with SourceMod from another.
+A rebuild of the same pins gets a `-r<N>` suffix (tags are never moved); `release.yml` maps
+`<tag>-r<N>` to the same line as `<tag>`.
 
-Use the **matched** pair from one tag. Do not mix Metamod from one line with SourceMod from another.
+**Current builds** (what the line pointers serve, built from `88713a7`, every asset in `SHA256SUMS`):
 
-| Tag | Line | SourceMod | Metamod | Verified |
-|-----|------|-----------|---------|----------|
-| [`1.11.0.6970-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.10.7) | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | CI smoke + botplay matrix |
-| [`1.12.0.7253-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7253-mm1.12.0) | `sm12-latest` | 1.12.0-git7253 | 1.12.0-dev+1226 | CI smoke + botplay matrix |
-| [`1.13.0.7472-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0) | `sm13-latest` | 1.13.0-git7472 | 1.12.0-dev+1226 | CI smoke + botplay matrix |
-| [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | legacy (`sm13-dev`) | 1.13.0-git7404 | 1.12.0-dev+1226 | Historical (line retired) |
-| [`1.13.0.7565-mm2.0.0-khook`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook) | `sm13-mm20-khook` | 1.13.0-git7565 (KHook branch + master) | 2.0.0-dev+1469 (KHook) | CI smoke + botplay matrix; release assets smoke + botplay |
-| [`1.13.0.7565-mm2.0.0-khook-dhooks`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks) | `sm13-mm20-khook` | 1.13.0-git7565 (KHook branch + master) | 2.0.0-dev+1469 (KHook), + dhooks.ext linux x86 | CI smoke + botplay matrix; release assets smoke + botplay |
-| [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev+1407 | CI smoke + botplay matrix |
+| Tag | Line | SourceMod | Metamod |
+|-----|------|-----------|---------|
+| [`1.13.0.7472-mm1.12.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0-r2) | `sm13-latest` | 1.13.0-git7472 | 1.12.0 git1226 |
+| [`1.12.0.7253-mm1.12.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7253-mm1.12.0-r2) | `sm12-latest` | 1.12.0-git7253 | 1.12.0 git1226 |
+| [`1.13.0.7565-mm2.0.0-khook-dhooks-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks-r2) | `sm13-mm20-khook` | 1.13.0-git7565 (KHook branch + master), + `dhooks.ext` | 2.0.0 git1472 (KHook) |
+| [`1.13.0.7404-mm2.0.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0-r2) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0 git1407 |
 
-Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}` and, for builds after this
-change, `mmsource-<ver>-git<mmrev>-css34-linux.tar.gz` (e.g. `mmsource-1.12.0-git1226-css34-linux.tar.gz`).
-Older tags keep their original `mmsource-1.12.0-dev-…` names (tags are never rewritten). Every new
-release also carries `SHA256SUMS`.
+**Earlier tags** (same pins, older packaging: no `SHA256SUMS`, no `css34-package.json`). The seven tags of the
+current lines were moved to `b1f5192` and rebuilt on 2026-10-12, before the `-r<N>` rule existed:
+
+| Tag | Line | SourceMod | Metamod | Notes |
+|-----|------|-----------|---------|-------|
+| [`1.11.0.6970-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.10.7) | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | Linux only; withheld (below) |
+| [`1.12.0.7253-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7253-mm1.12.0) | `sm12-latest` | 1.12.0-git7253 | 1.12.0-dev (git1226) | |
+| [`1.13.0.7472-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0) | `sm13-latest` | 1.13.0-git7472 | 1.12.0-dev (git1226) | |
+| [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev (git1407) | |
+| [`1.13.0.7565-mm2.0.0-khook`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook) | `sm13-mm20-khook` | 1.13.0-git7565 | 2.0.0-dev (git1472, `05c5c63`) | |
+| [`1.13.0.7565-mm2.0.0-khook-dhooks`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks) | `sm13-mm20-khook` | 1.13.0-git7565, + `dhooks.ext` | 2.0.0-dev (git1472, `05c5c63`) | |
+| [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` (retired) | 1.13.0-git7404 | 1.12.0-dev (git1226) | historical |
+| `1.11.0.6572-mm1.10.7`, `1.12.0.7245-mm1.12.0` | pre-matrix | 6572 / 7245 | 1.10.7-dev / 1.12.0-dev (git1224) | historical, superseded |
+| `1.12.0.7239-mm1.12.0`, `1.13.0.7394-mm1.12.0` | pre-matrix | 7239 / 7394 | 1.12.0-dev | **known-bad** (below) |
+
+Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}`; Linux Metamod is
+`mmsource-<ver>-git<mmrev>-css34-linux.tar.gz` on the `-r2` tags and `mmsource-<ver>-dev-css34-linux.tar.gz`
+on older ones; Windows Metamod is still `mmsource-<ver>-dev-css34-windows.zip` everywhere.
 
 ### Installer contract (fmu1337/v34_server_base)
 
@@ -69,8 +116,8 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/lines.j
 - `line-<line>/lines.json` holds only that line's entry (written by that line's runs only);
 - `lines-index/lines.json` holds every line, rebuilt from all `line-*/lines.json`.
 
-A pointer is created on the first tag release of its line after this change. A line whose builds never
-passed smoke has a pointer release with only `lines.json` (`"tag": null, "smoke": "fail"`).
+A pointer is created on the first tag release of its line. A line whose builds never passed smoke has a
+pointer release with only `lines.json` (`"tag": null, "smoke": "fail"`).
 
 `release.yml` switches a pointer only after `smoke-release` installed the **public** tag URLs with a plain
 `tar -x` and booted `srcds`; a red smoke leaves the pointer on the previous build (`lines.json[line].candidate`
@@ -87,10 +134,11 @@ back: an update whose tagged commit is older than the one served is skipped.
 (`--clobber`) and re-publishes it if it is a draft. Drafts that already exist can be re-published with
 the *Release Maintenance* workflow (Actions → Release Maintenance → Run).
 
-**Manifest in every package.** `addons/sourcemod/css34-package.json` and `addons/metamod/css34-package.json`:
+**Manifest in every package** (tags built after #69, i.e. the `-r2` tags and the pointers).
+`addons/sourcemod/css34-package.json` and `addons/metamod/css34-package.json`:
 `line, sm_version, sm_commit, mm_version, mm_commit, extension_api, extension_api_min, metamod_binary, build_date`.
 `extension_api` / `extension_api_min` are `SMINTERFACE_EXTENSIONAPI_VERSION` / `_MIN` of the build
-(SM 1.11/1.12 have no `_MIN` → `1`; 1.12: 8; 1.13.0.7394: 9–9; 1.13.0.7472: 9–11).
+(SM 1.11/1.12 have no `_MIN` → `1`; 1.12.0.7253: 8; 1.13.0.7404: 9–9; 1.13.0.7472 / 7565: 9–11).
 
 **Ready to run.** `tar -xzf mm.tgz -C cstrike && tar -xzf sm.tgz -C cstrike` is the whole install:
 `addons/metamod/sourcemod.vdf`, `"DisableAutoUpdate" "yes"` in `configs/core.cfg` (SourceMod's key for
@@ -100,92 +148,99 @@ non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
 
 ### Known-bad releases
 
-- **`1.13.0.7394-mm1.12.0`: SDKHooks broken.** The package has no `gamedata/sdkhooks.games/game.cstrike.txt`
-  and its `master.games.txt` is upstream's (no `game.cstrike.txt` entry), so *every* SDKHooks offset is
-  missing and `SDKHook()` throws `Hook type not supported on this game` for all types (SMAC
-  `smac_wallhack` FarESP hits it first on `SDKHook_ThinkPost` / `SetTransmit`). Fixed in every build since
-  (`package.sh` and `check-package.sh` require the css34 file); use `1.13.0.7472-mm1.12.0` /
-  `line-sm13-latest`. Botplay's API probe now `SDKHookEx`-checks the SMAC hook types, and
-  `check-sm-logs.sh` fails on that message.
+- **`1.13.0.7394-mm1.12.0` and `1.12.0.7239-mm1.12.0`: SDKHooks broken.** The packages have no
+  `gamedata/sdkhooks.games/game.cstrike.txt` and `master.games.txt` is upstream's (no `game.cstrike.txt` entry),
+  so *every* SDKHooks offset is missing and `SDKHook()` throws `Hook type not supported on this game` for all
+  types (SMAC `smac_wallhack` FarESP hits it first on `SDKHook_ThinkPost` / `SetTransmit`). Fixed in every
+  build since (`package.sh` and `check-package.sh` require the css34 file); use `line-sm13-latest` /
+  `line-sm12-latest`. Botplay's API probe `SDKHookEx`-checks the SMAC hook types, and `check-sm-logs.sh` fails
+  on that message.
 - **`1.11.0.6970-mm1.10.7` (`sm11-oldstable`): withheld from line pointers.** Reported SIGABRT at startup
   without plugins on rom4s 4044 + bufferfix + `srcds_i686` on Ubuntu 24.04 (our debian:11 smoke passes).
   Root cause is not yet reproduced here; until it is, there is no `line-sm11-oldstable` pointer and
-  installers should use rom4s 1.11.0.6572 + MM 1.10.6 for SM 1.11. The tag itself stays published.
-
-The **Windows** assets of both `1.13.0.7565-mm2.0.0-khook*` tags crash `srcds.exe` on the first
-map load (KHook recall on MSVC x86); use their Linux assets only. The fix and the Wine smoke test
-for the Windows packages are described in [docs/MM20_KHOOK.md](docs/MM20_KHOOK.md#windows).
+  installers should use rom4s 1.11.0.6572 + MM 1.10.6 for SM 1.11. The tag itself stays published
+  (Linux assets only).
+- **Windows assets of `1.13.0.7565-mm2.0.0-khook*`.** The first uploads crashed `srcds.exe` on the first map
+  load (KHook recall on MSVC x86). Both tags now point at `b1f5192`, which carries the fix, and their assets
+  were re-uploaded from it on 2026-10-12, but those exact files never went through the Wine smoke. Prefer
+  `1.13.0.7565-mm2.0.0-khook-dhooks-r2`. Fix and Wine / native Windows smoke:
+  [docs/MM20_KHOOK.md](docs/MM20_KHOOK.md#windows).
 
 **Install traps**
 
-- SM **1.11** expects Metamod **1.10.x / `metamod.1.ep1` / PLAPI 11**. Leftover myarena `metamod.2.ep1.so` → `Older Metamod… (11 < 14)` — not a bad package, a mix. See [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
-- SM **1.12+** needs a GeoIP2 `*.mmdb` under `configs/geoip/` for `geoip.ext` / SMAC (botplay installs it; packages may ship it via `prepare-package.sh`).
+- SM **1.11** expects Metamod **1.10.x / `metamod.1.ep1` / PLAPI 11**. A leftover myarena `metamod.2.ep1.so`
+  (MM 1.11) → `Older Metamod… (11 < 14)` — not a bad package, a mix. See
+  [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
+- Installing over an old SourceMod: delete a flat `gamedata/sm-cstrike.games.txt` left from older drops
+  (`[CSTRIKE] Could not locate HandleCommand_Buy`); ours lives in `gamedata/sm-cstrike.games/`.
 - Historical community URLs (rom4s / myarena) for local compare: [`testing/versions/matrix.json`](testing/versions/matrix.json) (`reference` section).
 
 ## Build (pure-source)
+
+Needs Docker; everything else (clang-9, i386 gcc-4.9 sysroot, MySQL / MariaDB SDKs, hl2sdk, AMBuild) is fetched into `deps/`.
 
 ```bash
 git submodule update --init --recursive
 
 # Default (SM 1.13.7472 + MM 1.12.1226):
-CSS34_LINE=sm13-latest PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+CSS34_LINE=sm13-latest builder/docker/legacy-build.sh
 
-# OldStable / Latest 1.12:
-CSS34_LINE=sm11-oldstable PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
-CSS34_LINE=sm12-latest    PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
-
-# Experimental SM 1.13 + MM 2.0 (also in CI as sm13-mm20):
-CSS34_LINE=sm13-mm20 PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
-
-# Experimental KHook: SM KHook branch + MM 2.0 master (docs/MM20_KHOOK.md):
-CSS34_LINE=sm13-mm20-khook PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+# Other lines:
+CSS34_LINE=sm11-oldstable  builder/docker/legacy-build.sh
+CSS34_LINE=sm12-latest     builder/docker/legacy-build.sh
+CSS34_LINE=sm13-mm20       builder/docker/legacy-build.sh
+CSS34_LINE=sm13-mm20-khook builder/docker/legacy-build.sh   # docs/MM20_KHOOK.md
 ```
 
-Host / jammy-native (ABI may fail legacy smoke):
+`PURE_SOURCE_BUILD=1` is the default. Packages land in `packages/`. `legacy-build.sh` builds in `debian:11`
+(glibc 2.31) — the only Linux package that passes `check-package.sh` and boots on legacy hosts.
+
+Host / jammy-native (fails the legacy ABI checks; not shipped, not smoke-tested):
 
 ```bash
-CSS34_LINE=sm13-latest PURE_SOURCE_BUILD=1 builder/run/linux.sh
+CSS34_LINE=sm13-latest builder/run/linux.sh
 ```
+
+`builder/run/linux.sh` compiles with clang-9 unless `USE_CLANG9=0`, whatever `CC` / `CXX` say.
 
 Windows (x86 MSVC env):
 
 ```bash
-CSS34_LINE=sm13-latest PURE_SOURCE_BUILD=1 builder/run/windows.sh
+CSS34_LINE=sm13-latest builder/run/windows.sh
 ```
 
 ## CI
 
-- `.github/workflows/build.yml` — default `CSS34_LINE=sm13-latest`, pure-source Linux + Windows (no Actions artifacts)
-- `.github/workflows/test-server.yml` — builds **sm11-oldstable**, **sm12-latest**, **sm13-latest**, **sm13-mm20**, **sm13-mm20-khook**; smoke on Debian 11 (all lines) + Debian latest / Rocky / host for `sm13-latest`; **botplay-stress matrix** (SMAC + SDKHooks OnTakeDamage); forces `sm exts load sdkhooks` and checks OnTakeDamage gamedata. Packages pass between jobs via **Actions cache**; log artifacts only on **failure** and are **deleted at end of run** by `cleanup-workflow-storage`
-- `.github/workflows/release.yml` — tag-driven; tag maps to `CSS34_LINE`; packages attach with `gh release upload` (**GitHub Releases**, not Actions artifacts)
-- `.github/workflows/cleanup-artifacts.yml` — purge leftover Actions artifacts (`keep_hours=0`) if quota is still full
+- `.github/workflows/test-server.yml` — the real gate (push to `master` / `cursor/**`, PRs; `docs/**` and `*.md` are ignored).
+  Builds **all five** lines with `legacy-build.sh` + `check-package.sh` / `check-metamod-package.sh`;
+  smoke on `debian:11` for all lines and on `debian:latest`, `rockylinux:9` and the ubuntu-22.04 host for
+  `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook`; **botplay-stress matrix** on `debian:11` for all lines
+  (SMAC + SDKHooks OnTakeDamage + SM API / cstrike / DHooks probes). Packages pass between jobs via
+  **Actions cache**. Reference (rom4s / published-release) botplay, extra distros and bisect are
+  `workflow_dispatch` opt-ins.
+- `.github/workflows/build.yml` — Linux build of `sm13-latest` with `builder/run/linux.sh` on ubuntu-22.04
+  (jammy-native, compile check only); **Windows** builds of `sm13-latest` + `sm13-mm20-khook`, each booted
+  natively on `windows-latest` and under Wine (`wine-smoke`).
+- `.github/workflows/release.yml` — tag-driven; tag (minus `-r<N>`) maps to `CSS34_LINE`; packages attach with
+  `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke,
+  line pointer, pointer smoke.
+- `.github/workflows/version-pins.yml` — `testing/scripts/check-version-pins.sh` on pin-related PRs.
+- `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts.
+- `.github/workflows/cleanup-artifacts.yml` — weekly / manual purge of Actions artifacts.
+
+Failure logs are uploaded as artifacts, but `test-server.yml`'s `cleanup-workflow-storage` deletes every
+artifact of the run when the run ends — download them while the run is still going.
 
 ```bash
-git tag 1.11.0.6970-mm1.10.7   # sm11-oldstable
-git tag 1.12.0.7253-mm1.12.0   # sm12-latest
-git tag 1.13.0.7472-mm1.12.0   # sm13-latest
-git tag 1.13.0.7404-mm2.0.0    # sm13-mm20
-git tag 1.13.0.7565-mm2.0.0-khook  # sm13-mm20-khook
-git tag 1.13.0.7565-mm2.0.0-khook-dhooks  # sm13-mm20-khook + dhooks.ext (linux x86)
-git push origin --tags
+git tag 1.13.0.7472-mm1.12.0-r3 && git push origin 1.13.0.7472-mm1.12.0-r3   # rebuild sm13-latest
 ```
 
-A rebuild of unchanged pins (packaging fix, new pointer) never moves an existing tag: add a revision
-suffix `-r<N>`, e.g. `git tag 1.13.0.7472-mm1.12.0-r2 && git push origin 1.13.0.7472-mm1.12.0-r2`.
-`release.yml` maps `<tag>-r<N>` to the same line as `<tag>`.
-
-## Install
-
-Extract **matched** MM then SM from the same line into `cstrike`:
-
-```bash
-tar -xzf mmsource-*-css34-linux.tar.gz -C /path/to/cstrike
-tar -xzf sourcemod-*-css34-linux.tar.gz -C /path/to/cstrike
-```
+New pins need a new base tag and a mapping in `release.yml` (the `case` in `resolve-line`).
 
 ## Notes
 
-- Patch strategy: [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md). 6970 carries API/toolchain shims from the old ≥6800 notes.
+- Docs index (current vs. history): [docs/README.md](docs/README.md).
+- Patch layout and upgrade strategy: [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md).
 - SDKHooks EP1 / PLAPI traps: [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
-- myarena SM 6522 vs our 6572 (gamedata / forum notes): [docs/v34-variant-6522-notes.md](docs/v34-variant-6522-notes.md).
-- Machine-readable pins, release assets, and mix PASS/FAIL notes: [`testing/versions/matrix.json`](testing/versions/matrix.json).
+- Machine-readable pins, compatibility PASS/FAIL notes and historical URLs: [`testing/versions/matrix.json`](testing/versions/matrix.json).
+- Smoke / botplay / Wine testing: [testing/README.md](testing/README.md).

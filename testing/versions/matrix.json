@@ -62,11 +62,10 @@
       "plapi": 11,
       "assets": {
         "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/sourcemod-1.11.0-git6970-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/mmsource-1.10.7-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/sourcemod-1.11.0-git6970-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/mmsource-1.10.7-dev-css34-windows.zip"
+        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/mmsource-1.10.7-dev-css34-linux.tar.gz"
       },
-      "verified": ["ci_smoke_debian_rocky_host", "botplay_matrix"]
+      "note": "Linux only (no Windows assets, no SHA256SUMS). Withheld from line pointers: unreproduced startup SIGABRT report on rom4s 4044 servers (README).",
+      "verified": ["ci_smoke", "botplay_matrix"]
     },
     "1.12.0.7253-mm1.12.0": {
       "line": "sm12-latest",
@@ -130,7 +129,8 @@
       "role": "experimental-khook",
       "sourcemod": "1.13.0-git7565",
       "sourcemod_commit": "25954d4aa4a55ab10c6e2c30699f52358f982fb9",
-      "metamod": "2.0.0-dev+1469",
+      "metamod": "2.0.0-dev+1472",
+      "metamod_commit": "05c5c63a9d595cb84021c3a51fe38366ba4a12a5",
       "metamod_binary": "metamod.2.ep1",
       "assets": {
         "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook/sourcemod-1.13.0-git7565-css34-linux.tar.gz",
@@ -145,7 +145,8 @@
       "role": "experimental-khook",
       "sourcemod": "1.13.0-git7565",
       "sourcemod_commit": "25954d4aa4a55ab10c6e2c30699f52358f982fb9",
-      "metamod": "2.0.0-dev+1469",
+      "metamod": "2.0.0-dev+1472",
+      "metamod_commit": "05c5c63a9d595cb84021c3a51fe38366ba4a12a5",
       "metamod_binary": "metamod.2.ep1",
       "extras": ["dhooks.ext (linux x86)"],
       "assets": {
@@ -221,6 +222,9 @@
     "Smoke and check-package.sh assert sdkhooks.games and OnTakeDamage css34 offsets.",
     "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all CI lines.",
     "Use matched release tags; do not mix MM from one line with SM from another.",
-    "reference.* URLs are historical community drops for local comparison only."
+    "reference.* URLs are historical community drops for local comparison only.",
+    "releases lists the original tag of each pin set. Current builds are the -r<N> rebuilds served by the line pointers; see https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json.",
+    "The 1.13.0.7565-mm2.0.0-khook* tags were moved to b1f5192 and rebuilt on 2026-10-12: their Metamod is git1472 (05c5c63), not git1469.",
+    "meta version prints the Metamod build number as +1 (shallow clone); the revision is in the asset name / css34-package.json."
   ]
 }

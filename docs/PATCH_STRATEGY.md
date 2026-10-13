@@ -1,4 +1,47 @@
-# Стратегия патчей css34 (решённая развилка)
+# Стратегия патчей css34
+
+## Статус на 2026-10-13 (читать первым)
+
+Решение «B — один патчсет под один pin», записанное ниже, **на практике отменено**. Сейчас в `master`:
+
+| Было решено | Как на самом деле |
+|-------------|-------------------|
+| Один production pin (`1.11.0.6572` + MM 1.10.7) | **Пять** линий в CI одновременно: `sm11-oldstable` (6970), `sm12-latest` (7253), `sm13-latest` (7472, default), `sm13-mm20` (7404 + MM 2.0 git1407), `sm13-mm20-khook` (7565 + MM 2.0 KHook) |
+| Не держать параллельные CI jobs по версиям | `test-server.yml` гоняет build + smoke + botplay по матрице всех линий на каждый push |
+| Не заводить слои | Де-факто это слоистая схема A (см. ниже) с роутером по `product.version` |
+| `apply-api-compat.sh` / `apply-toolchain.sh` не делать постоянным «слоем ≥6800» | Постоянные: `apply-sourcemod.sh` вызывает их для `SOURCEMOD_GIT_REV ≥ 6800` (6970) |
+| Сборку 6970 «не довели до зелёного» | 6970 зелёный в CI, тег `1.11.0.6970-mm1.10.7` опубликован (но снят с line-pointer'ов, см. README) |
+| Тег `1.11.0.6572-mm1.10.7` — текущий релизный pin | Исторический тег; текущие сборки — `-r2` теги, которые раздают `line-<line>` |
+
+Фактическая раскладка патчей:
+
+```
+SourceMod:  apply-sourcemod.sh                    # SM 1.11 (AMBuild 2.0, dual 1.ep1 + 2.ep1, MM 1.10 / PLAPI 11)
+              ├─ rev ≥ 6800: apply-api-compat.sh, apply-toolchain.sh
+              ├─ apply-logger-mapchange-fix.sh, apply-sm-boot-trace.sh
+              └─ product.version ≥ 1.12 → exec apply-sourcemod-v112.sh   # AMBuild 2.2, hl2sdk-manifests, 2.ep1
+                    ├─ apply-sourcemod-khook.sh   # no-op на SourceHook-дереве; KHook-ветка: *.patch
+                    └─ apply-logger-mapchange-fix.sh, apply-sm-boot-trace.sh
+            sourcemod-khook-merge.sh              # только sm13-mm20-khook: merge master в KHook-ветку
+Metamod:    apply-mmsource-css34.sh (MM 1.10) | apply-mmsource-v112.sh (MM 1.12 / 2.0, + apply-khook-x86-recall.sh)
+            apply-mmsource-v111.sh                # MM 1.11 — ни одна линия его не использует
+SDK:        apply-hl2sdk-ep1c.sh                  # rom4s hl2sdk-ep1c для SM 1.11 (ep1)
+```
+
+Что из этого следует для апгрейда SM сегодня:
+
+1. Новая ревизия той же major (7472 → 75xx): меняется pin в `builder/versions.env` (и в местах из
+   [JULES_DAILY_VERSION_BUMP.md](JULES_DAILY_VERSION_BUMP.md)), правки — in place в `apply-sourcemod-v112.sh`.
+2. Правка в `apply-sourcemod-v112.sh` действует на **все** линии 1.12/1.13 сразу — проверять CI по всем.
+3. Новая линия = новый case в `resolve-version.sh`, переменные в `versions.env`, строки в матрицах
+   `test-server.yml` / `build.yml`, маппинг тега в `release.yml`, запись в `matrix.json`.
+
+Предложения, как это упростить, — в [REVIEW_2026-10.md](REVIEW_2026-10.md). Всё, что ниже, — история
+обсуждения (PR #7, #10, #15, #17) и чек-листы граблей, которые по-прежнему полезны при апгрейдах.
+
+---
+
+## История: решённая развилка (2026-07)
 
 Документ фиксирует обсуждение вокруг [PR #7](https://github.com/fmu1337/sourcemod-css34/pull/7)
 («золотой билд 6572 + слоистые патчи») и выбор, на котором остановились.
@@ -8,7 +51,7 @@
 Upstream SourceMod официально не поддерживает CS:S v34.
 Сборка в этом репозитории всегда делает одно и то же:
 
-1. Чекаутит pinned upstream (сейчас **1.11.0.6572**).
+1. Чекаутит pinned upstream (на момент решения — **1.11.0.6572**).
 2. Прогоняет патчи из `builder/patches/` (в первую очередь `apply-sourcemod.sh`).
 3. Собирает пакет и гоняет smoke / ABI-чеки.
 
@@ -91,7 +134,7 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 | Проверка | Pin должен быть предком/потомком stable: `merge-base --is-ancestor <stable> HEAD` |
 | Depth | Считать depth от delta `(mid_rev − 6572) + запас`, иначе deepen / unshallow |
 
-На master для 6572 уже `fetch --depth=8192`. При смене pin на mid/дальше — явно заложить ancestry, не полагаться на «достал один SHA».
+`builder/run/linux.sh` делает `fetch --depth=8192` для любого pin. При смене pin на mid/дальше — явно заложить ancestry, не полагаться на «достал один SHA».
 
 ### Headers / build id
 
@@ -163,7 +206,7 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 [PR #17](https://github.com/fmu1337/sourcemod-css34/pull/17) добавил tooling для built Metamod + binary compare + smoke matrix vs rom4s/myarena.
 **Код уже в master** (через [#19](https://github.com/fmu1337/sourcemod-css34/pull/19) / коммит `29c5d88`: `compare-binaries.sh`, `install-built-metamod.sh`, `install-sourcemod-package.sh`, `run-built-mm-matrix.sh`). Сам draft #17 мержить не нужно — закрыть как landed.
 
-Ниже — совместимость, которую выявили прогоны; CI сейчас дымит **только наш** MM 1.10.7 + SM 6572, но локально matrix всё ещё полезен.
+Ниже — совместимость, которую выявили прогоны; CI тогда дымил **только наш** MM 1.10.7 + SM 6572 (сейчас — все пять линий), локально matrix всё ещё полезен.
 
 ### Что проходило / не проходило
 
@@ -195,7 +238,7 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 | Built MM 1.10.7-dev | крупнее (debug symbols), GLIBC хозяина/контейнера |
 | myarena MM 1.11 | `metamod.2.ep1.so` only |
 
-Актуальные наши артефакты — тег `1.11.0.6572-mm1.10.7` (in-tree SM+MM), не myarena.
+Актуальные наши артефакты — line pointers `line-<line>` (см. README), не myarena.
 
 ### Field notes: SDKHooks EP1 + PLAPI 11 vs MM 1.11 (2026-07-15)
 
@@ -234,7 +277,7 @@ sudo bash testing/scripts/run-built-mm-matrix.sh
 | Field report 2026-07-15 | SDKHooks `gEntList` + MM PLAPI 11 vs 1.11 mix — [SDKHOOKS_EP1_RELEASE_BLOCKERS.md](SDKHOOKS_EP1_RELEASE_BLOCKERS.md); sdkhooks vtables → #34 |
 | SlapPlayer / ForcePlayerSuicide on bots | SM 1.12/1.13 botplay CI segfault: Steam-CSS sdktools slots (`CommitSuicide` 447→**358**, `Teleport` 111→**99**) — [#60](https://github.com/fmu1337/sourcemod-css34/pull/60). EP1 `CommitSuicide()` is 0-arg (OB is 2-bool). API probe skips those natives on bots and uses `FakeClientCommand("kill")`. |
 | [PR #4](https://github.com/fmu1337/sourcemod-css34/pull/4), [PR #9](https://github.com/fmu1337/sourcemod-css34/pull/9) | Byte-identical vs rom4s — **не преследуем**; вердикт в [BYTE_MATCH.md](BYTE_MATCH.md) |
-| `builder/patches/apply-sourcemod.sh` | Актуальный монолитный патчсет под golden 6572 |
-| Тег `1.11.0.6572-mm1.10.7` | Текущий релизный pin SM+MM |
-| Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Эксперимент major-апгрейда поверх модели B |
+| `builder/patches/apply-sourcemod.sh` | Патчсет SM 1.11 (6970); для 1.12+ роутит в `apply-sourcemod-v112.sh` |
+| Тег `1.11.0.6572-mm1.10.7` | Исторический (до матрицы линий); текущие сборки — см. README |
+| Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Superseded #23 (1.12 в master, линия `sm12-latest`) |
 | [PR #54](https://github.com/fmu1337/sourcemod-css34/pull/54), [PR #55](https://github.com/fmu1337/sourcemod-css34/pull/55) | SourceHook header-graft на MM 2.0 git1469 отвергнут (`g_SHPtr` = NULL на KHook MM); заменены `sm13-mm20-khook` (#59). Детали — [MM20_KHOOK.md](MM20_KHOOK.md), CI-покрытие `sm13-mm20` — [SM13_MM20.md](SM13_MM20.md) |
