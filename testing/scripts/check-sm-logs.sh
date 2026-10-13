@@ -19,7 +19,7 @@ if [[ ${#log_files[@]} -eq 0 ]]; then
 fi
 
 # SM / extension failures we have seen in CI when boot breaks.
-error_pattern='(\[SM\][[:space:]]+(Encountered error|Fatal|Exception|Error))|(Failed to (load|open|create|initialize))|(Could not (load|open|find|initialize))|(Unable to (load|open|find|initialize))|(Plugin file .+ (is invalid|failed))|(Error loading plugin)|(Parse error)|(Native error)|(SQL error)|(Exception reported)'
+error_pattern='(\[SM\][[:space:]]+(Encountered error|Fatal|Exception|Error))|(Failed to (load|open|create|initialize))|(Could not (load|open|find|initialize))|(Unable to (load|open|find|initialize))|(Plugin file .+ (is invalid|failed))|(Error loading plugin)|(Parse error)|(Native error)|(SQL error)|(Exception reported)|(Hook type not supported)'
 
 matches="$(grep -Ehin -- "${error_pattern}" "${log_files[@]}" || true)"
 # css34: bintools is not built; splice may still race a stale extensions list entry.

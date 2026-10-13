@@ -65,5 +65,14 @@ if ! grep -Fq '"game.cstrike.txt"' "$sdkhooks_master"; then
   exit 1
 fi
 
+if [[ -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" && "${MMS_MODE:-}" == "1.10" ]]; then
+  mm_binary=metamod.1.ep1
+else
+  mm_binary=metamod.2.ep1
+fi
+SOURCEMOD_DIR="$SOURCEMOD_DIR" SOURCEMOD_GIT_REV="$rev" \
+  bash "$BUILDER_DIR/write-package-manifest.sh" \
+  "$PACKAGE_DIR/addons/sourcemod/css34-package.json" "$mm_binary"
+
 tar -C "$PACKAGE_DIR" -czf "$archive" addons cfg
 echo "$archive"

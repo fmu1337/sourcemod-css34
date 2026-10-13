@@ -11,10 +11,24 @@ name: Release
 #
 # Linux/Windows jobs attach packages directly to the GitHub Release.
 # No Actions artifacts (those count against the 0.5 GB storage quota).
+#
+# Release invariants (consumed by fmu1337/v34_server_base):
+#   * A release is created published and is never turned back into a draft;
+#     re-runs only `gh release upload --clobber` into it (a draft found here is
+#     re-published). Draft asset URLs 404.
+#   * Asset names carry the revision (sourcemod-…-git7472-…, mmsource-…-git1226-…)
+#     and every release has SHA256SUMS.
+#   * smoke-release installs the *public* URLs with plain `tar -x` and boots
+#     srcds; only on pass does line-pointer switch line-<line> (stable names,
+#     see builder/scripts/update-line-pointer.sh), then smoke-pointer re-checks
+#     the pointer URLs.
 on:
   push:
     tags:
       - '*-mm*'
+      # Pointer / index releases are created by this workflow itself.
+      - '!line-*'
+      - '!lines-*'
   workflow_dispatch:
     inputs:
       css34_line:
@@ -33,6 +47,7 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       css34_line: ${{ steps.map.outputs.css34_line }}
+      pointer: ${{ steps.map.outputs.pointer }}
     steps:
       - name: Map tag / input → CSS34_LINE
         id: map
@@ -57,11 +72,23 @@ jobs:
             line="${{ github.event.inputs.css34_line || 'sm13-latest' }}"
           fi
           echo "css34_line=${line}" >> "$GITHUB_OUTPUT"
+          # line-<line> pointers: only for live lines. sm13-dev is retired;
+          # sm11-oldstable is withheld (SIGABRT on rom4s 4044 servers, README).
+          case "${line}" in
+            sm12-latest|sm13-latest|sm13-mm20|sm13-mm20-khook) pointer=1 ;;
+            *) pointer=0 ;;
+          esac
+          echo "pointer=${pointer}" >> "$GITHUB_OUTPUT"
           echo "Resolved CSS34_LINE=${line} (ref=${GITHUB_REF_NAME})"
 
   linux:
     needs: [resolve-line]
     runs-on: ubuntu-22.04
+    # Exact names of what this run built: a release can hold older assets
+    # with other names (e.g. mmsource-…-dev-…), so later jobs never glob.
+    outputs:
+      sm_asset: ${{ steps.check.outputs.sm_asset }}
+      mm_asset: ${{ steps.check.outputs.mm_asset }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,6 +106,20 @@ jobs:
             builder/resolve-version.sh builder/py.sh builder/patches/*.sh \
             builder/install-clang9.sh builder/install-clang10.sh
           builder/docker/legacy-build.sh
+
+      - name: Static package checks
+        id: check
+        run: |
+          set -euo pipefail
+          rm -f ./*.tar.gz  # stray root symlinks from builder/run/linux.sh
+          sm="$(ls packages/sourcemod-*-css34-linux.tar.gz)"
+          mm="$(ls packages/mmsource-*-css34-linux.tar.gz)"
+          [[ "$(wc -l <<<"${sm}")" == 1 && "$(wc -l <<<"${mm}")" == 1 ]] \
+            || { echo "expected one SM + one MM linux package" >&2; ls packages >&2; exit 1; }
+          SM_PACKAGE="${sm}" testing/scripts/check-package.sh
+          MM_PACKAGE="${mm}" testing/scripts/check-metamod-package.sh
+          echo "sm_asset=$(basename "${sm}")" >> "$GITHUB_OUTPUT"
+          echo "mm_asset=$(basename "${mm}")" >> "$GITHUB_OUTPUT"
 
       - name: Attach Linux packages to GitHub Release
         if: github.ref_type == 'tag'
@@ -107,6 +148,10 @@ jobs:
             packages/sourcemod-*-css34-linux.tar.gz \
             packages/mmsource-*-css34-linux.tar.gz \
             --clobber
+          # Never leave (or turn) a release as draft: its asset URLs would 404.
+          if [[ "$(gh release view "${tag}" --json isDraft -q .isDraft)" == "true" ]]; then
+            gh release edit "${tag}" --draft=false --latest=false
+          fi
 
   windows:
     needs: [resolve-line]
@@ -165,3 +210,180 @@ jobs:
             packages/sourcemod-*-css34-windows.zip \
             packages/mmsource-*-css34-windows.zip \
             --clobber
+          if [[ "$(gh release view "${tag}" --json isDraft -q .isDraft)" == "true" ]]; then
+            gh release edit "${tag}" --draft=false --latest=false
+          fi
+
+  # SHA256SUMS over every asset of the tag release (Linux + Windows).
+  checksums:
+    needs: [linux, windows]
+    if: always() && github.ref_type == 'tag' && needs.linux.result == 'success'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Write SHA256SUMS
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          mkdir assets && cd assets
+          gh release download "${tag}" --repo "${GITHUB_REPOSITORY}" -p '*.tar.gz' -p '*.zip'
+          sha256sum -- * | sort -k2 > ../SHA256SUMS
+          cat ../SHA256SUMS
+          gh release upload "${tag}" --repo "${GITHUB_REPOSITORY}" ../SHA256SUMS --clobber
+
+  # Installer contract on the *published* URLs: plain tar -x + srcds boot.
+  smoke-release:
+    needs: [resolve-line, linux, checksums]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore cached server tree
+        id: server-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+
+      - name: Prepare server tree (cache miss)
+        if: steps.server-cache.outputs.cache-hit != 'true'
+        env:
+          SERVER_DIR: ${{ github.workspace }}/.ci-server
+          CACHE_DIR: ${{ github.workspace }}/.ci-cache
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl unzip unrar
+          chmod +x testing/scripts/*.sh
+          testing/scripts/fetch-server.sh
+          testing/scripts/apply-valve-rc-fix.sh
+          testing/scripts/apply-srcds-patch.sh
+          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
+          mkdir -p server-art
+          tar -C .ci-server -czf server-art/css34-server.tar.gz .
+          rm -rf .ci-server
+
+      - name: Smoke public release URLs (plain tar install)
+        env:
+          BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
+        run: |
+          chmod +x testing/scripts/*.sh
+          testing/scripts/release-smoke.sh
+
+      - name: Upload smoke logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-logs
+          retention-days: 3
+          path: |
+            .ci-server/smoke.log
+            .ci-server/console-probe.log
+            .ci-server/cstrike/addons/sourcemod/logs/*.log
+
+  # Switch line-<line> only after a green public-URL smoke. On red, record the
+  # failed candidate in lines.json and keep serving the previous build.
+  line-pointer:
+    needs: [resolve-line, linux, smoke-release]
+    if: >-
+      always() && github.ref_type == 'tag' &&
+      needs.resolve-line.outputs.pointer == '1' &&
+      (needs.smoke-release.result == 'success' || needs.smoke-release.result == 'failure')
+    runs-on: ubuntu-22.04
+    # One writer per line-<line>. Per line, not global: a concurrency group holds
+    # one running + one pending job and a newer pending one cancels it, so a
+    # global group would silently drop pointers when several lines are tagged
+    # together. Cross-line safety of lines-index is handled in the script.
+    concurrency:
+      group: css34-line-pointer-${{ needs.resolve-line.outputs.css34_line }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download tag assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
+        run: |
+          set -euo pipefail
+          mkdir -p ptr
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" -D ptr \
+            -p "${SM_ASSET}" -p "${MM_ASSET}"
+
+      - name: Update line-${{ needs.resolve-line.outputs.css34_line }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SMOKE: ${{ needs.smoke-release.result == 'success' && 'pass' || 'fail' }}
+          LINE: ${{ needs.resolve-line.outputs.css34_line }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
+        run: |
+          set -euo pipefail
+          bash builder/scripts/update-line-pointer.sh "${LINE}" "${GITHUB_REF_NAME}" \
+            "ptr/${SM_ASSET}" "ptr/${MM_ASSET}"
+          if [[ "${SMOKE}" != "pass" ]]; then
+            echo "::error::smoke failed for ${GITHUB_REF_NAME}; line-${LINE} not switched"
+            exit 1
+          fi
+
+  smoke-pointer:
+    needs: [resolve-line, line-pointer]
+    if: github.ref_type == 'tag' && needs.resolve-line.outputs.pointer == '1'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore cached server tree
+        id: server-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+
+      - name: Prepare server tree (cache miss)
+        if: steps.server-cache.outputs.cache-hit != 'true'
+        env:
+          SERVER_DIR: ${{ github.workspace }}/.ci-server
+          CACHE_DIR: ${{ github.workspace }}/.ci-cache
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl unzip unrar
+          chmod +x testing/scripts/*.sh
+          testing/scripts/fetch-server.sh
+          testing/scripts/apply-valve-rc-fix.sh
+          testing/scripts/apply-srcds-patch.sh
+          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
+          mkdir -p server-art
+          tar -C .ci-server -czf server-art/css34-server.tar.gz .
+          rm -rf .ci-server
+
+      - name: Smoke pointer URLs
+        env:
+          BASE_URL: https://github.com/${{ github.repository }}/releases/download/line-${{ needs.resolve-line.outputs.css34_line }}
+          LINE: ${{ needs.resolve-line.outputs.css34_line }}
+          SM_ASSET: sourcemod-css34-linux.tar.gz
+          MM_ASSET: mmsource-css34-linux.tar.gz
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          # A later tag of the same line may already have switched the pointer;
+          # that is fine — whatever it serves must be a smoke-passed build.
+          curl -fsSL "${BASE_URL}/lines.json" | LINE="${LINE}" TAG="${GITHUB_REF_NAME}" python3 -c '
+          import json, os, sys
+          d = json.load(sys.stdin)[os.environ["LINE"]]
+          print(json.dumps(d, indent=2))
+          assert d["smoke"] == "pass" and d["tag"], "pointer does not serve a smoke-passed build"
+          served, tag = d["tag"], os.environ["TAG"]
+          if served != tag:
+              print(f"::notice::line pointer already serves {served} (newer than {tag})")
+          '
+          testing/scripts/release-smoke.sh

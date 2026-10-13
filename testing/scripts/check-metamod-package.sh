@@ -92,6 +92,17 @@ elif [[ -n "${max_glibc}" ]]; then
   echo "OK: GLIBC_${max_glibc} is within Debian 11 range"
 fi
 
+manifest="${TMP}/addons/metamod/css34-package.json"
+if [[ ! -f "${manifest}" ]]; then
+  echo "FAIL: missing addons/metamod/css34-package.json" >&2
+  fail=1
+elif python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); b=d.get("metamod_binary"); sys.exit(0 if b in ("metamod.1.ep1","metamod.2.ep1") and d.get("mm_version") and d.get("mm_commit") else 1)' "${manifest}"; then
+  echo "OK: addons/metamod/css34-package.json"
+else
+  echo "FAIL: invalid addons/metamod/css34-package.json" >&2
+  fail=1
+fi
+
 if [[ "${fail}" -ne 0 ]]; then
   echo "Metamod ABI check FAILED"
   exit 1

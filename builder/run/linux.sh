@@ -12,6 +12,9 @@ source "$BUILDER_DIR/resolve-version.sh"
 MMS_DIR="${MMS_DIR:-$DEPS_DIR/$MMS_DIRNAME}"
 
 export PATH="$HOME/.local/bin:$PATH"
+# One timestamp for both css34-package.json manifests of this build.
+export BUILD_DATE="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+export MMS_DIR MMS_GIT_REV CSS34_LINE
 export SOURCEMOD_MAJOR MMS_MODE MMS_DIRNAME MMS_COMMIT MMS_BRANCH
 export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV SOURCEMOD_DIR WDIR
 export PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-1}"

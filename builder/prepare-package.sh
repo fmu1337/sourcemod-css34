@@ -106,6 +106,9 @@ if [ -f "$SM_ROOT/extensions/geoip.ext.so" ] || [ -f "$SM_ROOT/extensions/geoip.
     chmod +x "$BUILDER_DIR/download-geolite2.sh"
     CACHE_DIR="${CACHE_DIR:-$DEPS_DIR}" "$BUILDER_DIR/download-geolite2.sh" "$geoip_cfg"
   fi
+  # download-geolite2.sh stages via mktemp (mode 0600): srcds running as a
+  # non-root user could not read the DB after `tar -x` as root.
+  chmod 0644 "$geoip_cfg"/*.mmdb
 fi
 
 echo "==> Fetching upstream translations"

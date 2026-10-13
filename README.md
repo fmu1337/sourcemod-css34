@@ -47,7 +47,70 @@ Use the **matched** pair from one tag. Do not mix Metamod from one line with Sou
 | [`1.13.0.7565-mm2.0.0-khook-dhooks`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks) | `sm13-mm20-khook` | 1.13.0-git7565 (KHook branch + master) | 2.0.0-dev+1469 (KHook), + dhooks.ext linux x86 | CI smoke + botplay matrix; release assets smoke + botplay |
 | [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev+1407 | CI smoke + botplay matrix |
 
-Asset names: `sourcemod-<ver>-css34-{linux.tar.gz|windows.zip}` and `mmsource-<ver>-css34-{linux.tar.gz|windows.zip}`.
+Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}` and, for builds after this
+change, `mmsource-<ver>-git<mmrev>-css34-linux.tar.gz` (e.g. `mmsource-1.12.0-git1226-css34-linux.tar.gz`).
+Older tags keep their original `mmsource-1.12.0-dev-…` names (tags are never rewritten). Every new
+release also carries `SHA256SUMS`.
+
+### Installer contract (fmu1337/v34_server_base)
+
+**Stable line pointers.** Each live line has one published release with a fixed tag and fixed asset names:
+
+```
+https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcemod-css34-linux.tar.gz
+https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/mmsource-css34-linux.tar.gz
+https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/SHA256SUMS
+https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/lines.json
+```
+
+`<line>` ∈ `sm12-latest`, `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook`. Both files use the same format,
+`{line: {tag, sm_version, sm_commit, mm_version, mm_commit, extension_api, extension_api_min, metamod_binary, smoke, …}}`:
+
+- `line-<line>/lines.json` holds only that line's entry (written by that line's runs only);
+- `lines-index/lines.json` holds every line, rebuilt from all `line-*/lines.json`.
+
+A pointer is created on the first tag release of its line after this change. A line whose builds never
+passed smoke has a pointer release with only `lines.json` (`"tag": null, "smoke": "fail"`).
+
+`release.yml` switches a pointer only after `smoke-release` installed the **public** tag URLs with a plain
+`tar -x` and booted `srcds`; a red smoke leaves the pointer on the previous build (`lines.json[line].candidate`
+records the failed tag). Pointer assets are replaced upload-first (`<name>.next-<run>` → delete old → rename),
+so the URL serves the old file during a rebuild; the only gap is two back-to-back API calls. `smoke-pointer`
+then re-runs the smoke against the pointer URLs.
+
+Several lines may be tagged at once: pointer updates are serialized per line, and the shared
+`lines-index/lines.json` is rebuilt from the per-line files and re-checked after upload, so parallel runs
+cannot drop each other's entries. Two tags of the *same* line finishing out of order never move the pointer
+back: an update whose tagged commit is older than the one served is skipped.
+
+**Releases never go back to draft.** `release.yml` only uploads into an existing release
+(`--clobber`) and re-publishes it if it is a draft. Drafts that already exist can be re-published with
+the *Release Maintenance* workflow (Actions → Release Maintenance → Run).
+
+**Manifest in every package.** `addons/sourcemod/css34-package.json` and `addons/metamod/css34-package.json`:
+`line, sm_version, sm_commit, mm_version, mm_commit, extension_api, extension_api_min, metamod_binary, build_date`.
+`extension_api` / `extension_api_min` are `SMINTERFACE_EXTENSIONAPI_VERSION` / `_MIN` of the build
+(SM 1.11/1.12 have no `_MIN` → `1`; 1.12: 8; 1.13.0.7394: 9–9; 1.13.0.7472: 9–11).
+
+**Ready to run.** `tar -xzf mm.tgz -C cstrike && tar -xzf sm.tgz -C cstrike` is the whole install:
+`addons/metamod/sourcemod.vdf`, `"DisableAutoUpdate" "yes"` in `configs/core.cfg` (SourceMod's key for
+turning the updater off), executable `*.so` / `scripting/spcomp`, and on SM 1.12+
+`configs/geoip/GeoLite2-Country.mmdb` (mode 0644 — older packages shipped it 0600, unreadable for a
+non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
+
+### Known-bad releases
+
+- **`1.13.0.7394-mm1.12.0`: SDKHooks broken.** The package has no `gamedata/sdkhooks.games/game.cstrike.txt`
+  and its `master.games.txt` is upstream's (no `game.cstrike.txt` entry), so *every* SDKHooks offset is
+  missing and `SDKHook()` throws `Hook type not supported on this game` for all types (SMAC
+  `smac_wallhack` FarESP hits it first on `SDKHook_ThinkPost` / `SetTransmit`). Fixed in every build since
+  (`package.sh` and `check-package.sh` require the css34 file); use `1.13.0.7472-mm1.12.0` /
+  `line-sm13-latest`. Botplay's API probe now `SDKHookEx`-checks the SMAC hook types, and
+  `check-sm-logs.sh` fails on that message.
+- **`1.11.0.6970-mm1.10.7` (`sm11-oldstable`): withheld from line pointers.** Reported SIGABRT at startup
+  without plugins on rom4s 4044 + bufferfix + `srcds_i686` on Ubuntu 24.04 (our debian:11 smoke passes).
+  Root cause is not yet reproduced here; until it is, there is no `line-sm11-oldstable` pointer and
+  installers should use rom4s 1.11.0.6572 + MM 1.10.6 for SM 1.11. The tag itself stays published.
 
 The **Windows** assets of both `1.13.0.7565-mm2.0.0-khook*` tags crash `srcds.exe` on the first
 map load (KHook recall on MSVC x86); use their Linux assets only. The fix and the Wine smoke test

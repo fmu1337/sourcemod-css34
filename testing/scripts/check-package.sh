@@ -63,6 +63,77 @@ else
   fail=1
 fi
 
+# SMAC smac_wallhack hooks these; a missing offset → "Hook type not supported"
+# (1.13.0.7394 release shipped without game.cstrike.txt, see README).
+for hook in SetTransmit Think Weapon_Equip Weapon_Drop PreThink PostThink; do
+  if [[ -f "${SDKHOOKS_GAMEDATA}/game.cstrike.txt" ]] \
+    && grep -Fq "\"${hook}\"" "${SDKHOOKS_GAMEDATA}/game.cstrike.txt"; then
+    echo "OK: SDKHooks CS:S gamedata contains ${hook}"
+  else
+    echo "FAIL: SDKHooks CS:S gamedata lacks ${hook}" >&2
+    fail=1
+  fi
+done
+
+echo "==> Checking ready-to-run layout (plain tar -x over cstrike/)"
+SM_ROOT="${TMP}/addons/sourcemod"
+if [[ -f "${TMP}/addons/metamod/sourcemod.vdf" ]]; then
+  echo "OK: addons/metamod/sourcemod.vdf present"
+else
+  echo "FAIL: missing addons/metamod/sourcemod.vdf" >&2
+  fail=1
+fi
+if grep -Eq '"DisableAutoUpdate"[[:space:]]+"yes"' "${SM_ROOT}/configs/core.cfg" 2>/dev/null; then
+  echo "OK: core.cfg DisableAutoUpdate=yes"
+else
+  echo "FAIL: core.cfg does not disable the auto updater" >&2
+  fail=1
+fi
+while IFS= read -r -d '' bin; do
+  if [[ ! -x "${bin}" ]]; then
+    echo "FAIL: ${bin#"${TMP}"/} is not executable in the tarball" >&2
+    fail=1
+  fi
+done < <(find "${SM_ROOT}/bin" "${SM_ROOT}/extensions" -type f -name '*.so' -print0)
+if [[ -f "${SM_ROOT}/scripting/spcomp" && ! -x "${SM_ROOT}/scripting/spcomp" ]]; then
+  echo "FAIL: scripting/spcomp is not executable in the tarball" >&2
+  fail=1
+fi
+# SM 1.12+ (single 2.ep1 core) geoip.ext needs a *.mmdb; 1.11 dual-core uses GeoIP.dat.
+if [[ -f "${SM_ROOT}/extensions/geoip.ext.so" && ! -f "${SM_ROOT}/bin/sourcemod.1.ep1.so" ]]; then
+  mmdb="${SM_ROOT}/configs/geoip/GeoLite2-Country.mmdb"
+  if [[ ! -s "${mmdb}" ]]; then
+    echo "FAIL: missing configs/geoip/GeoLite2-Country.mmdb (SM 1.12+ geoip.ext)" >&2
+    fail=1
+  elif [[ "$(stat -c %a "${mmdb}")" != *4 && "$(stat -c %a "${mmdb}")" != *6 ]]; then
+    echo "FAIL: GeoLite2-Country.mmdb is not world-readable ($(stat -c %a "${mmdb}"))" >&2
+    fail=1
+  else
+    echo "OK: GeoLite2-Country.mmdb present and readable"
+  fi
+fi
+manifest="${SM_ROOT}/css34-package.json"
+if [[ ! -f "${manifest}" ]]; then
+  echo "FAIL: missing addons/sourcemod/css34-package.json" >&2
+  fail=1
+elif ! python3 - "${manifest}" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+need = ["line", "sm_version", "sm_commit", "mm_version", "mm_commit",
+        "extension_api", "extension_api_min", "metamod_binary", "build_date"]
+missing = [k for k in need if k not in d or d[k] in ("", None)]
+if missing:
+    sys.exit("FAIL: css34-package.json missing " + ", ".join(missing))
+if d["metamod_binary"] not in ("metamod.1.ep1", "metamod.2.ep1"):
+    sys.exit("FAIL: css34-package.json metamod_binary=" + d["metamod_binary"])
+if not (int(d["extension_api_min"]) <= int(d["extension_api"])):
+    sys.exit("FAIL: css34-package.json extension_api_min > extension_api")
+print("OK: css34-package.json", json.dumps(d, sort_keys=True))
+PY
+then
+  fail=1
+fi
+
 echo "==> Checking Metamod bridge exports"
 if nm -D "${MM_SO}" 2>/dev/null | grep -E ' T CreateInterface([[:space:]]|$)' >/dev/null; then
   echo "OK: CreateInterface export present (MM:S 1.10 V1 bridge)"

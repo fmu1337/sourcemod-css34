@@ -9,7 +9,11 @@ MMS_DIR="${3:?mmsource directory required}"
 mkdir -p "$OUTPUT_DIR"
 
 version="$(tr -d '\r\n' < "$MMS_DIR/product.version")"
-filename="mmsource-${version}-css34-linux.tar.gz"
+# Revision in the name keeps assets unique across releases ("1.12.0-dev" →
+# mmsource-1.12.0-git1226-css34-linux.tar.gz). MMS_GIT_REV is pinned in
+# versions.env because deps/ clones are shallow.
+rev="${MMS_GIT_REV:-$(git -C "$MMS_DIR" rev-list --count HEAD)}"
+filename="mmsource-${version%%-*}-git${rev}-css34-linux.tar.gz"
 archive="$OUTPUT_DIR/$filename"
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
@@ -53,6 +57,11 @@ for rel in "${required[@]}"; do
     exit 1
   fi
 done
+
+builder_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MMS_DIR="$MMS_DIR" MMS_GIT_REV="$rev" \
+  bash "$builder_dir/write-package-manifest.sh" \
+  "$staging/addons/metamod/css34-package.json" "${mm_core%.so}"
 
 tar -C "$staging" -czf "$archive" addons
 echo "$archive"
