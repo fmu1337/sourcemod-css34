@@ -170,6 +170,10 @@ git tag 1.13.0.7565-mm2.0.0-khook-dhooks  # sm13-mm20-khook + dhooks.ext (linux 
 git push origin --tags
 ```
 
+A rebuild of unchanged pins (packaging fix, new pointer) never moves an existing tag: add a revision
+suffix `-r<N>`, e.g. `git tag 1.13.0.7472-mm1.12.0-r2 && git push origin 1.13.0.7472-mm1.12.0-r2`.
+`release.yml` maps `<tag>-r<N>` to the same line as `<tag>`.
+
 ## Install
 
 Extract **matched** MM then SM from the same line into `cstrike`:

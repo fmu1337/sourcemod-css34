@@ -9,6 +9,9 @@ name: Release
 #   1.13.0.7565-mm2.0.0-khook → sm13-mm20-khook
 #   1.13.0.7565-mm2.0.0-khook-dhooks → sm13-mm20-khook (+ dhooks.ext linux x86)
 #
+# Rebuilds of the same pins get a packaging-revision suffix `-r<N>` (tags are
+# never moved): 1.13.0.7472-mm1.12.0-r2 → sm13-latest.
+#
 # Linux/Windows jobs attach packages directly to the GitHub Release.
 # No Actions artifacts (those count against the 0.5 GB storage quota).
 #
@@ -55,7 +58,12 @@ jobs:
           set -euo pipefail
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             tag="${GITHUB_REF_NAME}"
-            case "${tag}" in
+            # -r<N>: packaging rebuild of the same pins (existing tags stay put).
+            base="${tag}"
+            if [[ "${tag}" =~ ^(.+)-r[0-9]+$ ]]; then
+              base="${BASH_REMATCH[1]}"
+            fi
+            case "${base}" in
               1.11.0.6970-mm1.10.7) line=sm11-oldstable ;;
               1.12.0.7253-mm1.12.0) line=sm12-latest ;;
               1.13.0.7404-mm1.12.0) line=sm13-dev ;;
