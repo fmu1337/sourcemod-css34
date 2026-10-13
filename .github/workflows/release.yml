@@ -295,8 +295,12 @@ jobs:
       needs.resolve-line.outputs.pointer == '1' &&
       (needs.smoke-release.result == 'success' || needs.smoke-release.result == 'failure')
     runs-on: ubuntu-22.04
+    # One writer per line-<line>. Per line, not global: a concurrency group holds
+    # one running + one pending job and a newer pending one cancels it, so a
+    # global group would silently drop pointers when several lines are tagged
+    # together. Cross-line safety of lines-index is handled in the script.
     concurrency:
-      group: css34-line-pointers
+      group: css34-line-pointer-${{ needs.resolve-line.outputs.css34_line }}
       cancel-in-progress: false
     steps:
       - name: Checkout
@@ -365,10 +369,21 @@ jobs:
       - name: Smoke pointer URLs
         env:
           BASE_URL: https://github.com/${{ github.repository }}/releases/download/line-${{ needs.resolve-line.outputs.css34_line }}
+          LINE: ${{ needs.resolve-line.outputs.css34_line }}
           SM_ASSET: sourcemod-css34-linux.tar.gz
           MM_ASSET: mmsource-css34-linux.tar.gz
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
-          curl -fsSL "${BASE_URL}/lines.json" | python3 -c 'import json,sys; d=json.load(sys.stdin)["${{ needs.resolve-line.outputs.css34_line }}"]; print(d); assert d["tag"]=="${{ github.ref_name }}" and d["smoke"]=="pass"'
+          # A later tag of the same line may already have switched the pointer;
+          # that is fine — whatever it serves must be a smoke-passed build.
+          curl -fsSL "${BASE_URL}/lines.json" | LINE="${LINE}" TAG="${GITHUB_REF_NAME}" python3 -c '
+          import json, os, sys
+          d = json.load(sys.stdin)[os.environ["LINE"]]
+          print(json.dumps(d, indent=2))
+          assert d["smoke"] == "pass" and d["tag"], "pointer does not serve a smoke-passed build"
+          served, tag = d["tag"], os.environ["TAG"]
+          if served != tag:
+              print(f"::notice::line pointer already serves {served} (newer than {tag})")
+          '
           testing/scripts/release-smoke.sh

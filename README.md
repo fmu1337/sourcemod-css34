@@ -63,16 +63,25 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/SHA256S
 https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/lines.json
 ```
 
-`<line>` ∈ `sm12-latest`, `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook`. The index of all lines is also at
-`releases/download/lines-index/lines.json`:
-`{line: {tag, sm_version, sm_commit, mm_version, mm_commit, extension_api, extension_api_min, metamod_binary, smoke, …}}`.
-A pointer is created on the first tag release of its line after this change.
+`<line>` ∈ `sm12-latest`, `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook`. Both files use the same format,
+`{line: {tag, sm_version, sm_commit, mm_version, mm_commit, extension_api, extension_api_min, metamod_binary, smoke, …}}`:
+
+- `line-<line>/lines.json` holds only that line's entry (written by that line's runs only);
+- `lines-index/lines.json` holds every line, rebuilt from all `line-*/lines.json`.
+
+A pointer is created on the first tag release of its line after this change. A line whose builds never
+passed smoke has a pointer release with only `lines.json` (`"tag": null, "smoke": "fail"`).
 
 `release.yml` switches a pointer only after `smoke-release` installed the **public** tag URLs with a plain
 `tar -x` and booted `srcds`; a red smoke leaves the pointer on the previous build (`lines.json[line].candidate`
-records the failed tag). Pointer assets are replaced upload-first (`<name>.next` → delete old → rename), so
-the URL serves the old file during a rebuild; the only gap is two back-to-back API calls. `smoke-pointer`
+records the failed tag). Pointer assets are replaced upload-first (`<name>.next-<run>` → delete old → rename),
+so the URL serves the old file during a rebuild; the only gap is two back-to-back API calls. `smoke-pointer`
 then re-runs the smoke against the pointer URLs.
+
+Several lines may be tagged at once: pointer updates are serialized per line, and the shared
+`lines-index/lines.json` is rebuilt from the per-line files and re-checked after upload, so parallel runs
+cannot drop each other's entries. Two tags of the *same* line finishing out of order never move the pointer
+back: an update whose tagged commit is older than the one served is skipped.
 
 **Releases never go back to draft.** `release.yml` only uploads into an existing release
 (`--clobber`) and re-publishes it if it is a draft. Drafts that already exist can be re-published with
