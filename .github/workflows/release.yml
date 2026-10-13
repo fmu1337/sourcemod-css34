@@ -84,6 +84,11 @@ jobs:
   linux:
     needs: [resolve-line]
     runs-on: ubuntu-22.04
+    # Exact names of what this run built: a release can hold older assets
+    # with other names (e.g. mmsource-…-dev-…), so later jobs never glob.
+    outputs:
+      sm_asset: ${{ steps.check.outputs.sm_asset }}
+      mm_asset: ${{ steps.check.outputs.mm_asset }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,11 +108,18 @@ jobs:
           builder/docker/legacy-build.sh
 
       - name: Static package checks
+        id: check
         run: |
           set -euo pipefail
           rm -f ./*.tar.gz  # stray root symlinks from builder/run/linux.sh
-          SM_PACKAGE="$(ls packages/sourcemod-*-css34-linux.tar.gz)" testing/scripts/check-package.sh
-          MM_PACKAGE="$(ls packages/mmsource-*-css34-linux.tar.gz)" testing/scripts/check-metamod-package.sh
+          sm="$(ls packages/sourcemod-*-css34-linux.tar.gz)"
+          mm="$(ls packages/mmsource-*-css34-linux.tar.gz)"
+          [[ "$(wc -l <<<"${sm}")" == 1 && "$(wc -l <<<"${mm}")" == 1 ]] \
+            || { echo "expected one SM + one MM linux package" >&2; ls packages >&2; exit 1; }
+          SM_PACKAGE="${sm}" testing/scripts/check-package.sh
+          MM_PACKAGE="${mm}" testing/scripts/check-metamod-package.sh
+          echo "sm_asset=$(basename "${sm}")" >> "$GITHUB_OUTPUT"
+          echo "mm_asset=$(basename "${mm}")" >> "$GITHUB_OUTPUT"
 
       - name: Attach Linux packages to GitHub Release
         if: github.ref_type == 'tag'
@@ -222,12 +234,9 @@ jobs:
 
   # Installer contract on the *published* URLs: plain tar -x + srcds boot.
   smoke-release:
-    needs: [resolve-line, checksums]
+    needs: [resolve-line, linux, checksums]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-22.04
-    outputs:
-      sm_asset: ${{ steps.assets.outputs.sm_asset }}
-      mm_asset: ${{ steps.assets.outputs.mm_asset }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -257,24 +266,11 @@ jobs:
           tar -C .ci-server -czf server-art/css34-server.tar.gz .
           rm -rf .ci-server
 
-      - name: Resolve asset names
-        id: assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          names="$(gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json assets -q '.assets[].name')"
-          sm="$(grep -E '^sourcemod-.*-css34-linux\.tar\.gz$' <<<"${names}")"
-          mm="$(grep -E '^mmsource-.*-css34-linux\.tar\.gz$' <<<"${names}")"
-          [[ "$(wc -l <<<"${sm}")" == 1 && "$(wc -l <<<"${mm}")" == 1 ]] || { echo "expected one SM + one MM linux asset" >&2; echo "${names}" >&2; exit 1; }
-          echo "sm_asset=${sm}" >> "$GITHUB_OUTPUT"
-          echo "mm_asset=${mm}" >> "$GITHUB_OUTPUT"
-
       - name: Smoke public release URLs (plain tar install)
         env:
           BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
-          SM_ASSET: ${{ steps.assets.outputs.sm_asset }}
-          MM_ASSET: ${{ steps.assets.outputs.mm_asset }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
         run: |
           chmod +x testing/scripts/*.sh
           testing/scripts/release-smoke.sh
@@ -293,7 +289,7 @@ jobs:
   # Switch line-<line> only after a green public-URL smoke. On red, record the
   # failed candidate in lines.json and keep serving the previous build.
   line-pointer:
-    needs: [resolve-line, smoke-release]
+    needs: [resolve-line, linux, smoke-release]
     if: >-
       always() && github.ref_type == 'tag' &&
       needs.resolve-line.outputs.pointer == '1' &&
@@ -309,21 +305,25 @@ jobs:
       - name: Download tag assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
         run: |
           set -euo pipefail
           mkdir -p ptr
           gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" -D ptr \
-            -p 'sourcemod-*-css34-linux.tar.gz' -p 'mmsource-*-css34-linux.tar.gz'
+            -p "${SM_ASSET}" -p "${MM_ASSET}"
 
       - name: Update line-${{ needs.resolve-line.outputs.css34_line }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SMOKE: ${{ needs.smoke-release.result == 'success' && 'pass' || 'fail' }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
         run: |
           set -euo pipefail
           bash builder/scripts/update-line-pointer.sh "${LINE}" "${GITHUB_REF_NAME}" \
-            ptr/sourcemod-*-css34-linux.tar.gz ptr/mmsource-*-css34-linux.tar.gz
+            "ptr/${SM_ASSET}" "ptr/${MM_ASSET}"
           if [[ "${SMOKE}" != "pass" ]]; then
             echo "::error::smoke failed for ${GITHUB_REF_NAME}; line-${LINE} not switched"
             exit 1

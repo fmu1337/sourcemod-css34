@@ -72,7 +72,12 @@ mm_manifest="$(tar -xzOf "$MM_PKG" addons/metamod/css34-package.json)"
 
 # Current lines.json (index release is the source of truth).
 lines_json="${work}/lines.json"
-if ! gh release download "$INDEX_TAG" --repo "$REPO" -p lines.json -D "$work" 2>/dev/null; then
+# Start empty only when there is no index yet; a failed download of an existing
+# index must not silently drop every other line's entry.
+if gh release view "$INDEX_TAG" --repo "$REPO" --json assets -q '.assets[].name' 2>/dev/null \
+    | grep -qx lines.json; then
+  gh release download "$INDEX_TAG" --repo "$REPO" -p lines.json -D "$work"
+else
   echo '{}' > "$lines_json"
 fi
 
@@ -92,7 +97,7 @@ entry = {
     "extension_api_min": sm["extension_api_min"],
     "metamod_binary": mm["metamod_binary"],
     "smoke": smoke,
-    "updated": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "updated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     "sourcemod_url": f"https://github.com/{repo}/releases/download/{ptr}/sourcemod-css34-linux.tar.gz",
     "mmsource_url": f"https://github.com/{repo}/releases/download/{ptr}/mmsource-css34-linux.tar.gz",
 }
