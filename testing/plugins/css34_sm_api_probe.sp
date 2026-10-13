@@ -1034,6 +1034,42 @@ RunSdkHooksProbes(bot)
 
     AttachHooksOnce(bot);
     ProbeResult(g_Hooked[bot], "sdkhooks", "SDKHook_attached");
+    RunSmacHookTypeProbes(bot);
+}
+
+// Hook types used by SMAC smac_wallhack (FarESP / weapon transmit). A missing
+// sdkhooks.games/game.cstrike.txt offset makes SDKHook() throw
+// "Hook type not supported on this game" (1.13.0.7394 release regression);
+// SDKHookEx reports the same condition as false instead of aborting the probe.
+RunSmacHookTypeProbes(bot)
+{
+    ProbeHookType(bot, SDKHook_SetTransmit, "SetTransmit");
+    ProbeHookType(bot, SDKHook_WeaponEquipPost, "WeaponEquipPost");
+    ProbeHookType(bot, SDKHook_WeaponDropPost, "WeaponDropPost");
+
+    new manager = FindEntityByClassname(-1, "cs_player_manager");
+    if (manager == -1)
+    {
+        ProbeResult(false, "sdkhooks", "cs_player_manager_present");
+        return;
+    }
+    ProbeHookType(manager, SDKHook_ThinkPost, "ThinkPost_cs_player_manager");
+}
+
+ProbeHookType(entity, SDKHookType:type, const String:name[])
+{
+    new bool:ok = SDKHookEx(entity, type, Hook_ProbeGeneric);
+    if (ok)
+    {
+        SDKUnhook(entity, type, Hook_ProbeGeneric);
+    }
+    new String:probe[64];
+    Format(probe, sizeof(probe), "SDKHookEx_%s", name);
+    ProbeResult(ok, "sdkhooks", probe);
+}
+
+public Hook_ProbeGeneric(entity)
+{
 }
 
 AttachHooksOnce(client)

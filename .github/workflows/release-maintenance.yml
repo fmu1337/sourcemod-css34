@@ -1,0 +1,48 @@
+name: Release Maintenance
+
+# Re-publish releases that were turned into drafts (draft asset URLs 404 for
+# installers). Does not touch tags or assets; only flips draft → published.
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Space-separated release tags to re-publish"
+        required: true
+        default: "1.12.0.7253-mm1.12.0 1.13.0.7472-mm1.12.0 1.13.0.7404-mm1.12.0 1.13.0.7404-mm2.0.0 1.13.0.7565-mm2.0.0-khook 1.13.0.7565-mm2.0.0-khook-dhooks"
+
+permissions:
+  contents: write
+
+jobs:
+  republish:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Publish drafts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAGS: ${{ github.event.inputs.tags }}
+        run: |
+          set -euo pipefail
+          rc=0
+          for tag in ${TAGS}; do
+            if ! git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}" "refs/tags/${tag}" >/dev/null; then
+              echo "::error::tag ${tag} does not exist; not publishing a tagless draft"
+              rc=1
+              continue
+            fi
+            # `gh release view <tag>` cannot see drafts by tag; list instead.
+            draft="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              -q ".[] | select(.tag_name == \"${tag}\") | .draft")"
+            case "${draft}" in
+              true)
+                id="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+                  -q ".[] | select(.tag_name == \"${tag}\") | .id")"
+                gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${id}" \
+                  -F draft=false -f make_latest=false >/dev/null
+                echo "published ${tag}"
+                ;;
+              false) echo "${tag} already published" ;;
+              *) echo "::error::no release for ${tag}"; rc=1 ;;
+            esac
+          done
+          exit "${rc}"

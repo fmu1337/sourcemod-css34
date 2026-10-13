@@ -66,6 +66,15 @@ else
   tar -xzf "${SM_TGZ}" -C "${SERVER_DIR}/cstrike"
 fi
 
+# PLAIN_TAR_INSTALL=1: installer contract — `tar -xzf mm; tar -xzf sm` and
+# nothing else. Skip every fixup below so smoke proves the packages are
+# self-sufficient (sourcemod.vdf, core.cfg, GeoIP DB all come from the tarballs).
+if [[ "${PLAIN_TAR_INSTALL:-0}" == "1" ]]; then
+  echo "PLAIN_TAR_INSTALL=1: no post-extract fixups"
+  ls -la "${SERVER_DIR}/cstrike/addons/metamod" "${SERVER_DIR}/cstrike/addons/sourcemod/bin" || true
+  exit 0
+fi
+
 # Optional: keep rom4s reference logic with a host-built core (logic ABI still tracked).
 if [[ "${OVERLAY_ROM4S_LOGIC:-}" == "1" && -n "${SM_PACKAGE:-}" ]]; then
   REF_URL="${REFERENCE_SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"

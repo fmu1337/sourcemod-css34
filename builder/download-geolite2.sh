@@ -29,6 +29,7 @@ if [[ ! -f "${CACHE_FILE}" ]]; then
     echo "FAIL: GeoIP2 download too small (${size} bytes)" >&2
     exit 1
   fi
+  chmod 0644 "${tmp}"
   mv -f "${tmp}" "${CACHE_FILE}"
 fi
 

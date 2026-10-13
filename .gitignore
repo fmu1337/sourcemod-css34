@@ -6,3 +6,5 @@
 /.ci-cache/
 /.ci-server/
 /*.log
+/server-art/
+/.ci-release-smoke/
