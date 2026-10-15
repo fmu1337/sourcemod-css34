@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "default_line": "sm13-latest",
+  "pins": {
+    "SM_OLDSTABLE": {
+      "commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "rev": 6970,
+      "major": 11
+    },
+    "SM_LATEST": {
+      "commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "rev": 7253,
+      "major": 12
+    },
+    "SM_DEV": {
+      "commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
+      "rev": 7404,
+      "major": 13
+    },
+    "SM_LATEST_13": {
+      "commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "rev": 7472,
+      "major": 13
+    },
+    "SM_KHOOK": {
+      "commit": "0cd7f6fcb4e3f09e0adb136f42dfa12305682bcc",
+      "branch": "k/sourcehook_alternative",
+      "major": 13,
+      "merge_master": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "rev": 7565,
+      "build_commit": "25954d4aa4a55ab10c6e2c30699f52358f982fb9"
+    },
+    "MM_110": {
+      "commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "branch": "1.10-dev",
+      "dirname": "mmsource-1.10",
+      "rev": 976,
+      "mode": "1.10"
+    },
+    "MM_112": {
+      "commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "branch": "1.12-dev",
+      "dirname": "mmsource-1.12",
+      "rev": 1226,
+      "mode": "1.12"
+    },
+    "MM_20": {
+      "commit": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
+      "branch": "master",
+      "dirname": "mmsource-2.0",
+      "rev": 1407,
+      "mode": "2.0"
+    },
+    "MM_20K": {
+      "commit": "05c5c63a9d595cb84021c3a51fe38366ba4a12a5",
+      "branch": "master",
+      "dirname": "mmsource-2.0-khook",
+      "rev": 1472,
+      "mode": "2.0"
+    }
+  },
+  "lines": {
+    "sm11-oldstable": {
+      "sourcemod": "SM_OLDSTABLE",
+      "metamod": "MM_110",
+      "status": "active"
+    },
+    "sm12-latest": {
+      "sourcemod": "SM_LATEST",
+      "metamod": "MM_112",
+      "status": "active"
+    },
+    "sm13-latest": {
+      "sourcemod": "SM_LATEST_13",
+      "metamod": "MM_112",
+      "status": "active"
+    },
+    "sm13-dev": {
+      "sourcemod": "SM_DEV",
+      "metamod": "MM_112",
+      "status": "retired"
+    },
+    "sm13-mm20": {
+      "sourcemod": "SM_DEV",
+      "metamod": "MM_20",
+      "status": "frozen"
+    },
+    "sm13-mm20-khook": {
+      "sourcemod": "SM_KHOOK",
+      "metamod": "MM_20K",
+      "status": "experimental"
+    }
+  },
+  "known_bad": {
+    "1.11.0.6572-mm1.10.7": "Steam CSS sdktools offsets instead of CSS v34 offsets.",
+    "1.12.0.7239-mm1.12.0": "Missing CSS v34 sdkhooks gamedata.",
+    "1.12.0.7245-mm1.12.0": "Incorrect CSS v34 gamedata; fails vtable validation.",
+    "1.13.0.7394-mm1.12.0": "Missing CSS v34 sdktools gamedata.",
+    "1.11.0.6970-mm1.10.7": "Startup SIGABRT on newer operating systems; 2.ep1 core does not load."
+  }
+}
