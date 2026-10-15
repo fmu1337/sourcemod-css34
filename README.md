@@ -47,7 +47,11 @@ attached to the per-tag releases (pointers are Linux-only).
 `sm13-dev` (7404 + MM 1.12) is **retired** — use `sm13-latest`. Its alias stays in `resolve-version.sh` /
 `release.yml` only so the `1.13.0.7404-mm1.12.0` tag can be rebuilt.
 
-Pins live in [`builder/versions.env`](builder/versions.env); resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
+Pins live in [`builder/lines.json`](builder/lines.json); generate the committed
+[`builder/versions.env`](builder/versions.env) with `python3 builder/lines.py gen`.
+Run `python3 builder/lines.py check` to detect generated-file drift and inconsistent copies.
+The manifest records line status and known-bad release tags; it is separate from the published pointer index.
+Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
 They are also copied into CI matrices and fallbacks — see [docs/JULES_DAILY_VERSION_BUMP.md](docs/JULES_DAILY_VERSION_BUMP.md)
 for the full list and `testing/scripts/check-version-pins.sh` for what is checked automatically.
 
@@ -224,7 +228,7 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 - `.github/workflows/release.yml` — tag-driven; tag (minus `-r<N>`) maps to `CSS34_LINE`; packages attach with
   `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke,
   line pointer, pointer smoke.
-- `.github/workflows/version-pins.yml` — `testing/scripts/check-version-pins.sh` on pin-related PRs.
+- `.github/workflows/version-pins.yml` — `python3 builder/lines.py check` on pin-related PRs.
 - `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts.
 - `.github/workflows/cleanup-artifacts.yml` — weekly / manual purge of Actions artifacts.
 

@@ -16,8 +16,9 @@ Repository: fmu1337/sourcemod-css34
    - SM 1.13: git fetch origin master on alliedmodders/sourcemod.
    - MM 1.12: git fetch origin 1.12-dev on alliedmodders/metamod-source.
 
-3. Update ALL of these (source of truth is builder/versions.env):
-   - builder/versions.env
+3. Update ALL of these (source of truth is builder/lines.json):
+   - builder/lines.json               ← edit pins here, then run python3 builder/lines.py gen
+   - builder/versions.env             ← generated; do not edit by hand
    - builder/checkout-deps.sh          ← MM fallback commit (easy to forget)
    - builder/write-build-stamps.sh     ← MM fallback commit (easy to forget)
    - testing/versions/matrix.json      ← lines AND releases AND metamod_pins
@@ -31,7 +32,7 @@ Repository: fmu1337/sourcemod-css34
    - README.md                         ← "What to install" + version matrix + releases tables
    - testing/README.md                 ← test-release-botplay table
    - docs/SM13_LATEST.md               ← if sm13-latest SM pin changed
-   - SM_KHOOK_MERGE_MASTER in versions.env equals the sm13-latest commit today; do NOT bump it
+   - pins.SM_KHOOK.merge_master in lines.json equals the sm13-latest commit today; do NOT bump it
      with sm13-latest (moving it means redoing the KHook merge, see docs/MM20_KHOOK.md)
 
 4. matrix.json rules:
@@ -41,8 +42,7 @@ Repository: fmu1337/sourcemod-css34
    - sm13-mm20 still uses SM 7404 (SM_DEV_*) with MM 2.0; do not reintroduce sm13-dev.
 
 5. Before opening PR, MUST pass locally:
-   chmod +x testing/scripts/check-version-pins.sh
-   testing/scripts/check-version-pins.sh
+   python3 builder/lines.py check
 
 6. Open ONE draft PR. Do NOT duplicate if cursor/* PR already exists for the same pins.
    Title: "Bump sm12-latest (SM <rev>) and sm13-latest (SM <rev>) + MM <rev>"
@@ -93,6 +93,13 @@ Do **not** bump `sm13-mm20` (7404 + MM 2.0) unless explicitly asked. `sm13-dev` 
 # Upstream vs pinned
 builder/scripts/resolve-upstream-tips.sh
 
+# Regenerate after editing builder/lines.json
+python3 builder/lines.py gen
+
 # All pins consistent (runs in CI on version-related PRs)
-testing/scripts/check-version-pins.sh
+python3 builder/lines.py check
 ```
+
+`check-version-pins.sh` remains a compatibility entry point for `lines.py check`.
+The generated-file check covers all pins. Existing cross-file checks remain in
+`check-version-copies.sh` until T4.1 generates CI matrices and removes fallbacks.

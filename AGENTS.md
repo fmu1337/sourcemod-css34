@@ -5,7 +5,8 @@
 This repo is a **build system** (not a long-running app). It compiles patched
 **SourceMod + Metamod:Source** packages for **Counter-Strike: Source v34** — five
 lines selected by `CSS34_LINE` (default `sm13-latest` = SM 1.13.0.7472 + MM 1.12
-git1226; pins in `builder/versions.env`) — and smoke-tests them on a real `srcds`
+git1226; pins in `builder/lines.json`; generated `builder/versions.env`) — and
+smoke-tests them on a real `srcds`
 dedicated server. See `README.md`, `docs/README.md`, `testing/README.md`, and
 `.github/workflows/` for the canonical commands; the notes below only cover
 non-obvious environment caveats.
@@ -72,7 +73,8 @@ check (`check-package.sh`) is the closest static verification of build output.
 
 ### Version pin bumps (Jules / agents)
 Daily SM/MM tip bumps: follow `docs/JULES_DAILY_VERSION_BUMP.md`. After editing
-pins, run `testing/scripts/check-version-pins.sh` (also enforced by
-`.github/workflows/version-pins.yml` on PRs; it only covers `sm12-latest`,
-`sm13-latest` and MM 1.12). Upstream tip probe:
+pins in `builder/lines.json`, run `python3 builder/lines.py gen` then
+`python3 builder/lines.py check` (also enforced by
+`.github/workflows/version-pins.yml` on PRs). Generation checks cover all pins;
+cross-file checks cover `sm12-latest`, `sm13-latest` and MM 1.12. Upstream tip probe:
 `builder/scripts/resolve-upstream-tips.sh`.
