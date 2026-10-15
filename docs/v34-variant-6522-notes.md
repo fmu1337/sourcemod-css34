@@ -4,6 +4,16 @@
 
 Дата анализа: 2026-07-12.
 
+> **Статус 2026-10-13 (исторический документ).** Упоминания «наш builder = 6572» относятся к июлю 2026;
+> SM 1.11 сейчас собирается из 6970 (`sm11-oldstable`), основная линия — 1.13. Gamedata больше
+> не берётся из upstream как есть: `prepare-package.sh` кладёт поверх css34-версии из
+> `builder/assets/gamedata/` для `sdktools.games`, `sdkhooks.games`, `sm-cstrike.games` и
+> `core.games`, а `testing/scripts/check-css34-vtables.py` сверяет все vtable-offsets
+> SDKTools / SDKHooks с `server_i486.so` v34 (в CI — только в `test-built-smoke` на host-раннере,
+> т.е. для `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook`; в контейнерах smoke он SKIP). Разделы «Gamedata — требует ручной проверки» ниже
+> про Linux-offsets этим закрыты; Windows-сигнатуры и `WeaponPrice` проверяются botplay
+> (`css34_cstrike_forward_probe`) и Wine / Windows smoke.
+
 ## Идентификация пакета
 
 | | Архив 6522 | Наш builder |
@@ -55,11 +65,11 @@ Linux-сигнатуры в sm-cstrike совпадают. Расхождени�
 | DispatchKeyValueFloat | 31 |
 | DispatchKeyValueVector | 32 |
 
-У нас этот файл идёт из upstream SM **6572** при сборке (`prepare-package.sh` его не перезаписывает). При проблемах с sdktools на Linux — **сверить vtable offsets вручную** с `server.so` и при необходимости зафиксировать в `builder/assets/gamedata/`.
+На момент анализа этот файл шёл из upstream SM 6572. Сейчас `prepare-package.sh` перезаписывает его css34-версией из `builder/assets/gamedata/sdktools.games/`, а `check-css34-vtables.py` сверяет offsets с `server_i486.so` (см. оговорку выше).
 
 ### sdkhooks.games/game.cstrike.txt
 
-Архив содержит vtable offsets для хуков (`OnTakeDamage`, `FireBullets`, `Weapon_Switch` и т.д.) — только Linux/Windows числа, без сигнатур. У нас тоже из upstream 6572. При сбоях sdkhooks — сверить аналогично sdktools.
+Архив содержит vtable offsets для хуков (`OnTakeDamage`, `FireBullets`, `Weapon_Switch` и т.д.) — только Linux/Windows числа, без сигнатур. На момент анализа у нас тоже был upstream 6572; сейчас — css34-версия из `builder/assets/gamedata/sdkhooks.games/` (`OnTakeDamage` linux 61 / windows 60).
 
 ## Полезное из архива (не переносим в сборку)
 

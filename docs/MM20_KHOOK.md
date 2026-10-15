@@ -8,11 +8,15 @@ Experimental line built from the newest upstream dev heads that run on KHook:
 | ↳ KHook branch tip | 1.13.0-git7519 | `0cd7f6fcb4e3f09e0adb136f42dfa12305682bcc` |
 | ↳ merged `master` | 1.13.0-git7472 | `6eb5f8fa381100ed7cac1ab62a4ece11795a5d92` |
 | Metamod:Source | 2.0.0-dev+1472 (`master` tip) | `05c5c63a9d595cb84021c3a51fe38366ba4a12a5` |
-| KHook (MM submodule) | 2026-09-16 | `40d233d160b5bf60cc3e732939142b222fbd8ece` |
+| KHook (MM submodule) | pinned by MM `05c5c63` | `2a8953533da2dd473191f35448e21fcbe5667cc2` |
 
 ```bash
 CSS34_LINE=sm13-mm20-khook PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
 ```
+
+Install: `line-sm13-mm20-khook` (serves `1.13.0.7565-mm2.0.0-khook-dhooks-r2`), see [README](../README.md#what-to-install).
+`meta version` on these builds reads `2.0.0-dev+1` (shallow Metamod clone); the real revision, git1472,
+is in the asset name and `addons/metamod/css34-package.json`.
 
 ## Why SourceMod comes from the KHook branch
 
@@ -193,8 +197,10 @@ the build, and `wine-smoke` boots the packages on the Windows v34 server (`srcds
 SDK Tools, BinTools, SDK Hooks and DHooks loaded, the DHooks probe with bots
 for 150 s, then a `changelevel` (see [testing/README.md](../testing/README.md)).
 
-The `1.13.0.7565-mm2.0.0-khook*` Windows packages (released before the Wine
-test existed) crash `srcds.exe` on the first map load. Fixes:
+The first `1.13.0.7565-mm2.0.0-khook*` Windows packages (released before the Wine
+test existed) crashed `srcds.exe` on the first map load. Both tags were later moved to
+`b1f5192` (this fix) and their assets rebuilt on 2026-10-12, but those files were not
+Wine-tested; `1.13.0.7565-mm2.0.0-khook-dhooks-r2` is the build to use. Fixes:
 
 - **KHook recall on MSVC x86** (`apply-khook-x86-recall.sh`, called from
   `apply-mmsource-v112.sh`). SourceMod's `LevelInit` hook ends with
