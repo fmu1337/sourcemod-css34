@@ -1,5 +1,8 @@
 # Upstream reports (drafts)
 
+Submission drafts with reproduction procedures: [upstream-reports/](upstream-reports/README.md).
+Only the repository owner submits these upstream.
+
 Bugs found while porting the KHook SourceMod branch (`k/sourcehook_alternative`)
 and Metamod 2.0 KHook to CS:S v34. Each one is fixed or worked around in this
 repository; the text below is ready to file upstream (alliedmodders/sourcemod,
