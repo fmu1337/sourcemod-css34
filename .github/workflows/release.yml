@@ -42,6 +42,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   PURE_SOURCE_BUILD: "1"
 
@@ -79,6 +83,11 @@ jobs:
           else
             line="${{ github.event.inputs.css34_line || 'sm13-latest' }}"
           fi
+          case "$line" in
+            sm13-mm20|sm13-mm20-khook)
+              echo "Archived build line: use archive/khook; published pointers are unchanged" >&2
+              exit 1 ;;
+          esac
           echo "css34_line=${line}" >> "$GITHUB_OUTPUT"
           # line-<line> pointers: only for live lines. sm13-dev is retired;
           # sm11-oldstable is withheld (SIGABRT on rom4s 4044 servers, README).
@@ -119,7 +128,6 @@ jobs:
         id: check
         run: |
           set -euo pipefail
-          rm -f ./*.tar.gz  # stray root symlinks from builder/run/linux.sh
           sm="$(ls packages/sourcemod-*-css34-linux.tar.gz)"
           mm="$(ls packages/mmsource-*-css34-linux.tar.gz)"
           [[ "$(wc -l <<<"${sm}")" == 1 && "$(wc -l <<<"${mm}")" == 1 ]] \
@@ -288,7 +296,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-smoke-logs
-          retention-days: 3
+          retention-days: 7
           path: |
             .ci-server/smoke.log
             .ci-server/console-probe.log

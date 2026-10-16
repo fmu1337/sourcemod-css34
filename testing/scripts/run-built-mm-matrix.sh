@@ -9,11 +9,11 @@ RESULTS="${RESULTS:-${CACHE_DIR}/smoke-matrix-results.txt}"
 
 BUILT_SM="${BUILT_SM:-}"
 if [[ -z "${BUILT_SM}" ]]; then
-  BUILT_SM="$(ls "${ROOT}"/packages/sourcemod-*-css34-linux.tar.gz 2>/dev/null | head -n1 || true)"
+  BUILT_SM="$(PACKAGES_DIR="$ROOT/packages" bash -c 'source "$1/builder/package-paths.sh"; [[ ! -f "$SM_PACKAGE" ]] || printf "%s" "$SM_PACKAGE"' bash "$ROOT")"
 fi
 BUILT_MM="${BUILT_MM:-}"
 if [[ -z "${BUILT_MM}" ]]; then
-  BUILT_MM="$(ls "${ROOT}"/packages/mmsource-*-css34-linux.tar.gz 2>/dev/null | head -n1 || true)"
+  BUILT_MM="$(PACKAGES_DIR="$ROOT/packages" bash -c 'source "$1/builder/package-paths.sh"; [[ ! -f "$MM_PACKAGE" ]] || printf "%s" "$MM_PACKAGE"' bash "$ROOT")"
 fi
 ROM4S_SM="${ROM4S_SM:-${CACHE_DIR}/rom4s-sm.tar.gz}"
 MYARENA_SM_DIR="${MYARENA_SM_DIR:-${CACHE_DIR}/extract/myarena}"

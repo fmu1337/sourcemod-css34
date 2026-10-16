@@ -55,26 +55,6 @@ if [[ "$mm112_up" != "$mm_pinned_count" ]]; then
   needs_bump=1
 fi
 
-# sm13-mm20-khook: SM KHook branch, SM master it is merged with, MM 2.0 master
-sm_khook_tip="$(git ls-remote https://github.com/alliedmodders/sourcemod.git "refs/heads/${SM_KHOOK_BRANCH}" | cut -f1)"
-sm_master_tip="$(git ls-remote https://github.com/alliedmodders/sourcemod.git refs/heads/master | cut -f1)"
-read -r _ mm20_up mm20_sha < <(fetch_tip mmsource-20 https://github.com/alliedmodders/metamod-source.git "${MM_20K_BRANCH}")
-echo "SM KHook branch:      ${sm_khook_tip:0:12} (pinned: ${SM_KHOOK_COMMIT:0:12})"
-echo "SM master (merge):    ${sm_master_tip:0:12} (pinned: ${SM_KHOOK_MERGE_MASTER:0:12})"
-echo "MM 2.0 KHook:         git${mm20_up} ${mm20_sha:0:12} (pinned: ${MM_20K_COMMIT:0:12})"
-if [[ -n "$sm_khook_tip" && "$sm_khook_tip" != "$SM_KHOOK_COMMIT" ]]; then
-  echo "ACTION: sm13-mm20-khook SM KHook branch moved (${SM_KHOOK_COMMIT:0:12} -> ${sm_khook_tip:0:12}), re-run the merge (docs/MM20_KHOOK.md)"
-  needs_bump=1
-fi
-if [[ -n "$sm_master_tip" && "$sm_master_tip" != "$SM_KHOOK_MERGE_MASTER" ]]; then
-  echo "ACTION: sm13-mm20-khook SM master moved (${SM_KHOOK_MERGE_MASTER:0:12} -> ${sm_master_tip:0:12}), re-run the merge (docs/MM20_KHOOK.md)"
-  needs_bump=1
-fi
-if [[ "$mm20_sha" != "$MM_20K_COMMIT" ]]; then
-  echo "ACTION: sm13-mm20-khook MM 2.0 bump available (${MM_20K_COMMIT:0:12} -> git${mm20_up} ${mm20_sha:0:12})"
-  needs_bump=1
-fi
-
 if [[ "$needs_bump" -eq 0 ]]; then
   echo "OK: pins match upstream tips"
 else

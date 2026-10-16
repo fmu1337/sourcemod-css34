@@ -10,13 +10,13 @@ export APPLY_VALVE_RC="${APPLY_VALVE_RC:-1}"
 
 # Prefer in-tree packages when present and not overridden.
 if [[ -z "${SM_PACKAGE:-}" && -z "${SM_URL:-}" ]]; then
-  auto_sm="$(ls "${ROOT}"/packages/sourcemod-*-css34-linux.tar.gz 2>/dev/null | head -n1 || true)"
+  auto_sm="$(PACKAGES_DIR="$ROOT/packages" bash -c 'source "$1/builder/package-paths.sh"; [[ ! -f "$SM_PACKAGE" ]] || printf "%s" "$SM_PACKAGE"' bash "$ROOT")"
   if [[ -n "${auto_sm}" ]]; then
     export SM_PACKAGE="${auto_sm}"
   fi
 fi
 if [[ -z "${MM_PACKAGE:-}" && -z "${MM_URL:-}" && "${USE_BUILT_MM:-0}" != "1" ]]; then
-  auto_mm="$(ls "${ROOT}"/packages/mmsource-*-css34-linux.tar.gz 2>/dev/null | head -n1 || true)"
+  auto_mm="$(PACKAGES_DIR="$ROOT/packages" bash -c 'source "$1/builder/package-paths.sh"; [[ ! -f "$MM_PACKAGE" ]] || printf "%s" "$MM_PACKAGE"' bash "$ROOT")"
   if [[ -n "${auto_mm}" ]]; then
     export MM_PACKAGE="${auto_mm}"
   fi

@@ -8,3 +8,4 @@
 /*.log
 /server-art/
 /.ci-release-smoke/
+/mmsource-*.tar.gz

@@ -1,0 +1,45 @@
+name: CI Hygiene
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'builder/**'
+      - 'testing/scripts/check-package-paths.sh'
+      - 'testing/scripts/smoke-test.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check exact package selection
+        run: bash testing/scripts/check-package-paths.sh
+      # Negative test: an absent server must fail smoke and leave a downloadable
+      # diagnostic after the workflow completes. Production smoke gates are unchanged.
+      - name: Intentionally fail smoke with a missing server
+        id: negative-smoke
+        continue-on-error: true
+        env:
+          SERVER_DIR: ${{ runner.temp }}/absent-css34-server
+        run: |
+          mkdir -p "$SERVER_DIR"
+          bash testing/scripts/smoke-test.sh 2>&1 | tee negative-smoke.log
+      - name: Require the expected failure
+        env:
+          OUTCOME: ${{ steps.negative-smoke.outcome }}
+        run: |
+          test "$OUTCOME" = failure
+          grep -q 'No srcds_i686/i486 binary found' negative-smoke.log
+      - name: Preserve negative smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: negative-smoke-logs
+          path: negative-smoke.log
+          if-no-files-found: error
+          retention-days: 7
