@@ -127,7 +127,7 @@ require_grep() {
   fi
 }
 
-require_grep "${CONSOLE_PROBE_LOG}" 'Mapchange to de_dust2|Mapchange to '"${MAP}" "map loaded (${MAP})"
+require_grep "${CONSOLE_PROBE_LOG}" 'Started map "'"${MAP}"'"' "engine started map (${MAP})"
 require_grep "${CONSOLE_PROBE_LOG}" 'hostname|# [0-9]+' "status command output"
 require_grep "${CONSOLE_PROBE_LOG}" 'Protocol version|version' "version command output"
 require_grep "${CONSOLE_PROBE_LOG}" 'Metamod|metamod|MM:S' "meta version command output"
@@ -295,7 +295,6 @@ require_grep_glob() {
 
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'SourceMod log file session started' "SourceMod session started"
 require_grep_glob "${SM_LOG_DIR}/L*.log" 'Version "' "SourceMod version recorded in log"
-require_grep_glob "${SM_LOG_DIR}/L*.log" 'Mapchange to' "SourceMod saw mapchange"
 
 chmod +x "${ROOT}/testing/scripts/check-sm-logs.sh"
 if ! "${ROOT}/testing/scripts/check-sm-logs.sh" "${SM_LOG_DIR}"; then

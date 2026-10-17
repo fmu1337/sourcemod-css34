@@ -1914,8 +1914,9 @@ else:
     raise SystemExit('Failed to patch configure_linux CXX11 ABI block')
 PY
 
-bash "$script_dir/apply-logger-mapchange-fix.sh" "$sourcemod_dir"
-bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"
+if [[ "${CSS34_DEBUG_TRACE:-0}" == "1" ]]; then
+  bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"
+fi
 
 # css34: full upstream SHA in sourcemod_version_auto.h + CSS34 pack line in `sm version`.
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYHDR'
