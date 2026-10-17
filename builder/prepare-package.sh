@@ -10,23 +10,6 @@ SM_ROOT="$PACKAGE_DIR/addons/sourcemod"
 GAMEDATA_ROOT="$SM_ROOT/gamedata"
 TRANSLATIONS_REF="${TRANSLATIONS_REF:-master}"
 
-keep_gamedata=(
-  core.games/blacklist.plugins.txt
-  core.games/common.games.txt
-  core.games/engine.ep1.txt
-  core.games/master.games.txt
-  funcommands.games.txt
-  sdkhooks.games/common.games.txt
-  sdkhooks.games/game.cstrike.txt
-  sdkhooks.games/master.games.txt
-  sdktools.games/common.games.txt
-  sdktools.games/engine.ep1.txt
-  sdktools.games/game.cstrike.txt
-  sdktools.games/master.games.txt
-  sm-cstrike.games/game.cstrike.txt
-  sm-cstrike.games/master.games.txt
-)
-
 echo "==> Stripping Linux binaries"
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then
   while IFS= read -r -d '' binary; do
@@ -34,58 +17,16 @@ if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then
   done < <(find "$SM_ROOT/bin" "$SM_ROOT/extensions" -type f \( -name '*.so' -o -name 'spcomp' \) -print0)
 fi
 
-echo "==> Trimming gamedata to CS:S v34 layout"
-if [ -d "$GAMEDATA_ROOT" ]; then
-  while IFS= read -r -d '' file; do
-  rel="${file#"$GAMEDATA_ROOT"/}"
-  keep=0
-  for allowed in "${keep_gamedata[@]}"; do
-    if [ "$rel" = "$allowed" ]; then
-      keep=1
-      break
-    fi
-  done
-  if [ "$keep" -eq 0 ]; then
-    rm -f "$file"
-  fi
-  done < <(find "$GAMEDATA_ROOT" -type f -print0)
+echo "==> Installing self-contained CS:S v34 gamedata"
+# CS:S v34 has a fixed engine ABI. Do not inherit gamedata from a current
+# SourceMod build: it also carries entries for newer Source branches and can
+# silently change this package's runtime contract.
+rm -rf "$GAMEDATA_ROOT"
+mkdir -p "$GAMEDATA_ROOT"
+cp -a "$BUILDER_DIR/assets/gamedata/." "$GAMEDATA_ROOT/"
 
-  mkdir -p "$GAMEDATA_ROOT/sm-cstrike.games"
-  if [ -f "$GAMEDATA_ROOT/sm-cstrike.games/game.css.txt" ]; then
-    mv -f "$GAMEDATA_ROOT/sm-cstrike.games/game.css.txt" \
-      "$GAMEDATA_ROOT/sm-cstrike.games/game.cstrike.txt"
-  fi
-  rm -f "$GAMEDATA_ROOT/sm-cstrike.games/game.csgo.txt"
-  cp -f "$BUILDER_DIR/assets/gamedata/sm-cstrike.games/game.cstrike.txt" \
-    "$GAMEDATA_ROOT/sm-cstrike.games/game.cstrike.txt"
-  cp -f "$BUILDER_DIR/assets/gamedata/sm-cstrike.games/master.games.txt" \
-    "$GAMEDATA_ROOT/sm-cstrike.games/master.games.txt"
-  mkdir -p "$GAMEDATA_ROOT/core.games"
-  if [ -f "$BUILDER_DIR/assets/gamedata/core.games/master.games.txt" ]; then
-    cp -f "$BUILDER_DIR/assets/gamedata/core.games/master.games.txt" \
-      "$GAMEDATA_ROOT/core.games/master.games.txt"
-  fi
-  if [ -f "$BUILDER_DIR/assets/gamedata/core.games/engine.ep1.txt" ]; then
-    cp -f "$BUILDER_DIR/assets/gamedata/core.games/engine.ep1.txt" \
-      "$GAMEDATA_ROOT/core.games/engine.ep1.txt"
-  fi
-  if [ -f "$BUILDER_DIR/assets/gamedata/core.games/blacklist.plugins.txt" ]; then
-    cp -f "$BUILDER_DIR/assets/gamedata/core.games/blacklist.plugins.txt" \
-      "$GAMEDATA_ROOT/core.games/blacklist.plugins.txt"
-  fi
-  # engine.ep1.txt + game.cstrike.txt: upstream CS:S vtable offsets do not
-  # match v34 (see builder/assets/gamedata/sdktools.games/game.cstrike.txt).
-  if [ -d "$BUILDER_DIR/assets/gamedata/sdktools.games" ]; then
-    mkdir -p "$GAMEDATA_ROOT/sdktools.games"
-    cp -f "$BUILDER_DIR/assets/gamedata/sdktools.games/"*.txt \
-      "$GAMEDATA_ROOT/sdktools.games/"
-  fi
-  if [ -d "$BUILDER_DIR/assets/gamedata/sdkhooks.games" ]; then
-    mkdir -p "$GAMEDATA_ROOT/sdkhooks.games"
-    cp -f "$BUILDER_DIR/assets/gamedata/sdkhooks.games/"*.txt \
-      "$GAMEDATA_ROOT/sdkhooks.games/"
-  fi
-fi
+python3 "$BUILDER_DIR/../testing/scripts/check-css34-gamedata.py" \
+  "$GAMEDATA_ROOT" --source "$SOURCEMOD_DIR"
 
 echo "==> Patching core.cfg for CS:S v34 release layout"
 core_cfg="$SM_ROOT/configs/core.cfg"

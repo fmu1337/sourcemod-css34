@@ -1,0 +1,16 @@
+/** CSS v34 SDKTools loader. */
+
+"Game Master"
+{
+	"common.games.txt"
+	{
+	}
+	"engine.ep1.txt"
+	{
+		"engine"	"original"
+	}
+	"game.cstrike.txt"
+	{
+		"game"		"cstrike"
+	}
+}
