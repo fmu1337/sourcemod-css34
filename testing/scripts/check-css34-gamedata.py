@@ -50,6 +50,20 @@ REQUIRED = {
     ),
 }
 
+# These SDKHooks entries were present in the historical 1.12.0.7245 package,
+# but do not describe the CSS v34 server vtable.  VPhysicsUpdate slot 131 is
+# GetAttackDamageScale on v34; GetMaxHealth is non-virtual and therefore must
+# not be used as a vtable offset.
+REQUIRED_PATTERNS = {
+    'sdkhooks.games/game.cstrike.txt': (
+        r'"VPhysicsUpdate"\s*\{[^}]*"windows"\s*"142"[^}]*"linux"\s*"143"',
+    ),
+}
+
+FORBIDDEN = {
+    'sdkhooks.games/game.cstrike.txt': ('"GetMaxHealth"',),
+}
+
 # These names are looked up conditionally or in CS:GO-only code. Keeping this
 # list explicit prevents an upstream addition from silently inheriting a
 # current-engine entry through the package build.
@@ -121,6 +135,24 @@ def main() -> int:
         absent = [needle for needle in needles if needle not in text]
         if absent:
             print(f'FAIL: {rel} is missing ' + ', '.join(absent), file=sys.stderr)
+            failed = True
+    for rel, patterns in REQUIRED_PATTERNS.items():
+        path = root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding='latin-1')
+        absent = [pattern for pattern in patterns if not re.search(pattern, text, re.DOTALL)]
+        if absent:
+            print(f'FAIL: {rel} has incorrect CSS v34 entries: ' + ', '.join(absent), file=sys.stderr)
+            failed = True
+    for rel, needles in FORBIDDEN.items():
+        path = root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding='latin-1')
+        present = [needle for needle in needles if needle in text]
+        if present:
+            print(f'FAIL: {rel} contains unsupported CSS v34 entries: ' + ', '.join(present), file=sys.stderr)
             failed = True
     if len(args) == 3:
         try:
