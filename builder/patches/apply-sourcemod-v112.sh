@@ -909,57 +909,6 @@ if smn_core.exists():
     else:
         print('==> ParseTime has no std::get_time (ok)')
 
-# css34: LogToOpenFileEx must not call FindConVar(sv_logecho) on first mapchange.
-# icvar->FindVar can infinite-loop when vstdlib's ConVar list is corrupted (engine_i486 dlopen).
-logger_cpp = sm / 'core/logic/Logger.cpp'
-if logger_cpp.exists():
-    lt = logger_cpp.read_text()
-    if 'CSS34 LOG_ECHO_SAFE' not in lt:
-        old_lte = """void Logger::LogToOpenFileEx(FILE *fp, const char *msg, va_list ap)
-{
-\tstatic ConVar *sv_logecho = bridge->FindConVar("sv_logecho");
-
-\tchar buffer[3072];
-\tke::SafeVsprintf(buffer, sizeof(buffer), msg, ap);
-
-\tconst char* date = GetFormattedDate();
-\tfprintf(fp, "L %s: %s\\n", date, buffer);
-
-\tif (!sv_logecho || bridge->GetCvarBool(sv_logecho))
-\t{
-\t\tstatic char conBuffer[4096];
-\t\tke::SafeSprintf(conBuffer, sizeof(conBuffer), "L %s: %s\\n", date, buffer);
-\t\tbridge->ConPrint(conBuffer);
-\t}
-
-\tfflush(fp);
-}"""
-        new_lte = """void Logger::LogToOpenFileEx(FILE *fp, const char *msg, va_list ap)
-{
-\tchar buffer[3072];
-\tke::SafeVsprintf(buffer, sizeof(buffer), msg, ap);
-
-\tconst char* date = GetFormattedDate();
-\tfprintf(fp, "L %s: %s\\n", date, buffer);
-
-\t/* CSS34 LOG_ECHO_SAFE: skip FindConVar(sv_logecho) - icvar->FindVar can hang
-\t * on corrupted vstdlib ConVar lists after engine_i486 dlopen side-effects. */
-\t{
-\t\tstatic char conBuffer[4096];
-\t\tke::SafeSprintf(conBuffer, sizeof(conBuffer), "L %s: %s\\n", date, buffer);
-\t\tbridge->ConPrint(conBuffer);
-\t}
-
-\tfflush(fp);
-}"""
-        if old_lte not in lt:
-            print('==> WARN: Logger LogToOpenFileEx block not found')
-        else:
-            logger_cpp.write_text(lt.replace(old_lte, new_lte, 1))
-            print('==> Patched Logger LogToOpenFileEx (skip sv_logecho FindConVar)')
-    else:
-        print('==> Logger LOG_ECHO_SAFE already patched')
-
 # bundled curl fortify noise on gcc only (clang-9 rejects -Wno-stringop-*)
 curl_ambuild = sm / 'extensions/curl/curl-src/lib/AMBuilder'
 if curl_ambuild.exists() and 'stringop-truncation' not in curl_ambuild.read_text():
@@ -1173,11 +1122,10 @@ else:
 PY
 fi
 
-# Optional logger / boot-trace (best-effort; may no-op on 1.12)
-bash "$script_dir/apply-logger-mapchange-fix.sh" "$sourcemod_dir" || \
-  echo "==> WARN: apply-logger-mapchange-fix.sh failed (continuing)"
-bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir" || \
-  echo "==> WARN: apply-sm-boot-trace.sh failed (continuing)"
+# Boot traces are a local diagnostic aid and must never enter release packages.
+if [[ "${CSS34_DEBUG_TRACE:-0}" == "1" ]]; then
+  bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"
+fi
 
 # sm version CSS34 pack line
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYVER'
