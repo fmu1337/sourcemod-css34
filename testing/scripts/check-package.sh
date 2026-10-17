@@ -16,9 +16,16 @@ fi
 LOGIC_SO="${TMP}/addons/sourcemod/bin/sourcemod.logic.so"
 JIT_SO="${TMP}/addons/sourcemod/bin/sourcepawn.jit.x86.so"
 SDKHOOKS_GAMEDATA="${TMP}/addons/sourcemod/gamedata/sdkhooks.games"
+GAMEDATA_ROOT="${TMP}/addons/sourcemod/gamedata"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 fail=0
 STATIC_SP=0
+
+echo "==> Checking self-contained CS:S v34 gamedata"
+if ! python3 "${REPO_ROOT}/testing/scripts/check-css34-gamedata.py" "${GAMEDATA_ROOT}"; then
+  fail=1
+fi
 
 if [[ ! -f "${MM_SO}" ]]; then
   echo "FAIL: missing sourcemod_mm_i486.so" >&2

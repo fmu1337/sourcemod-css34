@@ -1,0 +1,30 @@
+/** Counter-Strike: Source v34 SDKTools common gamedata. */
+
+"Games"
+{
+	"#default"
+	{
+		"Keys"
+		{
+			"SlapSoundCount"	"3"
+			"SlapSound1"		"player/pl_fallpain1.wav"
+			"SlapSound2"		"player/pl_fallpain3.wav"
+			"SlapSound3"		"player/pl_pain5.wav"
+			"m_iFrags"		"m_iFrags"
+			"m_iScore"		"m_iScore"
+		}
+		"Offsets"
+		{
+			"m_iHealth"
+			{
+				"class"	"CBasePlayer"
+				"prop"		"m_iHealth"
+			}
+			"m_lifeState"
+			{
+				"class"	"CBasePlayer"
+				"prop"		"m_lifeState"
+			}
+		}
+	}
+}

@@ -1,0 +1,76 @@
+/**
+ * Counter-Strike: Source v34 core gamedata.
+ *
+ * This is the CSS v34 subset of SourceMod's core.games/common.games.txt.
+ * Keep it self-contained: the package must not inherit entries for current
+ * Source branches from an upstream SourceMod build.
+ */
+
+"Games"
+{
+	"#default"
+	{
+		"Offsets"
+		{
+			"m_lifeState"
+			{
+				"class"		"CBasePlayer"
+				"prop"		"m_lifeState"
+			}
+			"CSendPropExtra_UtlVector::m_Offset"
+			{
+				"windows"	"16"
+				"linux"		"16"
+			}
+		}
+
+		"Keys"
+		{
+			"m_fFlags"		"m_fFlags"
+			"m_MoveType"		"m_MoveType"
+			"m_nRenderMode"	"m_nRenderMode"
+			"m_nRenderFX"		"m_nRenderFX"
+			"m_clrRender"		"m_clrRender"
+			"m_flGravity"		"m_flGravity"
+			"m_iHealth"		"m_iHealth"
+			"m_nButtons"		"m_nButtons"
+		}
+	}
+
+	"#default"
+	{
+		"#supported"
+		{
+			"engine"	"original"
+		}
+		"Offsets"
+		{
+			"GetDataDescMap"
+			{
+				"windows"	"13"
+				"linux"		"14"
+			}
+		}
+	}
+
+	"cstrike"
+	{
+		"Keys"
+		{
+			"HudRadioMenuMsg"	"ShowMenu"
+			"RadioMenuTimeout"	"4"
+			"HudTextMsg"		"HudMsg"
+			"GameExtension"	"game.cstrike"
+		}
+	}
+
+	"#default"
+	{
+		"Keys"
+		{
+			"MenuItemSound"		"buttons/button14.wav"
+			"MenuExitSound"		"buttons/combine_button7.wav"
+			"MenuExitBackSound"	"buttons/combine_button7.wav"
+		}
+	}
+}
