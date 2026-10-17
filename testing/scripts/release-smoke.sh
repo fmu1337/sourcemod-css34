@@ -71,6 +71,7 @@ docker run --rm --platform linux/amd64 \
   -e TIMEOUT_SECS=120 \
   -e SMOKE_CONDEBUG=1 \
   -e SMOKE_VERBOSE=1 \
+  -e CSS34_CI=1 \
   -w /workspace \
   "${IMAGE}" \
   bash -lc '

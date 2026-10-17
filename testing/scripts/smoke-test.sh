@@ -15,6 +15,7 @@ SM_EXTENSIONS_DIR="${SERVER_DIR}/cstrike/addons/sourcemod/extensions"
 SRCDS_BINARY="${SRCDS_BINARY:-./srcds_i686}"
 SMOKE_VERBOSE="${SMOKE_VERBOSE:-0}"
 SMOKE_CONDEBUG="${SMOKE_CONDEBUG:-1}"
+CSS34_CI="${CSS34_CI:-0}"
 ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 
 # Expected versions. Resolve dynamically if not set.
@@ -235,6 +236,10 @@ if command -v python3 >/dev/null 2>&1 && command -v c++filt >/dev/null 2>&1 && [
   fi
 else
   echo "SKIP: css34 vtable check (needs python3 + c++filt + ${server_so})"
+  if [[ "${CSS34_CI}" == "1" ]]; then
+    echo "FAIL: CSS34_CI requires the css34 vtable check" >&2
+    fail=1
+  fi
 fi
 
 if grep -Eiq '<FAILED>' "${CONSOLE_PROBE_LOG}"; then

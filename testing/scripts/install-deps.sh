@@ -79,9 +79,9 @@ apt_install() {
       extra_opts+=(--force-yes)
       ;;
   esac
-  apt-get install -y --allow-unauthenticated "${extra_opts[@]}" "$@" \
-    || apt-get install -y --allow-unauthenticated --force-yes "$@" \
-    || apt-get install -y "$@"
+  apt-get install -y --no-install-recommends --allow-unauthenticated "${extra_opts[@]}" "$@" \
+    || apt-get install -y --no-install-recommends --allow-unauthenticated --force-yes "$@" \
+    || apt-get install -y --no-install-recommends "$@"
 }
 
 install_debian() {
@@ -92,7 +92,7 @@ install_debian() {
   apt-get update -y || apt-get update -y --allow-unauthenticated || true
 
   local pkgs=(
-    ca-certificates curl wget unzip bzip2 file procps expect git
+    ca-certificates curl wget unzip bzip2 file procps expect git python3 binutils
     libstdc++6 libstdc++6:i386 zlib1g:i386
   )
   if apt-cache show libc6-i386 >/dev/null 2>&1; then
@@ -118,13 +118,13 @@ fix_centos_vault() {
   if [[ "${ID:-}" == "centos" && "${VERSION_ID:-}" == "7" ]]; then
     echo "Pointing CentOS 7 repos at vault.centos.org"
     sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/*.repo || true
-    sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/*.repo || true
+    sed -i 's|#baseurl=http://mirror.centos.org|baseurl=https://vault.centos.org|g' /etc/yum.repos.d/*.repo || true
   fi
 }
 
 install_rhel() {
   fix_centos_vault
-  local pkgs=(glibc.i686 libstdc++.i686 zlib.i686 ca-certificates unzip bzip2 file procps-ng expect git)
+  local pkgs=(glibc.i686 libstdc++.i686 zlib.i686 ca-certificates unzip bzip2 file procps-ng expect git python3 binutils)
   if command -v dnf >/dev/null 2>&1; then
     # Align x86_64 runtime with the i686 packages we are about to install.
     dnf -y update libstdc++ libgcc glibc zlib ca-certificates || true
