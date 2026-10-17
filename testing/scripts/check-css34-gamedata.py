@@ -76,6 +76,9 @@ UNSUPPORTED_SOURCE_KEYS = {
     'ResourceEntityClassname',
     'SetClanTag',
     'Weapon_',
+    # CSGO/Blade/MCV string-table workaround; the KHook line retains this
+    # lookup even though the CSS v34 package cannot use the detour.
+    'WriteBaselines',
 }
 
 LOOKUP = re.compile(r'Get(?:KeyValue|Offset|MemSig|Address)\("([^"]+)"')
