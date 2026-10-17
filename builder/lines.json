@@ -83,12 +83,12 @@
     "sm13-mm20": {
       "sourcemod": "SM_DEV",
       "metamod": "MM_20",
-      "status": "frozen"
+      "status": "retired"
     },
     "sm13-mm20-khook": {
       "sourcemod": "SM_KHOOK",
       "metamod": "MM_20K",
-      "status": "experimental"
+      "status": "frozen"
     }
   },
   "known_bad": {

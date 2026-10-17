@@ -19,15 +19,9 @@ resolve_mm() {
       MMS_DIRNAME="$MM_112_DIRNAME"; MMS_MODE="$MM_112_MODE"
       MMS_GIT_REV="$MM_112_REV"
       ;;
-    2.0)
-      MMS_COMMIT="$MM_20_COMMIT"; MMS_BRANCH="$MM_20_BRANCH"
-      MMS_DIRNAME="$MM_20_DIRNAME"; MMS_MODE="$MM_20_MODE"
-      MMS_GIT_REV="$MM_20_REV"
-      ;;
-    2.0k)
-      MMS_COMMIT="$MM_20K_COMMIT"; MMS_BRANCH="$MM_20K_BRANCH"
-      MMS_DIRNAME="$MM_20K_DIRNAME"; MMS_MODE="$MM_20K_MODE"
-      MMS_GIT_REV="$MM_20K_REV"
+    2.0|2.0k)
+      echo "MM 2.0 builds are archived; use the archive/khook branch" >&2
+      exit 1
       ;;
     *)
       echo "Unknown MM mode '$mode'" >&2
@@ -64,22 +58,12 @@ apply_sm_line() {
       SOURCEMOD_MAJOR="$SM_DEV_MAJOR"
       resolve_mm 1.12
       ;;
-    sm13-mm20|sm13-mm2)
-      SOURCEMOD_COMMIT="$SM_DEV_COMMIT"
-      SOURCEMOD_GIT_REV="$SM_DEV_REV"
-      SOURCEMOD_MAJOR="$SM_DEV_MAJOR"
-      resolve_mm 2.0
-      ;;
-    sm13-mm20-khook|sm13-khook|khook)
-      SOURCEMOD_COMMIT="$SM_KHOOK_COMMIT"
-      SOURCEMOD_GIT_REV="$SM_KHOOK_REV"
-      SOURCEMOD_MAJOR="$SM_KHOOK_MAJOR"
-      SOURCEMOD_MERGE_MASTER="$SM_KHOOK_MERGE_MASTER"
-      SOURCEMOD_BUILD_COMMIT="$SM_KHOOK_BUILD_COMMIT"
-      resolve_mm 2.0k
+    sm13-mm20|sm13-mm2|sm13-mm20-khook|sm13-khook|khook)
+      echo "This build line is archived; use the archive/khook branch" >&2
+      exit 1
       ;;
     *)
-      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-latest|sm13-mm20|sm13-mm20-khook)" >&2
+      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-latest)" >&2
       exit 1
       ;;
   esac

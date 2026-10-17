@@ -3,7 +3,7 @@
 ## Cursor Cloud specific instructions
 
 This repo is a **build system** (not a long-running app). It compiles patched
-**SourceMod + Metamod:Source** packages for **Counter-Strike: Source v34** — five
+**SourceMod + Metamod:Source** packages for **Counter-Strike: Source v34** — three
 lines selected by `CSS34_LINE` (default `sm13-latest` = SM 1.13.0.7472 + MM 1.12
 git1226; pins in `builder/lines.json`; generated `builder/versions.env`) — and
 smoke-tests them on a real `srcds`
@@ -42,11 +42,10 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   clang-10 bundle from bitbucket, i386 sysroot, MySQL / MariaDB SDKs, hl2sdk
   clones, AMBuild). Downloads come from github.com, bitbucket.org, cdn.mysql.com,
   snapshot.debian.org and archive.debian.org — all reachable.
-- Known quirk: `builder/run/linux.sh` leaves `sourcemod-*.tar.gz` / `mmsource-*.tar.gz`
-  symlinks at the repo root pointing at the absolute package path. After a
-  `legacy-build.sh` run that path is the container's `/workspace/packages/…`, so
-  the links are dangling on the host (and `mmsource-*` is not in `.gitignore`).
-  Ignore/delete them; the real artifacts live in `packages/`.
+- Packages stay in `packages/` (or `PACKAGES_DIR`); the builder creates no root
+  symlinks. Source `builder/package-paths.sh` with `CSS34_LINE` to resolve exact
+  SM/MM archive paths. Archived MM 2.0/KHook builds live in `archive/khook`;
+  master rejects those build lines, while their published pointers stay intact.
 
 ### Verifying / testing
 - **Static ABI check** (the "ABI / export checks" step of `build-linux` in
@@ -68,7 +67,7 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   versions match the package.
 
 ### Lint
-There is no dedicated linter/pre-commit config in this repo. The ABI export
+Run `actionlint` after workflow edits. The ABI export
 check (`check-package.sh`) is the closest static verification of build output.
 
 ### Version pin bumps (Jules / agents)

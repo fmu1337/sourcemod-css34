@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       keep_hours:
-        description: "Keep artifacts newer than this many hours (0 = delete all)"
+        description: "Keep artifacts newer than this many hours (failure logs always kept 7 days)"
         required: false
-        default: "0"
+        default: "72"
       dry_run:
         description: "List what would be deleted without deleting"
         type: boolean
@@ -29,11 +29,11 @@ jobs:
       - name: Delete old Actions artifacts
         uses: actions/github-script@v7
         env:
-          KEEP_HOURS: ${{ github.event.inputs.keep_hours || '0' }}
+          KEEP_HOURS: ${{ github.event.inputs.keep_hours || '72' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         with:
           script: |
-            const keepHours = parseInt(process.env.KEEP_HOURS || '48', 10);
+            const keepHours = parseInt(process.env.KEEP_HOURS || '72', 10);
             const dryRun = String(process.env.DRY_RUN || 'false') === 'true';
             const cutoff = Date.now() - keepHours * 3600 * 1000;
             const owner = context.repo.owner;
@@ -54,7 +54,9 @@ jobs:
                   continue;
                 }
                 const created = new Date(art.created_at).getTime();
-                if (created >= cutoff) {
+                const failureLog = /(?:logs|smoke|botplay|bisect)/i.test(art.name);
+                const retentionCutoff = failureLog ? Math.min(cutoff, Date.now() - 7 * 24 * 3600 * 1000) : cutoff;
+                if (created >= retentionCutoff) {
                   skipped++;
                   continue;
                 }

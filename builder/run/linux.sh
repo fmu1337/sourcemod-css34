@@ -80,7 +80,6 @@ fi
 git -C "$SOURCEMOD_DIR" submodule foreach --recursive "git reset --hard && git clean -fd" 2>/dev/null || true
 git -C "$SOURCEMOD_DIR" fetch --depth=8192 origin "$SOURCEMOD_COMMIT"
 git -C "$SOURCEMOD_DIR" reset --hard "$SOURCEMOD_COMMIT"
-bash "$BUILDER_DIR/sourcemod-khook-merge.sh" "$SOURCEMOD_DIR"
 git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"
@@ -114,7 +113,6 @@ MM_ARTIFACT="$(
     "$PACKAGES_DIR" \
     "$MMS_DIR"
 )"
-ln -sfn "$MM_ARTIFACT" "$WDIR/$(basename "$MM_ARTIFACT")"
 echo "==> Metamod package: $MM_ARTIFACT"
 
 echo "==> Applying CS:S v34 compatibility patches"
@@ -176,5 +174,4 @@ ARTIFACT="$(
     "$DEPS_DIR"
 )"
 
-ln -sfn "$ARTIFACT" "$WDIR/$(basename "$ARTIFACT")"
 echo "==> Build complete: $ARTIFACT"

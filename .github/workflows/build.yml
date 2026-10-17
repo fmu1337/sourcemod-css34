@@ -16,6 +16,10 @@ on:
       - '.github/workflows/cleanup-artifacts.yml'
   workflow_dispatch:
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CSS34_LINE: sm13-latest
   PURE_SOURCE_BUILD: "1"
@@ -70,7 +74,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        line: [sm13-latest, sm13-mm20-khook]
+        line: [sm13-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,9 +107,6 @@ jobs:
         shell: bash
         run: |
           ls -lh packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip
-          if [[ "${{ matrix.line }}" == "sm13-mm20-khook" ]]; then
-            unzip -l packages/sourcemod-*-css34-windows.zip | grep -i 'dhooks.ext.dll'
-          fi
 
       # Packages + debug symbols for wine-smoke (Actions cache, not artifact storage)
       - name: Collect packages and PDBs
@@ -136,10 +137,10 @@ jobs:
       - name: Windows smoke test (${{ matrix.line }})
         shell: bash
         env:
-          SM_VERSION_EXPECT: ${{ matrix.line == 'sm13-mm20-khook' && '1.13.0.7565' || '1.13.0.7472' }}
-          MM_VERSION_EXPECT: ${{ matrix.line == 'sm13-mm20-khook' && '2.0.0' || '1.12.0' }}
-          EXPECT_EXTS: ${{ matrix.line == 'sm13-mm20-khook' && 'CS Tools,SDK Tools,BinTools,SDK Hooks,DHooks' || 'CS Tools,SDK Tools,BinTools' }}
-          LOAD_EXTS: ${{ matrix.line == 'sm13-mm20-khook' && 'sdkhooks.ext,dhooks.ext' || '' }}
+          SM_VERSION_EXPECT: "1.13.0.7472"
+          MM_VERSION_EXPECT: "1.12.0"
+          EXPECT_EXTS: "CS Tools,SDK Tools,BinTools"
+          LOAD_EXTS: ""
           # css34_dhooks_probe with bots (skipped when the package has no dhooks.ext.dll)
           DHOOKS_PROBE_SECS: "150"
         run: |
@@ -176,11 +177,6 @@ jobs:
             mm_expect: "1.12.0"
             exts: "CS Tools,SDK Tools,BinTools"
             load_exts: ""
-          - line: sm13-mm20-khook
-            sm_expect: "1.13.0.7565"
-            mm_expect: "2.0.0"
-            exts: "CS Tools,SDK Tools,BinTools,SDK Hooks,DHooks"
-            load_exts: "sdkhooks.ext,dhooks.ext"
     steps:
       # zstd: actions/cache picks the compression from the tools present, and the
       # Windows / host-runner entries are zstd (a gzip restore misses them)

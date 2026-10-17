@@ -19,8 +19,8 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 |----------|-----------|---------|------|
 | `sm13-latest` | 1.13.0.7472 | 1.12.0 git1226 | **Default / recommended** |
 | `sm12-latest` | 1.12.0.7253 | 1.12.0 git1226 | Latest 1.12 |
-| `sm13-mm20-khook` | 1.13.0.7565 (KHook branch + master) | 2.0.0 git1472 (KHook) | Experimental, ships `dhooks.ext` |
-| `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Experimental, frozen |
+| `sm13-mm20-khook` | 1.13.0.7565 (KHook branch + master) | 2.0.0 git1472 (KHook) | Frozen outside CI; archived builder, ships `dhooks.ext` |
+| `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Retired outside CI |
 
 `sm11-oldstable` (SM 1.11.0.6970 + MM 1.10.7) has **no pointer** — see [Known-bad releases](#known-bad-releases).
 What each pointer serves right now (tag, commits, smoke result) is in
@@ -41,8 +41,8 @@ attached to the per-tag releases (pointers are Linux-only).
 | `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev** git976 (`80e8ff0…`, `metamod.1.ep1`) | OldStable, withheld from pointers |
 | `sm12-latest` | **1.12.0.7253** (`2e229b11…`) | **1.12 git1226** (`9fd977d…`, `metamod.2.ep1`) | Latest 1.12 |
 | `sm13-latest` | **1.13.0.7472** (`6eb5f8fa…`) | **1.12 git1226** (`9fd977d…`) | Latest 1.13 (default) |
-| `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | **2.0 git1407** (`0084b86…`) | Experimental, frozen ([docs](docs/SM13_MM20.md)) |
-| `sm13-mm20-khook` | **1.13.0.7565** KHook branch + master (`25954d4…`) | **2.0 git1472** KHook (`05c5c63…`) | Experimental ([docs](docs/MM20_KHOOK.md)) |
+| `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | **2.0 git1407** (`0084b86…`) | Retired outside CI ([docs](docs/SM13_MM20.md)) |
+| `sm13-mm20-khook` | **1.13.0.7565** KHook branch + master (`25954d4…`) | **2.0 git1472** KHook (`05c5c63…`) | Frozen outside CI ([docs](docs/MM20_KHOOK.md)) |
 
 `sm13-dev` (7404 + MM 1.12) is **retired** — use `sm13-latest`. Its alias stays in `resolve-version.sh` /
 `release.yml` only so the `1.13.0.7404-mm1.12.0` tag can be rebuilt.
@@ -192,9 +192,16 @@ CSS34_LINE=sm13-latest builder/docker/legacy-build.sh
 # Other lines:
 CSS34_LINE=sm11-oldstable  builder/docker/legacy-build.sh
 CSS34_LINE=sm12-latest     builder/docker/legacy-build.sh
-CSS34_LINE=sm13-mm20       builder/docker/legacy-build.sh
-CSS34_LINE=sm13-mm20-khook builder/docker/legacy-build.sh   # docs/MM20_KHOOK.md
 ```
+
+MM 2.0 builds (`sm13-mm20`, `sm13-mm20-khook`) are archived outside CI in
+[`archive/khook`](https://github.com/fmu1337/sourcemod-css34/tree/archive/khook).
+Use that branch to reproduce them; master rejects those build selections. Existing
+release assets, line IDs and pointer URLs remain available.
+
+`builder/package-paths.sh` resolves exact Linux package names from the selected
+line and revisions. Stale packages cannot silently replace the expected build.
+No root package symlinks are created.
 
 `PURE_SOURCE_BUILD=1` is the default. Packages land in `packages/`. `legacy-build.sh` builds in `debian:11`
 (glibc 2.31) — the only Linux package that passes `check-package.sh` and boots on legacy hosts.
@@ -216,14 +223,14 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 ## CI
 
 - `.github/workflows/test-server.yml` — the real gate (push to `master` / `cursor/**`, PRs; `docs/**` and `*.md` are ignored).
-  Builds **all five** lines with `legacy-build.sh` + `check-package.sh` / `check-metamod-package.sh`;
+  Builds **three active** lines (`sm11-oldstable`, `sm12-latest`, `sm13-latest`) with `legacy-build.sh` + `check-package.sh` / `check-metamod-package.sh`;
   smoke on `debian:11` for all lines and on `debian:latest`, `rockylinux:9` and the ubuntu-22.04 host for
-  `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook`; **botplay-stress matrix** on `debian:11` for all lines
+  `sm13-latest`; **botplay-stress matrix** on `debian:11` for all lines
   (SMAC + SDKHooks OnTakeDamage + SM API / cstrike / DHooks probes). Packages pass between jobs via
   **Actions cache**. Reference (rom4s / published-release) botplay, extra distros and bisect are
   `workflow_dispatch` opt-ins.
 - `.github/workflows/build.yml` — Linux build of `sm13-latest` with `builder/run/linux.sh` on ubuntu-22.04
-  (jammy-native, compile check only); **Windows** builds of `sm13-latest` + `sm13-mm20-khook`, each booted
+  (jammy-native, compile check only); **Windows** build of `sm13-latest`, booted
   natively on `windows-latest` and under Wine (`wine-smoke`).
 - `.github/workflows/release.yml` — tag-driven; tag (minus `-r<N>`) maps to `CSS34_LINE`; packages attach with
   `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke,
@@ -232,8 +239,10 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 - `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts.
 - `.github/workflows/cleanup-artifacts.yml` — weekly / manual purge of Actions artifacts.
 
-Failure logs are uploaded as artifacts, but `test-server.yml`'s `cleanup-workflow-storage` deletes every
-artifact of the run when the run ends — download them while the run is still going.
+Failure logs remain downloadable for seven days after a run. Scheduled cleanup keeps other
+artifacts for at least 72 hours and preserves failure logs for seven days. Only PR runs
+cancel an older run of the same workflow/ref. Botplay baseline comparisons are informational;
+server crashes and API/ABI probes still fail the job.
 
 ```bash
 git tag 1.13.0.7472-mm1.12.0-r3 && git push origin 1.13.0.7472-mm1.12.0-r3   # rebuild sm13-latest

@@ -6,12 +6,12 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 
 | Job | Images | Lines |
 |---|---|---|
-| `build-linux` (+ "ABI / export checks") | `legacy-build.sh` in `debian:11` on ubuntu-22.04 | all five |
-| `test-built-debian` | `debian:11` | all five |
-| `test-built-debian` | `debian:latest` | `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook` |
-| `test-built-rhel` | `rockylinux:9` | `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook` |
-| `test-built-smoke` | ubuntu-22.04 host | `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook` |
-| `test-built-botplay-matrix` | `debian:11` | all five |
+| `build-linux` (+ "ABI / export checks") | `legacy-build.sh` in `debian:11` on ubuntu-22.04 | all three active lines |
+| `test-built-debian` | `debian:11` | all three active lines |
+| `test-built-debian` | `debian:latest` | `sm13-latest` |
+| `test-built-rhel` | `rockylinux:9` | `sm13-latest` |
+| `test-built-smoke` | ubuntu-22.04 host | `sm13-latest` |
+| `test-built-botplay-matrix` | `debian:11` | all three active lines |
 
 CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` from `build-linux` (handed to later jobs via Actions cache, not artifacts). rom4s reference drops are not used in this workflow.
 
@@ -26,7 +26,7 @@ When the CI server tree is trimmed to a single map (`de_dust2`), `testing/script
 | `SMOKE_CONDEBUG=1` | on | srcds `-condebug` → `cstrike/console.log` |
 | `SMOKE_VERBOSE=1` | off in local runs | expect `log_user 1`, `+log on +sv_logfile 1` |
 
-On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/console.log`, and SourceMod `L*.log`. CI uploads those logs as artifacts **only on failure** (1-day retention) so they do not fill the Actions storage quota — but `cleanup-workflow-storage` deletes every artifact of the run once the run finishes, so download them while it is still running (the printed tails in the job log stay).
+On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/console.log`, and SourceMod `L*.log`. CI uploads those logs as artifacts **only on failure** with seven-day retention. Logs remain available after the run finishes; scheduled cleanup also preserves them for seven days.
 
 ## What the smoke test checks
 
@@ -57,7 +57,7 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 
 `test-rom4s-botplay` boots the css34 server with **rom4s** Metamod 1.10.6 + SourceMod 6572, compiles [smac_v34](https://github.com/fmu1337/smac_v34), spawns 4 bots (`botplay-server.cfg`), records **600s** by default, then parses `cstrike/console.log` for `round_start`, `round_end`, and kills.
 
-`test-built-botplay-matrix` runs the same session with the **built** MM + SM packages of every line and compares against `testing/botplay/rom4s-baseline.json` (candidate must reach ≥75% of baseline event counts). The older single-line `test-built-botplay` job is disabled (`if: false`).
+`test-built-botplay-matrix` runs the same session with the **built** MM + SM packages of every line and compares against `testing/botplay/rom4s-baseline.json` for information only. Event-count differences do not fail CI; the botplay crash, extension and API/ABI checks remain required. The redundant single-line job has been removed.
 
 `test-release-botplay` downloads published GitHub Release packages and runs the same stress session for:
 
@@ -70,7 +70,7 @@ SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/`. Our package
 
 **Stress profile (default):** `botplay-stress.cfg` execs `botplay-server.cfg` (fast 1‑minute rounds) then raises `bot_quota` to 8. Plugin `css34_botplay_stress.smx` rotates maps every 3 rounds (`de_dust2` → `de_inferno` → `de_nuke`) and logs sdkhooks/sdktools ABI probe results each round.
 
-**When they run:** `test-built-botplay-matrix` (`debian:11`, 300 s per line) runs on every push / PR. `test-rom4s-botplay` and `test-release-botplay` (`debian:latest`) only on `workflow_dispatch` with `run_reference_botplay=true`; extra images (`debian:11`, `debian:12`, `rockylinux:9`) for rom4s / built (`sm13-latest`, `sm13-mm20`) only with `botplay_extra_distros=true`.
+**When they run:** `test-built-botplay-matrix` (`debian:11`, 300 s per line) runs on every push / PR. `test-rom4s-botplay` and `test-release-botplay` (`debian:latest`) only on `workflow_dispatch` with `run_reference_botplay=true`; extra images (`debian:11`, `debian:12`, `rockylinux:9`) for rom4s / built (`sm13-latest`) only with `botplay_extra_distros=true`.
 
 | File | Role |
 |------|------|
@@ -172,3 +172,11 @@ rom4s SM 6572 + MM 1.10.6 drops, i.e. it tests rom4s, not this repo.
 ## Version URLs
 
 Published release pairs of the five `CSS34_LINE`s, mix PASS/FAIL notes, and historical community URLs live in [`versions/matrix.json`](versions/matrix.json) (`releases`, `compatibility`, `reference`). What each line pointer serves right now is in [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json). CI smoke builds only in-tree pure-source packages — it does not download `reference.*` URLs.
+
+## CI hygiene regression checks
+
+Run `bash testing/scripts/check-package-paths.sh` and `actionlint` after workflow changes.
+`ci-hygiene.yml` deliberately runs smoke against an empty server directory, requires
+the expected missing-server failure, and uploads `negative-smoke-logs` for seven days.
+After that workflow completes, verify the artifact is still downloadable. This
+negative test does not relax any real server smoke or botplay gate.

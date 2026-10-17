@@ -20,11 +20,13 @@ if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
 fi
 
 mkdir -p "$PACKAGES_DIR"
+PACKAGES_DIR="$(cd "$PACKAGES_DIR" && pwd)"
 
 echo "==> Building SourceMod css34 in ${IMAGE}" >&2
 
 docker run --rm --platform linux/amd64 \
   -v "$ROOT:/workspace" \
+  -v "$PACKAGES_DIR:/workspace/packages" \
   -w /workspace \
   -e SKIP_APT_INSTALL=1 \
   -e CSS34_LINE="${CSS34_LINE}" \
@@ -142,7 +144,8 @@ EOF
 
 sudo chown -R "$(id -u):$(id -g)" "$ROOT/deps" "$ROOT/packages" "$ROOT/sourcemod" 2>/dev/null || true
 
-ARTIFACT="$(ls -1 "$PACKAGES_DIR"/sourcemod-*-css34-linux.tar.gz 2>/dev/null | head -n1)"
+source "$ROOT/builder/package-paths.sh"
+ARTIFACT="$SM_PACKAGE"
 if [[ -z "${ARTIFACT}" || ! -f "${ARTIFACT}" ]]; then
   echo "Legacy docker build did not produce a package under ${PACKAGES_DIR}" >&2
   exit 1
