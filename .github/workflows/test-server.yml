@@ -276,6 +276,7 @@ jobs:
             -e TIMEOUT_SECS=120 \
             -e SMOKE_CONDEBUG=1 \
             -e SMOKE_VERBOSE=1 \
+            -e CSS34_CI=1 \
             -w /workspace \
             "${IMAGE}" \
             bash -lc '
@@ -387,6 +388,7 @@ jobs:
             -e REPORT_TXT=/workspace/.ci-server/botplay-report.txt \
             -e SMOKE_CONDEBUG=1 \
             -e SMOKE_VERBOSE=1 \
+            -e CSS34_CI=1 \
             -w /workspace \
             "${IMAGE}" \
             bash -lc '
@@ -503,6 +505,7 @@ jobs:
             -e TIMEOUT_SECS=120 \
             -e SMOKE_CONDEBUG=1 \
             -e SMOKE_VERBOSE=1 \
+            -e CSS34_CI=1 \
             -w /workspace \
             "${IMAGE}" \
             bash -lc '
@@ -662,6 +665,7 @@ jobs:
             -e SM_VERSION_EXPECT \
             -e SMOKE_CONDEBUG=1 \
             -e SMOKE_VERBOSE=1 \
+            -e CSS34_CI=1 \
             -w /workspace \
             "${IMAGE}" \
             bash -lc '
@@ -736,6 +740,7 @@ jobs:
             -e SM_VERSION_EXPECT \
             -e SMOKE_CONDEBUG=1 \
             -e SMOKE_VERBOSE=1 \
+            -e CSS34_CI=1 \
             -w /workspace \
             "${IMAGE}" \
             bash -lc '
@@ -828,6 +833,7 @@ jobs:
             -e REPORT_TXT=/workspace/.ci-server/built-botplay-report.txt \
             -e SMOKE_CONDEBUG=1 \
             -e SMOKE_VERBOSE=1 \
+            -e CSS34_CI=1 \
             -w /workspace \
             "${IMAGE}" \
             bash -lc '
@@ -948,6 +954,7 @@ jobs:
             -e REPORT_TXT=/workspace/.ci-server/release-botplay-report.txt \
             -e SMOKE_CONDEBUG=1 \
             -e SMOKE_VERBOSE=1 \
+            -e CSS34_CI=1 \
             -w /workspace \
             "${IMAGE}" \
             bash -lc '
