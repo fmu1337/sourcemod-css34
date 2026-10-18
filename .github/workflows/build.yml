@@ -21,11 +21,23 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  CSS34_LINE: sm13-latest
   PURE_SOURCE_BUILD: "1"
 
 jobs:
+  pins:
+    runs-on: ubuntu-22.04
+    outputs:
+      windows: ${{ steps.m.outputs.windows }}
+      default_line: ${{ steps.m.outputs.default_line }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Emit CI matrices from lines.json
+        id: m
+        run: python3 builder/lines.py gha >> "$GITHUB_OUTPUT"
+
   linux:
+    needs: pins
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -57,7 +69,7 @@ jobs:
           SKIP_APT_INSTALL: 1
           CC: gcc-9
           CXX: g++-9
-          CSS34_LINE: ${{ env.CSS34_LINE }}
+          CSS34_LINE: ${{ needs.pins.outputs.default_line }}
           PURE_SOURCE_BUILD: ${{ env.PURE_SOURCE_BUILD }}
         run: |
           export WDIR="$PWD"
@@ -70,11 +82,12 @@ jobs:
         run: ls -lh packages/sourcemod-*-css34-linux.tar.gz packages/mmsource-*-css34-linux.tar.gz
 
   windows:
+    needs: pins
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        line: [sm13-latest]
+        include: ${{ fromJson(needs.pins.outputs.windows) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -137,8 +150,8 @@ jobs:
       - name: Windows smoke test (${{ matrix.line }})
         shell: bash
         env:
-          SM_VERSION_EXPECT: "1.13.0.7472"
-          MM_VERSION_EXPECT: "1.12.0"
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
           EXPECT_EXTS: "CS Tools,SDK Tools,BinTools"
           LOAD_EXTS: ""
           # css34_dhooks_probe with bots (skipped when the package has no dhooks.ext.dll)
@@ -163,7 +176,7 @@ jobs:
 
   # Boots the Windows packages on the Windows CS:S v34 server (srcds.exe) under Wine
   wine-smoke:
-    needs: windows
+    needs: [pins, windows]
     # Test each line whose Windows build succeeded (a missing package fails on the cache miss)
     if: ${{ !cancelled() }}
     runs-on: ubuntu-22.04
@@ -171,12 +184,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - line: sm13-latest
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
-            exts: "CS Tools,SDK Tools,BinTools"
-            load_exts: ""
+        include: ${{ fromJson(needs.pins.outputs.windows) }}
     steps:
       # zstd: actions/cache picks the compression from the tools present, and the
       # Windows / host-runner entries are zstd (a gzip restore misses them)

@@ -119,18 +119,9 @@ MMS_DIRNAME="${MMS_DIRNAME:-}"
 MMS_COMMIT="${MMS_COMMIT:-}"
 MMS_BRANCH="${MMS_BRANCH:-}"
 
-if [[ -z "$MMS_MODE" || -z "$MMS_DIRNAME" || -z "$MMS_COMMIT" ]]; then
-  if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
-    MMS_COMMIT="${MMS_COMMIT:-9fd977df3b49ec76cdf865a4af13a90c0f5c8814}"
-    MMS_BRANCH="${MMS_BRANCH:-1.12-dev}"
-    MMS_DIRNAME="${MMS_DIRNAME:-mmsource-1.12}"
-    MMS_MODE="${MMS_MODE:-1.12}"
-  else
-    MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-    MMS_BRANCH="${MMS_BRANCH:-1.10-dev}"
-    MMS_DIRNAME="${MMS_DIRNAME:-mmsource-1.10}"
-    MMS_MODE="${MMS_MODE:-1.10}"
-  fi
+if [[ -z "$MMS_MODE" || -z "$MMS_DIRNAME" || -z "$MMS_COMMIT" || -z "$MMS_BRANCH" ]]; then
+  echo "MMS_MODE, MMS_DIRNAME, MMS_BRANCH and MMS_COMMIT are required (source builder/resolve-version.sh)" >&2
+  exit 1
 fi
 
 clone_repo "$MMS_DIRNAME" "https://github.com/alliedmodders/metamod-source" "$MMS_BRANCH" "$MMS_COMMIT"

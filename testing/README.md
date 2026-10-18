@@ -171,7 +171,7 @@ rom4s SM 6572 + MM 1.10.6 drops, i.e. it tests rom4s, not this repo.
 
 ## Version URLs
 
-Published release pairs of the five `CSS34_LINE`s, mix PASS/FAIL notes, and historical community URLs live in [`versions/matrix.json`](versions/matrix.json) (`releases`, `compatibility`, `reference`). What each line pointer serves right now is in [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json). CI smoke builds only in-tree pure-source packages — it does not download `reference.*` URLs.
+Mix PASS/FAIL notes and historical community URLs live in [`versions/matrix.json`](versions/matrix.json) (`compatibility`, `reference`). Current pins are [`builder/lines.json`](../builder/lines.json). What each line pointer serves right now is in [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json). CI smoke builds only in-tree pure-source packages — it does not download `reference.*` URLs.
 
 ## CI hygiene regression checks
 

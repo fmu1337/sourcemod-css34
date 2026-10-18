@@ -18,9 +18,12 @@ class LinesTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         for name in ("builder/lines.py", "builder/lines.json", "builder/versions.env",
+                     "builder/generated/ci-matrix.json", "builder/generated/tag-map.sh",
+                     "README.md",
                      "builder/checkout-deps.sh", "builder/write-build-stamps.sh",
                      "testing/scripts/check-version-copies.sh", "testing/versions/matrix.json",
-                     ".github/workflows/test-server.yml", ".github/workflows/release.yml"):
+                     ".github/workflows/build.yml", ".github/workflows/test-server.yml",
+                     ".github/workflows/release.yml"):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
@@ -45,7 +48,7 @@ class LinesTest(unittest.TestCase):
         target = self.root / "builder/versions.env"
         changed = target.read_text() + "\nSM_LATEST_REV=1\n"
         target.write_text(changed)
-        self.assertIn("stale versions.env", self.run_command("check", False).stderr)
+        self.assertIn("stale builder/versions.env", self.run_command("check", False).stderr)
         self.assertEqual(target.read_text(), changed)
 
     def test_pin_change_requires_generation_and_consumer_updates(self):
@@ -53,10 +56,9 @@ class LinesTest(unittest.TestCase):
         data = json.loads(target.read_text())
         data["pins"]["SM_LATEST"]["rev"] += 1
         target.write_text(json.dumps(data))
-        self.run_command("check", False)
+        self.assertIn("stale", self.run_command("check", False).stderr)
         self.run_command("gen")
-        result = self.run_command("check", False)
-        self.assertIn("matrix lines.sm12-latest", result.stderr)
+        self.run_command("check")
 
     def test_malformed_sha_does_not_overwrite_generated_file(self):
         target = self.root / "builder/lines.json"

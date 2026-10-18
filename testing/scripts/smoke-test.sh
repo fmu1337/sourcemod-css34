@@ -41,17 +41,20 @@ if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" || -z "${MM_COM
           1.11) MM_VERSION_EXPECT="1.11.0" ;;
           1.12) MM_VERSION_EXPECT="1.12.0" ;;
           2.0)  MM_VERSION_EXPECT="2.0.0" ;;
-          *)    MM_VERSION_EXPECT="1.12.0" ;;
+          *)
+            echo "Unknown Metamod mode '${RESOLVED_MM_MODE:-}'" >&2
+            exit 1
+            ;;
         esac
       fi
     fi
   fi
 fi
 
-MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
-SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6970}"
-MM_COMMIT_EXPECT="${MM_COMMIT_EXPECT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-SM_COMMIT_EXPECT="${SM_COMMIT_EXPECT:-f53cb134ef83b580c83e1f4bf35f60d11c4571dd}"
+if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" || -z "${MM_COMMIT_EXPECT:-}" || -z "${SM_COMMIT_EXPECT:-}" ]]; then
+  echo "SM/MM version and commit expects are required (set them or CSS34_LINE)" >&2
+  exit 1
+fi
 # Packaging repo commit (CSS34 pack line). Empty skips the check.
 CSS34_PACK_COMMIT_EXPECT="${CSS34_PACK_COMMIT_EXPECT:-}"
 

@@ -33,8 +33,8 @@ SDK:        apply-hl2sdk-ep1c.sh                  # rom4s hl2sdk-ep1c для SM 
 1. Новая ревизия той же major (7472 → 75xx): меняется pin в `builder/versions.env` (и в местах из
    [JULES_DAILY_VERSION_BUMP.md](JULES_DAILY_VERSION_BUMP.md)), правки — in place в `apply-sourcemod-v112.sh`.
 2. Правка в `apply-sourcemod-v112.sh` действует на **все** линии 1.12/1.13 сразу — проверять CI по всем.
-3. Новая линия = новый case в `resolve-version.sh`, переменные в `versions.env`, строки в матрицах
-   `test-server.yml` / `build.yml`, маппинг тега в `release.yml`, запись в `matrix.json`.
+3. Новая линия = запись в `builder/lines.json` и `python3 builder/lines.py gen`
+   (versions.env, CI-матрица, маппинг тега, таблицы README). `matrix.json` — только история.
 
 Предложения, как это упростить, — в [REVIEW_2026-10.md](REVIEW_2026-10.md). Всё, что ниже, — история
 обсуждения (PR #7, #10, #15, #17) и чек-листы граблей, которые по-прежнему полезны при апгрейдах.

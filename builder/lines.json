@@ -63,32 +63,45 @@
     "sm11-oldstable": {
       "sourcemod": "SM_OLDSTABLE",
       "metamod": "MM_110",
-      "status": "active"
+      "status": "active",
+      "pointer": false,
+      "role": "OldStable, withheld from pointers"
     },
     "sm12-latest": {
       "sourcemod": "SM_LATEST",
       "metamod": "MM_112",
-      "status": "active"
+      "status": "active",
+      "pointer": true,
+      "role": "Latest 1.12"
     },
     "sm13-latest": {
       "sourcemod": "SM_LATEST_13",
       "metamod": "MM_112",
-      "status": "active"
+      "status": "active",
+      "pointer": true,
+      "role": "Default / recommended"
     },
     "sm13-dev": {
       "sourcemod": "SM_DEV",
       "metamod": "MM_112",
-      "status": "retired"
+      "status": "retired",
+      "pointer": false,
+      "role": "Retired alias of 7404 + MM 1.12"
     },
     "sm13-mm20": {
       "sourcemod": "SM_DEV",
       "metamod": "MM_20",
-      "status": "retired"
+      "status": "retired",
+      "pointer": true,
+      "role": "Retired outside CI"
     },
     "sm13-mm20-khook": {
       "sourcemod": "SM_KHOOK",
       "metamod": "MM_20K",
-      "status": "frozen"
+      "status": "frozen",
+      "pointer": true,
+      "extra_tags": ["1.13.0.7565-mm2.0.0-khook-dhooks"],
+      "role": "Frozen outside CI; ships dhooks.ext"
     }
   },
   "known_bad": {

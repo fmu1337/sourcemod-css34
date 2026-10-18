@@ -6,8 +6,8 @@ set -euo pipefail
 WDIR="${WDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 SOURCEMOD_DIR="${SOURCEMOD_DIR:-$WDIR/sourcemod}"
 MMS_DIR="${MMS_DIR:-$WDIR/deps/mmsource-1.12}"
-SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-b951843d42f7b9204615c14885468ea131a24002}"
-MMS_COMMIT="${MMS_COMMIT:-9fd977df3b49ec76cdf865a4af13a90c0f5c8814}"
+SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-}"
+MMS_COMMIT="${MMS_COMMIT:-}"
 # Fall back to MMS 1.10 tree when building the 1.11 css34 track.
 if [[ ! -d "$MMS_DIR/.git" && -d "$WDIR/deps/mmsource-1.10/.git" ]]; then
   MMS_DIR="$WDIR/deps/mmsource-1.10"
@@ -28,6 +28,10 @@ if [[ -d "$SOURCEMOD_DIR/.git" ]] || [[ -f "$SOURCEMOD_DIR/.git" ]]; then
 fi
 if [[ -d "$MMS_DIR/.git" ]]; then
   MMS_COMMIT="$(git -C "$MMS_DIR" rev-parse HEAD 2>/dev/null || echo "$MMS_COMMIT")"
+fi
+if [[ -z "$SOURCEMOD_COMMIT" || -z "$MMS_COMMIT" ]]; then
+  echo "SOURCEMOD_COMMIT and MMS_COMMIT are required when the git checkouts are missing" >&2
+  exit 1
 fi
 
 write_stamp() {

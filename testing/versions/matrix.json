@@ -1,163 +1,4 @@
 {
-  "lines": {
-    "sm11-oldstable": {
-      "sourcemod": "1.11.0.6970",
-      "sourcemod_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
-      "metamod": "1.10-dev",
-      "metamod_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
-      "metamod_binary": "metamod.1.ep1",
-      "role": "oldstable"
-    },
-    "sm12-latest": {
-      "sourcemod": "1.12.0.7253",
-      "sourcemod_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
-      "metamod": "1.12.0-dev+1226",
-      "metamod_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "metamod_binary": "metamod.2.ep1",
-      "role": "latest"
-    },
-    "sm13-mm20": {
-      "sourcemod": "1.13.0.7404",
-      "sourcemod_commit": "cdedec7606f1ee9bf3685b2cce3620fbec90efa8",
-      "metamod": "2.0.0-dev+1407",
-      "metamod_commit": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
-      "metamod_binary": "metamod.2.ep1",
-      "role": "experimental"
-    },
-    "sm13-latest": {
-      "sourcemod": "1.13.0.7472",
-      "sourcemod_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
-      "metamod": "1.12.0-dev+1226",
-      "metamod_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "metamod_binary": "metamod.2.ep1",
-      "role": "latest-sm13"
-    },
-    "sm13-mm20-khook": {
-      "sourcemod": "1.13.0.7565",
-      "sourcemod_branch": "k/sourcehook_alternative + master",
-      "sourcemod_commit": "25954d4aa4a55ab10c6e2c30699f52358f982fb9",
-      "sourcemod_khook_commit": "0cd7f6fcb4e3f09e0adb136f42dfa12305682bcc",
-      "sourcemod_merge_master": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
-      "metamod": "2.0.0-dev+1472",
-      "metamod_commit": "05c5c63a9d595cb84021c3a51fe38366ba4a12a5",
-      "metamod_binary": "metamod.2.ep1",
-      "hooking": "khook",
-      "role": "experimental"
-    }
-  },
-  "metamod_pins": {
-    "1.10-dev": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
-    "1.11-dev": "7ff2d97bdad1493b809c5ec91bbfc7abc6ae5445",
-    "1.12-1226": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-    "2.0-1407": "0084b86af4b08614ed6b95485d072b5aa2e88cdc",
-    "2.0-1472-khook": "05c5c63a9d595cb84021c3a51fe38366ba4a12a5"
-  },
-  "releases": {
-    "1.11.0.6970-mm1.10.7": {
-      "line": "sm11-oldstable",
-      "role": "oldstable",
-      "sourcemod": "1.11.0-git6970",
-      "metamod": "1.10.7-dev",
-      "metamod_binary": "metamod.1.ep1",
-      "plapi": 11,
-      "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/sourcemod-1.11.0-git6970-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.11.0.6970-mm1.10.7/mmsource-1.10.7-dev-css34-linux.tar.gz"
-      },
-      "note": "Linux only (no Windows assets, no SHA256SUMS). Withheld from line pointers: unreproduced startup SIGABRT report on rom4s 4044 servers (README).",
-      "verified": ["ci_smoke", "botplay_matrix"]
-    },
-    "1.12.0.7253-mm1.12.0": {
-      "line": "sm12-latest",
-      "role": "latest",
-      "sourcemod": "1.12.0-git7253",
-      "metamod": "1.12.0-dev+1226",
-      "metamod_binary": "metamod.2.ep1",
-      "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7253-mm1.12.0/sourcemod-1.12.0-git7253-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7253-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7253-mm1.12.0/sourcemod-1.12.0-git7253-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.12.0.7253-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
-      },
-      "verified": ["ci_smoke", "botplay_matrix"]
-    },
-    "1.13.0.7404-mm1.12.0": {
-      "line": "sm13-dev",
-      "role": "legacy",
-      "note": "Retired CI line (use sm13-latest). Tag kept for historical downloads / retags.",
-      "sourcemod": "1.13.0-git7404",
-      "metamod": "1.12.0-dev+1226",
-      "metamod_binary": "metamod.2.ep1",
-      "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/sourcemod-1.13.0-git7404-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/sourcemod-1.13.0-git7404-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
-      },
-      "verified": ["ci_smoke", "botplay_matrix"]
-    },
-    "1.13.0.7404-mm2.0.0": {
-      "line": "sm13-mm20",
-      "role": "experimental",
-      "sourcemod": "1.13.0-git7404",
-      "metamod": "2.0.0-dev+1407",
-      "metamod_binary": "metamod.2.ep1",
-      "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/sourcemod-1.13.0-git7404-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/mmsource-2.0.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/sourcemod-1.13.0-git7404-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7404-mm2.0.0/mmsource-2.0.0-dev-css34-windows.zip"
-      },
-      "verified": ["ci_smoke", "botplay_matrix"]
-    },
-    "1.13.0.7472-mm1.12.0": {
-      "line": "sm13-latest",
-      "role": "latest-sm13",
-      "sourcemod": "1.13.0-git7472",
-      "metamod": "1.12.0-dev+1226",
-      "metamod_binary": "metamod.2.ep1",
-      "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/sourcemod-1.13.0-git7472-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/mmsource-1.12.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/sourcemod-1.13.0-git7472-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7472-mm1.12.0/mmsource-1.12.0-dev-css34-windows.zip"
-      },
-      "verified": ["ci_smoke", "botplay_matrix"]
-    },
-    "1.13.0.7565-mm2.0.0-khook": {
-      "line": "sm13-mm20-khook",
-      "role": "experimental-khook",
-      "sourcemod": "1.13.0-git7565",
-      "sourcemod_commit": "25954d4aa4a55ab10c6e2c30699f52358f982fb9",
-      "metamod": "2.0.0-dev+1472",
-      "metamod_commit": "05c5c63a9d595cb84021c3a51fe38366ba4a12a5",
-      "metamod_binary": "metamod.2.ep1",
-      "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook/sourcemod-1.13.0-git7565-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook/mmsource-2.0.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook/sourcemod-1.13.0-git7565-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook/mmsource-2.0.0-dev-css34-windows.zip"
-      },
-      "verified": ["ci_smoke", "botplay_matrix", "release_asset_smoke", "release_asset_botplay"]
-    },
-    "1.13.0.7565-mm2.0.0-khook-dhooks": {
-      "line": "sm13-mm20-khook",
-      "role": "experimental-khook",
-      "sourcemod": "1.13.0-git7565",
-      "sourcemod_commit": "25954d4aa4a55ab10c6e2c30699f52358f982fb9",
-      "metamod": "2.0.0-dev+1472",
-      "metamod_commit": "05c5c63a9d595cb84021c3a51fe38366ba4a12a5",
-      "metamod_binary": "metamod.2.ep1",
-      "extras": ["dhooks.ext (linux x86)"],
-      "assets": {
-        "linux_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook-dhooks/sourcemod-1.13.0-git7565-css34-linux.tar.gz",
-        "linux_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook-dhooks/mmsource-2.0.0-dev-css34-linux.tar.gz",
-        "windows_sm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook-dhooks/sourcemod-1.13.0-git7565-css34-windows.zip",
-        "windows_mm": "https://github.com/fmu1337/sourcemod-css34/releases/download/1.13.0.7565-mm2.0.0-khook-dhooks/mmsource-2.0.0-dev-css34-windows.zip"
-      },
-      "verified": ["ci_smoke", "botplay_matrix", "release_asset_smoke", "release_asset_botplay"]
-    }
-  },
   "compatibility": [
     {
       "mm": "MM 1.10 metamod.1.ep1",
@@ -193,13 +34,13 @@
       "mm": "myarena 1.11 metamod.2.ep1",
       "sm": "our SM 1.11 (PLAPI 11)",
       "result": "FAIL",
-      "notes": "Older Metamod (11 < 14) — leftover MM, not a package bug"
+      "notes": "Older Metamod (11 < 14) \u2014 leftover MM, not a package bug"
     },
     {
       "mm": "built/rom4s MM 1.10.x",
       "sm": "myarena 6522 (2.ep1 only)",
       "result": "FAIL",
-      "notes": "Expected — myarena SM needs MM 1.11 / CreateInterface_MMS-only bridge"
+      "notes": "Expected \u2014 myarena SM needs MM 1.11 / CreateInterface_MMS-only bridge"
     }
   ],
   "reference": {
@@ -217,13 +58,12 @@
     }
   },
   "notes": [
+    "Current pins live in builder/lines.json. This file keeps compatibility notes and historical reference URLs only.",
     "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
-    "CI matrix: sm11-oldstable, sm12-latest, sm13-latest, sm13-mm20 (7404 + MM 2.0 git1407), sm13-mm20-khook. sm13-dev (7404 + MM 1.12) retired.",
     "Smoke and check-package.sh assert sdkhooks.games and OnTakeDamage css34 offsets.",
     "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all CI lines.",
     "Use matched release tags; do not mix MM from one line with SM from another.",
     "reference.* URLs are historical community drops for local comparison only.",
-    "releases lists the original tag of each pin set. Current builds are the -r<N> rebuilds served by the line pointers; see https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json.",
     "The 1.13.0.7565-mm2.0.0-khook* tags were moved to b1f5192 and rebuilt on 2026-10-12: their Metamod is git1472 (05c5c63), not git1469.",
     "meta version prints the Metamod build number as +1 (shallow clone); the revision is in the asset name / css34-package.json."
   ]

@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - 'builder/versions.env'
+      - 'builder/generated/**'
       - 'builder/lines.json'
       - 'builder/lines.py'
+      - 'README.md'
       - 'builder/resolve-version.sh'
       - 'testing/scripts/test-lines.py'
       - 'testing/scripts/check-version-copies.sh'
@@ -14,6 +16,7 @@ on:
       - 'builder/scripts/**'
       - 'testing/versions/matrix.json'
       - 'testing/scripts/check-version-pins.sh'
+      - '.github/workflows/build.yml'
       - '.github/workflows/test-server.yml'
       - '.github/workflows/release.yml'
       - '.github/workflows/version-pins.yml'
@@ -22,8 +25,10 @@ on:
       - master
     paths:
       - 'builder/versions.env'
+      - 'builder/generated/**'
       - 'builder/lines.json'
       - 'builder/lines.py'
+      - 'README.md'
       - 'builder/resolve-version.sh'
       - 'testing/scripts/test-lines.py'
       - 'testing/scripts/check-version-copies.sh'
@@ -31,6 +36,7 @@ on:
       - 'builder/write-build-stamps.sh'
       - 'testing/versions/matrix.json'
       - 'testing/scripts/check-version-pins.sh'
+      - '.github/workflows/build.yml'
       - '.github/workflows/test-server.yml'
       - '.github/workflows/release.yml'
   workflow_dispatch:

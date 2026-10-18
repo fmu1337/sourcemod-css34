@@ -1,16 +1,7 @@
 name: Release
 
-# Tag format examples (must match builder/versions.env pins):
-#   1.11.0.6970-mm1.10.7   → sm11-oldstable
-#   1.12.0.7253-mm1.12.0   → sm12-latest
-#   1.13.0.7404-mm1.12.0   → sm13-dev (legacy alias; line retired from CI matrix)
-#   1.13.0.7404-mm2.0.0    → sm13-mm20
-#   1.13.0.7472-mm1.12.0   → sm13-latest
-#   1.13.0.7565-mm2.0.0-khook → sm13-mm20-khook
-#   1.13.0.7565-mm2.0.0-khook-dhooks → sm13-mm20-khook (+ dhooks.ext linux x86)
-#
-# Rebuilds of the same pins get a packaging-revision suffix `-r<N>` (tags are
-# never moved): 1.13.0.7472-mm1.12.0-r2 → sm13-latest.
+# Tag → CSS34_LINE comes from builder/generated/tag-map.sh (python3 builder/lines.py gen).
+# A packaging rebuild of the same pins uses a `-r<N>` suffix; the base tag selects the line.
 #
 # Linux/Windows jobs attach packages directly to the GitHub Release.
 # No Actions artifacts (those count against the 0.5 GB storage quota).
@@ -56,10 +47,15 @@ jobs:
       css34_line: ${{ steps.map.outputs.css34_line }}
       pointer: ${{ steps.map.outputs.pointer }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Map tag / input → CSS34_LINE
         id: map
         run: |
           set -euo pipefail
+          # shellcheck disable=SC1091
+          source builder/generated/tag-map.sh
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             tag="${GITHUB_REF_NAME}"
             # -r<N>: packaging rebuild of the same pins (existing tags stay put).
@@ -67,21 +63,15 @@ jobs:
             if [[ "${tag}" =~ ^(.+)-r[0-9]+$ ]]; then
               base="${BASH_REMATCH[1]}"
             fi
-            case "${base}" in
-              1.11.0.6970-mm1.10.7) line=sm11-oldstable ;;
-              1.12.0.7253-mm1.12.0) line=sm12-latest ;;
-              1.13.0.7404-mm1.12.0) line=sm13-dev ;;
-              1.13.0.7404-mm2.0.0)  line=sm13-mm20 ;;
-              1.13.0.7472-mm1.12.0) line=sm13-latest ;;
-              1.13.0.7565-mm2.0.0-khook) line=sm13-mm20-khook ;;
-              1.13.0.7565-mm2.0.0-khook-dhooks) line=sm13-mm20-khook ;;
-              *)
-                echo "Unknown release tag '${tag}' — add a mapping in release.yml" >&2
-                exit 1
-                ;;
-            esac
+            line="$(css34_line_for_tag "${base}")" || {
+              echo "Unknown release tag '${tag}' — add the line in builder/lines.json and regenerate" >&2
+              exit 1
+            }
           else
-            line="${{ github.event.inputs.css34_line || 'sm13-latest' }}"
+            line="${{ github.event.inputs.css34_line }}"
+            if [[ -z "$line" ]]; then
+              line="$(python3 -c 'import json; print(json.load(open("builder/lines.json"))["default_line"])')"
+            fi
           fi
           case "$line" in
             sm13-mm20|sm13-mm20-khook)
@@ -89,12 +79,12 @@ jobs:
               exit 1 ;;
           esac
           echo "css34_line=${line}" >> "$GITHUB_OUTPUT"
-          # line-<line> pointers: only for live lines. sm13-dev is retired;
-          # sm11-oldstable is withheld (SIGABRT on rom4s 4044 servers, README).
-          case "${line}" in
-            sm12-latest|sm13-latest|sm13-mm20|sm13-mm20-khook) pointer=1 ;;
-            *) pointer=0 ;;
-          esac
+          # line-<line> pointers: sm13-dev is retired; sm11-oldstable is withheld.
+          if css34_line_has_pointer "${line}"; then
+            pointer=1
+          else
+            pointer=0
+          fi
           echo "pointer=${pointer}" >> "$GITHUB_OUTPUT"
           echo "Resolved CSS34_LINE=${line} (ref=${GITHUB_REF_NAME})"
 
