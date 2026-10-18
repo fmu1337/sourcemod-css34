@@ -65,7 +65,7 @@ expect {
     }
 }
 
-# Give MM/SM a moment after mapchange.
+# Give MM/SM a moment after map load.
 sleep 3
 
 send "status\r"
@@ -117,6 +117,22 @@ expect {
     timeout {
         puts stderr "timeout waiting for sm version output"
         exit 5
+    }
+}
+
+# basecommands is part of every standard SourceMod install. This leaves the
+# default value unchanged but makes its normal LogAction() path open and write
+# the SourceMod session log without patching Logger.cpp.
+send "sm_cvar sv_cheats 0\r"
+expect {
+    -re {Cvar changed|changed cvar|sv_cheats} {}
+    eof {
+        puts stderr "srcds exited while invoking sm_cvar logging probe"
+        exit 9
+    }
+    timeout {
+        puts stderr "timeout waiting for sm_cvar logging probe"
+        exit 9
     }
 }
 
