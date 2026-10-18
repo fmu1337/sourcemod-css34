@@ -65,7 +65,26 @@ expect {
     }
 }
 
-# Give MM/SM a moment after mapchange.
+# Give MM/SM a moment after the initial map load, then perform one ordinary
+# level change.  Upstream Logger assigns the daily logfile name on the first
+# map but does not emit a message until a subsequent map change, so this
+# exercises normal SourceMod logging without patching Logger.cpp.
+sleep 3
+
+send "changelevel $map\r"
+expect {
+    -re "Started map \"${map}\"|Loading map \"${map}\"" {
+        puts stderr "OK: matched level change (${map})"
+    }
+    eof {
+        puts stderr "srcds exited during level change to $map"
+        exit 9
+    }
+    timeout {
+        puts stderr "timeout waiting for level change to $map"
+        exit 9
+    }
+}
 sleep 3
 
 send "status\r"
