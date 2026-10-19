@@ -295,14 +295,12 @@ patch_file('core/logic/Logger.cpp', [
         'Logger _MapChange',
     ),
     (
-        '\t/* CSS34 LOGGER_MAPCHANGE_FIX: log first mapchange even when daily log path is new */\n'
         '\tif (m_NormalFileName.compare(buff))\n\t{\n\t\t_CloseNormal();\n\t\tm_NormalFileName = buff;\n\t}\n'
-        '\tif (bLevelChange)\n\t{\n\t\tLogMessage("-------- Mapchange to %s --------", m_CurrentMapName.c_str());\n\t}',
-        '\t/* CSS34 LOGGER_MAPCHANGE_FIX: log first mapchange even when daily log path is new */\n'
+        '\telse\n\t{\n\t\tif (bLevelChange)\n\t\t{\n\t\t\tLogMessage("-------- Mapchange to %s --------", m_CurrentMapName.c_str());\n\t\t}\n\t}',
         '\tif (m_NormalFileName.compare(buff))\n\t{\n\t\t_CloseNormal();\n\t\tm_NormalFileName = buff;\n\t}\n'
-        '\tif (bLevelChange)\n\t{\n'
-        f'\t\tsm_boot_trace("{marker} Logger::_UpdateFiles: mapchange LogMessage");\n'
-        '\t\tLogMessage("-------- Mapchange to %s --------", m_CurrentMapName.c_str());\n\t}',
+        '\telse\n\t{\n\t\tif (bLevelChange)\n\t\t{\n'
+        f'\t\t\tsm_boot_trace("{marker} Logger::_UpdateFiles: mapchange LogMessage");\n'
+        '\t\t\tLogMessage("-------- Mapchange to %s --------", m_CurrentMapName.c_str());\n\t\t}\n\t}',
         'Logger _UpdateFiles mapchange trace',
     ),
     (

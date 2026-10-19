@@ -1,13 +1,27 @@
 name: Release Maintenance
 
-# Re-publish releases that were turned into drafts (draft asset URLs 404 for
-# installers). Does not touch tags or assets; only flips draft → published.
+# Two maintenance actions, picked with the `mode` input. Neither touches tags
+# or assets.
+#   republish       — flip drafts back to published (draft asset URLs 404 for
+#                     installers).
+#   mark-known-bad  — turn every release listed in builder/lines.json
+#                     `known_bad` into a prerelease with a banner (asset URLs keep
+#                     working), then make `latest_tag` the GitHub "Latest" release.
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "republish | mark-known-bad"
+        type: choice
+        options: [republish, mark-known-bad]
+        default: republish
+      latest_tag:
+        description: "mark-known-bad: release to mark as GitHub Latest"
+        required: false
+        default: "1.13.0.7472-mm1.12.0-r2"
       tags:
-        description: "Space-separated release tags to re-publish"
-        required: true
+        description: "republish: space-separated release tags to re-publish"
+        required: false
         default: "1.12.0.7253-mm1.12.0 1.13.0.7472-mm1.12.0 1.13.0.7404-mm1.12.0 1.13.0.7404-mm2.0.0 1.13.0.7565-mm2.0.0-khook 1.13.0.7565-mm2.0.0-khook-dhooks"
 
 permissions:
@@ -15,6 +29,7 @@ permissions:
 
 jobs:
   republish:
+    if: github.event.inputs.mode == 'republish'
     runs-on: ubuntu-22.04
     steps:
       - name: Publish drafts
@@ -45,4 +60,51 @@ jobs:
               *) echo "::error::no release for ${tag}"; rc=1 ;;
             esac
           done
+          exit "${rc}"
+
+  mark-known-bad:
+    if: github.event.inputs.mode == 'mark-known-bad'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Mark known-bad releases as prereleases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST_TAG: ${{ github.event.inputs.latest_tag }}
+        run: |
+          set -euo pipefail
+          marker='<!-- css34-known-bad -->'
+          rc=0
+          while IFS=$'\t' read -r tag reason; do
+            [[ -n "${tag}" ]] || continue
+            if ! gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" >release.json 2>/dev/null; then
+              echo "::warning::no published release for ${tag}; skipped"
+              continue
+            fi
+            id="$(jq -r .id release.json)"
+            if jq -e --arg m "${marker}" '.body // "" | contains($m)' release.json >/dev/null; then
+              body="$(jq -r '.body // ""' release.json)"
+            else
+              banner="${marker}"$'\n'"> [!WARNING]"$'\n'"> **KNOWN BAD — do not install.** ${reason}"$'\n'"> Use a \`line-<line>\` pointer release instead (see README)."$'\n\n'
+              body="${banner}$(jq -r '.body // ""' release.json)"
+            fi
+            if gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${id}" \
+                -F prerelease=true -f make_latest=false -f body="${body}" >/dev/null; then
+              echo "marked ${tag}"
+            else
+              echo "::error::failed to mark ${tag}"; rc=1
+            fi
+          done < <(jq -r '.known_bad | to_entries[] | "\(.key)\t\(.value)"' builder/lines.json)
+
+          if [[ -n "${LATEST_TAG}" ]]; then
+            if jq -e --arg t "${LATEST_TAG}" '.known_bad | has($t)' builder/lines.json >/dev/null; then
+              echo "::error::${LATEST_TAG} is listed as known bad"; exit 1
+            fi
+            id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${LATEST_TAG}" -q .id)"
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${id}" \
+              -F prerelease=false -F draft=false -f make_latest=true >/dev/null
+          fi
+          echo "GitHub Latest is now: $(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" -q .tag_name)"
           exit "${rc}"
