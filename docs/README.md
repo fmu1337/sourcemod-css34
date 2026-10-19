@@ -17,6 +17,7 @@ doc carries a status note at the top saying what is still true.
 | [PATCH_STRATEGY.md](PATCH_STRATEGY.md) | How the patch sets are laid out today and how to upgrade SM (status section on top; the rest is history) |
 | [JULES_DAILY_VERSION_BUMP.md](JULES_DAILY_VERSION_BUMP.md) | Every place a pin is copied to; daily bump prompt |
 | [UPSTREAM_REPORTS.md](UPSTREAM_REPORTS.md) | Draft bug reports for SourceMod / Metamod / KHook |
+| [ROADMAP.md](ROADMAP.md) | Agent work plan: three SM lines (1.11 dual-core frozen, 1.12, 1.13), glibc 2.17, Windows; tracked in issue #73 |
 | [REVIEW_2026-10.md](REVIEW_2026-10.md) | Doc / project inconsistencies found on 2026-10-13 and simplification proposals |
 | [../testing/docs/bufferfix.md](../testing/docs/bufferfix.md) | memcpy→memmove ELF rewrite of the v34 server |
 | [../testing/docs/srcds-params.md](../testing/docs/srcds-params.md) | v34 `srcds` launch flags |
