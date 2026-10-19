@@ -71,6 +71,7 @@ EOF
 }
 
 apt_install() {
+  # bash < 4.4 treats an empty "${arr[@]}" as unbound under set -u.
   local extra_opts=()
   # shellcheck disable=SC1091
   . /etc/os-release
@@ -79,7 +80,7 @@ apt_install() {
       extra_opts+=(--force-yes)
       ;;
   esac
-  apt-get install -y --no-install-recommends --allow-unauthenticated "${extra_opts[@]}" "$@" \
+  apt-get install -y --no-install-recommends --allow-unauthenticated ${extra_opts[@]+"${extra_opts[@]}"} "$@" \
     || apt-get install -y --no-install-recommends --allow-unauthenticated --force-yes "$@" \
     || apt-get install -y --no-install-recommends "$@"
 }

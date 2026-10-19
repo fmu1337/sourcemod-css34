@@ -125,7 +125,7 @@ expect {
 # the SourceMod session log without patching Logger.cpp.
 send "sm_cvar sv_cheats 0\r"
 expect {
-    -re {Cvar changed|changed cvar|sv_cheats} {}
+    -re {Changed cvar "sv_cheats"} {}
     eof {
         puts stderr "srcds exited while invoking sm_cvar logging probe"
         exit 9
