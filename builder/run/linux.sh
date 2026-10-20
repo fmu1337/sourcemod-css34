@@ -26,7 +26,9 @@ fi
 # manylinux2014_i686: devtoolset-10 GCC, no apt, no clang, no gcc-9.
 if [[ -f /opt/rh/devtoolset-10/enable ]]; then
   # shellcheck disable=SC1091
+  set +u
   source /opt/rh/devtoolset-10/enable
+  set -u
   export USE_CLANG9=0
   export CC="${CC:-gcc}"
   export CXX="${CXX:-g++}"

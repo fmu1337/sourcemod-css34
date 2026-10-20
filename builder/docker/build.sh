@@ -62,7 +62,10 @@ docker_cmd run --rm -i --platform linux/386 \
 set -euo pipefail
 # linux32 makes uname/platform.machine() report i686. Without it AMBuild
 # treats the 64-bit kernel as the host arch inside this 32-bit image.
+# enable references unset MANPATH / rpmlibdir32; this script uses set -u.
+set +u
 source /opt/rh/devtoolset-10/enable
+set -u
 export PATH="/opt/python/cp311-cp311/bin:${PATH}"
 hash -r
 
