@@ -5,8 +5,10 @@ set -euo pipefail
 
 TARGET_DIR="${1:?target configs/geoip directory required}"
 CACHE_DIR="${CACHE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.ci-cache}"
-# Pinned to P3TERX/GeoLite.mmdb commit 0ee3c9de (download branch, 2026-10-19).
-GEOLITE2_URL="${GEOLITE2_URL:-https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/0ee3c9de3f817dd71b4d9c2a7dacfb6dc475c712/GeoLite2-Country.mmdb}"
+# Release asset of this repo. The P3TERX `download` branch is an orphan that is
+# force-replaced on every DB update, so a commit pin there becomes unreachable.
+# Bytes are the 2026-10-19 GeoLite2-Country file (see GEOLITE2_SHA256).
+GEOLITE2_URL="${GEOLITE2_URL:-https://github.com/fmu1337/sourcemod-css34/releases/download/deps-geolite2-20261019/GeoLite2-Country.mmdb}"
 GEOLITE2_SHA256="${GEOLITE2_SHA256:-55fb913b4a5ab69fb0bbe11f86242b8a3f64061205227f4c1efceef7e14e5dbc}"
 GEOLITE2_NAME="${GEOLITE2_NAME:-GeoLite2-Country.mmdb}"
 CACHE_FILE="${CACHE_DIR}/geoip/${GEOLITE2_NAME}"
