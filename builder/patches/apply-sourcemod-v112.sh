@@ -108,11 +108,18 @@ new_ext = """  def ExtLibrary(self, context, compiler, name):
       for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
         if flag not in binary.compiler.linkflags:
           binary.compiler.linkflags += [flag]
+      # css34: non-SDK extensions hide every static archive. Game extensions
+      # (HL2Library) keep tier1 exports.
+      _base = name[:-4] if name.endswith('.ext') else name
+      if (_base.startswith('dbi.') or _base in (
+          'bintools', 'clientprefs', 'geoip', 'regex', 'topmenus', 'updater', 'webternet')):
+        if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
+          binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
     return binary
 """
 if 'css34: pthread/rt DT_NEEDED on pre-2.34' not in text:
     if old_ext not in text:
-        print('==> WARN: ExtLibrary pattern not found (continuing)')
+        raise SystemExit('FAIL: ExtLibrary anchor not found in AMBuildScript')
     else:
         text = text.replace(old_ext, new_ext, 1)
         print('==> Patched ExtLibrary for pthread/rt')
@@ -139,7 +146,7 @@ else:
 if "CSS34 SDK compatibility" not in text:
     marker = "    if have_gcc:\n      cxx.cflags += ['-mfpmath=sse']\n      cxx.cflags += ['-Wno-maybe-uninitialized']\n"
     extra = marker + """    # CSS34 SDK compatibility
-    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes']
+    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes', '-Wno-volatile']
     if have_gcc:
       cxx.cflags += [
         '-Wno-stringop-overflow', '-Wno-error=stringop-overflow',
@@ -155,7 +162,7 @@ if "CSS34 SDK compatibility" not in text:
         text = text.replace(
             alt,
             alt + "    # CSS34 SDK compatibility (early)\n"
-                 "    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes']\n"
+                 "    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes', '-Wno-volatile']\n"
                  "    if cxx.family == 'gcc':\n"
                  "      cxx.cflags += ['-Wno-stringop-overflow', '-Wno-error=stringop-overflow', '-Wno-stringop-truncation', '-Wno-error=stringop-truncation', '-Wno-format-truncation', '-Wno-error=format-truncation']\n"
                  "    if '_GLIBCXX_USE_CXX11_ABI=0' not in cxx.defines:\n"
@@ -369,11 +376,11 @@ if logic_am.exists():
     import shutil as _shutil
     import os as _os
     logic_cxx = cxx.clone()
-    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
-    _gcc9 = _shutil.which('gcc-9') or '/usr/bin/gcc-9'
-    logic_cxx.cxx_argv = [_gpp9]
-    logic_cxx.cc_argv = [_gcc9]
-    logic_cxx.linker_argv = [_gpp9]
+    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
+    _cc_bin = _shutil.which((_os.environ.get('CC') or 'gcc').split()[0]) or (_os.environ.get('CC') or 'gcc').split()[0]
+    logic_cxx.cxx_argv = [_cxx_bin]
+    logic_cxx.cc_argv = [_cc_bin]
+    logic_cxx.linker_argv = [_cxx_bin]
     if logic_cxx.target.arch == 'x86':
       if '-m32' not in logic_cxx.cflags:
         logic_cxx.cflags += ['-m32']
@@ -404,7 +411,7 @@ if logic_am.exists():
     binary = SM.Library(builder, cxx, 'sourcemod.logic')
 """
         if loop_old not in lt:
-            print('==> WARN: logic AMBuilder for-cxx loop not found (layout changed?)')
+            raise SystemExit('FAIL: logic AMBuilder for-cxx loop anchor not found')
         else:
             lt = lt.replace(loop_old, loop_new, 1)
             print(f'==> Patched logic AMBuilder ({logic_toolchain})')
@@ -443,7 +450,7 @@ if logic_am.exists():
             lt = lt.replace(defs_old, defs_new, 1)
             print('==> Patched logic AMBuilder css34 ABI defines')
         else:
-            print('==> WARN: logic AMBuilder defines block not found')
+            raise SystemExit('FAIL: logic AMBuilder defines block anchor not found')
 
     # Linux link: static sysroot/gcc-9 libstdc++ + forced pthread/rt DT_NEEDED.
     if 'css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT' not in lt:
@@ -470,9 +477,8 @@ if logic_am.exists():
       SP.zlib[{sp_idx_var}],
 {mimalloc_link}    ]
 """
-        exclude_libs = ""
-        if sm_minor >= 13:
-            exclude_libs = """    # css34: hide static archive symbols from the dynamic export table (libsourcepawn_static)
+        # Every line: logic.so must not export static libstdc++ / sourcepawn symbols.
+        exclude_libs = """    # css34: hide static archive symbols from the dynamic export table
     if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
 """
@@ -503,16 +509,18 @@ if logic_am.exists():
           _sup = _os.path.join(_base, 'libsupc++.a')
           break
     if _stdcxx is None:
-      for _cand in (
-          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-      ):
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
-          break
+      import subprocess as _sp
+      _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
+      _printed = _sp.check_output([_cxx, '-print-file-name=libstdc++.a'], universal_newlines=True).strip()
+      if _printed and _printed != 'libstdc++.a' and _os.path.isfile(_printed):
+        _stdcxx = _printed
+        _sup = _os.path.join(_os.path.dirname(_printed), 'libsupc++.a')
+        if not _os.path.isfile(_sup):
+          _sup_printed = _sp.check_output([_cxx, '-print-file-name=libsupc++.a'], universal_newlines=True).strip()
+          if _sup_printed and _os.path.isfile(_sup_printed):
+            _sup = _sup_printed
     if _stdcxx is None:
-      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+      raise Exception('logic libstdc++.a not found (%s -print-file-name=libstdc++.a)' % ((_os.environ.get('CXX') or 'g++').split()[0]))
     _gcc = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc.a')
     _gcc_eh = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc_eh.a')
     for flag in ('-static-libgcc',):
@@ -539,7 +547,7 @@ if logic_am.exists():
                 print('==> Patched logic AMBuilder linux static libstdc++ + pthread/rt')
                 break
         if not replaced:
-            print('==> WARN: logic linux postlink block not found for static link patch')
+            raise SystemExit('FAIL: logic linux postlink anchor not found for static link patch')
     else:
         print('==> logic AMBuilder static libstdc++ already patched')
 
@@ -1161,5 +1169,29 @@ else:
         else:
             print('==> WARN: Built from block not found for CSS34 pack')
 PYVER
+
+# Every Linux module links libstdc++ statically and hides it. --exclude-libs,ALL
+# stays on logic.so and non-SDK extensions only.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYHIDE'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+marker = 'css34: hide static libstdc++'
+if marker in text:
+    print('==> static libstdc++ hide flags already present')
+else:
+    old_sm13 = "    cxx.linkflags += ['-static-libstdc++']\n    cxx.linkflags += ['-Wl,--exclude-libs=libstdc++.a']\n"
+    old = "    cxx.linkflags += ['-static-libstdc++']\n"
+    new = "    cxx.linkflags += ['-static-libstdc++', '-Wl,--exclude-libs=libstdc++.a:libsupc++.a']  # css34: hide static libstdc++\n"
+    if old_sm13 in text:
+        text = text.replace(old_sm13, new, 1)
+    elif old in text:
+        text = text.replace(old, new, 1)
+    else:
+        raise SystemExit('FAIL: static-libstdc++ linkflags anchor not found in AMBuildScript')
+    path.write_text(text)
+    print('==> Patched AMBuildScript to hide static libstdc++')
+PYHIDE
 
 echo "==> SourceMod 1.12+ css34 patches applied (Metamod 1.12 / 2.ep1)"

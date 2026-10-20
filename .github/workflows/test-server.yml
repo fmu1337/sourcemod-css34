@@ -107,12 +107,12 @@ jobs:
           CSS34_LINE: ${{ matrix.line }}
           PURE_SOURCE_BUILD: "1"
         run: |
-          chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
+          chmod +x builder/docker/build.sh builder/docker/legacy-build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
             builder/build-metamod.sh builder/prepare-package.sh builder/write-build-stamps.sh \
             builder/resolve-version.sh builder/py.sh builder/patches/*.sh \
             builder/install-clang9.sh builder/install-clang10.sh
-          builder/docker/legacy-build.sh
+          builder/docker/build.sh
 
       - name: ABI / export checks
         if: steps.select.outputs.skip != '1'
@@ -185,12 +185,11 @@ jobs:
           path: server-art/css34-server.tar.gz
           key: ${{ steps.server-cache.outputs.cache-primary-key }}
 
-  # Primary gate: pure-source matched SM×MM lines on modern glibc.
-  # Packages are produced in debian:11 (legacy-build.sh).
+  # Primary gate: pure-source matched SM×MM lines.
+  # Packages are produced in manylinux2014_i686 (builder/docker/build.sh, glibc 2.17).
   test-built-debian:
     needs: [build-linux, prepare-server]
     runs-on: ubuntu-22.04
-    continue-on-error: ${{ matrix.allow_failure || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -221,14 +220,12 @@ jobs:
             mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
           - line: sm11-oldstable
             image: ubuntu:24.04
-            allow_failure: true
             sm_expect: "1.11.0.6970"
             mm_expect: "1.10.7"
             sm_commit: f53cb134ef83b580c83e1f4bf35f60d11c4571dd
             mm_commit: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
           - line: sm11-oldstable
             image: debian:13
-            allow_failure: true
             sm_expect: "1.11.0.6970"
             mm_expect: "1.10.7"
             sm_commit: f53cb134ef83b580c83e1f4bf35f60d11c4571dd

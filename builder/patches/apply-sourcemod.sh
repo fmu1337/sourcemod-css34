@@ -148,7 +148,7 @@ if compiler_flavor == 'clang':
     if supports_deprecated_non_prototype:
         insert += "    cxx.cflags += ['-Wno-deprecated-non-prototype']  # CSS34 clang compatibility\n"
 elif compiler_flavor == 'gcc':
-    insert += """    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings']  # CSS34 SDK compatibility
+    insert += """    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare']  # CSS34 SDK compatibility
 """
 if needle not in text:
     raise SystemExit('Failed to locate compiler flags block in AMBuildScript')
@@ -1080,6 +1080,13 @@ new_6970 = """  def ExtLibrary(self, context, compiler, name):
       for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
         if flag not in binary.compiler.linkflags:
           binary.compiler.linkflags += [flag]
+      # css34: non-SDK extensions may hide every static archive; cores and game
+      # extensions must keep tier1 (ConVar, s_pConCommandBases, InterfaceReg).
+      _base = name[:-4] if name.endswith('.ext') else name
+      if (_base.startswith('dbi.') or _base in (
+          'bintools', 'clientprefs', 'geoip', 'regex', 'topmenus', 'updater', 'webternet')):
+        if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
+          binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
     return binary
 """
 if "css34: match rom4s clientprefs DT_NEEDED" in text:
@@ -1240,11 +1247,11 @@ if _loop_old_mod in text or (
     import shutil as _shutil
     import os as _os
     logic_cxx = cxx.clone()
-    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
-    _gcc9 = _shutil.which('gcc-9') or '/usr/bin/gcc-9'
-    logic_cxx.cxx_argv = [_gpp9]
-    logic_cxx.cc_argv = [_gcc9]
-    logic_cxx.linker_argv = [_gpp9]
+    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
+    _cc_bin = _shutil.which((_os.environ.get('CC') or 'gcc').split()[0]) or (_os.environ.get('CC') or 'gcc').split()[0]
+    logic_cxx.cxx_argv = [_cxx_bin]
+    logic_cxx.cc_argv = [_cc_bin]
+    logic_cxx.linker_argv = [_cxx_bin]
     if logic_cxx.target.arch == 'x86':
       if '-m32' not in logic_cxx.cflags:
         logic_cxx.cflags += ['-m32']
@@ -1351,16 +1358,18 @@ if _loop_old_mod in text or (
           _sup = _os.path.join(_base, 'libsupc++.a')
           break
     if _stdcxx is None:
-      for _cand in (
-          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-      ):
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
-          break
+      import subprocess as _sp
+      _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
+      _printed = _sp.check_output([_cxx, '-print-file-name=libstdc++.a'], universal_newlines=True).strip()
+      if _printed and _printed != 'libstdc++.a' and _os.path.isfile(_printed):
+        _stdcxx = _printed
+        _sup = _os.path.join(_os.path.dirname(_printed), 'libsupc++.a')
+        if not _os.path.isfile(_sup):
+          _sup_printed = _sp.check_output([_cxx, '-print-file-name=libsupc++.a'], universal_newlines=True).strip()
+          if _sup_printed and _os.path.isfile(_sup_printed):
+            _sup = _sup_printed
     if _stdcxx is None:
-      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+      raise Exception('logic libstdc++.a not found (%s -print-file-name=libstdc++.a)' % ((_os.environ.get('CXX') or 'g++').split()[0]))
     _gcc = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc.a')
     _gcc_eh = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc_eh.a')
     for flag in ('-static-libgcc',):
@@ -1376,6 +1385,7 @@ if _loop_old_mod in text or (
     binary.compiler.linkflags += _static + [
       '-Wl,-Bdynamic',
       '-lc', '-lm',
+      '-Wl,--exclude-libs,ALL',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]
   elif binary.compiler.target.platform == 'mac':"""
@@ -1394,11 +1404,11 @@ logic_loop_new = """for arch in SM.archs:
     import shutil as _shutil
     import os as _os
     logic_cxx = builder.cxx.clone()
-    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
-    _gcc9 = _shutil.which('gcc-9') or '/usr/bin/gcc-9'
-    logic_cxx.cxx_argv = [_gpp9]
-    logic_cxx.cc_argv = [_gcc9]
-    logic_cxx.linker_argv = [_gpp9]
+    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
+    _cc_bin = _shutil.which((_os.environ.get('CC') or 'gcc').split()[0]) or (_os.environ.get('CC') or 'gcc').split()[0]
+    logic_cxx.cxx_argv = [_cxx_bin]
+    logic_cxx.cc_argv = [_cc_bin]
+    logic_cxx.linker_argv = [_cxx_bin]
     if arch == 'x86':
       logic_cxx.cflags += ['-m32']
       logic_cxx.linkflags += ['-m32']
@@ -1443,10 +1453,11 @@ logic_loop_old_variants = [
     # css34: logic must be built with g++-9 (clang-9 object code hangs in srcds).
     import shutil as _shutil
     logic_cxx = builder.cxx.clone()
-    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
-    _gcc9 = _shutil.which('gcc-9') or '/usr/bin/gcc-9'
-    logic_cxx.cxx_argv = [_gpp9]
-    logic_cxx.cc_argv = [_gcc9]
+    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
+    _cc_bin = _shutil.which((_os.environ.get('CC') or 'gcc').split()[0]) or (_os.environ.get('CC') or 'gcc').split()[0]
+    logic_cxx.cxx_argv = [_cxx_bin]
+    logic_cxx.cc_argv = [_cc_bin]
+    logic_cxx.linker_argv = [_cxx_bin]
     if arch == 'x86':
       logic_cxx.cflags += ['-m32']
       logic_cxx.linkflags += ['-m32']
@@ -1482,10 +1493,10 @@ logic_loop_old_variants = [
     if not _os.path.isfile(_clangpp):
       _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
       _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
-    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
     logic_cxx.cxx_argv = [_clangpp]
     logic_cxx.cc_argv = [_clang]
-    logic_cxx.linker_argv = [_gpp9]
+    logic_cxx.linker_argv = [_cxx_bin]
     if arch == 'x86':
       logic_cxx.cflags += ['-m32']
       logic_cxx.linkflags += ['-m32']
@@ -1535,10 +1546,10 @@ else:
     if not _os.path.isfile(_clangpp):
       _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
       _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
-    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
     logic_cxx.cxx_argv = [_clangpp]
     logic_cxx.cc_argv = [_clang]
-    logic_cxx.linker_argv = [_gpp9]
+    logic_cxx.linker_argv = [_cxx_bin]
     if arch == 'x86':
       logic_cxx.cflags += ['-m32']
       logic_cxx.linkflags += ['-m32']
@@ -1573,10 +1584,10 @@ else:
     if not _os.path.isfile(_clangpp):
       _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
       _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
-    _gpp9 = _shutil.which('g++-9') or '/usr/bin/g++-9'
+    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
     logic_cxx.cxx_argv = [_clangpp]
     logic_cxx.cc_argv = [_clang]
-    logic_cxx.linker_argv = [_gpp9]
+    logic_cxx.linker_argv = [_cxx_bin]
     if arch == 'x86':
       logic_cxx.cflags += ['-m32']
       logic_cxx.linkflags += ['-m32']
@@ -1675,16 +1686,18 @@ linux_block_new = """  if builder.target.platform == 'linux':
           _sup = _os.path.join(_base, 'libsupc++.a')
           break
     if _stdcxx is None:
-      for _cand in (
-          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-      ):
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
-          break
+      import subprocess as _sp
+      _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
+      _printed = _sp.check_output([_cxx, '-print-file-name=libstdc++.a'], universal_newlines=True).strip()
+      if _printed and _printed != 'libstdc++.a' and _os.path.isfile(_printed):
+        _stdcxx = _printed
+        _sup = _os.path.join(_os.path.dirname(_printed), 'libsupc++.a')
+        if not _os.path.isfile(_sup):
+          _sup_printed = _sp.check_output([_cxx, '-print-file-name=libsupc++.a'], universal_newlines=True).strip()
+          if _sup_printed and _os.path.isfile(_sup_printed):
+            _sup = _sup_printed
     if _stdcxx is None:
-      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+      raise Exception('logic libstdc++.a not found (%s -print-file-name=libstdc++.a)' % ((_os.environ.get('CXX') or 'g++').split()[0]))
     _gcc = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc.a')
     _gcc_eh = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc_eh.a')
     for flag in ('-static-libgcc',):
@@ -1698,6 +1711,7 @@ linux_block_new = """  if builder.target.platform == 'linux':
     binary.compiler.linkflags += _static + [
       '-Wl,-Bdynamic',
       '-lc', '-lm',
+      '-Wl,--exclude-libs,ALL',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]"""
 
@@ -1732,17 +1746,16 @@ linux_block_old_variants = [
     for flag in ('-static-libstdc++', '-lgcc_eh'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
-    _gcc9_stdcxx = None
-    for _cand in (
-        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-    ):
-      if _os.path.isfile(_cand):
-        _gcc9_stdcxx = _cand
-        break
-    if _gcc9_stdcxx is None:
-      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
+    import subprocess as _sp
+    _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
+    _gcc9_stdcxx = _sp.check_output([_cxx, '-print-file-name=libstdc++.a'], universal_newlines=True).strip()
+    if not _gcc9_stdcxx or _gcc9_stdcxx == 'libstdc++.a' or not _os.path.isfile(_gcc9_stdcxx):
+      raise Exception('logic libstdc++.a not found (%s -print-file-name=libstdc++.a)' % _cxx)
     _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
+    if not _os.path.isfile(_gcc9_sup):
+      _sup_printed = _sp.check_output([_cxx, '-print-file-name=libsupc++.a'], universal_newlines=True).strip()
+      if _sup_printed and _os.path.isfile(_sup_printed):
+        _gcc9_sup = _sup_printed
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
     binary.compiler.linkflags += [
@@ -1755,17 +1768,16 @@ linux_block_old_variants = [
     for flag in ('-static-libstdc++', '-lgcc_eh'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
-    _gcc9_stdcxx = None
-    for _cand in (
-        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-    ):
-      if _os.path.isfile(_cand):
-        _gcc9_stdcxx = _cand
-        break
-    if _gcc9_stdcxx is None:
-      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
+    import subprocess as _sp
+    _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
+    _gcc9_stdcxx = _sp.check_output([_cxx, '-print-file-name=libstdc++.a'], universal_newlines=True).strip()
+    if not _gcc9_stdcxx or _gcc9_stdcxx == 'libstdc++.a' or not _os.path.isfile(_gcc9_stdcxx):
+      raise Exception('logic libstdc++.a not found (%s -print-file-name=libstdc++.a)' % _cxx)
     _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
+    if not _os.path.isfile(_gcc9_sup):
+      _sup_printed = _sp.check_output([_cxx, '-print-file-name=libsupc++.a'], universal_newlines=True).strip()
+      if _sup_printed and _os.path.isfile(_sup_printed):
+        _gcc9_sup = _sup_printed
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
     binary.compiler.linkflags += [
@@ -1801,16 +1813,18 @@ else:
           _sup = _os.path.join(_base, 'libsupc++.a')
           break
     if _stdcxx is None:
-      for _cand in (
-          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-      ):
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
-          break
+      import subprocess as _sp
+      _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
+      _printed = _sp.check_output([_cxx, '-print-file-name=libstdc++.a'], universal_newlines=True).strip()
+      if _printed and _printed != 'libstdc++.a' and _os.path.isfile(_printed):
+        _stdcxx = _printed
+        _sup = _os.path.join(_os.path.dirname(_printed), 'libsupc++.a')
+        if not _os.path.isfile(_sup):
+          _sup_printed = _sp.check_output([_cxx, '-print-file-name=libsupc++.a'], universal_newlines=True).strip()
+          if _sup_printed and _os.path.isfile(_sup_printed):
+            _sup = _sup_printed
     if _stdcxx is None:
-      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+      raise Exception('logic libstdc++.a not found (%s -print-file-name=libstdc++.a)' % ((_os.environ.get('CXX') or 'g++').split()[0]))
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
     # g++/clang++ drivers append -lstdc++ unless default libs are disabled.
@@ -1841,16 +1855,18 @@ else:
           _sup = _os.path.join(_base, 'libsupc++.a')
           break
     if _stdcxx is None:
-      for _cand in (
-          '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-          '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-      ):
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_os.path.dirname(_cand), 'libsupc++.a')
-          break
+      import subprocess as _sp
+      _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
+      _printed = _sp.check_output([_cxx, '-print-file-name=libstdc++.a'], universal_newlines=True).strip()
+      if _printed and _printed != 'libstdc++.a' and _os.path.isfile(_printed):
+        _stdcxx = _printed
+        _sup = _os.path.join(_os.path.dirname(_printed), 'libsupc++.a')
+        if not _os.path.isfile(_sup):
+          _sup_printed = _sp.check_output([_cxx, '-print-file-name=libsupc++.a'], universal_newlines=True).strip()
+          if _sup_printed and _os.path.isfile(_sup_printed):
+            _sup = _sup_printed
     if _stdcxx is None:
-      raise Exception('logic libstdc++.a not found (install sysroot-i386 or gcc-9-multilib)')
+      raise Exception('logic libstdc++.a not found (%s -print-file-name=libstdc++.a)' % ((_os.environ.get('CXX') or 'g++').split()[0]))
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
     # g++/clang++ drivers append -lstdc++ unless default libs are disabled.
@@ -1866,17 +1882,16 @@ else:
     for flag in ('-static-libstdc++', '-lgcc_eh'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
-    _gcc9_stdcxx = None
-    for _cand in (
-        '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
-        '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
-    ):
-      if _os.path.isfile(_cand):
-        _gcc9_stdcxx = _cand
-        break
-    if _gcc9_stdcxx is None:
-      raise Exception('gcc-9 i686 libstdc++.a not found (install gcc-9-multilib)')
+    import subprocess as _sp
+    _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
+    _gcc9_stdcxx = _sp.check_output([_cxx, '-print-file-name=libstdc++.a'], universal_newlines=True).strip()
+    if not _gcc9_stdcxx or _gcc9_stdcxx == 'libstdc++.a' or not _os.path.isfile(_gcc9_stdcxx):
+      raise Exception('logic libstdc++.a not found (%s -print-file-name=libstdc++.a)' % _cxx)
     _gcc9_sup = _os.path.join(_os.path.dirname(_gcc9_stdcxx), 'libsupc++.a')
+    if not _os.path.isfile(_gcc9_sup):
+      _sup_printed = _sp.check_output([_cxx, '-print-file-name=libsupc++.a'], universal_newlines=True).strip()
+      if _sup_printed and _os.path.isfile(_sup_printed):
+        _gcc9_sup = _sup_printed
     if '-static-libgcc' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-static-libgcc']
     binary.compiler.linkflags += [
@@ -1978,3 +1993,27 @@ else:
     path.write_text(text.replace(old, new, 1))
     print('==> Patched sm version to print CSS34 pack commit')
 PYVER
+
+# Every Linux module links libstdc++ statically and hides it. --exclude-libs,ALL
+# is applied only to logic.so and non-SDK extensions (ExtLibrary above).
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYHIDE'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+marker = 'css34: hide static libstdc++'
+if marker in text:
+    print('==> static libstdc++ hide flags already present')
+else:
+    old_sm13 = "    cxx.linkflags += ['-static-libstdc++']\n    cxx.linkflags += ['-Wl,--exclude-libs=libstdc++.a']\n"
+    old = "    cxx.linkflags += ['-static-libstdc++']\n"
+    new = "    cxx.linkflags += ['-static-libstdc++', '-Wl,--exclude-libs=libstdc++.a:libsupc++.a']  # css34: hide static libstdc++\n"
+    if old_sm13 in text:
+        text = text.replace(old_sm13, new, 1)
+    elif old in text:
+        text = text.replace(old, new, 1)
+    else:
+        raise SystemExit('FAIL: static-libstdc++ linkflags anchor not found in AMBuildScript')
+    path.write_text(text)
+    print('==> Patched AMBuildScript to hide static libstdc++')
+PYHIDE

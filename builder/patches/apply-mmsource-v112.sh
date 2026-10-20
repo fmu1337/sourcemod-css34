@@ -226,6 +226,36 @@ else:
     print('==> Forced MM linker_argv to C++ driver')
 PYLINK
 
+# css34: GCC 10 -Werror (metamod.cpp format truncation) and hidden static libstdc++.
+# libgcc_s stays dynamic. Cores keep tier1 exports (--exclude-libs is not ALL).
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYSTD'
+from pathlib import Path
+import os
+path = Path(os.environ['MMS_DIR']) / 'AMBuildScript'
+text = path.read_text()
+old = """      if cxx.family == 'gcc':
+        cxx.linkflags += ['-static-libgcc']
+      elif cxx.family == 'clang':
+        cxx.linkflags += ['-lgcc_eh']
+      cxx.linkflags += ['-static-libstdc++']
+"""
+new = """      if cxx.family == 'gcc':
+        # css34: libgcc_s stays dynamic; hide static libstdc++ (GCC 10 / glibc 2.17)
+        cxx.linkflags += ['-lgcc_s']
+        cxx.cxxflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-volatile']
+      elif cxx.family == 'clang':
+        cxx.linkflags += ['-lgcc_eh']
+      cxx.linkflags += ['-static-libstdc++', '-Wl,--exclude-libs=libstdc++.a:libsupc++.a']
+"""
+if 'css34: libgcc_s stays dynamic' in text:
+    print('==> MM 1.12 libstdc++ link flags already patched')
+elif old not in text:
+    raise SystemExit('FAIL: MM 1.12 static-libgcc anchor not found in AMBuildScript')
+else:
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched MM 1.12 link flags (static libstdc++, dynamic libgcc_s)')
+PYSTD
+
 # episode1 SDK: MemAllocScratch lives in tier0/mem.h but the Source1 provider
 # never includes it (newer SDKs pull it transitively). Without the include,
 # metamod.2.ep1 fails to compile.

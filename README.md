@@ -181,18 +181,20 @@ non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
 
 ## Build (pure-source)
 
-Needs Docker; everything else (clang-9, i386 gcc-4.9 sysroot, MySQL / MariaDB SDKs, hl2sdk, AMBuild) is fetched into `deps/`.
+Needs Docker. The build runs in pinned `quay.io/pypa/manylinux2014_i686` (glibc 2.17, GCC 10.2.1). SDKs, AMBuild and static OpenSSL 1.1.1w are fetched into `deps/`.
 
 ```bash
 git submodule update --init --recursive
 
 # Default (SM 1.13.7472 + MM 1.12.1226):
-CSS34_LINE=sm13-latest builder/docker/legacy-build.sh
+CSS34_LINE=sm13-latest builder/docker/build.sh
 
 # Other lines:
-CSS34_LINE=sm11-oldstable  builder/docker/legacy-build.sh
-CSS34_LINE=sm12-latest     builder/docker/legacy-build.sh
+CSS34_LINE=sm11-oldstable  builder/docker/build.sh
+CSS34_LINE=sm12-latest     builder/docker/build.sh
 ```
+
+`builder/docker/legacy-build.sh` calls `build.sh`.
 
 MM 2.0 builds (`sm13-mm20`, `sm13-mm20-khook`) are archived outside CI in
 [`archive/khook`](https://github.com/fmu1337/sourcemod-css34/tree/archive/khook).
@@ -203,16 +205,12 @@ release assets, line IDs and pointer URLs remain available.
 line and revisions. Stale packages cannot silently replace the expected build.
 No root package symlinks are created.
 
-`PURE_SOURCE_BUILD=1` is the default. Packages land in `packages/`. `legacy-build.sh` builds in `debian:11`
-(glibc 2.31) — the only Linux package that passes `check-package.sh` and boots on legacy hosts.
+`PURE_SOURCE_BUILD=1` is the default. Packages land in `packages/`. `build.sh` builds in
+manylinux2014 (glibc 2.17). `check-package.sh` fails the package if any ELF needs a
+GLIBC newer than `GLIBC_FLOOR` (default 2.17).
 
-Host / jammy-native (fails the legacy ABI checks; not shipped, not smoke-tested):
-
-```bash
-CSS34_LINE=sm13-latest builder/run/linux.sh
-```
-
-`builder/run/linux.sh` compiles with clang-9 unless `USE_CLANG9=0`, whatever `CC` / `CXX` say.
+`builder/run/linux.sh` on a normal distro still defaults to clang-9 (`USE_CLANG9=1`).
+That path is not what CI ships. Inside the manylinux image it uses devtoolset-10 GCC.
 
 Windows (x86 MSVC env):
 
@@ -223,14 +221,14 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 ## CI
 
 - `.github/workflows/test-server.yml` — the real gate (push to `master` / `cursor/**`, PRs; `docs/**` and `*.md` are ignored).
-  Builds **three active** lines (`sm11-oldstable`, `sm12-latest`, `sm13-latest`) with `legacy-build.sh` + `check-package.sh` / `check-metamod-package.sh`;
+  Builds **three active** lines (`sm11-oldstable`, `sm12-latest`, `sm13-latest`) with `builder/docker/build.sh` + `check-package.sh` / `check-metamod-package.sh`;
   smoke on `debian:11` for all lines and on `debian:latest`, `rockylinux:9` and the ubuntu-22.04 host for
   `sm13-latest`; **botplay-stress matrix** on `debian:11` for all lines
   (SMAC + SDKHooks OnTakeDamage + SM API / cstrike / DHooks probes). Packages pass between jobs via
   **Actions cache**. Reference (rom4s / published-release) botplay, extra distros and bisect are
   `workflow_dispatch` opt-ins.
-- `.github/workflows/build.yml` — Linux build of `sm13-latest` with `builder/run/linux.sh` on ubuntu-22.04
-  (jammy-native, compile check only); **Windows** build of `sm13-latest`, booted
+- `.github/workflows/build.yml` — Linux build of `sm13-latest` with `builder/docker/build.sh`
+  (manylinux2014); **Windows** build of `sm13-latest`, booted
   natively on `windows-latest` and under Wine (`wine-smoke`).
 - `.github/workflows/release.yml` — tag-driven; tag (minus `-r<N>`) maps to `CSS34_LINE`; packages attach with
   `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke,

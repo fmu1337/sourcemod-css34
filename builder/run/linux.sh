@@ -23,6 +23,21 @@ if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
   export SPLICE_REFERENCE_LOGIC=0
 fi
 
+# manylinux2014_i686: devtoolset-10 GCC, no apt, no clang, no gcc-9.
+if [[ -f /opt/rh/devtoolset-10/enable ]]; then
+  # shellcheck disable=SC1091
+  source /opt/rh/devtoolset-10/enable
+  export USE_CLANG9=0
+  export CC="${CC:-gcc}"
+  export CXX="${CXX:-g++}"
+  if ! command -v "${CC}" >/dev/null 2>&1; then
+    export CC=gcc
+  fi
+  if ! command -v "${CXX}" >/dev/null 2>&1; then
+    export CXX=g++
+  fi
+fi
+
 if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
   echo "==> Installing Linux build dependencies"
   export DEBIAN_FRONTEND=noninteractive
@@ -65,8 +80,13 @@ if [ "$USE_CLANG9" = "1" ]; then
     g++*|gcc*) export CXX=clang++-9 ;;
   esac
 else
-  export CC="${CC:-gcc-9}"
-  export CXX="${CXX:-g++-9}"
+  if [[ -f /opt/rh/devtoolset-10/enable ]]; then
+    export CC="${CC:-gcc}"
+    export CXX="${CXX:-g++}"
+  else
+    export CC="${CC:-gcc-9}"
+    export CXX="${CXX:-g++-9}"
+  fi
 fi
 
 echo "==> Using compiler: $($CC --version | head -1)"
@@ -84,6 +104,11 @@ git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
+if [[ -f "$DEPS_DIR/openssl.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$DEPS_DIR/openssl.env"
+  echo "==> OpenSSL: CPATH=${CPATH:-} LIBRARY_PATH=${LIBRARY_PATH:-}"
+fi
 chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/package-metamod.sh" \
   "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
 

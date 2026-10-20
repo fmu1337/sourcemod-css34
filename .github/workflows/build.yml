@@ -33,38 +33,16 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install build dependencies
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y \
-            curl \
-            g++-9-multilib \
-            gcc-9-multilib \
-            git \
-            lib32stdc++-9-dev \
-            lib32stdc++6 \
-            lib32z1-dev \
-            libc6-dev-i386 \
-            libstdc++-9-dev \
-            linux-libc-dev \
-            libssl-dev:i386 \
-            python3 \
-            python3-pip
-
-      - name: Build SourceMod + Metamod for CS:S v34
+      - name: Build SourceMod + Metamod for CS:S v34 (manylinux2014)
         env:
-          SKIP_APT_INSTALL: 1
-          CC: gcc-9
-          CXX: g++-9
           CSS34_LINE: ${{ env.CSS34_LINE }}
           PURE_SOURCE_BUILD: ${{ env.PURE_SOURCE_BUILD }}
         run: |
-          export WDIR="$PWD"
-          chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
-            builder/package-metamod.sh builder/build-metamod.sh builder/prepare-package.sh \
-            builder/write-build-stamps.sh builder/resolve-version.sh builder/py.sh builder/patches/*.sh
-          builder/run/linux.sh
+          chmod +x builder/docker/build.sh builder/run/linux.sh builder/checkout-deps.sh \
+            builder/package.sh builder/package-metamod.sh builder/build-metamod.sh \
+            builder/prepare-package.sh builder/write-build-stamps.sh \
+            builder/resolve-version.sh builder/py.sh builder/patches/*.sh
+          builder/docker/build.sh
 
       - name: Confirm Linux packages exist
         run: ls -lh packages/sourcemod-*-css34-linux.tar.gz packages/mmsource-*-css34-linux.tar.gz
