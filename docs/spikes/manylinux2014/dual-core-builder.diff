@@ -1,0 +1,275 @@
+diff --git a/builder/build-metamod.sh b/builder/build-metamod.sh
+index 95828fb..8e7c809 100755
+--- a/builder/build-metamod.sh
++++ b/builder/build-metamod.sh
+@@ -29,6 +29,12 @@ if [[ ! -f "$MMS_DIR/core/ISmmAPI.h" ]]; then
+   exit 1
+ fi
+ 
++# oldos experiment: MM 1.10 gates exports/allocator on __GNUC__ == 4 (true for clang only)
++if [[ "${OLDOS_GNUC_FIX:-0}" == 1 && -f "$MMS_DIR/core-legacy/oslink.h" ]]; then
++  sed -i 's/#if (__GNUC__ == 4)$/#if (__GNUC__ >= 4)/; s/#if (__GNUC__ == 4) \&\& (__GNUC_MINOR__ >= 1)/#if (__GNUC__ >= 4)/' "$MMS_DIR/core-legacy/oslink.h" "$MMS_DIR/core-legacy/ISmmPlugin.h" "$MMS_DIR/core/metamod_oslink.h"
++  sed -i 's/(__GNUC__ == 3 || __GNUC__ == 4)/(__GNUC__ >= 3)/' "$MMS_DIR/core-legacy/sourcemm.cpp" "$MMS_DIR/core/metamod_oslink.cpp"
++  grep -n '__GNUC__' "$MMS_DIR/core-legacy/oslink.h" "$MMS_DIR/core-legacy/ISmmPlugin.h" "$MMS_DIR/core-legacy/sourcemm.cpp" >&2
++fi
+ product="$(tr -d '\r\n' < "$MMS_DIR/product.version" 2>/dev/null || echo "")"
+ if [[ -z "$MMS_MODE" ]]; then
+   case "$product" in
+diff --git a/builder/patches/apply-sourcemod-v112.sh b/builder/patches/apply-sourcemod-v112.sh
+index 0835bea..1bb95eb 100755
+--- a/builder/patches/apply-sourcemod-v112.sh
++++ b/builder/patches/apply-sourcemod-v112.sh
+@@ -174,7 +174,7 @@ else:
+     print('==> CSS34 compiler flags already present')
+ 
+ # SM 7461+ sets -std=c++20; css34 uses gcc-9/clang-9 (max c++17).
+-if "cxx.cxxflags += ['-std=c++20']" in text:
++if os.environ.get('CSS34_KEEP_CXX20') != '1' and "cxx.cxxflags += ['-std=c++20']" in text:  # oldos experiment
+     text = text.replace(
+         "cxx.cxxflags += ['-std=c++20']",
+         "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+@@ -186,7 +186,7 @@ elif "css34: gcc-9/clang-9 lack c++20" in text:
+ 
+ # SM 7461+ SourcePawn uses std::span (C++20); provide a polyfill via -I cxx17-compat.
+ pool_allocator = sm / 'sourcepawn/utils/pool-allocator.h'
+-if pool_allocator.exists() and '#include <span>' in pool_allocator.read_text():
++if os.environ.get('CSS34_KEEP_CXX20') != '1' and pool_allocator.exists() and '#include <span>' in pool_allocator.read_text():  # oldos experiment
+     compat_inc = os.path.join(builder_dir, 'patches', 'cxx17-compat')
+     span_marker = "cxx.cxxflags += ['-I"  # css34: C++17 std::span polyfill
+     if span_marker not in text:
+@@ -475,7 +475,7 @@ if logic_am.exists():
+ {mimalloc_link}    ]
+ """
+         exclude_libs = ""
+-        if sm_minor >= 13:
++        if sm_minor >= 13 or os.environ.get('CSS34_EXCLUDE_LIBS_ALL') == '1':  # oldos experiment
+             exclude_libs = """    # css34: hide static archive symbols from the dynamic export table (libsourcepawn_static)
+     if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
+       binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
+@@ -510,6 +510,7 @@ if logic_am.exists():
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
+diff --git a/builder/patches/apply-sourcemod.sh b/builder/patches/apply-sourcemod.sh
+index 5b09bd6..adda1cc 100755
+--- a/builder/patches/apply-sourcemod.sh
++++ b/builder/patches/apply-sourcemod.sh
+@@ -1169,6 +1169,45 @@ else:
+     raise SystemExit('Failed to patch static-libstdc++ block for css34')
+ PYLINK
+ 
++# css34 dual: one SM build, two Metamod APIs. The 'ep1' SDK (sourcemod.1.ep1,
++# *.ext.1.ep1) compiles against the MM 1.10 legacy ABI headers (css34-patched
++# mmsource-1.10/core: PLAPI 11, SourceHook v4) named by CSS34_MMS_LEGACY_ROOT;
++# every other target (episode1 → *.2.ep1, shared extensions, logic, loader,
++# DHooks) uses --mms-path (Metamod 1.12: PLAPI 16, SourceHook v5).
++SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
++from pathlib import Path
++import os
++path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
++text = path.read_text()
++old = """    compiler.cxxincludes += [
++      os.path.join(self.mms_root, 'core'),
++      os.path.join(self.mms_root, 'core', 'sourcehook'),
++    ]
++"""
++legacy_root = os.environ.get('CSS34_MMS_LEGACY_ROOT', '')
++if not legacy_root:
++    print('==> css34 dual: CSS34_MMS_LEGACY_ROOT unset; single Metamod include root')
++    raise SystemExit(0)
++# Literal path (not os.environ at configure time): AMBuild re-parses build
++# scripts on later `ambuild` runs where the env var may be missing.
++new = """    # css34 dual: 1.ep1 builds against MM 1.10 legacy ABI headers (PLAPI 11 / SH v4).
++    mms_inc_root = self.mms_root
++    if sdk.name == 'ep1':
++      mms_inc_root = %r
++    compiler.cxxincludes += [
++      os.path.join(mms_inc_root, 'core'),
++      os.path.join(mms_inc_root, 'core', 'sourcehook'),
++    ]
++""" % legacy_root
++if 'css34 dual: 1.ep1 builds against MM 1.10 legacy ABI headers' in text:
++    print('==> AMBuildScript per-SDK Metamod include root already patched')
++elif old in text:
++    path.write_text(text.replace(old, new, 1))
++    print('==> Patched AMBuildScript: per-SDK Metamod include root (ep1 -> CSS34_MMS_LEGACY_ROOT)')
++else:
++    raise SystemExit('Failed to locate ConfigureForHL2 Metamod includes in AMBuildScript')
++PY
++
+ # bintools: modern ProtoInfo/CProtoInfoBuilder via sourcehook_pibuilder.h shim (see apply-mmsource-css34.sh).
+ SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+ from pathlib import Path
+@@ -1192,6 +1231,8 @@ PY
+ # Bundled DHooks (SM >=6970) needs SourceHook::IHookManagerAutoGen (SH v5 /
+ # Metamod 1.11+). MM 1.10 css34 ships SH v4 only — skip the extension here.
+ # sm12+/MM 1.12 keeps dhooks via apply-sourcemod-v112.sh (unpatched BuildScripts).
++# css34 dual (CSS34_DUAL_MM=1): SM.mms_root is Metamod 1.12 (2.ep1 / shared
++# modules), so build the bundled DHooks against it like upstream 6970 does.
+ SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
+ from pathlib import Path
+ import os
+@@ -1202,7 +1243,23 @@ skipped = (
+     "  # css34: bundled DHooks needs SourceHook::IHookManagerAutoGen (SH v5 / MM 1.11+)\n"
+     "  # 'extensions/dhooks/AMBuilder',\n"
+ )
+-if skipped in text:
++if os.environ.get('CSS34_DUAL_MM') == '1':
++    # GCC: -Wno-invalid-offsetof is C++-only; 6970 dhooks puts it on cflags (C too).
++    dh = Path(os.environ['SOURCEMOD_DIR']) / 'extensions/dhooks/AMBuilder'
++    if dh.exists():
++        dtext = dh.read_text()
++        dold = "    binary.compiler.cflags += ['-Wno-invalid-offsetof']"
++        if dold in dtext:
++            dh.write_text(dtext.replace(dold, "    binary.compiler.cxxflags += ['-Wno-invalid-offsetof']", 1))
++            print('==> css34 dual: dhooks -Wno-invalid-offsetof moved to cxxflags (GCC)')
++    if skipped in text:
++        path.write_text(text.replace(skipped, enabled, 1))
++        print('==> css34 dual: re-enabled bundled DHooks (built against Metamod 1.12 headers)')
++    elif enabled in text:
++        print('==> css34 dual: bundled DHooks enabled (Metamod 1.12 headers)')
++    else:
++        print('==> No bundled DHooks AMBuilder entry (pre-6970 SourceMod)')
++elif skipped in text:
+     print('==> Bundled DHooks already skipped for MM 1.10 / SH v4')
+ elif enabled in text:
+     path.write_text(text.replace(enabled, skipped, 1))
+@@ -1354,6 +1411,7 @@ if _loop_old_mod in text or (
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
+@@ -1678,6 +1736,7 @@ linux_block_new = """  if builder.target.platform == 'linux':
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
+@@ -1804,6 +1863,7 @@ else:
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
+@@ -1844,6 +1904,7 @@ else:
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
+diff --git a/builder/run/linux.sh b/builder/run/linux.sh
+index 1807822..56d49f6 100755
+--- a/builder/run/linux.sh
++++ b/builder/run/linux.sh
+@@ -117,6 +117,28 @@ MM_ARTIFACT="$(
+ ln -sfn "$MM_ARTIFACT" "$WDIR/$(basename "$MM_ARTIFACT")"
+ echo "==> Metamod package: $MM_ARTIFACT"
+ 
++# css34 dual (SM 1.11): 1.ep1 targets against MM 1.10 legacy headers (PLAPI 11 /
++# SH v4), everything else (2.ep1, shared extensions, logic, loader, DHooks)
++# against Metamod 1.12 (PLAPI 16 / SH v5) so MM 1.12 accepts sourcemod.2.ep1.
++CSS34_DUAL_MM="${CSS34_DUAL_MM:-0}"
++SM_MMS_PATH="$MMS_DIR"
++if [ "$SOURCEMOD_MAJOR" -lt 12 ] && [ "$CSS34_DUAL_MM" = "1" ]; then
++  SM_MMS_PATH="$(
++    WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" PACKAGES_DIR="$PACKAGES_DIR" \
++      CC="$CC" CXX="$CXX" USE_CLANG9="$USE_CLANG9" \
++      CSS34_DUAL_MM_COMMIT="${CSS34_DUAL_MM_COMMIT:-$MM_112_COMMIT}" \
++      CSS34_DUAL_MM_REV="${CSS34_DUAL_MM_REV:-$MM_112_REV}" \
++      CSS34_DUAL_MM_DIRNAME="$MM_112_DIRNAME" \
++      bash "$BUILDER_DIR/dual-mm-modern.sh" | tail -n 1
++  )"
++  export CSS34_MMS_LEGACY_ROOT="$MMS_DIR"
++  echo "==> css34 dual: SM --mms-path=$SM_MMS_PATH (2.ep1/shared), CSS34_MMS_LEGACY_ROOT=$CSS34_MMS_LEGACY_ROOT (1.ep1)"
++else
++  CSS34_DUAL_MM=0
++  unset CSS34_MMS_LEGACY_ROOT
++fi
++export CSS34_DUAL_MM
++
+ echo "==> Applying CS:S v34 compatibility patches"
+ "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
+ 
+@@ -149,7 +171,7 @@ elif [ "$SOURCEMOD_MAJOR" -lt 12 ]; then
+   CONFIGURE_ARGS=(
+     --enable-optimize
+     --hl2sdk-root="$DEPS_DIR"
+-    --mms-path="$MMS_DIR"
++    --mms-path="$SM_MMS_PATH"
+     "${DB_PATH_ARGS[@]}"
+     --sdks=ep1,episode1
+   )
+diff --git a/builder/dual-mm-modern.sh b/builder/dual-mm-modern.sh
+new file mode 100755
+index 0000000..f4e4c1d
+--- /dev/null
++++ b/builder/dual-mm-modern.sh
+@@ -0,0 +1,55 @@
++#!/usr/bin/env bash
++# css34 dual SM 1.11 build: prepare the Metamod 1.12 tree whose headers the
++# 2.ep1 core / *.ext.2.ep1 / shared extensions / logic / loader / DHooks are
++# compiled against (PLAPI 16, SourceHook v5). The 1.ep1 targets keep using the
++# css34-patched MM 1.10 legacy headers (CSS34_MMS_LEGACY_ROOT).
++#
++# Optionally (CSS34_DUAL_BUILD_MM112=1) also builds + packages that Metamod 1.12
++# so the SM package can be smoke-tested on both Metamods from one run.
++#
++# Prints the Metamod 1.12 directory on stdout (last line).
++set -euo pipefail
++
++DEPS_DIR="${DEPS_DIR:?}"
++BUILDER_DIR="${BUILDER_DIR:?}"
++WDIR="${WDIR:?}"
++PACKAGES_DIR="${PACKAGES_DIR:?}"
++MODERN_COMMIT="${CSS34_DUAL_MM_COMMIT:?}"
++MODERN_REV="${CSS34_DUAL_MM_REV:?}"
++MODERN_DIR="$DEPS_DIR/${CSS34_DUAL_MM_DIRNAME:-mmsource-1.12}"
++url="https://github.com/alliedmodders/metamod-source"
++
++{
++  echo "==> css34 dual: Metamod 1.12 headers for 2.ep1 targets ($MODERN_COMMIT, git$MODERN_REV)"
++  if [ ! -d "$MODERN_DIR/.git" ]; then
++    git clone --depth 1 "$url" "$MODERN_DIR"
++  fi
++  git -C "$MODERN_DIR" fetch --depth 1 origin "$MODERN_COMMIT"
++  git -C "$MODERN_DIR" checkout --force "$MODERN_COMMIT"
++  git -C "$MODERN_DIR" clean -fdxq -e hl2sdk-manifests
++  git -C "$MODERN_DIR" submodule update --init --recursive
++  bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$MODERN_DIR"
++  # Stamp only the MM tree (SOURCEMOD_DIR pointed nowhere on purpose).
++  WDIR="$WDIR" SOURCEMOD_DIR=/nonexistent MMS_DIR="$MODERN_DIR" MMS_COMMIT="$MODERN_COMMIT" \
++    bash "$BUILDER_DIR/write-build-stamps.sh"
++
++  for f in core/ISmmPluginExt.h core/sourcehook/sourcehook.h core/sourcehook/sourcehook_hookmangen.h; do
++    [ -f "$MODERN_DIR/$f" ] || { echo "css34 dual: missing $MODERN_DIR/$f" >&2; exit 1; }
++  done
++  grep -q 'SH_IFACE_VERSION 5' "$MODERN_DIR/core/sourcehook/sourcehook.h" \
++    || { echo "css34 dual: Metamod 1.12 sourcehook.h is not SH v5" >&2; exit 1; }
++
++  if [ "${CSS34_DUAL_BUILD_MM112:-0}" = "1" ]; then
++    echo "==> css34 dual: building Metamod 1.12 package (metamod.2.ep1)"
++    WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
++      CC="$CC" CXX="$CXX" USE_CLANG9="${USE_CLANG9:-0}" \
++      SOURCEMOD_MAJOR=12 MMS_DIR="$MODERN_DIR" MMS_MODE=1.12 \
++      MMS_DIRNAME="$(basename "$MODERN_DIR")" \
++      bash "$BUILDER_DIR/build-metamod.sh"
++    art="$(MMS_COMMIT="$MODERN_COMMIT" MMS_GIT_REV="$MODERN_REV" bash "$BUILDER_DIR/package-metamod.sh" \
++      "$MODERN_DIR/build/package" "$PACKAGES_DIR" "$MODERN_DIR")"
++    echo "==> css34 dual: Metamod 1.12 package: $art"
++  fi
++} >&2
++
++echo "$MODERN_DIR"

@@ -1,0 +1,94 @@
+######## x-mmsource-1.10.7-git971-linux
+addons/metamod/bin/metamod.1.ep1.so | GLIBC_2.3 |  | NEEDED=vstdlib_i486.so,tier0_i486.so,libc.so.6, | exports=178 | >2.17: 
+addons/metamod/bin/server.so | GLIBC_2.3 |  | NEEDED=libc.so.6, | exports=6 | >2.17: 
+addons/metamod/bin/server_i486.so | GLIBC_2.3 |  | NEEDED=libc.so.6, | exports=6 | >2.17: 
+   .comment(x-mmsource-1.10.7-git971-linux/addons/metamod/bin/metamod.1.ep1.so): GCC: (Debian 4.9.2-10+deb8u1) 4.9.2;GCC: (GNU) 3.4.1;clang version 3.8.1;
+######## x-mmsource-1.11.0-git1155-linux
+addons/metamod/bin/linux64/server.so | GLIBC_2.3 |  | NEEDED=libc.so.6, | exports=6 | >2.17: 
+addons/metamod/bin/metamod.2.ep1.so | GLIBC_2.3 |  | NEEDED=vstdlib_i486.so,tier0_i486.so,libm.so.6,libc.so.6, | exports=178 | >2.17: 
+addons/metamod/bin/server.so | GLIBC_2.3 |  | NEEDED=libc.so.6, | exports=6 | >2.17: 
+addons/metamod/bin/server_i486.so | GLIBC_2.3 |  | NEEDED=libc.so.6, | exports=6 | >2.17: 
+   .comment(x-mmsource-1.11.0-git1155-linux/addons/metamod/bin/metamod.2.ep1.so): GCC: (Debian 4.9.2-10+deb8u2) 4.9.2;GCC: (GNU) 3.4.1;clang version 3.8.1;
+######## x-mmsource-1.12.0-git1227-linux
+addons/metamod/bin/linux64/server.so | GLIBC_2.3 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6, | exports=1 | >2.17: 
+addons/metamod/bin/metamod.2.ep1.so | GLIBC_2.29 |  | NEEDED=libm.so.6,vstdlib_i486.so,tier0_i486.so,libgcc_s.so.1,libc.so.6, | exports=811 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/metamod/bin/server.so | GLIBC_2.3 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6, | exports=1 | >2.17: 
+addons/metamod/bin/server_i486.so | GLIBC_2.3 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6, | exports=1 | >2.17: 
+   .comment(x-mmsource-1.12.0-git1227-linux/addons/metamod/bin/metamod.2.ep1.so): GCC: (Debian 10.2.1-6) 10.2.1 20210110;GCC: (GNU) 3.4.1;clang version 22.1.8;
+######## x-mmsource-2.0.0-git1476-linux
+addons/metamod/bin/linux64/server.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=1 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/metamod/bin/linuxsteamrt64/libserver.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=1 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/metamod/bin/metamod.2.ep1.so | GLIBC_2.29 |  | NEEDED=libm.so.6,vstdlib_i486.so,tier0_i486.so,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=16 | >2.17: __cxa_thread_atexit_impl@2.18 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/metamod/bin/server.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=1 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/metamod/bin/server_i486.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=1 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+   .comment(x-mmsource-2.0.0-git1476-linux/addons/metamod/bin/metamod.2.ep1.so): GCC: (Debian 10.2.1-6) 10.2.1 20210110;GCC: (GNU) 3.4.1;clang version 22.1.8;
+######## x-sourcemod-1.11.0-git6970-linux
+addons/sourcemod/bin/sourcemod.2.ep1.so | GLIBC_2.3.2 |  | NEEDED=vstdlib_i486.so,tier0_i486.so,libm.so.6,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6, | exports=3945 | >2.17: 
+addons/sourcemod/bin/sourcemod.logic.so | GLIBC_2.12 |  | NEEDED=libm.so.6,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=3958 | >2.17: 
+addons/sourcemod/bin/sourcepawn.jit.x86.so | GLIBC_2.17 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=3617 | >2.17: 
+addons/sourcemod/bin/x64/sourcemod.logic.so | GLIBC_2.14 |  | NEEDED=libm.so.6,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=3958 | >2.17: 
+addons/sourcemod/extensions/dbi.mysql.ext.so | GLIBC_2.3.2 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=4717 | >2.17: 
+addons/sourcemod/extensions/dbi.pgsql.ext.so | GLIBC_2.3.2 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=3833 | >2.17: 
+addons/sourcemod/extensions/dbi.sqlite.ext.so | GLIBC_2.3.2 |  | NEEDED=libm.so.6,libdl.so.2,libpthread.so.0,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=3588 | >2.17: 
+addons/sourcemod/extensions/geoip.ext.so | GLIBC_2.3.2 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=3588 | >2.17: 
+addons/sourcemod/extensions/sdkhooks.ext.2.ep1.so | GLIBC_2.1.3 |  | NEEDED=vstdlib_i486.so,tier0_i486.so,libm.so.6,libgcc_s.so.1,libc.so.6, | exports=204 | >2.17: 
+addons/sourcemod/extensions/sdktools.ext.2.ep1.so | GLIBC_2.1.3 |  | NEEDED=vstdlib_i486.so,tier0_i486.so,libm.so.6,libgcc_s.so.1,libc.so.6, | exports=204 | >2.17: 
+addons/sourcemod/extensions/updater.ext.so | GLIBC_2.3 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=117 | >2.17: 
+addons/sourcemod/extensions/webternet.ext.so | GLIBC_2.3 |  | NEEDED=libm.so.6,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=117 | >2.17: 
+addons/sourcemod/extensions/x64/dbi.mysql.ext.so | GLIBC_2.14 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=4715 | >2.17: 
+addons/sourcemod/extensions/x64/dbi.pgsql.ext.so | GLIBC_2.14 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=3833 | >2.17: 
+addons/sourcemod/extensions/x64/dbi.sqlite.ext.so | GLIBC_2.14 |  | NEEDED=libm.so.6,libdl.so.2,libpthread.so.0,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=3588 | >2.17: 
+addons/sourcemod/extensions/x64/geoip.ext.so | GLIBC_2.14 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=3588 | >2.17: 
+addons/sourcemod/extensions/x64/updater.ext.so | GLIBC_2.14 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=117 | >2.17: 
+addons/sourcemod/extensions/x64/webternet.ext.so | GLIBC_2.14 |  | NEEDED=libm.so.6,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=117 | >2.17: 
+addons/sourcemod/scripting/spcomp | GLIBC_2.17 | CXXABI_1.3 CXXABI_1.3.5 GLIBCXX_3.4 GLIBCXX_3.4.9 GLIBCXX_3.4.11 GLIBCXX_3.4.14 GLIBCXX_3.4.18 GLIBCXX_3.4.19 GLIBCXX_3.4.20 GLIBCXX_3.4.21 GLIBCXX_3.4.22  | NEEDED=libm.so.6,libstdc++.so.6,libpthread.so.0,libgc
+addons/sourcemod/scripting/spcomp64 | GLIBC_2.14 | CXXABI_1.3 CXXABI_1.3.5 GLIBCXX_3.4 GLIBCXX_3.4.9 GLIBCXX_3.4.11 GLIBCXX_3.4.14 GLIBCXX_3.4.18 GLIBCXX_3.4.19 GLIBCXX_3.4.20 GLIBCXX_3.4.21 GLIBCXX_3.4.22  | NEEDED=libm.so.6,libstdc++.so.6,libpthread.so.0,lib
+   .comment(x-sourcemod-1.11.0-git6970-linux/addons/sourcemod/bin/x64/sourcemod.logic.so): GCC: (Debian 6.3.0-18+deb9u1) 6.3.0 20170516;clang version 11.0.1;
+   .comment(x-sourcemod-1.11.0-git6970-linux/addons/sourcemod/bin/sourcemod.logic.so): GCC: (Debian 6.3.0-18+deb9u1) 6.3.0 20170516;clang version 11.0.1;
+######## x-sourcemod-1.12.0-git7255-linux
+addons/sourcemod/bin/sourcemod.2.ep1.so | GLIBC_2.29 |  | NEEDED=libm.so.6,vstdlib_i486.so,tier0_i486.so,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6, | exports=1072 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/bin/sourcemod.logic.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=4019 | >2.17: expf@2.27 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/bin/sourcepawn.jit.x86.so | GLIBC_2.17 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=864 | >2.17: 
+addons/sourcemod/bin/x64/sourcemod.logic.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=4019 | >2.17: expf@2.27 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/dbi.mysql.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=2149 | >2.17: fcntl@2.28 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/dbi.pgsql.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=1045 | >2.17: fcntl@2.28 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/dbi.sqlite.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libdl.so.2,libpthread.so.0,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=801 | >2.17: exp@2.29 fcntl64@2.28 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/geoip.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=760 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/sdkhooks.ext.2.ep1.so | GLIBC_2.29 |  | NEEDED=libm.so.6,vstdlib_i486.so,tier0_i486.so,libgcc_s.so.1,libc.so.6, | exports=636 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/sdktools.ext.2.ep1.so | GLIBC_2.29 |  | NEEDED=libm.so.6,vstdlib_i486.so,tier0_i486.so,libgcc_s.so.1,libc.so.6, | exports=1805 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/updater.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=113 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/webternet.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=113 | >2.17: fcntl64@2.28 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/dbi.mysql.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=2147 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/dbi.pgsql.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=1045 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/dbi.sqlite.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libdl.so.2,libpthread.so.0,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=801 | >2.17: exp@2.29 fcntl64@2.28 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/geoip.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=760 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/updater.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=113 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/webternet.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=113 | >2.17: fcntl64@2.28 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/scripting/spcomp | GLIBC_2.30 | CXXABI_1.3 CXXABI_1.3.9 GLIBCXX_3.4 GLIBCXX_3.4.9 GLIBCXX_3.4.11 GLIBCXX_3.4.14 GLIBCXX_3.4.15 GLIBCXX_3.4.18 GLIBCXX_3.4.19 GLIBCXX_3.4.20 GLIBCXX_3.4.21 GLIBCXX_3.4.22 GLIBCXX_3.4.26  | NEEDED=libm.so.6,libstd
+addons/sourcemod/scripting/spcomp64 | GLIBC_2.30 | CXXABI_1.3 CXXABI_1.3.9 GLIBCXX_3.4 GLIBCXX_3.4.9 GLIBCXX_3.4.11 GLIBCXX_3.4.14 GLIBCXX_3.4.15 GLIBCXX_3.4.18 GLIBCXX_3.4.19 GLIBCXX_3.4.20 GLIBCXX_3.4.21 GLIBCXX_3.4.22 GLIBCXX_3.4.26  | NEEDED=libm.so.6,libs
+   .comment(x-sourcemod-1.12.0-git7255-linux/addons/sourcemod/bin/x64/sourcemod.logic.so): GCC: (Debian 10.2.1-6) 10.2.1 20210110;clang version 22.1.8;
+   .comment(x-sourcemod-1.12.0-git7255-linux/addons/sourcemod/bin/sourcemod.logic.so): GCC: (Debian 10.2.1-6) 10.2.1 20210110;clang version 22.1.8;
+######## x-sourcemod-1.13.0-git7477-linux
+addons/sourcemod/bin/sourcemod.2.ep1.so | GLIBC_2.29 |  | NEEDED=libm.so.6,vstdlib_i486.so,tier0_i486.so,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6, | exports=444 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/bin/sourcemod.logic.so | GLIBC_2.30 |  | NEEDED=libm.so.6,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=56 | >2.17: expf@2.27 log@2.29 logf@2.27 pow@2.29 powf@2.27 pthread_cond_clockwait@2.30 
+addons/sourcemod/bin/x64/sourcemod.logic.so | GLIBC_2.30 |  | NEEDED=libm.so.6,libpthread.so.0,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=57 | >2.17: expf@2.27 log@2.29 logf@2.27 pow@2.29 powf@2.27 pthread_cond_clockwait@2.30 
+addons/sourcemod/extensions/dbi.mysql.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libdl.so.2,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=6032 | >2.17: fcntl64@2.28 fcntl@2.28 getentropy@2.25 log@2.29 logf@2.27 pow@2.29 p
+addons/sourcemod/extensions/dbi.pgsql.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libpthread.so.0,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=400 | >2.17: explicit_bzero@2.25 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/dbi.sqlite.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libdl.so.2,libpthread.so.0,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=7 | >2.17: exp@2.29 fcntl64@2.28 log2@2.29 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/geoip.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=5 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/sdkhooks.ext.2.ep1.so | GLIBC_2.29 |  | NEEDED=libm.so.6,vstdlib_i486.so,tier0_i486.so,libgcc_s.so.1,libc.so.6, | exports=9 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/sdktools.ext.2.ep1.so | GLIBC_2.29 |  | NEEDED=libm.so.6,vstdlib_i486.so,tier0_i486.so,libgcc_s.so.1,libc.so.6, | exports=1090 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/updater.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=7 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/webternet.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux.so.2, | exports=5 | >2.17: fcntl64@2.28 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/dbi.mysql.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libz.so.1,libpthread.so.0,librt.so.1,libdl.so.2,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=6115 | >2.17: getentropy@2.25 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/dbi.pgsql.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libpthread.so.0,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=399 | >2.17: explicit_bzero@2.25 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/dbi.sqlite.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libdl.so.2,libpthread.so.0,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=7 | >2.17: exp@2.29 fcntl64@2.28 log2@2.29 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/geoip.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=5 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/updater.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=7 | >2.17: log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/extensions/x64/webternet.ext.so | GLIBC_2.29 |  | NEEDED=libm.so.6,librt.so.1,libgcc_s.so.1,libc.so.6,ld-linux-x86-64.so.2, | exports=5 | >2.17: fcntl64@2.28 log@2.29 logf@2.27 pow@2.29 powf@2.27 
+addons/sourcemod/scripting/spcomp | GLIBC_2.30 | CXXABI_1.3 CXXABI_1.3.5 CXXABI_1.3.9 GLIBCXX_3.4 GLIBCXX_3.4.9 GLIBCXX_3.4.11 GLIBCXX_3.4.14 GLIBCXX_3.4.15 GLIBCXX_3.4.18 GLIBCXX_3.4.19 GLIBCXX_3.4.20 GLIBCXX_3.4.21 GLIBCXX_3.4.22 GLIBCXX_3.4.26  | NEEDED=lib
+addons/sourcemod/scripting/spcomp64 | GLIBC_2.30 | CXXABI_1.3 CXXABI_1.3.5 CXXABI_1.3.9 GLIBCXX_3.4 GLIBCXX_3.4.9 GLIBCXX_3.4.11 GLIBCXX_3.4.14 GLIBCXX_3.4.15 GLIBCXX_3.4.18 GLIBCXX_3.4.19 GLIBCXX_3.4.20 GLIBCXX_3.4.21 GLIBCXX_3.4.22 GLIBCXX_3.4.26  | NEEDED=l
+   .comment(x-sourcemod-1.13.0-git7477-linux/addons/sourcemod/bin/x64/sourcemod.logic.so): GCC: (Debian 10.2.1-6) 10.2.1 20210110;clang version 22.1.8;
+   .comment(x-sourcemod-1.13.0-git7477-linux/addons/sourcemod/bin/sourcemod.logic.so): GCC: (Debian 10.2.1-6) 10.2.1 20210110;clang version 22.1.8;
+
+[exited with code 0]
