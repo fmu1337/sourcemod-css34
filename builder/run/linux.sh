@@ -145,6 +145,19 @@ echo "==> Metamod package: $MM_ARTIFACT"
 echo "==> Applying CS:S v34 compatibility patches"
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
 
+# Vendored .a files (libpcre, libpq, …) were built with clang. Their .comment
+# notes are merged into the extension ELF. Drop those notes so the package
+# comment section is the devtoolset GCC that compiled our objects.
+if command -v objcopy >/dev/null 2>&1; then
+  echo "==> Removing clang .comment notes from vendored archives"
+  while IFS= read -r -d '' archive; do
+    if readelf -p .comment "$archive" 2>/dev/null | grep -q 'clang version'; then
+      echo "    ${archive#"$WDIR"/}"
+      objcopy --remove-section=.comment "$archive"
+    fi
+  done < <(find "$SOURCEMOD_DIR" "$DEPS_DIR" -name '*.a' -print0)
+fi
+
 echo "==> Writing CSS34 build stamp headers (pre-SourceMod)"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
   SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" MMS_DIR="$MMS_DIR" \

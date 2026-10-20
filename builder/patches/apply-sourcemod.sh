@@ -1388,6 +1388,11 @@ if _loop_old_mod in text or (
       '-Wl,--exclude-libs,ALL',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]
+    # css34: template instantiations in .o files ignore --exclude-libs; export only the C API.
+    _vs = _os.path.join(_os.environ.get('WDIR', ''), 'builder', 'patches', 'sourcemod-logic.version')
+    if not _os.path.isfile(_vs):
+      raise Exception('logic version script missing: ' + _vs)
+    binary.compiler.linkflags += ['-Wl,--version-script,' + _vs]
   elif binary.compiler.target.platform == 'mac':"""
         if linux_old not in text:
             raise SystemExit('Failed to locate modular logic AMBuilder linux link block')
@@ -1713,7 +1718,12 @@ linux_block_new = """  if builder.target.platform == 'linux':
       '-lc', '-lm',
       '-Wl,--exclude-libs,ALL',
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
-    ]"""
+    ]
+    _vs = _os.path.join(_os.environ.get('WDIR', ''), 'builder', 'patches', 'sourcemod-logic.version')
+    if not _os.path.isfile(_vs):
+      raise Exception('logic version script missing: ' + _vs)
+    binary.compiler.linkflags += ['-Wl,--version-script,' + _vs]
+"""
 
 linux_block_old_variants = [
     """  if builder.target.platform == 'linux':
@@ -1927,6 +1937,20 @@ elif old in text:
     print('==> Patched configure_linux for legacy libstdc++ ABI')
 else:
     raise SystemExit('Failed to patch configure_linux CXX11 ABI block')
+text = path.read_text()
+old_gcc = """    if cxx.family == 'gcc':
+      cxx.linkflags += ['-static-libgcc']
+"""
+new_gcc = """    if cxx.family == 'gcc':
+      cxx.linkflags += ['-lgcc_s']  # css34: libgcc_s stays dynamic
+"""
+if 'css34: libgcc_s stays dynamic' in text:
+    print('==> configure_linux already keeps libgcc_s dynamic')
+elif old_gcc not in text:
+    raise SystemExit('FAIL: configure_linux -static-libgcc anchor not found')
+else:
+    path.write_text(text.replace(old_gcc, new_gcc, 1))
+    print('==> Patched configure_linux to keep libgcc_s dynamic')
 PY
 
 if [[ "${CSS34_DEBUG_TRACE:-0}" == "1" ]]; then

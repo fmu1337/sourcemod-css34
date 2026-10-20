@@ -481,6 +481,12 @@ if logic_am.exists():
         exclude_libs = """    # css34: hide static archive symbols from the dynamic export table
     if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
       binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
+    # css34: template instantiations in .o files ignore --exclude-libs; export only the C API.
+    _vs = _os.path.join(_os.environ.get('WDIR', ''), 'builder', 'patches', 'sourcemod-logic.version')
+    if not _os.path.isfile(_vs):
+      raise Exception('logic version script missing: ' + _vs)
+    if '-Wl,--version-script,' + _vs not in binary.compiler.linkflags:
+      binary.compiler.linkflags += ['-Wl,--version-script,' + _vs]
 """
         linux_new = f"""  if binary.compiler.target.platform == 'linux':
     # css34: gcc-4.9 libstdc++ when SM_LOGIC_CXX_SYSROOT (SM < 1.13); gcc-9 for 1.13+ static SP.
@@ -1193,5 +1199,25 @@ else:
     path.write_text(text)
     print('==> Patched AMBuildScript to hide static libstdc++')
 PYHIDE
+
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYGCC'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+old_gcc = """    if cxx.family == 'gcc':
+      cxx.linkflags += ['-static-libgcc']
+"""
+new_gcc = """    if cxx.family == 'gcc':
+      cxx.linkflags += ['-lgcc_s']  # css34: libgcc_s stays dynamic
+"""
+if 'css34: libgcc_s stays dynamic' in text:
+    print('==> configure_linux already keeps libgcc_s dynamic')
+elif old_gcc not in text:
+    raise SystemExit('FAIL: configure_linux -static-libgcc anchor not found')
+else:
+    path.write_text(text.replace(old_gcc, new_gcc, 1))
+    print('==> Patched configure_linux to keep libgcc_s dynamic')
+PYGCC
 
 echo "==> SourceMod 1.12+ css34 patches applied (Metamod 1.12 / 2.ep1)"

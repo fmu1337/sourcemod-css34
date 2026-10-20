@@ -234,7 +234,16 @@ else
   echo "OK: logic.so exports ${logic_t_count} defined symbols"
 fi
 
-logic_std_exports="$(objdump -T --defined-only "${LOGIC_SO}" 2>/dev/null | c++filt | grep -cE 'std::|__cxxabiv1' || true)"
+# Portable stand-in for `objdump -T --defined-only`: drop *UND* rows.
+# A missing objdump dump is a failure, not a zero count.
+logic_dyn="$(objdump -T "${LOGIC_SO}" 2>/dev/null || true)"
+if [[ -z "${logic_dyn}" ]]; then
+  echo "FAIL: objdump -T produced no dynamic symbols for sourcemod.logic.so" >&2
+  fail=1
+  logic_std_exports=0
+else
+  logic_std_exports="$(printf '%s\n' "${logic_dyn}" | awk '$0 !~ /\*UND\*/' | c++filt | grep -cE 'std::|__cxxabiv1' || true)"
+fi
 if [[ "${logic_std_exports}" -ne 0 ]]; then
   echo "FAIL: sourcemod.logic.so exports ${logic_std_exports} std::/__cxxabiv1 symbols (static libstdc++ leak)" >&2
   fail=1
