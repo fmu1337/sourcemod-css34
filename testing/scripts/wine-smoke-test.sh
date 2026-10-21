@@ -199,12 +199,21 @@ require_exts() {
   IFS=',' read -r -a exts <<<"${EXPECT_EXTS}"
   for e in "${exts[@]}"; do
     [[ -n "$e" ]] || continue
-    grep -q "\] ${e} (" <<<"$list" || fail "extension '${e}' not loaded"
+    # A bare grep -q under set -e aborts the caller when this function's
+    # status is the miss (1). Keep the failure inside the if.
+    if ! grep -q "\] ${e} (" <<<"$list"; then
+      fail "extension '${e}' not loaded"
+    fi
   done
   if [[ -f "${SM_DIR}/extensions/dhooks.ext.dll" ]]; then
-    grep -q "\] DHooks (" <<<"$list" || fail "extension 'DHooks' not loaded"
+    if ! grep -q "\] DHooks (" <<<"$list"; then
+      fail "extension 'DHooks' not loaded"
+    fi
   fi
-  grep -qi "<FAILED>\|<ERROR>" <<<"$list" && fail "an extension or plugin failed to load"
+  if grep -qi "<FAILED>\|<ERROR>" <<<"$list"; then
+    fail "an extension or plugin failed to load"
+  fi
+  return 0
 }
 require_exts "$out"
 
