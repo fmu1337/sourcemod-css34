@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Boot the Windows CS:S v34 dedicated server (srcds.exe) with the Windows
 # Metamod + SourceMod packages and probe them over RCON: under Wine on Linux,
-# or natively from Git Bash on Windows (MINGW/MSYS, e.g. the windows-latest runner).
+# or natively from Git Bash on Windows (MINGW/MSYS, e.g. the windows-2022 runner).
 #
 # Inputs (env):
 #   SM_WIN_PACKAGE / MM_WIN_PACKAGE  Windows zips (sourcemod-*-windows.zip, mmsource-*-windows.zip)
@@ -178,18 +178,35 @@ echo "==> srcds.exe answers RCON"
 
 IFS=',' read -r -a load <<<"${LOAD_EXTS:-}"
 for e in "${load[@]}"; do
+  [[ -n "$e" ]] || continue
   rcon "sm exts load ${e}"
 done
+# DHooks ships in sm12/sm13 packages (dhooks.ext.dll) and is absent on lines
+# that do not build it. Require it only when the zip actually contains it.
+if [[ -f "${SM_DIR}/extensions/dhooks.ext.dll" ]]; then
+  case ",${LOAD_EXTS:-}," in
+    *,dhooks,*) ;;
+    *) rcon "sm exts load dhooks" ;;
+  esac
+fi
 
 out="$(rcon "meta version" "meta list" "sm version" "sm exts list" "sm plugins list")"
 echo "$out"
 grep -q "Metamod:Source version ${MM_VERSION_EXPECT}" <<<"$out" || fail "Metamod ${MM_VERSION_EXPECT} not reported"
 grep -q "SourceMod Version: ${SM_VERSION_EXPECT}" <<<"$out" || fail "SourceMod ${SM_VERSION_EXPECT} not reported"
-IFS=',' read -r -a exts <<<"${EXPECT_EXTS}"
-for e in "${exts[@]}"; do
-  grep -q "\] ${e} (" <<<"$out" || fail "extension '${e}' not loaded"
-done
-grep -qi "<FAILED>\|<ERROR>" <<<"$out" && fail "an extension or plugin failed to load"
+require_exts() {
+  local list="$1" e
+  IFS=',' read -r -a exts <<<"${EXPECT_EXTS}"
+  for e in "${exts[@]}"; do
+    [[ -n "$e" ]] || continue
+    grep -q "\] ${e} (" <<<"$list" || fail "extension '${e}' not loaded"
+  done
+  if [[ -f "${SM_DIR}/extensions/dhooks.ext.dll" ]]; then
+    grep -q "\] DHooks (" <<<"$list" || fail "extension 'DHooks' not loaded"
+  fi
+  grep -qi "<FAILED>\|<ERROR>" <<<"$list" && fail "an extension or plugin failed to load"
+}
+require_exts "$out"
 
 if [[ "${DHOOKS_PROBE_SECS}" -gt 0 ]]; then
   echo "==> Playing ${DHOOKS_PROBE_SECS}s with bots (DHooks probe)"
@@ -225,6 +242,7 @@ done
 out="$(rcon "status" "sm exts list")"
 echo "$out"
 grep -q "map     :  ${MAP2}" <<<"$out" || fail "map is not ${MAP2} after changelevel"
+require_exts "$out"
 
 rcon "quit" >/dev/null 2>&1 || true
 if [[ "${NATIVE}" == 1 ]]; then echo "Windows smoke test PASSED"; else echo "Wine smoke test PASSED"; fi

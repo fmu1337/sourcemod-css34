@@ -42,6 +42,19 @@ mm_base="${mm_product%%-*}"
 build_date="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 pack_commit="$(git -C "${WDIR:-$SOURCEMOD_DIR/..}" rev-parse HEAD 2>/dev/null || echo unknown)"
 
+# Windows packages record the vcvars toolset and SDK that produced the binaries.
+toolchain_fields=""
+if [[ "${BUILD_PLATFORM:-}" == "windows" ]]; then
+  msvc_toolset="${MSVC_TOOLSET:?MSVC_TOOLSET required for Windows packages}"
+  windows_sdk="${WINDOWS_SDK:?WINDOWS_SDK required for Windows packages}"
+  if [[ ! "$msvc_toolset" =~ ^[0-9]+(\.[0-9]+)+$ || ! "$windows_sdk" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+    echo "Bad MSVC_TOOLSET/WINDOWS_SDK (expected dotted versions)" >&2
+    exit 1
+  fi
+  toolchain_fields=$(printf '  "msvc_toolset": "%s",\n  "windows_sdk": "%s",\n' \
+    "$msvc_toolset" "$windows_sdk")
+fi
+
 mkdir -p "$(dirname "$OUT")"
 cat >"$OUT" <<EOF
 {
@@ -55,7 +68,7 @@ cat >"$OUT" <<EOF
   "extension_api": ${ext_api},
   "extension_api_min": ${ext_api_min},
   "metamod_binary": "${METAMOD_BINARY}",
-  "css34_pack_commit": "${pack_commit}",
+${toolchain_fields}  "css34_pack_commit": "${pack_commit}",
   "build_date": "${build_date}"
 }
 EOF

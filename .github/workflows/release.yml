@@ -245,7 +245,8 @@ jobs:
 
   windows:
     needs: [resolve-line]
-    runs-on: windows-latest
+    # Same pin as build.yml (builder/windows-toolchain.env).
+    runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -257,10 +258,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Set up MSVC (x86)
+      - name: Set up MSVC (x86, toolset 14.44, SDK 10.0.26100.0)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x86
+          toolset: "14.44"
+          sdk: 10.0.26100.0
 
       - name: Build SourceMod + Metamod for CS:S v34
         shell: bash

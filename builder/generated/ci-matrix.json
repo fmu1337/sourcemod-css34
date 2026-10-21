@@ -143,11 +143,18 @@
   ],
   "windows": [
     {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
+      "load_exts": "sdkhooks"
+    },
+    {
       "line": "sm13-latest",
       "sm_expect": "1.13.0.7472",
       "mm_expect": "1.12.0",
-      "exts": "CS Tools,SDK Tools,BinTools",
-      "load_exts": ""
+      "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
+      "load_exts": "sdkhooks"
     }
   ],
   "release_botplay": [
