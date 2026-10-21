@@ -24,8 +24,7 @@
     "linux": {
         "defines": [
             "NO_HOOK_MALLOC",
-            "NO_MALLOC_OVERRIDE",
-            "_GLIBCXX_USE_CXX11_ABI=0"
+            "NO_MALLOC_OVERRIDE"
         ],
         "cflags": [
             "-Wno-overloaded-virtual",

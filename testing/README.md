@@ -155,7 +155,7 @@ SM_VERSION_EXPECT=1.13.0.7478 MM_VERSION_EXPECT=1.12.0 \
 ```bash
 chmod +x testing/scripts/*.sh
 
-# Test freshly built SM + MM from builder/docker/legacy-build.sh (primary path).
+# Test freshly built SM + MM from builder/docker/build.sh (primary path).
 # run-smoke.sh picks packages/*.tar.gz by itself; CSS34_LINE sets the expected versions.
 CSS34_LINE=sm13-latest testing/scripts/run-smoke.sh
 

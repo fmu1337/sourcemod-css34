@@ -11,7 +11,7 @@ Experimental line built from the newest upstream dev heads that run on KHook:
 | KHook (MM submodule) | pinned by MM `05c5c63` | `2a8953533da2dd473191f35448e21fcbe5667cc2` |
 
 ```bash
-CSS34_LINE=sm13-mm20-khook PURE_SOURCE_BUILD=1 builder/docker/legacy-build.sh
+CSS34_LINE=sm13-mm20-khook PURE_SOURCE_BUILD=1 builder/docker/build.sh
 ```
 
 Install: `line-sm13-mm20-khook` (serves `1.13.0.7565-mm2.0.0-khook-dhooks-r2`), see [README](../README.md#what-to-install).

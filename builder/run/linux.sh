@@ -23,21 +23,12 @@ if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
   export SPLICE_REFERENCE_LOGIC=0
 fi
 
-# manylinux2014_i686: devtoolset-10 GCC, no apt, no clang, no gcc-9.
+# manylinux2014_i686: devtoolset-10 GCC. build.sh sets SKIP_APT_INSTALL=1.
 if [[ -f /opt/rh/devtoolset-10/enable ]]; then
   # shellcheck disable=SC1091
   set +u
   source /opt/rh/devtoolset-10/enable
   set -u
-  export USE_CLANG9=0
-  export CC="${CC:-gcc}"
-  export CXX="${CXX:-g++}"
-  if ! command -v "${CC}" >/dev/null 2>&1; then
-    export CC=gcc
-  fi
-  if ! command -v "${CXX}" >/dev/null 2>&1; then
-    export CXX=g++
-  fi
 fi
 
 if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
@@ -50,46 +41,14 @@ if [ "${SKIP_APT_INSTALL:-0}" != "1" ]; then
     git \
     python3 \
     python3-pip \
-    g++-9-multilib \
-    gcc-9-multilib \
-    lib32stdc++-9-dev \
-    lib32stdc++6 \
     lib32z1-dev \
     libc6-dev-i386 \
     linux-libc-dev \
     libssl-dev:i386
 fi
 
-# rom4s SM 1.11.0.6572 was built with clang-9; gcc-9 produces a core that
-# loads alone but SIGSEGVs inside css34 metamod when engine extensions
-# register SourceHook hooks (FastDelegate / HookMan ABI drift).
-USE_CLANG9="${USE_CLANG9:-1}"
-if [ "$USE_CLANG9" = "1" ]; then
-  echo "==> Installing/using clang-9 (rom4s-compatible toolchain)"
-  bash "$BUILDER_DIR/install-clang9.sh" "$DEPS_DIR"
-  bash "$BUILDER_DIR/install-clang10.sh" "$DEPS_DIR"
-  # shellcheck source=/dev/null
-  source "$DEPS_DIR/clang9.env"
-  # shellcheck source=/dev/null
-  source "$DEPS_DIR/clang10.env"
-  export CC="${CC:-clang-9}"
-  export CXX="${CXX:-clang++-9}"
-  # Prefer clang-9 wrappers even if a parent env exported gcc-9.
-  case "$CC" in
-    gcc*|g++*) export CC=clang-9 ;;
-  esac
-  case "$CXX" in
-    g++*|gcc*) export CXX=clang++-9 ;;
-  esac
-else
-  if [[ -f /opt/rh/devtoolset-10/enable ]]; then
-    export CC="${CC:-gcc}"
-    export CXX="${CXX:-g++}"
-  else
-    export CC="${CC:-gcc-9}"
-    export CXX="${CXX:-g++-9}"
-  fi
-fi
+export CC="${CC:-gcc}"
+export CXX="${CXX:-g++}"
 
 echo "==> Using compiler: $($CC --version | head -1)"
 echo "==> Using C++ compiler: $($CXX --version | head -1)"
@@ -115,8 +74,7 @@ chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/pack
   "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
 
 python3 -m pip install --upgrade pip --user
-chmod +x "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$BUILDER_DIR/patches/patch-ambuild-py312.sh" 2>/dev/null || true
-bash "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$DEPS_DIR/ambuild"
+chmod +x "$BUILDER_DIR/patches/patch-ambuild-py312.sh" 2>/dev/null || true
 bash "$BUILDER_DIR/patches/patch-ambuild-py312.sh" "$DEPS_DIR/ambuild"
 python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS_DIR/ambuild" 2>/dev/null || true
 # Ensure Python 3.12 site-packages stay patched after reinstall.
@@ -129,7 +87,7 @@ WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
 
 echo "==> Building Metamod:Source (css34 episode1, ${MMS_MODE})"
 WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
-  CC="$CC" CXX="$CXX" USE_CLANG9="$USE_CLANG9" \
+  CC="$CC" CXX="$CXX" \
   SOURCEMOD_MAJOR="$SOURCEMOD_MAJOR" MMS_DIR="$MMS_DIR" \
   MMS_MODE="$MMS_MODE" MMS_DIRNAME="$MMS_DIRNAME" \
   bash "$BUILDER_DIR/build-metamod.sh"

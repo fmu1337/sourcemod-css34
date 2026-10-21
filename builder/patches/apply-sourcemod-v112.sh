@@ -17,7 +17,7 @@ if [ ! -d "$manifests_dir" ]; then
   exit 1
 fi
 
-# Ensure episode1 linux defines match css34 (ABI0 + no HL2 malloc hooks).
+# Ensure episode1 linux defines match css34 (no HL2 malloc hooks).
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMAN'
 from pathlib import Path
 import json, os
@@ -26,10 +26,13 @@ data = json.loads(man.read_text())
 linux = data.setdefault('linux', {})
 defs = linux.setdefault('defines', [])
 changed = False
-for d in ('NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE', '_GLIBCXX_USE_CXX11_ABI=0'):
+for d in ('NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE'):
     if d not in defs:
         defs.append(d)
         changed = True
+if '_GLIBCXX_USE_CXX11_ABI=0' in defs:
+    defs.remove('_GLIBCXX_USE_CXX11_ABI=0')
+    changed = True
 if changed:
     man.write_text(json.dumps(data, indent=4) + '\n')
     print('==> Patched SM episode1.json linux defines for css34')
@@ -181,7 +184,7 @@ if "css34: link via C++ driver" not in text:
 else:
     print('==> linker_argv already forced to C++ driver')
 
-# Global CXX11 ABI + SDK warning suppressions for clang/gcc on episode1
+# SDK warning suppressions for gcc on episode1
 if "CSS34 SDK compatibility" not in text:
     marker = "    if have_gcc:\n      cxx.cflags += ['-mfpmath=sse']\n      cxx.cflags += ['-Wno-maybe-uninitialized']\n"
     extra = marker + """    # CSS34 SDK compatibility
@@ -192,7 +195,6 @@ if "CSS34 SDK compatibility" not in text:
         '-Wno-stringop-truncation', '-Wno-error=stringop-truncation',
         '-Wno-format-truncation', '-Wno-error=format-truncation',
       ]
-    cxx.defines += ['_GLIBCXX_USE_CXX11_ABI=0']
 """
     if marker not in text:
         alt = "    have_gcc = cxx.family == 'gcc'\n"
@@ -203,9 +205,7 @@ if "CSS34 SDK compatibility" not in text:
             alt + "    # CSS34 SDK compatibility (early)\n"
                  "    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes', '-Wno-volatile']\n"
                  "    if cxx.family == 'gcc':\n"
-                 "      cxx.cflags += ['-Wno-stringop-overflow', '-Wno-error=stringop-overflow', '-Wno-stringop-truncation', '-Wno-error=stringop-truncation', '-Wno-format-truncation', '-Wno-error=format-truncation']\n"
-                 "    if '_GLIBCXX_USE_CXX11_ABI=0' not in cxx.defines:\n"
-                 "      cxx.defines += ['_GLIBCXX_USE_CXX11_ABI=0']\n",
+                 "      cxx.cflags += ['-Wno-stringop-overflow', '-Wno-error=stringop-overflow', '-Wno-stringop-truncation', '-Wno-error=stringop-truncation', '-Wno-format-truncation', '-Wno-error=format-truncation']\n",
             1,
         )
         print('==> Injected CSS34 compiler flags (alt path)')
@@ -332,27 +332,9 @@ if sp.exists():
     else:
         print('==> libsourcepawn pthread/rt already patched')
 
-    # css34: static libsourcepawn is linked into logic.so — must use ABI0.
-    sp_text = sp.read_text()
-    if 'CSS34 ABI0 for static libsourcepawn' not in sp_text:
-        sp_text = sp_text.replace(
-            "    def SetupBinForArch(self, binary, builder):\n        if binary.compiler.like('gcc'):",
-            "    def SetupBinForArch(self, binary, builder):\n"
-            "        # CSS34 ABI0 for static libsourcepawn (embedded in logic.so)\n"
-            "        if '_GLIBCXX_USE_CXX11_ABI=0' not in binary.compiler.defines:\n"
-            "            binary.compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']\n"
-            "        if binary.compiler.like('gcc'):",
-            1,
-        )
-        sp.write_text(sp_text)
-        print('==> Patched sourcepawn SetupBinForArch for ABI0 static lib')
-        sp_text = sp.read_text()
-    else:
-        print('==> sourcepawn ABI0 static lib patch already present')
-
 # sourcemod.logic.so must match rom4s link profile (old libstdc++ ABI, pthread/rt
 # NEEDED, static embed). SM 1.12 uses `for cxx in builder.targets` - adapt the
-# g++-9 + SM_LOGIC_CXX_SYSROOT toolchain from the 1.11 apply-sourcemod.sh path.
+# host g++ toolchain, same shape as the SM 1.11 logic patch.
 logic_am = sm / 'core/logic/AMBuilder'
 if logic_am.exists():
     lt = logic_am.read_text()
@@ -375,28 +357,14 @@ if logic_am.exists():
     mimalloc_tail_link = (
         '    SP.mimalloc[target],\n' if uses_sp_target_key else ''
     )
-    if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in lt and 'SM_LOGIC_CXX_SYSROOT gcc-9 g++-9' not in lt:
+    if 'css34: host g++ logic toolchain' not in lt:
         loop_old = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
-        # SM 1.12: gcc-4.9 sysroot + strptime ParseTime shim.
-        # SM 1.13+: static SourcePawn headers need C++17 (<string_view>); use host
-        # g++-9 headers with ABI0 + static gcc-9 libstdc++.a at link time.
+        # Static SourcePawn on SM 1.13+ needs the host libstdc++ (std::thread).
         sysroot_inc = ""
-        if sm_minor < 13:
-            sysroot_inc = """
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    if _sysroot and logic_cxx.target.arch == 'x86':
-      logic_cxx.cxxflags += [
-        '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
-      ]"""
-        logic_toolchain = "gcc-4.9 g++-9" if sm_minor < 13 else "gcc-9 g++-9"
+        logic_toolchain = "host g++"
         loop_new = f"""for cxx in builder.targets:
   if cxx.target.platform == 'linux':
-    # css34: SM_LOGIC_CXX_SYSROOT {logic_toolchain} logic toolchain.
+    # css34: host g++ logic toolchain.
     import shutil as _shutil
     import os as _os
     logic_cxx = cxx.clone()
@@ -427,8 +395,6 @@ if logic_am.exists():
     logic_cxx.cxxflags += [
       '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
       '-Wno-stringop-truncation', '-Wno-unused-result',
-      '-D_GLIBCXX_USE_CXX11_ABI=0',
-      '-fno-sized-deallocation',  # css34: no UND _ZdlPvj/_ZdaPvj at dlopen
     ]
     binary = SM.Library(builder, logic_cxx, 'sourcemod.logic')
   else:
@@ -440,8 +406,8 @@ if logic_am.exists():
             lt = lt.replace(loop_old, loop_new, 1)
             print(f'==> Patched logic AMBuilder ({logic_toolchain})')
 
-    # Defines: old ABI + no HL2 malloc hooks (rom4s logic profile).
-    if '_GLIBCXX_USE_CXX11_ABI=0' not in lt or 'NO_HOOK_MALLOC' not in lt:
+    # Defines: no HL2 malloc hooks.
+    if 'NO_HOOK_MALLOC' not in lt:
         defs_old = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC'
@@ -449,7 +415,6 @@ if logic_am.exists():
         defs_new = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC',
-    '_GLIBCXX_USE_CXX11_ABI=0',
     'NO_HOOK_MALLOC',
     'NO_MALLOC_OVERRIDE',
   ]"""
@@ -462,7 +427,6 @@ if logic_am.exists():
         defs_new_boot = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC',
-    '_GLIBCXX_USE_CXX11_ABI=0',
     'NO_HOOK_MALLOC',
     'NO_MALLOC_OVERRIDE',
     'SM_BOOT_TRACE',
@@ -477,7 +441,7 @@ if logic_am.exists():
             raise SystemExit('FAIL: logic AMBuilder defines block anchor not found')
 
     # Linux link: static sysroot/gcc-9 libstdc++ + forced pthread/rt DT_NEEDED.
-    if 'css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT' not in lt:
+    if 'css34: host libstdc++ static' not in lt:
         linux_old_variants = [
             """  if binary.compiler.target.platform == 'linux':
     binary.compiler.postlink += ['-lpthread', '-lrt', '-lm']
@@ -513,7 +477,7 @@ if logic_am.exists():
       binary.compiler.linkflags += ['-Wl,--version-script,' + _vs]
 """
         linux_new = f"""  if binary.compiler.target.platform == 'linux':
-    # css34: gcc-4.9 libstdc++ when SM_LOGIC_CXX_SYSROOT (SM < 1.13); gcc-9 for 1.13+ static SP.
+    # css34: host libstdc++ static.
     import os as _os
     for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
       if flag in binary.compiler.linkflags:
@@ -521,23 +485,8 @@ if logic_am.exists():
     for flag in list(binary.compiler.postlink):
       if flag in ('-lpthread', '-lrt', '-Wl,--no-as-needed'):
         binary.compiler.postlink.remove(flag)
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
     _stdcxx = None
     _sup = None
-    # SM 1.13+ static SourcePawn needs gcc-9 libstdc++ (std::thread unique_ptr ABI)
-    if _sysroot and {sm_minor} < 13:
-      for _base in (
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
-      ):
-        _cand = _os.path.join(_base, 'libstdc++.a')
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_base, 'libsupc++.a')
-          break
     if _stdcxx is None:
       import subprocess as _sp
       _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
@@ -580,24 +529,6 @@ if logic_am.exists():
             raise SystemExit('FAIL: logic linux postlink anchor not found for static link patch')
     else:
         print('==> logic AMBuilder static libstdc++ already patched')
-
-    # SM 1.13+ legacy-build sets SM_LOGIC_CXX_SYSROOT but must link gcc-9 libstdc++.a
-    # (gcc-4.9 lacks std::thread::_M_start_thread(unique_ptr<...>)).
-    if 'SM 1.13+ static SourcePawn needs gcc-9 libstdc++' not in lt:
-        sysroot_link_old = """    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    _stdcxx = None
-    _sup = None
-    if _sysroot:
-      for _base in ("""
-        sysroot_link_new = f"""    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    _stdcxx = None
-    _sup = None
-    # SM 1.13+ static SourcePawn needs gcc-9 libstdc++ (std::thread unique_ptr ABI)
-    if _sysroot and {sm_minor} < 13:
-      for _base in ("""
-        if sysroot_link_old in lt:
-            lt = lt.replace(sysroot_link_old, sysroot_link_new, 1)
-            print('==> logic AMBuilder: gcc-9 libstdc++ for SM 1.13+ (skip sysroot 4.9 link)')
 
     # SM 1.13+: static SourcePawn was appended after libstdc++.a; reorder so std::thread resolves.
     # SM 1.12 has no SP in logic AMBuilder / BuildScripts — skip entirely.
@@ -872,59 +803,7 @@ if gc.exists():
             gc.write_text(gt)
             print('==> Patched GameConfigs CacheGameBinaryInfo for css34 RTLD_NOLOAD')
 
-# ParseTime uses std::get_time (C++11 <iomanip>); gcc-4.9 sysroot headers lack it.
-# SM 1.13+ uses host g++-9 headers — keep upstream std::get_time.
-smn_core = sm / 'core/logic/smn_core.cpp'
-if smn_core.exists():
-    sc = smn_core.read_text()
-    pv_parts = (sm / 'product.version').read_text().strip().split('.')
-    sm_minor = int(pv_parts[1]) if len(pv_parts) > 1 else 11
-    if sm_minor >= 13:
-        print('==> ParseTime strptime shim skipped (SM 1.13+ uses g++-9 headers)')
-    elif 'css34: ParseTime via strptime' in sc:
-        print('==> ParseTime strptime already patched')
-    elif 'std::get_time' in sc:
-        old_pt = """\t// https://stackoverflow.com/a/33542189
-\tstd::tm t{};
-\tstd::istringstream input(datetime);
-
-\tauto previousLocale = input.imbue(std::locale::classic());
-\tinput >> std::get_time(&t, format);
-\tbool failed = input.fail();
-\tinput.imbue(previousLocale);
-
-\tif (failed)
-\t{
-\t\treturn pContext->ThrowNativeError("Invalid date/time string or time format.");
-\t}
-"""
-        new_pt = """\t/* css34: ParseTime via strptime (gcc-4.9 sysroot has no std::get_time) */
-\tstd::tm t{};
-#if defined PLATFORM_WINDOWS
-\tstd::istringstream input(datetime);
-\tauto previousLocale = input.imbue(std::locale::classic());
-\tinput >> std::get_time(&t, format);
-\tbool failed = input.fail();
-\tinput.imbue(previousLocale);
-\tif (failed)
-#else
-\tif (strptime(datetime, format, &t) == NULL)
-#endif
-\t{
-\t\treturn pContext->ThrowNativeError("Invalid date/time string or time format.");
-\t}
-"""
-        if old_pt not in sc:
-            print('==> WARN: ParseTime get_time block not found')
-        else:
-            sc = sc.replace(old_pt, new_pt, 1)
-            # Drop unused iostream helpers when possible (keep if used elsewhere).
-            smn_core.write_text(sc)
-            print('==> Patched ParseTime to use strptime for gcc-4.9 sysroot')
-    else:
-        print('==> ParseTime has no std::get_time (ok)')
-
-# bundled curl fortify noise on gcc only (clang-9 rejects -Wno-stringop-*)
+# bundled curl fortify noise on gcc only
 curl_ambuild = sm / 'extensions/curl/curl-src/lib/AMBuilder'
 if curl_ambuild.exists() and 'stringop-truncation' not in curl_ambuild.read_text():
     ct = curl_ambuild.read_text()
@@ -951,64 +830,6 @@ PY
 "${PY[@]}" "$script_dir/pin-generate-headers.py" \
   "$sourcemod_dir/tools/buildbot/generate_headers.py" \
   --env SOURCEMOD_GIT_REV
-
-# --- CheckedMul __mulodi4 patch for 32-bit spcomp ---
-SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMUL'
-from pathlib import Path
-import os
-cf_cpp = Path(os.environ['SOURCEMOD_DIR']) / 'sourcepawn/compiler/constant-fold.cpp'
-if cf_cpp.exists():
-    text = cf_cpp.read_text()
-    old_mul = """template <typename T>
-static inline bool CheckedMul(T a, T b, T* result) {
-#if defined(__clang__) || defined(__GNUC__)
-    return !__builtin_mul_overflow(a, b, result);
-#elif defined(_MSC_VER)
-    if (a == 0 || b == 0) {"""
-    new_mul = """template <typename T>
-static inline bool CheckedMul(T a, T b, T* result) {
-    if (a == 0 || b == 0) {"""
-    if old_mul in text:
-        # Also remove trailing #endif for the #elif
-        old_full = """template <typename T>
-static inline bool CheckedMul(T a, T b, T* result) {
-#if defined(__clang__) || defined(__GNUC__)
-    return !__builtin_mul_overflow(a, b, result);
-#elif defined(_MSC_VER)
-    if (a == 0 || b == 0) {
-        *result = 0;
-        return true;
-    }
-    // INT_MIN * -1 breaks the round-trip check below.
-    if ((a == std::numeric_limits<T>::min() && b == T(-1)) ||
-        (b == std::numeric_limits<T>::min() && a == T(-1))) {
-        return false;
-    }
-    T product = a * b;
-    *result = product;
-    return product / b == a;
-#endif
-}"""
-        new_full = """template <typename T>
-static inline bool CheckedMul(T a, T b, T* result) {
-    if (a == 0 || b == 0) {
-        *result = 0;
-        return true;
-    }
-    // INT_MIN * -1 breaks the round-trip check below.
-    if ((a == std::numeric_limits<T>::min() && b == T(-1)) ||
-        (b == std::numeric_limits<T>::min() && a == T(-1))) {
-        return false;
-    }
-    T product = a * b;
-    *result = product;
-    return product / b == a;
-}"""
-        cf_cpp.write_text(text.replace(old_full, new_full, 1))
-        print('==> Patched CheckedMul in constant-fold.cpp (avoid __mulodi4)')
-    elif 'css34: avoid __mulodi4' in text or 'return product / b == a;' in text:
-        print('==> CheckedMul in constant-fold.cpp already patched')
-PYMUL
 
 # --- Safe GET_V_IFACE macros in sourcemm_api.cpp ---
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYIFACE'

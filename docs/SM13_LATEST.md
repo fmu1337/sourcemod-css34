@@ -12,7 +12,7 @@ Install: `line-sm13-latest` (the published pointer stays on the last released ta
 Build:
 
 ```bash
-CSS34_LINE=sm13-latest builder/docker/legacy-build.sh
+CSS34_LINE=sm13-latest builder/docker/build.sh
 ```
 
 MM 2.0 git1450+ (KHook) lives in its own line, `sm13-mm20-khook` ([MM20_KHOOK.md](MM20_KHOOK.md)); SM `master` cannot run on it.
