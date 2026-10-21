@@ -182,7 +182,7 @@ def patch_console(rel: str) -> None:
 patch_console('core/metamod_console.cpp')
 PYCONS
 
-# Linux episode1: ensure CXX11 ABI=0 + NO_HOOK_MALLOC survive SdkHelpers (css34 glibc).
+# Linux episode1: NO_HOOK_MALLOC must survive SdkHelpers (css34 glibc).
 MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYSDK'
 from pathlib import Path
 import json, os
@@ -194,7 +194,7 @@ data = json.loads(man.read_text())
 linux = data.setdefault('linux', {})
 defs = linux.setdefault('defines', [])
 changed = False
-for d in ('NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE', '_GLIBCXX_USE_CXX11_ABI=0'):
+for d in ('NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE'):
     if d not in defs:
         defs.append(d)
         changed = True

@@ -1273,7 +1273,6 @@ if _loop_old_mod in text or (
     logic_cxx.cxxflags += [
       '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
       '-Wno-stringop-truncation', '-Wno-unused-result',
-      '-D_GLIBCXX_USE_CXX11_ABI=0',
     ]
     binary = SM.Library(builder, logic_cxx, 'sourcemod.logic')
   else:
@@ -1289,7 +1288,6 @@ if _loop_old_mod in text or (
     defs_new = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC',
-    '_GLIBCXX_USE_CXX11_ABI=0',
     'NO_HOOK_MALLOC',
     'NO_MALLOC_OVERRIDE',
   ]"""
@@ -1301,12 +1299,11 @@ if _loop_old_mod in text or (
     defs_new_boot = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC',
-    '_GLIBCXX_USE_CXX11_ABI=0',
     'NO_HOOK_MALLOC',
     'NO_MALLOC_OVERRIDE',
     'SM_BOOT_TRACE',
   ]"""
-    if '_GLIBCXX_USE_CXX11_ABI=0' not in text or 'NO_HOOK_MALLOC' not in text:
+    if 'NO_HOOK_MALLOC' not in text:
         if defs_old_boot in text:
             text = text.replace(defs_old_boot, defs_new_boot, 1)
         elif defs_old in text:
@@ -1406,7 +1403,7 @@ logic_loop_new = """for arch in SM.archs:
     logic_cxx.cxxflags += [
       '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
       '-Wno-stringop-truncation', '-Wno-unused-result',
-      '-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0',
+      '-Wno-tautological-overlap-compare',
     ]
     binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
   else:
@@ -1437,7 +1434,6 @@ defines_old = """  binary.compiler.defines += [
 defines_new = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC',
-    '_GLIBCXX_USE_CXX11_ABI=0',
     'NO_HOOK_MALLOC',
     'NO_MALLOC_OVERRIDE',
     'SM_BOOT_TRACE',
@@ -1452,13 +1448,12 @@ defines_old_variants = [
     """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC',
-    '_GLIBCXX_USE_CXX11_ABI=0',
     'NO_HOOK_MALLOC',
     'NO_MALLOC_OVERRIDE',
   ]""",
 ]
 
-if '_GLIBCXX_USE_CXX11_ABI=0' in text and 'NO_HOOK_MALLOC' in text:
+if 'NO_HOOK_MALLOC' in text:
     print('==> logic AMBuilder css34 defines already present')
     if "'SM_BOOT_TRACE'" not in text:
         text = text.replace("'NO_MALLOC_OVERRIDE',", "'NO_MALLOC_OVERRIDE',\n    'SM_BOOT_TRACE',", 1)
@@ -1687,22 +1682,12 @@ else:
 path.write_text(text)
 PY
 
-# css34: rom4s builds the whole tree with the legacy libstdc++ ABI.
+# css34: keep libgcc_s dynamic. Do not force _GLIBCXX_USE_CXX11_ABI.
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 
 path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
-text = path.read_text()
-old = "    cxx.defines += ['_LINUX', 'POSIX', '_FILE_OFFSET_BITS=64']\n    cxx.linkflags += ['-lm']"
-new = "    cxx.defines += ['_LINUX', 'POSIX', '_FILE_OFFSET_BITS=64', '_GLIBCXX_USE_CXX11_ABI=0']\n    cxx.linkflags += ['-lm']"
-if "'_GLIBCXX_USE_CXX11_ABI=0']" in text and "configure_linux" in text:
-    print('==> configure_linux CXX11 ABI already patched')
-elif old in text:
-    path.write_text(text.replace(old, new, 1))
-    print('==> Patched configure_linux for legacy libstdc++ ABI')
-else:
-    raise SystemExit('Failed to patch configure_linux CXX11 ABI block')
 text = path.read_text()
 old_gcc = """    if cxx.family == 'gcc':
       cxx.linkflags += ['-static-libgcc']

@@ -19,7 +19,7 @@ if [ ! -d "$manifests_dir" ]; then
   exit 1
 fi
 
-# Ensure episode1 linux defines match css34 (ABI0 + no HL2 malloc hooks).
+# Ensure episode1 linux defines match css34 (no HL2 malloc hooks).
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMAN'
 from pathlib import Path
 import json, os
@@ -28,7 +28,7 @@ data = json.loads(man.read_text())
 linux = data.setdefault('linux', {})
 defs = linux.setdefault('defines', [])
 changed = False
-for d in ('NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE', '_GLIBCXX_USE_CXX11_ABI=0'):
+for d in ('NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE'):
     if d not in defs:
         defs.append(d)
         changed = True
@@ -142,7 +142,7 @@ if "css34: link via C++ driver" not in text:
 else:
     print('==> linker_argv already forced to C++ driver')
 
-# Global CXX11 ABI + SDK warning suppressions for clang/gcc on episode1
+# SDK warning suppressions for gcc on episode1
 if "CSS34 SDK compatibility" not in text:
     marker = "    if have_gcc:\n      cxx.cflags += ['-mfpmath=sse']\n      cxx.cflags += ['-Wno-maybe-uninitialized']\n"
     extra = marker + """    # CSS34 SDK compatibility
@@ -153,7 +153,6 @@ if "CSS34 SDK compatibility" not in text:
         '-Wno-stringop-truncation', '-Wno-error=stringop-truncation',
         '-Wno-format-truncation', '-Wno-error=format-truncation',
       ]
-    cxx.defines += ['_GLIBCXX_USE_CXX11_ABI=0']
 """
     if marker not in text:
         alt = "    have_gcc = cxx.family == 'gcc'\n"
@@ -164,9 +163,7 @@ if "CSS34 SDK compatibility" not in text:
             alt + "    # CSS34 SDK compatibility (early)\n"
                  "    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes', '-Wno-volatile']\n"
                  "    if cxx.family == 'gcc':\n"
-                 "      cxx.cflags += ['-Wno-stringop-overflow', '-Wno-error=stringop-overflow', '-Wno-stringop-truncation', '-Wno-error=stringop-truncation', '-Wno-format-truncation', '-Wno-error=format-truncation']\n"
-                 "    if '_GLIBCXX_USE_CXX11_ABI=0' not in cxx.defines:\n"
-                 "      cxx.defines += ['_GLIBCXX_USE_CXX11_ABI=0']\n",
+                 "      cxx.cflags += ['-Wno-stringop-overflow', '-Wno-error=stringop-overflow', '-Wno-stringop-truncation', '-Wno-error=stringop-truncation', '-Wno-format-truncation', '-Wno-error=format-truncation']\n",
             1,
         )
         print('==> Injected CSS34 compiler flags (alt path)')
@@ -308,24 +305,6 @@ if sp.exists():
     else:
         print('==> libsourcepawn pthread/rt already patched')
 
-    # css34: static libsourcepawn is linked into logic.so — must use ABI0.
-    sp_text = sp.read_text()
-    if 'CSS34 ABI0 for static libsourcepawn' not in sp_text:
-        sp_text = sp_text.replace(
-            "    def SetupBinForArch(self, binary, builder):\n        if binary.compiler.like('gcc'):",
-            "    def SetupBinForArch(self, binary, builder):\n"
-            "        # CSS34 ABI0 for static libsourcepawn (embedded in logic.so)\n"
-            "        if '_GLIBCXX_USE_CXX11_ABI=0' not in binary.compiler.defines:\n"
-            "            binary.compiler.defines += ['_GLIBCXX_USE_CXX11_ABI=0']\n"
-            "        if binary.compiler.like('gcc'):",
-            1,
-        )
-        sp.write_text(sp_text)
-        print('==> Patched sourcepawn SetupBinForArch for ABI0 static lib')
-        sp_text = sp.read_text()
-    else:
-        print('==> sourcepawn ABI0 static lib patch already present')
-
 # sourcemod.logic.so must match rom4s link profile (old libstdc++ ABI, pthread/rt
 # NEEDED, static embed). SM 1.12 uses `for cxx in builder.targets` - adapt the
 # host g++ toolchain, same shape as the SM 1.11 logic patch.
@@ -389,7 +368,6 @@ if logic_am.exists():
     logic_cxx.cxxflags += [
       '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
       '-Wno-stringop-truncation', '-Wno-unused-result',
-      '-D_GLIBCXX_USE_CXX11_ABI=0',
     ]
     binary = SM.Library(builder, logic_cxx, 'sourcemod.logic')
   else:
@@ -401,8 +379,8 @@ if logic_am.exists():
             lt = lt.replace(loop_old, loop_new, 1)
             print(f'==> Patched logic AMBuilder ({logic_toolchain})')
 
-    # Defines: old ABI + no HL2 malloc hooks (rom4s logic profile).
-    if '_GLIBCXX_USE_CXX11_ABI=0' not in lt or 'NO_HOOK_MALLOC' not in lt:
+    # Defines: no HL2 malloc hooks.
+    if 'NO_HOOK_MALLOC' not in lt:
         defs_old = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC'
@@ -410,7 +388,6 @@ if logic_am.exists():
         defs_new = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC',
-    '_GLIBCXX_USE_CXX11_ABI=0',
     'NO_HOOK_MALLOC',
     'NO_MALLOC_OVERRIDE',
   ]"""
@@ -423,7 +400,6 @@ if logic_am.exists():
         defs_new_boot = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
     'SM_LOGIC',
-    '_GLIBCXX_USE_CXX11_ABI=0',
     'NO_HOOK_MALLOC',
     'NO_MALLOC_OVERRIDE',
     'SM_BOOT_TRACE',
