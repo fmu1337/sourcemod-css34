@@ -41,6 +41,44 @@ PYMAN
 "${PY[@]}" "$script_dir/manifest_flag_guard.py" \
   "$sourcemod_dir/hl2sdk-manifests/SdkHelpers.ambuild"
 
+# 1.12-dev cherry-picked OnMapEnd (#2589) with std::list, but this branch still
+# stores OutputHookList as SourceHook::List and does not include <list>.
+# GCC 10 then fails sdktools: 'list' is not a member of 'std'. 1.13 already
+# uses std::list for the whole file, so leave that tree alone.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYOUT'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'extensions/sdktools/output.cpp'
+text = path.read_text()
+marker = 'css34: OnMapEnd uses SourceHook::List on SM 1.12'
+if marker in text:
+    print('==> OnMapEnd SourceHook::List patch already present')
+elif 'SourceHook::List<omg_hooks *>' in text and 'std::list<omg_hooks *>' in text:
+    old = (
+        "void EntityOutputManager::OnMapEnd()\n"
+        "{\n"
+        "\tIPluginIterator *plugins = plsys->GetPluginIterator();\n"
+        "\tfor (; plugins->MorePlugins(); plugins->NextPlugin())\n"
+        "\t{\n"
+        "\t\tstd::list<omg_hooks *> *pList = NULL;\n"
+    )
+    new = (
+        "void EntityOutputManager::OnMapEnd()\n"
+        "{\n"
+        "\t// css34: OnMapEnd uses SourceHook::List on SM 1.12\n"
+        "\tIPluginIterator *plugins = plsys->GetPluginIterator();\n"
+        "\tfor (; plugins->MorePlugins(); plugins->NextPlugin())\n"
+        "\t{\n"
+        "\t\tSourceHook::List<omg_hooks *> *pList = NULL;\n"
+    )
+    if old not in text:
+        raise SystemExit('FAIL: OnMapEnd std::list anchor not found in output.cpp')
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched OnMapEnd to SourceHook::List (SM 1.12 #2589 cherry-pick)')
+else:
+    print('==> OnMapEnd hook-list type already matches this tree')
+PYOUT
+
 # --- AMBuildScript / SdkHelpers (1.12 structure) ---
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
