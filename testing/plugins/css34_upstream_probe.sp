@@ -25,13 +25,13 @@
 
 #define PROBE_TAG "[css34_upstream_probe]"
 #define PROBE_SAMPLE "weapons/ak47/ak47-1.wav"
+#define PROBE_MARK 137
 #define PROBE_PITCH 173
 
 int g_SoundFirst;
 int g_SoundSecond;
 int g_SoundSaw;
 int g_SoundBad;
-bool g_EmitActive;
 
 int g_OutputHits;
 int g_OutputFresh;
@@ -63,6 +63,10 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+	// v34 drops EmitSound before the sound hook when the sample is not
+	// precached (SV_StartSound: not precached). A bot firing the weapon
+	// precaches it only sometimes, so do it on every map.
+	PrecacheSound(PROBE_SAMPLE, true);
 	CreateTimer(1.5, Timer_OutputProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -172,20 +176,25 @@ void ProbeSound(int client)
 {
 	int clients[1];
 	clients[0] = client;
-	g_EmitActive = true;
-	EmitSound(clients, 1, PROBE_SAMPLE, client, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, 0.8, 100);
-	g_EmitActive = false;
+	// Pitch PROBE_MARK identifies this emit. The hook may run after EmitSound
+	// returns, so it cannot depend on a flag cleared below this call.
+	EmitSound(clients, 1, PROBE_SAMPLE, client, SNDCHAN_STATIC, SNDLEVEL_NORMAL, SND_NOFLAGS, 0.8, PROBE_MARK);
 	if (g_SoundFirst > 0 && g_SoundSecond > 0 && g_SoundSaw == 0)
 	{
 		g_SoundBad++;
 	}
 }
 
+bool IsProbeSample(const char[] sample, int pitch)
+{
+	return StrContains(sample, "ak47-1.wav") != -1 && (pitch == PROBE_MARK || pitch == PROBE_PITCH);
+}
+
 public Action Sound_First(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH],
 	int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
 	char soundEntry[PLATFORM_MAX_PATH], int &seed)
 {
-	if (!g_EmitActive || StrContains(sample, "ak47-1.wav") == -1)
+	if (!IsProbeSample(sample, pitch) || pitch != PROBE_MARK)
 	{
 		return Plugin_Continue;
 	}
@@ -198,7 +207,7 @@ public Action Sound_Second(int clients[MAXPLAYERS], int &numClients, char sample
 	int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
 	char soundEntry[PLATFORM_MAX_PATH], int &seed)
 {
-	if (!g_EmitActive || StrContains(sample, "ak47-1.wav") == -1)
+	if (!IsProbeSample(sample, pitch))
 	{
 		return Plugin_Continue;
 	}
