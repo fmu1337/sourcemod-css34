@@ -20,12 +20,31 @@ ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 
 # Expected versions. Always resolve pins so build-number checks have MM_REV
 # even when CI passes only the short product version (1.12.0 / 1.10.7).
+# versions.env defaults CSS34_LINE to sm13-latest. Smoke containers often have
+# the pinned commits but not the line name, and sm11's Metamod rev is not 1226.
 RESOLVED_SM_REV=""
 RESOLVED_MM_REV=""
 RESOLVED_MM_MODE=""
+resolve_line="${CSS34_LINE:-}"
+if [[ -z "$resolve_line" && -f "${ROOT}/builder/versions.env" ]]; then
+  # shellcheck disable=SC1091
+  eval "$(grep -E '^(SM_|MM_)[A-Z0-9_]+=' "${ROOT}/builder/versions.env")"
+  case "${MM_COMMIT_EXPECT:-}" in
+    "${MM_110_COMMIT:-}") resolve_line=sm11-oldstable ;;
+    "${MM_112_COMMIT:-}")
+      case "${SM_COMMIT_EXPECT:-}" in
+        "${SM_LATEST_COMMIT:-}") resolve_line=sm12-latest ;;
+        "${SM_DEV_COMMIT:-}") resolve_line=sm13-dev ;;
+        *) resolve_line=sm13-latest ;;
+      esac
+      ;;
+    *) resolve_line=sm13-latest ;;
+  esac
+fi
+resolve_line="${resolve_line:-sm13-latest}"
 if [[ -f "${ROOT}/builder/resolve-version.sh" ]]; then
   eval "$(
-    CSS34_LINE="${CSS34_LINE:-sm13-latest}" bash -c "
+    CSS34_LINE="${resolve_line}" bash -c "
       source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
       echo \"RESOLVED_SM_COMMIT='\${SOURCEMOD_BUILD_COMMIT:-\$SOURCEMOD_COMMIT}'\"
       echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"
