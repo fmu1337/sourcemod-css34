@@ -94,31 +94,63 @@ expect {
     }
 }
 
+# Version text is printed before Build ID. A wrong build number should fail
+# quickly; map load keeps the longer CONSOLE_PROBE_TIMEOUT.
+set saved_timeout $timeout
+set timeout 20
+
 send "meta version\r"
+if {[info exists env(META_VERSION_NEEDLE)] && $env(META_VERSION_NEEDLE) ne ""} {
+    set meta_ver $env(META_VERSION_NEEDLE)
+} else {
+    set meta_ver "Metamod:Source version"
+}
 expect {
-    -re {Metamod|metamod|MM:S} {}
+    -ex $meta_ver {}
     eof {
-        puts stderr "srcds exited while waiting for meta version output"
+        puts stderr "srcds exited while waiting for meta version output ($meta_ver)"
         exit 4
     }
     timeout {
-        puts stderr "timeout waiting for meta version output"
+        puts stderr "timeout waiting for meta version output ($meta_ver)"
+        exit 4
+    }
+}
+if {[info exists env(META_BUILD_ID_NEEDLE)] && $env(META_BUILD_ID_NEEDLE) ne ""} {
+    set meta_id $env(META_BUILD_ID_NEEDLE)
+} else {
+    set meta_id "Build ID:"
+}
+expect {
+    -ex $meta_id {}
+    eof {
+        puts stderr "srcds exited while waiting for meta Build ID ($meta_id)"
+        exit 4
+    }
+    timeout {
+        puts stderr "timeout waiting for meta Build ID ($meta_id)"
         exit 4
     }
 }
 
 send "sm version\r"
+if {[info exists env(SM_VERSION_NEEDLE)] && $env(SM_VERSION_NEEDLE) ne ""} {
+    set sm_pat $env(SM_VERSION_NEEDLE)
+} else {
+    set sm_pat "SourceMod Version"
+}
 expect {
-    -re {SourceMod Version|SourceMod} {}
+    -ex $sm_pat {}
     eof {
-        puts stderr "srcds exited while waiting for sm version output"
+        puts stderr "srcds exited while waiting for sm version output ($sm_pat)"
         exit 5
     }
     timeout {
-        puts stderr "timeout waiting for sm version output"
+        puts stderr "timeout waiting for sm version output ($sm_pat)"
         exit 5
     }
 }
+set timeout $saved_timeout
 
 # basecommands is part of every standard SourceMod install. This leaves the
 # default value unchanged but makes its normal LogAction() path open and write

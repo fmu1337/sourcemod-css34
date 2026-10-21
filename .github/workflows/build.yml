@@ -131,6 +131,8 @@ jobs:
         env:
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          MM_REV_EXPECT: ${{ matrix.mm_rev }}
+          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
           EXPECT_EXTS: ${{ matrix.exts }}
           LOAD_EXTS: ${{ matrix.load_exts }}
           # css34_dhooks_probe with bots (skipped when the package has no dhooks.ext.dll)
@@ -198,6 +200,8 @@ jobs:
         env:
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          MM_REV_EXPECT: ${{ matrix.mm_rev }}
+          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
           EXPECT_EXTS: ${{ matrix.exts }}
           LOAD_EXTS: ${{ matrix.load_exts }}
           # css34_dhooks_probe with bots (skipped when the package has no dhooks.ext.dll)

@@ -93,6 +93,7 @@ else
   echo "    CC=${CC:-} CXX=${CXX:-}"
 fi
 echo "    MMS_DIR=$MMS_DIR"
+echo "    MMS_GIT_REV=${MMS_GIT_REV:-<unset>}"
 echo "    BUILD_PLATFORM=$BUILD_PLATFORM"
 
 cd "$MMS_DIR"

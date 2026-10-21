@@ -306,31 +306,11 @@ else:
 PY
 fi
 
-# css34: stamp full upstream SHA into metamod_version_auto.h and print CSS34 pack
-# commit from `meta version`.
-MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYHDR'
-from pathlib import Path
-import os
-path = Path(os.environ['MMS_DIR']) / 'support/buildbot/generate_headers.py'
-text = path.read_text()
-# Use full 40-char SHA for Built from / Build ID.
-old = '""".format(tag, shorthash, major, minor, release, count))'
-new = '""".format(tag, longhash, major, minor, release, count))'
-if 'css34: full commit SHA' in text:
-    print('==> MM generate_headers already uses full SHA')
-elif old in text:
-    text = text.replace(
-        '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
-        '  # css34: full commit SHA for meta version Built from\n'
-        '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
-        1,
-    )
-    text = text.replace(old, new, 1)
-    path.write_text(text)
-    print('==> Patched MM generate_headers.py to emit full commit SHA')
-else:
-    raise SystemExit('Failed to patch MM generate_headers.py for full SHA')
-PYHDR
+# css34: lines.json MMS_GIT_REV (shallow clone cannot count commits).
+# MM 1.10's generator also omits +rev from the version string.
+"${PY[@]}" "$script_dir/pin-generate-headers.py" \
+  "$mms_dir/support/buildbot/generate_headers.py" \
+  --env MMS_GIT_REV --mm110-dev-suffix
 
 # Detached MMS_COMMIT checkout stores a raw SHA in .git/HEAD (no "ref: ...").
 MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYVER'
