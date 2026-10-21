@@ -60,15 +60,19 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 - **Full smoke test** (CI primary gate `test-built-debian`): prepare the server
   tree on the host (`fetch-server.sh` → `apply-valve-rc-fix.sh` →
   `apply-srcds-patch.sh` → `KEEP_MAPS=de_dust2,de_inferno,de_nuke trim-server-maps.sh`,
-  needs `unrar`), then boot `srcds` inside `debian:11` running `install-deps.sh` →
-  `install-addons.sh` → `smoke-test.sh` with `SM_PACKAGE` / `MM_PACKAGE` set (without
-  them `install-addons.sh` falls back to downloading rom4s 6572 + MM 1.10.6). The
+  needs `unrar`), then boot `srcds` inside a pinned image from `builder/lines.json`
+  (`centos:7`, `ubuntu:24.04`, or `debian:13` on every PR; older images are the
+  weekly/release matrix) running `install-deps.sh` → `install-addons.sh` →
+  `smoke-test.sh` with `SM_PACKAGE` / `MM_PACKAGE` set (without them
+  `install-addons.sh` falls back to downloading rom4s 6572 + MM 1.10.6). The
   559 MB server zip is cached under `.ci-cache/`. It boots a 32-bit `srcds_i686`
-  and probes `meta version` / `sm version` / `sm exts list` / `sm plugins list`
-  via `expect` (~2 min). Pass `CSS34_LINE=<line>` (or the `*_EXPECT` variables) so
-  the expected versions match the package. `meta version` must contain
-  `+<MM_REV>` and `Build ID: <MM_REV>:<sha prefix>`; `sm version` must be
-  `<major>.<SM_REV>` (the revs come from `builder/lines.json`).
+  and probes `meta version` / `sm version` / `sm exts load dbi.mysql.ext` /
+  `sm exts load dbi.pgsql.ext` / `sm exts list` / `sm plugins list` via `expect`
+  (~2 min). Pass `CSS34_LINE=<line>` (or the `*_EXPECT` variables) so the expected
+  versions match the package. `meta version` must contain `+<MM_REV>` and
+  `Build ID: <MM_REV>:<sha prefix>`; `sm version` must be `<major>.<SM_REV>`
+  (the revs come from `builder/lines.json`). Image digests live only in
+  `builder/lines.json`; `python3 builder/lines.py gen` writes the matrix.
 
 ### Lint
 Run `actionlint` after workflow edits. The ABI export

@@ -18,9 +18,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 LINE_FIELDS = {
     "sourcemod", "metamod", "status", "pointer", "releasable", "role",
-    "install_role", "extra_tags", "smoke", "rhel_image", "host_smoke",
+    "install_role", "extra_tags", "smoke", "host_smoke",
     "windows", "botplay_extra_images", "sm_note", "mm_note",
 }
+DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 GENERATED = (
     ("builder/versions.env", "versions"),
     ("builder/generated/ci-matrix.json", "matrix"),
@@ -70,17 +71,15 @@ def load_manifest(path):
         require(isinstance(line.get("releasable", True), bool), name + ".releasable must be a bool")
         require(isinstance(line.get("host_smoke", False), bool), name + ".host_smoke must be a bool")
         require(isinstance(line.get("windows", False), bool), name + ".windows must be a bool")
-        for key in ("role", "install_role", "sm_note", "mm_note", "rhel_image"):
+        for key in ("role", "install_role", "sm_note", "mm_note"):
             if key in line:
                 require(isinstance(line[key], str) and line[key].strip() and "\n" not in line[key],
                         name + "." + key + " must be a nonempty single-line string")
-        if "rhel_image" in line:
-            require(IMAGE_RE.fullmatch(line["rhel_image"]), "invalid rhel image on " + name)
         for tag in line.get("extra_tags", []):
             require(isinstance(tag, str) and TAG_RE.fullmatch(tag), "invalid extra tag on " + name)
         images = []
         for entry in line.get("smoke", []):
-            require(isinstance(entry, dict) and set(entry) <= {"image", "allow_failure"},
+            require(isinstance(entry, dict) and set(entry) == {"image"},
                     "invalid smoke entry on " + name)
             image = entry["image"]
             require(isinstance(image, str) and IMAGE_RE.fullmatch(image),
@@ -89,11 +88,6 @@ def load_manifest(path):
                     name + " must not list debian:latest (it duplicates debian:13)")
             require(image not in images, name + " lists image " + image + " twice")
             images.append(image)
-            if "allow_failure" in entry:
-                require(isinstance(entry["allow_failure"], bool),
-                        name + " allow_failure for " + image + " must be a bool")
-        if "rhel_image" in line and line["rhel_image"] in images:
-            raise ValueError(name + " lists image " + line["rhel_image"] + " twice")
         for entry in line.get("botplay_extra_images", []):
             require(isinstance(entry, dict) and set(entry) == {"image", "image_id"},
                     "invalid botplay_extra image on " + name)
@@ -116,7 +110,46 @@ def load_manifest(path):
         for tag in [part["tag"]] + part["extra_tags"]:
             if tag in data["known_bad"] and part["pointer"]:
                 raise ValueError("known-bad tag " + tag + " is pinned on pointer line " + name)
+    validate_runtime_images(data)
     return data
+
+
+def image_ref(data, name):
+    return "{}@{}".format(name, data["images"][name])
+
+
+def attach_image(item, data, name):
+    item["image"] = image_ref(data, name)
+    item["image_name"] = name
+    return item
+
+
+def validate_runtime_images(data):
+    images = data.get("images")
+    require(isinstance(images, dict) and images, "images must map names to sha256 digests")
+    for name, digest in images.items():
+        require(isinstance(name, str) and IMAGE_RE.fullmatch(name) and "@" not in name,
+                "invalid image name " + str(name))
+        require(isinstance(digest, str) and DIGEST_RE.fullmatch(digest),
+                "invalid digest for " + str(name))
+    weekly = data.get("weekly_smoke")
+    require(isinstance(weekly, list) and weekly, "weekly_smoke must be a nonempty list")
+    seen = []
+    for name in weekly:
+        require(isinstance(name, str) and name in images,
+                "weekly_smoke image is not pinned: " + str(name))
+        require(name not in seen, "weekly_smoke lists " + str(name) + " twice")
+        seen.append(name)
+    for key in ("botplay_image", "weekly_botplay_image"):
+        name = data.get(key)
+        require(isinstance(name, str) and name in images, str(key) + " is not a pinned image")
+    for lname, line in data["lines"].items():
+        for entry in line.get("smoke") or []:
+            require(entry["image"] in images,
+                    lname + " smoke image is not pinned: " + entry["image"])
+        for entry in line.get("botplay_extra_images") or []:
+            require(entry["image"] in images,
+                    lname + " botplay_extra image is not pinned: " + entry["image"])
 
 
 def mm_version(mode):
@@ -178,7 +211,7 @@ def row_expect(row, with_commits):
 
 
 def debian_rows(data):
-    """Image-major order: every active line for debian:11, then ubuntu:24.04, then debian:13."""
+    """Per-PR smoke, image-major, in the order each line lists its images."""
     order = []
     by_image = {}
     for name, line in data["lines"].items():
@@ -190,28 +223,39 @@ def debian_rows(data):
             if image not in by_image:
                 order.append(image)
                 by_image[image] = []
-            item = row_expect(part, True)
-            item["image"] = image
-            item["allow_failure"] = bool(entry.get("allow_failure", False))
-            by_image[image].append(item)
+            by_image[image].append(attach_image(row_expect(part, True), data, image))
     rows = []
     for image in order:
         rows.extend(by_image[image])
+    require(rows, "per-PR smoke matrix is empty")
+    return rows
+
+
+def weekly_rows(data):
+    rows = []
+    for image in data["weekly_smoke"]:
+        for name, line in data["lines"].items():
+            if line["status"] != "active":
+                continue
+            rows.append(attach_image(row_expect(line_parts(data, name), True), data, image))
+    require(rows, "weekly smoke matrix is empty")
+    return rows
+
+
+def image_rows(data, image_name, with_commits):
+    rows = []
+    for row in active_rows(data):
+        rows.append(attach_image(row_expect(row, with_commits), data, image_name))
+    require(rows, "matrix for " + image_name + " is empty")
     return rows
 
 
 def ci_matrix(data):
     rows = active_rows(data)
-    default = line_parts(data, data["default_line"])
-    rhel = []
     host = []
     windows = []
     for name, line in data["lines"].items():
         part = line_parts(data, name)
-        if line.get("rhel_image"):
-            item = row_expect(part, True)
-            item["image"] = line["rhel_image"]
-            rhel.append(item)
         if line.get("host_smoke"):
             host.append(row_expect(part, True))
         if line.get("windows"):
@@ -223,7 +267,7 @@ def ci_matrix(data):
             item["exts"] = WINDOWS_EXTS
             item["load_exts"] = ""
             windows.append(item)
-    require(rhel and host and windows, "rhel, host, and windows matrices must be non-empty")
+    require(host and windows, "host and windows matrices must be non-empty")
     release = []
     for row in rows:
         if row["mm_mode"] != "1.12":
@@ -238,15 +282,19 @@ def ci_matrix(data):
             "mm_expect": row["mm_expect"],
         })
     require(release, "release botplay matrix must be non-empty")
+    extra = botplay_extra_matrix(data)
     return {
         "build": [row_expect(row, True) for row in rows],
         "debian": debian_rows(data),
-        "botplay": [row_expect(row, False) for row in rows],
-        "rhel": rhel,
+        "botplay": image_rows(data, data["botplay_image"], False),
+        "weekly": weekly_rows(data),
+        "weekly_botplay": image_rows(data, data["weekly_botplay_image"], False),
         "host": host,
         "windows": windows,
         "release_botplay": release,
-        "botplay_extra": botplay_extra_matrix(data),
+        "botplay_extra": extra,
+        "botplay_extra_images": extra["include"][:len(extra["image"])],
+        "images": {name: image_ref(data, name) for name in data["images"]},
     }
 
 
@@ -263,11 +311,14 @@ def botplay_extra_matrix(data):
             raise ValueError("botplay_extra_images must match across lines")
         chosen.append(name)
     require(chosen, "botplay_extra matrix is empty")
-    include = [{"image": item["image"], "image_id": item["image_id"]} for item in images]
+    include = [
+        attach_image({"image_id": item["image_id"]}, data, item["image"])
+        for item in images
+    ]
     for name in chosen:
         include.append(row_expect(line_parts(data, name), False))
     return {
-        "image": [item["image"] for item in images],
+        "image": [image_ref(data, item["image"]) for item in images],
         "line": chosen,
         "include": include,
     }
@@ -408,7 +459,8 @@ def generated_text(data, kind, current=""):
 
 def emit_gha(data):
     matrix = ci_matrix(data)
-    for key in ("build", "debian", "botplay", "rhel", "host", "windows", "release_botplay", "botplay_extra"):
+    for key in ("build", "debian", "botplay", "weekly", "weekly_botplay", "host", "windows",
+                "release_botplay", "botplay_extra", "botplay_extra_images", "images"):
         print("{}<<EOF".format(key))
         print(json.dumps(matrix[key], separators=(",", ":")))
         print("EOF")

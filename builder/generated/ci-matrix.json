@@ -29,8 +29,8 @@
       "mm_expect": "1.10.7",
       "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
       "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
-      "image": "debian:11",
-      "allow_failure": false
+      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image_name": "centos:7"
     },
     {
       "line": "sm12-latest",
@@ -38,8 +38,8 @@
       "mm_expect": "1.12.0",
       "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
       "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "image": "debian:11",
-      "allow_failure": false
+      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image_name": "centos:7"
     },
     {
       "line": "sm13-latest",
@@ -47,8 +47,8 @@
       "mm_expect": "1.12.0",
       "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
       "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "image": "debian:11",
-      "allow_failure": false
+      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image_name": "centos:7"
     },
     {
       "line": "sm11-oldstable",
@@ -56,8 +56,8 @@
       "mm_expect": "1.10.7",
       "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
       "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
-      "image": "ubuntu:24.04",
-      "allow_failure": false
+      "image": "ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+      "image_name": "ubuntu:24.04"
     },
     {
       "line": "sm12-latest",
@@ -65,8 +65,8 @@
       "mm_expect": "1.12.0",
       "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
       "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "image": "ubuntu:24.04",
-      "allow_failure": false
+      "image": "ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+      "image_name": "ubuntu:24.04"
     },
     {
       "line": "sm13-latest",
@@ -74,8 +74,8 @@
       "mm_expect": "1.12.0",
       "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
       "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "image": "ubuntu:24.04",
-      "allow_failure": false
+      "image": "ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+      "image_name": "ubuntu:24.04"
     },
     {
       "line": "sm11-oldstable",
@@ -83,8 +83,8 @@
       "mm_expect": "1.10.7",
       "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
       "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
-      "image": "debian:13",
-      "allow_failure": false
+      "image": "debian:13@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+      "image_name": "debian:13"
     },
     {
       "line": "sm12-latest",
@@ -92,8 +92,8 @@
       "mm_expect": "1.12.0",
       "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
       "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "image": "debian:13",
-      "allow_failure": false
+      "image": "debian:13@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+      "image_name": "debian:13"
     },
     {
       "line": "sm13-latest",
@@ -101,35 +101,272 @@
       "mm_expect": "1.12.0",
       "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
       "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "image": "debian:13",
-      "allow_failure": false
+      "image": "debian:13@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+      "image_name": "debian:13"
     }
   ],
   "botplay": [
     {
       "line": "sm11-oldstable",
       "sm_expect": "1.11.0.6970",
-      "mm_expect": "1.10.7"
+      "mm_expect": "1.10.7",
+      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image_name": "debian:11"
     },
     {
       "line": "sm12-latest",
       "sm_expect": "1.12.0.7253",
-      "mm_expect": "1.12.0"
+      "mm_expect": "1.12.0",
+      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image_name": "debian:11"
     },
     {
       "line": "sm13-latest",
       "sm_expect": "1.13.0.7472",
-      "mm_expect": "1.12.0"
+      "mm_expect": "1.12.0",
+      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image_name": "debian:11"
     }
   ],
-  "rhel": [
+  "weekly": [
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7",
+      "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "image": "debian:8@sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
+      "image_name": "debian:8"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "debian:8@sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
+      "image_name": "debian:8"
+    },
     {
       "line": "sm13-latest",
       "sm_expect": "1.13.0.7472",
       "mm_expect": "1.12.0",
       "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
       "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
-      "image": "rockylinux:9"
+      "image": "debian:8@sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
+      "image_name": "debian:8"
+    },
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7",
+      "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "image": "debian:9@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+      "image_name": "debian:9"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "debian:9@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+      "image_name": "debian:9"
+    },
+    {
+      "line": "sm13-latest",
+      "sm_expect": "1.13.0.7472",
+      "mm_expect": "1.12.0",
+      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "debian:9@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+      "image_name": "debian:9"
+    },
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7",
+      "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "image": "debian:10@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+      "image_name": "debian:10"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "debian:10@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+      "image_name": "debian:10"
+    },
+    {
+      "line": "sm13-latest",
+      "sm_expect": "1.13.0.7472",
+      "mm_expect": "1.12.0",
+      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "debian:10@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+      "image_name": "debian:10"
+    },
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7",
+      "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image_name": "debian:11"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image_name": "debian:11"
+    },
+    {
+      "line": "sm13-latest",
+      "sm_expect": "1.13.0.7472",
+      "mm_expect": "1.12.0",
+      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image_name": "debian:11"
+    },
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7",
+      "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "image": "ubuntu:14.04@sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
+      "image_name": "ubuntu:14.04"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "ubuntu:14.04@sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
+      "image_name": "ubuntu:14.04"
+    },
+    {
+      "line": "sm13-latest",
+      "sm_expect": "1.13.0.7472",
+      "mm_expect": "1.12.0",
+      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "ubuntu:14.04@sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
+      "image_name": "ubuntu:14.04"
+    },
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7",
+      "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "image": "ubuntu:16.04@sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
+      "image_name": "ubuntu:16.04"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "ubuntu:16.04@sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
+      "image_name": "ubuntu:16.04"
+    },
+    {
+      "line": "sm13-latest",
+      "sm_expect": "1.13.0.7472",
+      "mm_expect": "1.12.0",
+      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "ubuntu:16.04@sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
+      "image_name": "ubuntu:16.04"
+    },
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7",
+      "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "image": "ubuntu:18.04@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
+      "image_name": "ubuntu:18.04"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "ubuntu:18.04@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
+      "image_name": "ubuntu:18.04"
+    },
+    {
+      "line": "sm13-latest",
+      "sm_expect": "1.13.0.7472",
+      "mm_expect": "1.12.0",
+      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "ubuntu:18.04@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
+      "image_name": "ubuntu:18.04"
+    },
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7",
+      "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "image": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+      "image_name": "rockylinux:9"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+      "image_name": "rockylinux:9"
+    },
+    {
+      "line": "sm13-latest",
+      "sm_expect": "1.13.0.7472",
+      "mm_expect": "1.12.0",
+      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "image": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+      "image_name": "rockylinux:9"
+    }
+  ],
+  "weekly_botplay": [
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7",
+      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image_name": "centos:7"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7253",
+      "mm_expect": "1.12.0",
+      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image_name": "centos:7"
+    },
+    {
+      "line": "sm13-latest",
+      "sm_expect": "1.13.0.7472",
+      "mm_expect": "1.12.0",
+      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image_name": "centos:7"
     }
   ],
   "host": [
@@ -172,25 +409,28 @@
   ],
   "botplay_extra": {
     "image": [
-      "debian:11",
-      "debian:12",
-      "rockylinux:9"
+      "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "debian:12@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+      "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6"
     ],
     "line": [
       "sm13-latest"
     ],
     "include": [
       {
-        "image": "debian:11",
-        "image_id": "debian11"
+        "image_id": "debian11",
+        "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+        "image_name": "debian:11"
       },
       {
-        "image": "debian:12",
-        "image_id": "debian12"
+        "image_id": "debian12",
+        "image": "debian:12@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+        "image_name": "debian:12"
       },
       {
-        "image": "rockylinux:9",
-        "image_id": "rocky9"
+        "image_id": "rocky9",
+        "image": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+        "image_name": "rockylinux:9"
       },
       {
         "line": "sm13-latest",
@@ -198,5 +438,37 @@
         "mm_expect": "1.12.0"
       }
     ]
+  },
+  "botplay_extra_images": [
+    {
+      "image_id": "debian11",
+      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image_name": "debian:11"
+    },
+    {
+      "image_id": "debian12",
+      "image": "debian:12@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+      "image_name": "debian:12"
+    },
+    {
+      "image_id": "rocky9",
+      "image": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+      "image_name": "rockylinux:9"
+    }
+  ],
+  "images": {
+    "centos:7": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+    "ubuntu:14.04": "ubuntu:14.04@sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
+    "ubuntu:16.04": "ubuntu:16.04@sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
+    "ubuntu:18.04": "ubuntu:18.04@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
+    "ubuntu:24.04": "ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+    "debian:8": "debian:8@sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
+    "debian:9": "debian:9@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+    "debian:10": "debian:10@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+    "debian:11": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+    "debian:12": "debian:12@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+    "debian:13": "debian:13@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "debian:latest": "debian:latest@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "rockylinux:9": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6"
   }
 }

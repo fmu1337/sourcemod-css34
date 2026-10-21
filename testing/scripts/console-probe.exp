@@ -168,6 +168,29 @@ expect {
     }
 }
 
+# DBI drivers are not autoloaded. A broken OpenSSL/glibc link only shows up here.
+# geoip and regex are optional: smoke-test.sh records them and does not fail the run.
+proc probe_ext_load {name} {
+    send "sm exts load $name\r"
+    expect {
+        -re {successfully|already loaded|Unable to load|Failed to load|Could not|could not|error|Error} {}
+        eof {
+            puts stderr "srcds exited while loading extension $name"
+            exit 10
+        }
+        timeout {
+            puts stderr "timeout waiting for extension load $name"
+            exit 10
+        }
+    }
+    sleep 1
+}
+
+probe_ext_load dbi.mysql.ext
+probe_ext_load dbi.pgsql.ext
+probe_ext_load geoip.ext
+probe_ext_load regex.ext
+
 # Force-load SDK Hooks so smoke can assert css34 OnTakeDamage gamedata path.
 send "sm exts load sdkhooks\r"
 expect {

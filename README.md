@@ -226,19 +226,23 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 
 ## CI
 
-- `.github/workflows/test-server.yml` — the real gate (push to `master` / `cursor/**`, PRs; `docs/**` and `*.md` are ignored).
+- `.github/workflows/test-server.yml` — the real gate (push to `master` / `cursor/**`, PRs, and a weekly schedule).
+  Doc-only changes skip the server jobs; the `gate` job always reports the result.
   Builds **three active** lines (`sm11-oldstable`, `sm12-latest`, `sm13-latest`) with `builder/docker/build.sh` + `check-package.sh` / `check-metamod-package.sh`;
-  smoke on `debian:11`, `ubuntu:24.04` and `debian:13` for every active line, plus `rockylinux:9` and the ubuntu-22.04 host for
-  `sm13-latest`; **botplay-stress matrix** on `debian:11` for all lines
-  (SMAC + SDKHooks OnTakeDamage + SM API / cstrike / DHooks probes). Packages pass between jobs via
+  every PR smokes `centos:7`, `ubuntu:24.04` and `debian:13` for every active line, plus the ubuntu-22.04 host for
+  `sm13-latest`, and one **botplay-stress** run per line on `debian:11`
+  (SMAC + SDKHooks OnTakeDamage + SM API / cstrike / DHooks probes).
+  `debian:11` smoke itself, plus `debian:8`/`9`/`10`, `ubuntu:14.04`/`16.04`/`18.04`, `rockylinux:9`, and botplay on `centos:7`,
+  run on the weekly schedule, on `workflow_dispatch` with `suite=weekly`, and on release.
+  Images are pinned by digest in `builder/lines.json`. Packages pass between jobs via
   **Actions cache**. Reference (rom4s / published-release) botplay, extra distros and bisect are
   `workflow_dispatch` opt-ins.
 - `.github/workflows/build.yml` — Linux build of `sm13-latest` with `builder/docker/build.sh`
   (manylinux2014); **Windows** build of `sm13-latest`, booted
   natively on `windows-latest` and under Wine (`wine-smoke`).
 - `.github/workflows/release.yml` — tag-driven; tag (minus `-r<N>`) maps to `CSS34_LINE`; packages attach with
-  `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke,
-  line pointer, pointer smoke.
+  `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke
+  on the weekly OS matrix, botplay on `centos:7`, line pointer, pointer smoke.
 - `.github/workflows/version-pins.yml` — `python3 builder/lines.py check` on pin-related PRs.
 - `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts.
 - `.github/workflows/cleanup-artifacts.yml` — weekly / manual purge of Actions artifacts.
