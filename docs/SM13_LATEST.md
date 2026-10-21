@@ -1,13 +1,13 @@
 # sm13-latest — latest SourceMod pin for CSS v34
 
-Release line with the newest **SourceMod 1.13** pin paired with **Metamod 1.12 git1226** (classic SourceHook, no KHook breakage):
+Release line with the newest **SourceMod 1.13** pin paired with **Metamod 1.12 git1228** (classic SourceHook, no KHook breakage):
 
 | Component | Pin | Commit |
 |-----------|-----|--------|
-| SourceMod | **1.13.0-git7472** | `6eb5f8fa381100ed7cac1ab62a4ece11795a5d92` |
-| Metamod:Source | **1.12.0-git1226** | `9fd977df3b49ec76cdf865a4af13a90c0f5c8814` |
+| SourceMod | **1.13.0-git7478** | `b34de51b8c7f92fc2a7242fc0195e2d64a69cefd` |
+| Metamod:Source | **1.12.0-git1228** | `cb47755826fad1483291e5dc00222aa64303d12f` |
 
-Install: `line-sm13-latest` (serves `1.13.0.7472-mm1.12.0-r2`), see [README](../README.md#what-to-install).
+Install: `line-sm13-latest` (the published pointer stays on the last released tag until this pin is tagged), see [README](../README.md#what-to-install).
 
 Build:
 

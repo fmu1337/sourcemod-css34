@@ -62,8 +62,8 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 
 | Line | Tag | Packages |
 |------|-----|----------|
-| sm12 | `1.12.0.7253-mm1.12.0` | SM 1.12.0.7253 + MM 1.12.0-dev (git1226) |
-| sm13 | `1.13.0.7472-mm1.12.0` | SM 1.13.0.7472 + MM 1.12.0-dev (git1226) |
+| sm12 | `1.12.0.7257-mm1.12.0` | SM 1.12.0.7257 + MM 1.12.0-dev (git1228) |
+| sm13 | `1.13.0.7478-mm1.12.0` | SM 1.13.0.7478 + MM 1.12.0-dev (git1228) |
 
 SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/`. Our packages ship `GeoLite2-Country.mmdb` (`prepare-package.sh`, enforced by `check-package.sh`); `botplay-test.sh` also installs one via `install-geoip2-db.sh` when it is missing (e.g. for rom4s packages).
 
@@ -146,7 +146,7 @@ uploaded as the `windows-smoke-<line>` artifact on a failure).
 # needs wine32, xvfb, unzip, python3 (e.g. an ubuntu:22.04 container)
 SM_WIN_PACKAGE="$(ls packages/sourcemod-*-css34-windows.zip)" \
 MM_WIN_PACKAGE="$(ls packages/mmsource-*-css34-windows.zip)" \
-SM_VERSION_EXPECT=1.13.0.7472 MM_VERSION_EXPECT=1.12.0 \
+SM_VERSION_EXPECT=1.13.0.7478 MM_VERSION_EXPECT=1.12.0 \
   testing/scripts/wine-smoke-test.sh
 ```
 
