@@ -108,7 +108,6 @@ register_git_safe_dirs
 chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
   builder/package-metamod.sh builder/build-metamod.sh \
   builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
-  builder/install-sysroot-i386.sh \
   builder/patches/patch-ambuild-linker.sh \
   builder/splice-reference-logic.sh builder/splice-reference-extras.sh \
   builder/download-geolite2.sh

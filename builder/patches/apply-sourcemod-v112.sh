@@ -328,7 +328,7 @@ if sp.exists():
 
 # sourcemod.logic.so must match rom4s link profile (old libstdc++ ABI, pthread/rt
 # NEEDED, static embed). SM 1.12 uses `for cxx in builder.targets` - adapt the
-# g++-9 + SM_LOGIC_CXX_SYSROOT toolchain from the 1.11 apply-sourcemod.sh path.
+# host g++ toolchain, same shape as the SM 1.11 logic patch.
 logic_am = sm / 'core/logic/AMBuilder'
 if logic_am.exists():
     lt = logic_am.read_text()
@@ -351,28 +351,14 @@ if logic_am.exists():
     mimalloc_tail_link = (
         '    SP.mimalloc[target],\n' if uses_sp_target_key else ''
     )
-    if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in lt and 'SM_LOGIC_CXX_SYSROOT gcc-9 g++-9' not in lt:
+    if 'css34: host g++ logic toolchain' not in lt:
         loop_old = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
-        # SM 1.12: gcc-4.9 sysroot + strptime ParseTime shim.
-        # SM 1.13+: static SourcePawn headers need C++17 (<string_view>); use host
-        # g++-9 headers with ABI0 + static gcc-9 libstdc++.a at link time.
+        # Static SourcePawn on SM 1.13+ needs the host libstdc++ (std::thread).
         sysroot_inc = ""
-        if sm_minor < 13:
-            sysroot_inc = """
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    if _sysroot and logic_cxx.target.arch == 'x86':
-      logic_cxx.cxxflags += [
-        '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
-      ]"""
-        logic_toolchain = "gcc-4.9 g++-9" if sm_minor < 13 else "gcc-9 g++-9"
+        logic_toolchain = "host g++"
         loop_new = f"""for cxx in builder.targets:
   if cxx.target.platform == 'linux':
-    # css34: SM_LOGIC_CXX_SYSROOT {logic_toolchain} logic toolchain.
+    # css34: host g++ logic toolchain.
     import shutil as _shutil
     import os as _os
     logic_cxx = cxx.clone()
@@ -453,7 +439,7 @@ if logic_am.exists():
             raise SystemExit('FAIL: logic AMBuilder defines block anchor not found')
 
     # Linux link: static sysroot/gcc-9 libstdc++ + forced pthread/rt DT_NEEDED.
-    if 'css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT' not in lt:
+    if 'css34: host libstdc++ static' not in lt:
         linux_old_variants = [
             """  if binary.compiler.target.platform == 'linux':
     binary.compiler.postlink += ['-lpthread', '-lrt', '-lm']
@@ -489,7 +475,7 @@ if logic_am.exists():
       binary.compiler.linkflags += ['-Wl,--version-script,' + _vs]
 """
         linux_new = f"""  if binary.compiler.target.platform == 'linux':
-    # css34: gcc-4.9 libstdc++ when SM_LOGIC_CXX_SYSROOT (SM < 1.13); gcc-9 for 1.13+ static SP.
+    # css34: host libstdc++ static.
     import os as _os
     for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
       if flag in binary.compiler.linkflags:
@@ -497,23 +483,8 @@ if logic_am.exists():
     for flag in list(binary.compiler.postlink):
       if flag in ('-lpthread', '-lrt', '-Wl,--no-as-needed'):
         binary.compiler.postlink.remove(flag)
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
     _stdcxx = None
     _sup = None
-    # SM 1.13+ static SourcePawn needs gcc-9 libstdc++ (std::thread unique_ptr ABI)
-    if _sysroot and {sm_minor} < 13:
-      for _base in (
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
-      ):
-        _cand = _os.path.join(_base, 'libstdc++.a')
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_base, 'libsupc++.a')
-          break
     if _stdcxx is None:
       import subprocess as _sp
       _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
@@ -556,24 +527,6 @@ if logic_am.exists():
             raise SystemExit('FAIL: logic linux postlink anchor not found for static link patch')
     else:
         print('==> logic AMBuilder static libstdc++ already patched')
-
-    # SM 1.13+ legacy-build sets SM_LOGIC_CXX_SYSROOT but must link gcc-9 libstdc++.a
-    # (gcc-4.9 lacks std::thread::_M_start_thread(unique_ptr<...>)).
-    if 'SM 1.13+ static SourcePawn needs gcc-9 libstdc++' not in lt:
-        sysroot_link_old = """    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    _stdcxx = None
-    _sup = None
-    if _sysroot:
-      for _base in ("""
-        sysroot_link_new = f"""    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    _stdcxx = None
-    _sup = None
-    # SM 1.13+ static SourcePawn needs gcc-9 libstdc++ (std::thread unique_ptr ABI)
-    if _sysroot and {sm_minor} < 13:
-      for _base in ("""
-        if sysroot_link_old in lt:
-            lt = lt.replace(sysroot_link_old, sysroot_link_new, 1)
-            print('==> logic AMBuilder: gcc-9 libstdc++ for SM 1.13+ (skip sysroot 4.9 link)')
 
     # SM 1.13+: static SourcePawn was appended after libstdc++.a; reorder so std::thread resolves.
     # SM 1.12 has no SP in logic AMBuilder / BuildScripts — skip entirely.

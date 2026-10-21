@@ -1229,20 +1229,20 @@ path = Path(os.environ['SOURCEMOD_DIR']) / 'core/logic/AMBuilder'
 text = path.read_text()
 
 # 6970+: AMBuild 2.x `for cxx in builder.targets` (same shape as SM 1.12 logic).
-# Apply g++-9 + gcc-4.9 sysroot toolchain without static SourcePawn (SP is not
+# Apply the host g++ logic toolchain without static SourcePawn (SP is not
 # passed into BuildScripts on 1.11/1.12).
 _loop_old_mod = "for cxx in builder.targets:\n  binary = SM.Library(builder, cxx, 'sourcemod.logic')\n"
 if _loop_old_mod in text or (
     "for cxx in builder.targets:" in text
     and "SM.Library(builder, cxx, 'sourcemod.logic')" in text
-    and 'SM_LOGIC_CXX_SYSROOT' in text
+    and 'css34: host g++ logic toolchain' in text
 ):
-    if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' not in text:
+    if 'css34: host g++ logic toolchain' not in text:
         if _loop_old_mod not in text:
             raise SystemExit('Failed to locate modular logic AMBuilder for-cxx loop')
         _loop_new_mod = """for cxx in builder.targets:
   if cxx.target.platform == 'linux':
-    # css34: SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9 logic toolchain.
+    # css34: host g++ logic toolchain.
     import shutil as _shutil
     import os as _os
     logic_cxx = cxx.clone()
@@ -1265,16 +1265,6 @@ if _loop_old_mod in text or (
     for _attr in ('cflags', 'cxxflags'):
       _flags = getattr(logic_cxx, _attr)
       setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    if _sysroot and logic_cxx.target.arch == 'x86':
-      logic_cxx.cxxflags += [
-        '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
-      ]
     for _flag in ('-lgcc_eh', '-static-libstdc++'):
       if _flag in logic_cxx.linkflags:
         logic_cxx.linkflags.remove(_flag)
@@ -1291,7 +1281,7 @@ if _loop_old_mod in text or (
     binary = SM.Library(builder, cxx, 'sourcemod.logic')
 """
         text = text.replace(_loop_old_mod, _loop_new_mod, 1)
-        print('==> Patched modular logic AMBuilder (gcc-4.9 g++-9)')
+        print('==> Patched modular logic AMBuilder (host g++)')
 
     defs_old = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
@@ -1326,13 +1316,12 @@ if _loop_old_mod in text or (
             raise SystemExit('Failed to locate modular logic AMBuilder defines block')
         print('==> Patched modular logic AMBuilder css34 ABI defines')
 
-    if 'css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT' not in text and \
-       'css34: gcc-4.9 libstdc++ when SM_LOGIC_CXX_SYSROOT' not in text:
+    if 'css34: host libstdc++ static' not in text:
         linux_old = """  if binary.compiler.target.platform == 'linux':
     binary.compiler.postlink += ['-lpthread', '-lrt']
   elif binary.compiler.target.platform == 'mac':"""
         linux_new = """  if binary.compiler.target.platform == 'linux':
-    # css34: gcc-4.9 libstdc++ when SM_LOGIC_CXX_SYSROOT (SM < 1.13); no static SP.
+    # css34: host libstdc++ static (no static SP).
     import os as _os
     for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
       if flag in binary.compiler.linkflags:
@@ -1340,22 +1329,8 @@ if _loop_old_mod in text or (
     for flag in list(binary.compiler.postlink):
       if flag in ('-lpthread', '-lrt', '-Wl,--no-as-needed'):
         binary.compiler.postlink.remove(flag)
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
     _stdcxx = None
     _sup = None
-    if _sysroot:
-      for _base in (
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
-      ):
-        _cand = _os.path.join(_base, 'libstdc++.a')
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_base, 'libsupc++.a')
-          break
     if _stdcxx is None:
       import subprocess as _sp
       _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
@@ -1404,7 +1379,7 @@ if _loop_old_mod in text or (
 
 logic_loop_new = """for arch in SM.archs:
   if builder.target.platform == 'linux':
-    # css34: SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9 logic toolchain.
+    # css34: host g++ logic toolchain.
     import shutil as _shutil
     import os as _os
     logic_cxx = builder.cxx.clone()
@@ -1424,16 +1399,6 @@ logic_loop_new = """for arch in SM.archs:
     for _attr in ('cflags', 'cxxflags'):
       _flags = getattr(logic_cxx, _attr)
       setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    if _sysroot and arch == 'x86':
-      logic_cxx.cxxflags += [
-        '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
-      ]
     for _flag in ('-lgcc_eh',):
       if _flag in logic_cxx.linkflags:
         logic_cxx.linkflags.remove(_flag)
@@ -1454,8 +1419,8 @@ logic_loop_old_variants = [
   binary = SM.Library(builder, 'sourcemod.logic', arch)""",
 ]
 
-if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' in text:
-    print('==> logic AMBuilder g++-9/sysroot already patched')
+if 'css34: host g++ logic toolchain' in text:
+    print('==> logic AMBuilder host g++ already patched')
     sized_flag = "'-fno-sized-deallocation',  # css34: no UND _ZdlPvj/_ZdaPvj at dlopen"
     if sized_flag not in text:
         anchor = "'-D_GLIBCXX_USE_CXX11_ABI=0',\n    ]"
@@ -1475,7 +1440,7 @@ else:
             break
     if not replaced:
         raise SystemExit('Failed to locate logic AMBuilder library loop')
-    print('==> Patched logic AMBuilder to compile with g++-9 + gcc-4.9 sysroot')
+    print('==> Patched logic AMBuilder to compile with host g++')
 
 defines_old = """  binary.compiler.defines += [
     'SM_DEFAULT_THREADER',
@@ -1522,27 +1487,13 @@ else:
     print('==> Patched logic AMBuilder for rom4s-compatible logic.so')
 
 linux_block_new = """  if builder.target.platform == 'linux':
-    # css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
+    # css34: host libstdc++ static.
     import os as _os
     for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
     _stdcxx = None
     _sup = None
-    if _sysroot:
-      for _base in (
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
-      ):
-        _cand = _os.path.join(_base, 'libstdc++.a')
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_base, 'libsupc++.a')
-          break
     if _stdcxx is None:
       import subprocess as _sp
       _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
@@ -1649,32 +1600,18 @@ linux_block_old_variants = [
     ]""",
 ]
 
-if 'gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set' in text and '_gcc_eh' in text:
+if 'css34: host libstdc++ static' in text and '_gcc_eh' in text:
     print('==> logic AMBuilder link flags already patched')
 else:
     replaced = False
     gcc49_prev = """  if builder.target.platform == 'linux':
-    # css34: gcc-4.9 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
+    # css34: host libstdc++ static.
     import os as _os
     for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
     _stdcxx = None
     _sup = None
-    if _sysroot:
-      for _base in (
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/4.9/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.9'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
-      ):
-        _cand = _os.path.join(_base, 'libstdc++.a')
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_base, 'libsupc++.a')
-          break
     if _stdcxx is None:
       import subprocess as _sp
       _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
@@ -1698,25 +1635,13 @@ else:
       '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
     ]"""
     gcc8_block = """  if builder.target.platform == 'linux':
-    # css34: gcc-8 libstdc++ static when SM_LOGIC_CXX_SYSROOT set; else gcc-9.
+    # css34: host libstdc++ static (gcc 8 search path, retired).
     import os as _os
     for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
       if flag in binary.compiler.linkflags:
         binary.compiler.linkflags.remove(flag)
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
     _stdcxx = None
     _sup = None
-    if _sysroot:
-      for _base in (
-          _os.path.join(_sysroot, 'usr/lib/gcc/x86_64-linux-gnu/8/32'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/8'),
-          _os.path.join(_sysroot, 'usr/lib/gcc/i686-linux-gnu/4.8'),
-      ):
-        _cand = _os.path.join(_base, 'libstdc++.a')
-        if _os.path.isfile(_cand):
-          _stdcxx = _cand
-          _sup = _os.path.join(_base, 'libsupc++.a')
-          break
     if _stdcxx is None:
       import subprocess as _sp
       _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
