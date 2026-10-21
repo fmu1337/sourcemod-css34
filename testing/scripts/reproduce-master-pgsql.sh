@@ -4,7 +4,7 @@ set -euo pipefail
 git fetch origin 59eb2476b8646b76852796660d865c49c38bfefc
 git worktree add --detach /tmp/css34-master 59eb2476b8646b76852796660d865c49c38bfefc
 (cd /tmp/css34-master && bash builder/docker/build.sh)
-source /tmp/css34-master/builder/package-paths.sh
+PACKAGES_DIR=/tmp/css34-master/packages source /tmp/css34-master/builder/package-paths.sh
 export SM_PACKAGE
 if bash testing/scripts/check-package.sh > /tmp/master-abi.log 2>&1; then
   cat /tmp/master-abi.log
