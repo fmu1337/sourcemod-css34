@@ -49,7 +49,8 @@ elif printf '%s\n' "${core_syms}" | grep -F ' U _ZN6ConVarC1EPKcS1_i' >/dev/null
   echo "FAIL: ConVar ctor imported from vstdlib (tier1 must precede vstdlib on link line)" >&2
   fail=1
 else
-  echo "WARN: ConVar ctor not found in dynamic symbols"
+  echo "FAIL: ConVar ctor not found in dynamic symbols" >&2
+  fail=1
 fi
 
 if printf '%s\n' "${core_syms}" | grep -F ' B _ZN14ConCommandBase18s_pConCommandBasesE' >/dev/null; then
@@ -58,7 +59,8 @@ elif printf '%s\n' "${core_syms}" | grep -F ' U _ZN14ConCommandBase18s_pConComma
   echo "FAIL: s_pConCommandBases imported (link order / missing static tier1)" >&2
   fail=1
 else
-  echo "WARN: s_pConCommandBases not found"
+  echo "FAIL: s_pConCommandBases not found in dynamic symbols" >&2
+  fail=1
 fi
 
 cxx11="$(printf '%s\n' "${core_syms}" | grep -c '__cxx11' || true)"
@@ -68,29 +70,37 @@ else
   echo "OK: no __cxx11 ABI exports"
 fi
 
-echo "==> Checking GLIBC requirements"
-max_glibc="$(
-  objdump -T "${CORE_SO}" "${LOADER_SO}" 2>/dev/null \
-    | grep -oE 'GLIBC_[0-9.]+' \
-    | sed 's/GLIBC_//' \
-    | sort -t. -k1,1n -k2,2n -k3,3n \
-    | tail -n1 || true
-)"
-echo "Highest GLIBC symbol version referenced: ${max_glibc:-unknown}"
-glibc_too_new() {
-  local ver="$1"
-  [[ -z "${ver}" ]] && return 1
-  local major="${ver%%.*}"
-  local rest="${ver#*.}"
-  local minor="${rest%%.*}"
-  [[ "${major}" -gt 2 || ( "${major}" -eq 2 && "${minor}" -ge 34 ) ]]
+echo "==> Checking libstdc++ is not a DT_NEEDED and GLIBC floor"
+GLIBC_FLOOR="${GLIBC_FLOOR:-2.17}"
+version_gt() {
+  [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$1" ]]
 }
-if glibc_too_new "${max_glibc}"; then
-  echo "FAIL: Metamod requires GLIBC_${max_glibc} (>= 2.34); too new for Debian 11 smoke" >&2
-  fail=1
-elif [[ -n "${max_glibc}" ]]; then
-  echo "OK: GLIBC_${max_glibc} is within Debian 11 range"
-fi
+max_glibc=""
+while IFS= read -r -d '' elf; do
+  readelf -h "${elf}" >/dev/null 2>&1 || continue
+  rel="${elf#"${TMP}"/}"
+  if readelf -d "${elf}" 2>/dev/null | grep -q 'libstdc++\.so\.6'; then
+    echo "FAIL: ${rel} NEEDED libstdc++.so.6" >&2
+    fail=1
+  fi
+  elf_glibc="$(
+    objdump -T "${elf}" 2>/dev/null \
+      | grep -oE 'GLIBC_[0-9.]+' \
+      | sed 's/GLIBC_//' \
+      | sort -V \
+      | tail -1 || true
+  )"
+  if [[ -n "${elf_glibc}" ]]; then
+    if [[ -z "${max_glibc}" ]] || version_gt "${elf_glibc}" "${max_glibc}"; then
+      max_glibc="${elf_glibc}"
+    fi
+    if version_gt "${elf_glibc}" "${GLIBC_FLOOR}"; then
+      echo "FAIL: ${rel} requires GLIBC_${elf_glibc} > ${GLIBC_FLOOR}" >&2
+      fail=1
+    fi
+  fi
+done < <(find "${TMP}" -type f -name '*.so' -print0)
+echo "Highest GLIBC symbol version referenced: ${max_glibc:-none} (floor ${GLIBC_FLOOR})"
 
 manifest="${TMP}/addons/metamod/css34-package.json"
 if [[ ! -f "${manifest}" ]]; then

@@ -112,17 +112,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Build SourceMod + Metamod (legacy-build / pure-source)
+      - name: Build SourceMod + Metamod (manylinux2014 / pure-source)
         env:
           CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
           PURE_SOURCE_BUILD: "1"
         run: |
-          chmod +x builder/docker/legacy-build.sh builder/run/linux.sh \
+          chmod +x builder/docker/build.sh builder/docker/legacy-build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
             builder/build-metamod.sh builder/prepare-package.sh builder/write-build-stamps.sh \
             builder/resolve-version.sh builder/py.sh builder/patches/*.sh \
             builder/install-clang9.sh builder/install-clang10.sh
-          builder/docker/legacy-build.sh
+          builder/docker/build.sh
 
       - name: Static package checks
         id: check
@@ -152,7 +152,7 @@ jobs:
           - SourceMod Linux / Windows
           - Metamod:Source Linux / Windows
 
-          Build line: \`${LINE}\` (pure-source, legacy-build Linux, no reference binary splice).
+          Build line: \`${LINE}\` (pure-source, manylinux2014 Linux, glibc 2.17, no reference binary splice).
           Pins are resolved from \`builder/versions.env\` via \`builder/resolve-version.sh\`.
           Packages are attached directly to this Release (no Actions artifacts).
           EOF

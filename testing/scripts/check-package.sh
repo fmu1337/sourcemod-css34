@@ -227,38 +227,29 @@ else
 fi
 
 logic_t_count="$(printf '%s\n' "${logic_dynsyms}" | grep -c ' T ' || true)"
-if [[ "${STATIC_SP}" -eq 1 ]]; then
-  if [[ "${logic_t_count}" -lt 1 ]]; then
-    echo "FAIL: logic.so exports no defined symbols" >&2
-    fail=1
-  else
-    echo "OK: logic.so exports ${logic_t_count} defined symbols (static SourcePawn; visibility-hidden)"
-  fi
-elif [[ "${logic_t_count}" -lt 100 ]]; then
-  echo "FAIL: logic.so exports only ${logic_t_count} defined symbols (rom4s ~285; missing libstdc++ EH exports?)" >&2
+if [[ "${logic_t_count}" -lt 1 ]]; then
+  echo "FAIL: logic.so exports no defined symbols" >&2
   fail=1
 else
-  echo "OK: logic.so exports ${logic_t_count} defined symbols (libstdc++ EH visible)"
+  echo "OK: logic.so exports ${logic_t_count} defined symbols"
 fi
 
-# Guard against rom4s logic splice masking in-tree build regressions.
-REF_URL="${REFERENCE_SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
-ref_tmp="$(mktemp -d)"
-if curl -fsSL -o "${ref_tmp}/ref.tar.gz" "${REF_URL}" \
-  && tar -xzf "${ref_tmp}/ref.tar.gz" -C "${ref_tmp}" addons/sourcemod/bin/sourcemod.logic.so 2>/dev/null; then
-  ref_logic="${ref_tmp}/addons/sourcemod/bin/sourcemod.logic.so"
-  pkg_logic="${TMP}/logic-cmp.so"
-  cp -f "${LOGIC_SO}" "${pkg_logic}"
-  strip --strip-unneeded "${ref_logic}" 2>/dev/null || true
-  strip --strip-unneeded "${pkg_logic}" 2>/dev/null || true
-  if cmp -s "${pkg_logic}" "${ref_logic}"; then
-    echo "FAIL: sourcemod.logic.so is byte-identical to stripped rom4s reference (logic splice mask)" >&2
-    fail=1
-  else
-    echo "OK: logic.so is not a rom4s splice copy"
-  fi
+# Portable stand-in for `objdump -T --defined-only`: drop *UND* rows.
+# A missing objdump dump is a failure, not a zero count.
+logic_dyn="$(objdump -T "${LOGIC_SO}" 2>/dev/null || true)"
+if [[ -z "${logic_dyn}" ]]; then
+  echo "FAIL: objdump -T produced no dynamic symbols for sourcemod.logic.so" >&2
+  fail=1
+  logic_std_exports=0
+else
+  logic_std_exports="$(printf '%s\n' "${logic_dyn}" | awk '$0 !~ /\*UND\*/' | c++filt | grep -cE 'std::|__cxxabiv1' || true)"
 fi
-rm -rf "${ref_tmp}"
+if [[ "${logic_std_exports}" -ne 0 ]]; then
+  echo "FAIL: sourcemod.logic.so exports ${logic_std_exports} std::/__cxxabiv1 symbols (static libstdc++ leak)" >&2
+  fail=1
+else
+  echo "OK: sourcemod.logic.so exports no std::/__cxxabiv1 symbols"
+fi
 
 echo "==> Checking DT_NEEDED for game libs (GetCVarIF / tier0)"
 needed="$(readelf -d "${CORE_SO}" 2>/dev/null | awk '/\(NEEDED\)/ {print $NF}' | tr -d '[]')"
@@ -323,44 +314,55 @@ else
   fail=1
 fi
 
-echo "==> Checking GLIBC requirements (css34 targets old distros)"
-max_glibc="$(
-  objdump -T "${MM_SO}" "${CORE_SO}" "${LOGIC_SO}" 2>/dev/null \
-    | grep -oE 'GLIBC_[0-9.]+' \
-    | sed 's/GLIBC_//' \
-    | sort -t. -k1,1n -k2,2n -k3,3n \
-    | tail -n1 || true
-)"
-logic_max_glibc="$(
-  objdump -T "${LOGIC_SO}" 2>/dev/null \
-    | grep -oE 'GLIBC_[0-9.]+' \
-    | sed 's/GLIBC_//' \
-    | sort -t. -k1,1n -k2,2n -k3,3n \
-    | tail -n1 || true
-)"
-echo "Highest GLIBC symbol version referenced: ${max_glibc:-unknown} (logic: ${logic_max_glibc:-unknown})"
-# Debian 10 = 2.28, Debian 9 = 2.24, CentOS 7 = 2.17. rom4s logic stays on 2.12-era symbols.
-# jammy-built logic pulls GLIBC 2.34+; legacy docker (bullseye) stays <= 2.31.
-glibc_too_new_for_logic() {
-  local ver="$1"
-  [[ -z "${ver}" ]] && return 1
-  local major="${ver%%.*}"
-  local rest="${ver#*.}"
-  local minor="${rest%%.*}"
-  [[ "${major}" -gt 2 || ( "${major}" -eq 2 && "${minor}" -ge 34 ) ]]
+echo "==> Checking GLIBC floor and libstdc++ linkage on every ELF"
+GLIBC_FLOOR="${GLIBC_FLOOR:-2.17}"
+GLIBCXX_SPCOMP_MAX="${GLIBCXX_SPCOMP_MAX:-3.4.19}"
+version_gt() {
+  [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$1" ]]
 }
-if glibc_too_new_for_logic "${logic_max_glibc}"; then
-  echo "FAIL: sourcemod.logic.so requires GLIBC_${logic_max_glibc} (>= 2.34); jammy-native logic hangs srcds" >&2
-  fail=1
-elif [[ -n "${logic_max_glibc}" ]]; then
-  echo "OK: logic GLIBC_${logic_max_glibc} is within legacy-server range"
-fi
-if glibc_too_new_for_logic "${max_glibc}"; then
-  echo "WARN: package requires GLIBC_${max_glibc} (>= 2.29); too new for Debian 8-10 / CentOS 7"
-  echo "      Use the rom4s reference package on legacy distros; host-built packages need newer glibc."
-else
-  echo "OK: GLIBC_${max_glibc} is within legacy-server range"
-fi
+max_glibc=""
+while IFS= read -r -d '' elf; do
+  readelf -h "${elf}" >/dev/null 2>&1 || continue
+  rel="${elf#"${TMP}"/}"
+  base="$(basename "${elf}")"
+  elf_glibc="$(
+    objdump -T "${elf}" 2>/dev/null \
+      | grep -oE 'GLIBC_[0-9.]+' \
+      | sed 's/GLIBC_//' \
+      | sort -V \
+      | tail -1 || true
+  )"
+  if [[ -n "${elf_glibc}" ]]; then
+    if [[ -z "${max_glibc}" ]] || version_gt "${elf_glibc}" "${max_glibc}"; then
+      max_glibc="${elf_glibc}"
+    fi
+    if version_gt "${elf_glibc}" "${GLIBC_FLOOR}"; then
+      echo "FAIL: ${rel} requires GLIBC_${elf_glibc} > ${GLIBC_FLOOR}" >&2
+      fail=1
+    fi
+  fi
+  if readelf -d "${elf}" 2>/dev/null | grep -q 'libstdc++\.so\.6'; then
+    if [[ "${base}" == "spcomp" || "${base}" == "oldspcomp" ]]; then
+      elf_cxx="$(
+        objdump -T "${elf}" 2>/dev/null \
+          | grep -oE 'GLIBCXX_[0-9.]+' \
+          | sed 's/GLIBCXX_//' \
+          | sort -V \
+          | tail -1 || true
+      )"
+      if [[ -n "${elf_cxx}" ]] && version_gt "${elf_cxx}" "${GLIBCXX_SPCOMP_MAX}"; then
+        echo "FAIL: spcomp requires GLIBCXX_${elf_cxx} > ${GLIBCXX_SPCOMP_MAX}" >&2
+        fail=1
+      else
+        echo "OK: spcomp links libstdc++.so.6 dynamically (GLIBCXX_${elf_cxx:-none} <= ${GLIBCXX_SPCOMP_MAX})"
+      fi
+    else
+      echo "FAIL: ${rel} NEEDED libstdc++.so.6 (libstdc++ must be static except spcomp)" >&2
+      fail=1
+    fi
+  fi
+done < <(find "${TMP}" -type f -print0)
+echo "Highest GLIBC symbol version referenced: ${max_glibc:-none} (floor ${GLIBC_FLOOR})"
 
 if [[ "${fail}" -ne 0 ]]; then
   echo "Package ABI check FAILED"

@@ -141,7 +141,14 @@ def load_vtables(path, wanted):
             entries.append(relocs.get(addr + i * 4) or funcs.get(val, ''))
         mangled[vt] = entries[2:]  # skip offset-to-top + typeinfo
     flat = [n for v in mangled.values() for n in v]
-    demangled = subprocess.run(['c++filt'], input='\n'.join(flat), capture_output=True, text=True).stdout.split('\n')
+    # Python 3.6 (CentOS 7) has no capture_output= / text=.
+    demangled = subprocess.run(
+        ['c++filt'],
+        input='\n'.join(flat),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    ).stdout.split('\n')
     out, pos = {}, 0
     for vt, entries in mangled.items():
         out[vt] = demangled[pos:pos + len(entries)]

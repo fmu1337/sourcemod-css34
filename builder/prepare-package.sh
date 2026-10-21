@@ -8,7 +8,7 @@ DEPS_DIR="${4:-$(cd "$BUILDER_DIR/.." && pwd)/deps}"
 
 SM_ROOT="$PACKAGE_DIR/addons/sourcemod"
 GAMEDATA_ROOT="$SM_ROOT/gamedata"
-TRANSLATIONS_REF="${TRANSLATIONS_REF:-master}"
+# Translations come from the SourceMod tree already checked out at SOURCEMOD_COMMIT.
 
 echo "==> Stripping Linux binaries"
 if [ "${BUILD_PLATFORM:-linux}" != "windows" ]; then
@@ -52,19 +52,13 @@ if [ -f "$SM_ROOT/extensions/geoip.ext.so" ] || [ -f "$SM_ROOT/extensions/geoip.
   chmod 0644 "$geoip_cfg"/*.mmdb
 fi
 
-echo "==> Fetching upstream translations"
-translations_dir="$DEPS_DIR/sourcemod-translations"
-rm -rf "$translations_dir"
-git clone --depth 1 --filter=blob:none --sparse \
-  https://github.com/alliedmodders/sourcemod "$translations_dir"
-git -C "$translations_dir" sparse-checkout set translations
-if [ "$TRANSLATIONS_REF" != "master" ]; then
-  git -C "$translations_dir" fetch --depth 1 origin "$TRANSLATIONS_REF"
-  git -C "$translations_dir" checkout "$TRANSLATIONS_REF"
+echo "==> Installing translations from this SourceMod commit"
+if [ ! -d "$SOURCEMOD_DIR/translations" ]; then
+  echo "FAIL: $SOURCEMOD_DIR/translations is missing (expected the pinned SM tree)" >&2
+  exit 1
 fi
-
 rm -rf "$SM_ROOT/translations"
-cp -a "$translations_dir/translations" "$SM_ROOT/translations"
+cp -a "$SOURCEMOD_DIR/translations" "$SM_ROOT/translations"
 
 if [ ! -f "$SM_ROOT/scripting/include/version_auto.inc" ]; then
   inc_dir="$SOURCEMOD_DIR/build/includes"

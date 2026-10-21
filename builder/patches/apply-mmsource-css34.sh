@@ -25,6 +25,39 @@ if [ ! -d "$core_dir" ]; then
   exit 1
 fi
 
+# MM 1.10 gates default visibility and operator new on __GNUC__ == 4, which is
+# true for clang and false for GCC 10. Without this, GetGameDllBridge /
+# GetVspBridge are hidden and MM's operator new is dropped.
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYGNUC'
+from pathlib import Path
+import os
+root = Path(os.environ['MMS_DIR'])
+edits = [
+    (root / 'core-legacy/oslink.h',
+     '#if (__GNUC__ == 4)\n',
+     '#if (__GNUC__ >= 4)\n'),
+    (root / 'core-legacy/ISmmPlugin.h',
+     '#if (__GNUC__ == 4) && (__GNUC_MINOR__ >= 1)\n',
+     '#if (__GNUC__ >= 4)\n'),
+    (root / 'core-legacy/sourcemm.cpp',
+     '(__GNUC__ == 3 || __GNUC__ == 4)',
+     '(__GNUC__ >= 3)'),
+]
+for path, old, new in edits:
+    if not path.is_file():
+        raise SystemExit(f'FAIL: missing {path}')
+    text = path.read_text()
+    if old not in text:
+        if new in text:
+            print(f'==> {path.relative_to(root)} already uses a GCC >= guard')
+            continue
+        raise SystemExit(f'FAIL: __GNUC__ anchor not found in {path.relative_to(root)}')
+    if text.count(old) != 1:
+        raise SystemExit(f'FAIL: __GNUC__ anchor in {path.relative_to(root)} matched {text.count(old)} times')
+    path.write_text(text.replace(old, new, 1))
+    print(f'==> Patched {path.relative_to(root)} __GNUC__ guard for GCC >= 4')
+PYGNUC
+
 # --- SourceHook v4 (required by css34 metamod.1.ep1.so) ---
 if [ -d "$legacy_dir/sourcehook" ]; then
   echo "==> Installing core-legacy SourceHook (SH_IFACE_VERSION 4) into core/"
@@ -405,3 +438,32 @@ else:
     path.write_text(text.replace(needle, insert, 1))
     print('==> Patched MM HL2Library for episode1 tier1-before-vstdlib')
 PYTIER1
+
+# css34: static hidden libstdc++, dynamic libgcc_s, GCC 10 -Werror suppressions.
+# Anchor is the stock MM 1.10 configure() linux block. Missing it is a hard fail.
+MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYLINKSTD'
+from pathlib import Path
+import os
+path = Path(os.environ['MMS_DIR']) / 'AMBuildScript'
+text = path.read_text()
+old = """      if cxx.name == 'gcc':
+        cfg.linkflags += ['-static-libgcc']
+      elif cxx.name == 'clang':
+        cfg.linkflags += ['-lgcc_eh']
+"""
+new = """      if cxx.name == 'gcc':
+        # css34: libgcc_s stays dynamic; hide static libstdc++ (GCC 10 / glibc 2.17)
+        cfg.linkflags += ['-lgcc_s', '-static-libstdc++', '-Wl,--exclude-libs=libstdc++.a:libsupc++.a']
+        cfg.cflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-sign-compare']
+        cfg.cxxflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-volatile']
+      elif cxx.name == 'clang':
+        cfg.linkflags += ['-lgcc_eh']
+"""
+if 'css34: libgcc_s stays dynamic' in text:
+    print('==> MM 1.10 libstdc++ link flags already patched')
+elif old not in text:
+    raise SystemExit('FAIL: MM 1.10 static-libgcc anchor not found in AMBuildScript')
+else:
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched MM 1.10 link flags (static libstdc++, dynamic libgcc_s)')
+PYLINKSTD

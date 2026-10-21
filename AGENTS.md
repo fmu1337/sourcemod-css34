@@ -25,23 +25,24 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 ```
 
 ### Building the packages (the "app")
-- **Shipping / smoke-test-compatible package** (what `test-server.yml` and
-  `release.yml` build): `CSS34_LINE=<line> builder/docker/legacy-build.sh`. It builds
-  in `debian:11` with the i386 gcc-4.9 sysroot for `sourcemod.logic.so`. This is
-  the package that passes the ABI check and boots on legacy glibc. Prefer this
-  whenever you need a package that actually loads in `srcds`.
-- **`build.yml` Linux equivalent** (jammy-native, compile check only): run
-  `builder/run/linux.sh` inside `ubuntu:22.04` with `SKIP_APT_INSTALL=1`,
-  `WDIR/DEPS_DIR/PACKAGES_DIR=/workspace/...`. Note: with the default
-  `USE_CLANG9=1`, `builder/run/linux.sh` compiles with **clang-9** even when `CC=gcc-9`
-  / `CXX=g++-9` are exported; gcc-9 is used only with `USE_CLANG9=0`.
+- **Shipping / smoke-test-compatible package** (what `test-server.yml`,
+  `release.yml` and `build.yml` build): `CSS34_LINE=<line> builder/docker/build.sh`.
+  Image `quay.io/pypa/manylinux2014_i686@sha256:30305867f278896ee117b0d162a8e4f9b7b16819e6590f6139e14c5ed5b23fdd`
+  (CentOS 7.9 i686, glibc 2.17, devtoolset-10 GCC 10.2.1). Python for AMBuild is
+  `/opt/python/cp311-cp311/bin/python`. The script runs under `linux32` so
+  AMBuild sees i686. `builder/docker/legacy-build.sh` is a wrapper that calls
+  `build.sh` (removed in T1.4).
+- `builder/run/linux.sh` still knows the old clang-9 path (`USE_CLANG9=1` by
+  default outside the manylinux image). Inside manylinux it forces `USE_CLANG9=0`
+  and `gcc`/`g++` from devtoolset-10. Do not export `gcc-9` there.
 - `git config --global --add safe.directory '*'` inside the container (the repo
   is bind-mounted and owned by uid 1000, git blocks submodule ops otherwise).
-  `legacy-build.sh` does this itself.
-- The builder self-provisions all deps into `deps/` (clang-9 and the rom4s
-  clang-10 bundle from bitbucket, i386 sysroot, MySQL / MariaDB SDKs, hl2sdk
-  clones, AMBuild). Downloads come from github.com, bitbucket.org, cdn.mysql.com,
-  snapshot.debian.org and archive.debian.org — all reachable.
+  `build.sh` does this itself.
+- The builder self-provisions deps into `deps/` (pinned hl2sdk episode1,
+  rom4s/hl2sdk-ep1c, AMBuild, static OpenSSL 1.1.1w, MySQL / MariaDB SDKs).
+  Downloads come from github.com, bitbucket.org, cdn.mysql.com, www.openssl.org,
+  snapshot.debian.org and archive.debian.org — all reachable. Tarball downloads
+  are sha256-pinned.
 - Packages stay in `packages/` (or `PACKAGES_DIR`); the builder creates no root
   symlinks. Source `builder/package-paths.sh` with `CSS34_LINE` to resolve exact
   SM/MM archive paths. Archived MM 2.0/KHook builds live in `archive/khook`;
@@ -52,9 +53,10 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `test-server.yml`, "Static package checks" in `release.yml`): `SM_PACKAGE=<pkg>
   testing/scripts/check-package.sh` and `MM_PACKAGE=<pkg>
   testing/scripts/check-metamod-package.sh`. Uses host `binutils` (reads 32-bit
-  ELF fine). The **legacy-build** package PASSES; a **jammy-native**
-  (`ubuntu:22.04`) package intentionally FAILS the glibc-2.34 / pthread /
-  `__cxx11` checks — that is expected, not a regression.
+  ELF fine). The **manylinux2014** package must PASS with `GLIBC_FLOOR=2.17`
+  (the default): every ELF ≤ GLIBC 2.17, logic.so exports no `std::` /
+  `__cxxabiv1`, and no Metamod `.so` needs `libstdc++.so.6`. A jammy-native
+  package still fails those checks.
 - **Full smoke test** (CI primary gate `test-built-debian`): prepare the server
   tree on the host (`fetch-server.sh` → `apply-valve-rc-fix.sh` →
   `apply-srcds-patch.sh` → `KEEP_MAPS=de_dust2,de_inferno,de_nuke trim-server-maps.sh`,
