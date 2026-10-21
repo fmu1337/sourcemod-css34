@@ -76,6 +76,7 @@ check (`check-package.sh`) is the closest static verification of build output.
 Daily SM/MM tip bumps: follow `docs/JULES_DAILY_VERSION_BUMP.md`. After editing
 pins in `builder/lines.json`, run `python3 builder/lines.py gen` then
 `python3 builder/lines.py check` (also enforced by
-`.github/workflows/version-pins.yml` on PRs). Generation checks cover all pins;
-cross-file checks cover `sm12-latest`, `sm13-latest` and MM 1.12. Upstream tip probe:
+`.github/workflows/version-pins.yml` on PRs). `gen` rewrites `builder/versions.env`,
+`builder/generated/ci-matrix.json`, `builder/generated/tag-map.sh`, and the README pin
+tables. Workflows load the matrices from `python3 builder/lines.py gha`. Upstream tip probe:
 `builder/scripts/resolve-upstream-tips.sh`.

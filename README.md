@@ -15,12 +15,14 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/mmsourc
 https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcemod-css34-linux.tar.gz
 ```
 
+<!-- lines-install:begin -->
 | `<line>` | SourceMod | Metamod | Role |
 |----------|-----------|---------|------|
 | `sm13-latest` | 1.13.0.7472 | 1.12.0 git1226 | **Default / recommended** |
 | `sm12-latest` | 1.12.0.7253 | 1.12.0 git1226 | Latest 1.12 |
 | `sm13-mm20-khook` | 1.13.0.7565 (KHook branch + master) | 2.0.0 git1472 (KHook) | Frozen outside CI; archived builder, ships `dhooks.ext` |
 | `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Retired outside CI |
+<!-- lines-install:end -->
 
 `sm11-oldstable` (SM 1.11.0.6970 + MM 1.10.7) has **no pointer** — see [Known-bad releases](#known-bad-releases).
 What each pointer serves right now (tag, commits, smoke result) is in
@@ -36,24 +38,27 @@ attached to the per-tag releases (pointers are Linux-only).
 
 ## Version matrix (current pins)
 
+<!-- lines-versions:begin -->
 | Line (`CSS34_LINE`) | SourceMod | Metamod | Role |
 |---------------------|-----------|---------|------|
-| `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev** git976 (`80e8ff0…`, `metamod.1.ep1`) | OldStable, withheld from pointers |
-| `sm12-latest` | **1.12.0.7253** (`2e229b11…`) | **1.12 git1226** (`9fd977d…`, `metamod.2.ep1`) | Latest 1.12 |
-| `sm13-latest` | **1.13.0.7472** (`6eb5f8fa…`) | **1.12 git1226** (`9fd977d…`) | Latest 1.13 (default) |
-| `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | **2.0 git1407** (`0084b86…`) | Retired outside CI ([docs](docs/SM13_MM20.md)) |
-| `sm13-mm20-khook` | **1.13.0.7565** KHook branch + master (`25954d4…`) | **2.0 git1472** KHook (`05c5c63…`) | Frozen outside CI ([docs](docs/MM20_KHOOK.md)) |
+| `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev git976** (`80e8ff0b…`) | OldStable, withheld from pointers |
+| `sm12-latest` | **1.12.0.7253** (`2e229b11…`) | **1.12 git1226** (`9fd977df…`) | Latest 1.12 |
+| `sm13-latest` | **1.13.0.7472** (`6eb5f8fa…`) | **1.12 git1226** (`9fd977df…`) | Latest 1.13 (default) |
+| `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | 2.0 git1407 (last SourceHook MM 2.0) (`0084b86a…`) | Retired outside CI ([docs](docs/SM13_MM20.md)) |
+| `sm13-mm20-khook` | **1.13.0.7565** (KHook branch + master) (`25954d4a…`) | **2.0 git1472 (KHook)** (`05c5c63a…`) | Frozen outside CI ([docs](docs/MM20_KHOOK.md)) |
+<!-- lines-versions:end -->
 
 `sm13-dev` (7404 + MM 1.12) is **retired** — use `sm13-latest`. Its alias stays in `resolve-version.sh` /
 `release.yml` only so the `1.13.0.7404-mm1.12.0` tag can be rebuilt.
 
-Pins live in [`builder/lines.json`](builder/lines.json); generate the committed
-[`builder/versions.env`](builder/versions.env) with `python3 builder/lines.py gen`.
-Run `python3 builder/lines.py check` to detect generated-file drift and inconsistent copies.
+Pins live in [`builder/lines.json`](builder/lines.json). `python3 builder/lines.py gen` writes
+[`builder/versions.env`](builder/versions.env), [`builder/generated/ci-matrix.json`](builder/generated/ci-matrix.json),
+[`builder/generated/tag-map.sh`](builder/generated/tag-map.sh), and the two tables above.
+`python3 builder/lines.py check` fails when a generated file is stale, a line lists the same image twice,
+or a known-bad tag is pinned on a line that publishes a pointer.
 The manifest records line status and known-bad release tags; it is separate from the published pointer index.
 Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
-They are also copied into CI matrices and fallbacks — see [docs/JULES_DAILY_VERSION_BUMP.md](docs/JULES_DAILY_VERSION_BUMP.md)
-for the full list and `testing/scripts/check-version-pins.sh` for what is checked automatically.
+A daily bump edits `lines.json` and regenerates — see [docs/JULES_DAILY_VERSION_BUMP.md](docs/JULES_DAILY_VERSION_BUMP.md).
 
 > `meta version` prints the Metamod build number as `+1` (e.g. `1.12.0-dev+1`): Metamod is cloned
 > shallow and its versioning counts commits. The real revision is in the asset name and in
@@ -222,7 +227,7 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 
 - `.github/workflows/test-server.yml` — the real gate (push to `master` / `cursor/**`, PRs; `docs/**` and `*.md` are ignored).
   Builds **three active** lines (`sm11-oldstable`, `sm12-latest`, `sm13-latest`) with `builder/docker/build.sh` + `check-package.sh` / `check-metamod-package.sh`;
-  smoke on `debian:11` for all lines and on `debian:latest`, `rockylinux:9` and the ubuntu-22.04 host for
+  smoke on `debian:11`, `ubuntu:24.04` and `debian:13` for every active line, plus `rockylinux:9` and the ubuntu-22.04 host for
   `sm13-latest`; **botplay-stress matrix** on `debian:11` for all lines
   (SMAC + SDKHooks OnTakeDamage + SM API / cstrike / DHooks probes). Packages pass between jobs via
   **Actions cache**. Reference (rom4s / published-release) botplay, extra distros and bisect are
@@ -246,12 +251,12 @@ server crashes and API/ABI probes still fail the job.
 git tag 1.13.0.7472-mm1.12.0-r3 && git push origin 1.13.0.7472-mm1.12.0-r3   # rebuild sm13-latest
 ```
 
-New pins need a new base tag and a mapping in `release.yml` (the `case` in `resolve-line`).
+New pins need a new base tag. `release.yml` reads the tag map generated from `builder/lines.json`.
 
 ## Notes
 
 - Docs index (current vs. history): [docs/README.md](docs/README.md).
 - Patch layout and upgrade strategy: [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md).
 - SDKHooks EP1 / PLAPI traps: [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
-- Machine-readable pins, compatibility PASS/FAIL notes and historical URLs: [`testing/versions/matrix.json`](testing/versions/matrix.json).
+- Compatibility PASS/FAIL notes and historical URLs: [`testing/versions/matrix.json`](testing/versions/matrix.json). Live pins are [`builder/lines.json`](builder/lines.json).
 - Smoke / botplay / Wine testing: [testing/README.md](testing/README.md).
