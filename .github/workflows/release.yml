@@ -215,6 +215,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
+          CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
@@ -284,6 +285,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
+          CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
