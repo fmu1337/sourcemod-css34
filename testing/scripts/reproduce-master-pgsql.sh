@@ -2,7 +2,9 @@
 # One-off PR #127 evidence; removed after recording the CI result.
 set -euo pipefail
 git fetch origin 59eb2476b8646b76852796660d865c49c38bfefc
-git worktree add --detach /tmp/css34-master 59eb2476b8646b76852796660d865c49c38bfefc
+git clone --no-hardlinks . /tmp/css34-master
+git -C /tmp/css34-master checkout --detach 59eb2476b8646b76852796660d865c49c38bfefc
+git -C /tmp/css34-master remote set-url origin https://github.com/fmu1337/sourcemod-css34.git
 (cd /tmp/css34-master && bash builder/docker/build.sh)
 PACKAGES_DIR=/tmp/css34-master/packages source /tmp/css34-master/builder/package-paths.sh
 export SM_PACKAGE
