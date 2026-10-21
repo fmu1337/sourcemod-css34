@@ -135,10 +135,17 @@ def write_manifest(out_path, metamod_binary):
     A Windows Python process that launches bash.exe has its /d/... arguments
     rewritten, and dirname in that bash only splits on '/'.
     """
-    sm_dir = Path(host_path(os.environ.get("SOURCEMOD_DIR", "")))
-    mm_dir = Path(host_path(os.environ.get("MMS_DIR", "")))
-    if not sm_dir.is_dir() or not mm_dir.is_dir():
-        fail("SOURCEMOD_DIR/MMS_DIR missing: {} {}".format(sm_dir, mm_dir))
+    def env_dir(name):
+        raw = os.environ.get(name, "")
+        if not raw:
+            fail(name + " is unset")
+        path = Path(host_path(raw))
+        if not path.is_dir():
+            fail(name + " is not a directory: " + str(path))
+        return path
+
+    sm_dir = env_dir("SOURCEMOD_DIR")
+    mm_dir = env_dir("MMS_DIR")
     sm_rev = require_rev("SOURCEMOD_GIT_REV")
     mm_rev = require_rev("MMS_GIT_REV")
     sm_product = product_version(sm_dir / "product.version")
