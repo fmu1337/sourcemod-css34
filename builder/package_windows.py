@@ -89,28 +89,100 @@ def rewrite_metamod_vdf(staging):
     vdf.write_text(new, encoding="utf-8", newline="\n")
 
 
-def git_bash_path(path):
-    """Git Bash does not treat D:\\foo as a path (dirname only splits on '/')."""
-    text = Path(path).resolve().as_posix()
-    if len(text) >= 2 and text[1] == ":":
-        return "/" + text[0].lower() + text[2:]
+EXT_API_RE = re.compile(
+    r"^[ \t]*#define[ \t]+SMINTERFACE_EXTENSIONAPI_VERSION[ \t]+([0-9]+)",
+    re.M,
+)
+EXT_MIN_RE = re.compile(
+    r"^[ \t]*#define[ \t]+SMINTERFACE_EXTENSIONAPI_VERSION_MIN[ \t]+([0-9]+)",
+    re.M,
+)
+
+
+def host_path(value):
+    """Map a Git Bash /d/a/... env value to D:/a/... on Windows."""
+    if os.name == "nt" and len(value) >= 4 and value[0] == "/" and value[2] == "/":
+        return value[1].upper() + ":" + value[2:]
+    return value
+
+
+def read_text(path):
+    return Path(path).read_text(encoding="utf-8")
+
+
+def product_version(path):
+    text = read_text(path).strip()
+    if not text or "\n" in text or "\r" in text:
+        fail("bad product.version: " + str(path))
     return text
 
 
+def git_head(repo):
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return "unknown"
+    return out.strip() or "unknown"
+
+
 def write_manifest(out_path, metamod_binary):
-    script = BUILDER / "write-package-manifest.sh"
-    result = subprocess.run(
-        ["bash", git_bash_path(script), git_bash_path(out_path), metamod_binary],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.stdout:
-        sys.stdout.write(result.stdout)
-    if result.stderr:
-        sys.stderr.write(result.stderr)
-    if result.returncode != 0:
-        fail("write-package-manifest.sh exited " + str(result.returncode))
+    """Same fields as write-package-manifest.sh, without calling Git Bash.
+
+    A Windows Python process that launches bash.exe has its /d/... arguments
+    rewritten, and dirname in that bash only splits on '/'.
+    """
+    sm_dir = Path(host_path(os.environ.get("SOURCEMOD_DIR", "")))
+    mm_dir = Path(host_path(os.environ.get("MMS_DIR", "")))
+    if not sm_dir.is_dir() or not mm_dir.is_dir():
+        fail("SOURCEMOD_DIR/MMS_DIR missing: {} {}".format(sm_dir, mm_dir))
+    sm_rev = require_rev("SOURCEMOD_GIT_REV")
+    mm_rev = require_rev("MMS_GIT_REV")
+    sm_product = product_version(sm_dir / "product.version")
+    mm_product = product_version(mm_dir / "product.version")
+    sm_commit = os.environ.get("SOURCEMOD_BUILD_COMMIT") or os.environ.get("SOURCEMOD_COMMIT") or ""
+    if not sm_commit:
+        sm_commit = git_head(sm_dir)
+    mm_commit = os.environ.get("MMS_COMMIT") or git_head(mm_dir)
+    header_path = sm_dir / "public" / "IExtensionSys.h"
+    header = read_text(header_path)
+    api_match = EXT_API_RE.search(header)
+    if not api_match:
+        fail("Cannot read SMINTERFACE_EXTENSIONAPI_VERSION from " + str(header_path))
+    min_match = EXT_MIN_RE.search(header)
+    ext_api_min = int(min_match.group(1)) if min_match else 1
+    wdir = os.environ.get("WDIR")
+    pack_commit = git_head(host_path(wdir)) if wdir else git_head(sm_dir.parent)
+    msvc_toolset = os.environ.get("MSVC_TOOLSET", "")
+    windows_sdk = os.environ.get("WINDOWS_SDK", "")
+    if not VERSION_RE.fullmatch(msvc_toolset) or not VERSION_RE.fullmatch(windows_sdk):
+        fail("MSVC_TOOLSET/WINDOWS_SDK must be dotted versions, got {} {}".format(
+            msvc_toolset, windows_sdk))
+    payload = {
+        "line": os.environ.get("CSS34_LINE") or "custom",
+        "sm_version": "{}.{}".format(sm_product.split("-", 1)[0], sm_rev),
+        "sm_product_version": sm_product,
+        "sm_commit": sm_commit,
+        "mm_version": "{}-git{}".format(mm_product.split("-", 1)[0], mm_rev),
+        "mm_product_version": mm_product,
+        "mm_commit": mm_commit,
+        "extension_api": int(api_match.group(1)),
+        "extension_api_min": ext_api_min,
+        "metamod_binary": metamod_binary,
+        "msvc_toolset": msvc_toolset,
+        "windows_sdk": windows_sdk,
+        "css34_pack_commit": pack_commit,
+        "build_date": os.environ.get("BUILD_DATE") or "",
+    }
+    if not payload["build_date"]:
+        fail("BUILD_DATE required")
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+    print("==> Wrote " + out_path.as_posix(), file=sys.stderr)
 
 
 def core_name(package_dir, folder, candidates):
