@@ -67,6 +67,7 @@ expect {
 
 # Give MM/SM a moment after map load.
 sleep 3
+set probe_failed 0
 
 send "status\r"
 expect {
@@ -77,7 +78,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for status output"
-        exit 2
+        set probe_failed 1
     }
 }
 
@@ -90,7 +91,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for version output"
-        exit 3
+        set probe_failed 1
     }
 }
 
@@ -113,7 +114,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for meta version output ($meta_ver)"
-        exit 4
+        set probe_failed 1
     }
 }
 if {[info exists env(META_BUILD_ID_NEEDLE)] && $env(META_BUILD_ID_NEEDLE) ne ""} {
@@ -129,7 +130,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for meta Build ID ($meta_id)"
-        exit 4
+        set probe_failed 1
     }
 }
 
@@ -147,7 +148,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sm version output ($sm_pat)"
-        exit 5
+        set probe_failed 1
     }
 }
 set timeout $saved_timeout
@@ -164,23 +165,24 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sm_cvar logging probe"
-        exit 9
+        set probe_failed 1
     }
 }
 
 # DBI drivers are not autoloaded. A broken OpenSSL/glibc link only shows up here.
 # geoip and regex are optional: smoke-test.sh records them and does not fail the run.
 proc probe_ext_load {name} {
+    global probe_failed
     send "sm exts load $name\r"
     expect {
-        -re {successfully|already loaded|Unable to load|Failed to load|Could not|could not|error|Error} {}
+        -re {successfully|already loaded|Unable to load|[Ff]ailed to load|Could not|could not|error|Error} {}
         eof {
             puts stderr "srcds exited while loading extension $name"
             exit 10
         }
         timeout {
             puts stderr "timeout waiting for extension load $name"
-            exit 10
+            set probe_failed 1
         }
     }
     sleep 1
@@ -201,7 +203,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sdkhooks load"
-        exit 8
+        set probe_failed 1
     }
 }
 sleep 1
@@ -215,7 +217,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sm exts list output"
-        exit 6
+        set probe_failed 1
     }
 }
 
@@ -231,7 +233,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sm plugins list output"
-        exit 7
+        set probe_failed 1
     }
 }
 
@@ -243,3 +245,6 @@ expect {
     eof {}
     timeout {}
 }
+
+# Retain a failed result after collecting the remaining diagnostics.
+exit $probe_failed
