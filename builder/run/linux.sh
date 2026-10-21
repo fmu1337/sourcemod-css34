@@ -74,8 +74,7 @@ chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/pack
   "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
 
 python3 -m pip install --upgrade pip --user
-chmod +x "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$BUILDER_DIR/patches/patch-ambuild-py312.sh" 2>/dev/null || true
-bash "$BUILDER_DIR/patches/patch-ambuild-linker.sh" "$DEPS_DIR/ambuild"
+chmod +x "$BUILDER_DIR/patches/patch-ambuild-py312.sh" 2>/dev/null || true
 bash "$BUILDER_DIR/patches/patch-ambuild-py312.sh" "$DEPS_DIR/ambuild"
 python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS_DIR/ambuild" 2>/dev/null || true
 # Ensure Python 3.12 site-packages stay patched after reinstall.
