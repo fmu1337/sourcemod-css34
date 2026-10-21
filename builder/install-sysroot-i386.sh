@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pre-dual-ABI i386 libstdc++4.9 for logic.so (gcc-8 static archive leaks __cxx11).
-# Core/extensions still use host gcc-9/clang-9; logic alone uses this tree.
+# Core/extensions use the host compiler; logic alone uses this tree.
 set -euo pipefail
 
 DEPS_DIR="${1:?deps directory required}"

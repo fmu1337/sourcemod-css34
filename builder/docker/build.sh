@@ -49,7 +49,6 @@ docker_cmd run --rm -i --platform linux/386 \
   -e SPLICE_REFERENCE_EXTRAS="${SPLICE_REFERENCE_EXTRAS:-0}" \
   -e SPLICE_REFERENCE_LOGIC="${SPLICE_REFERENCE_LOGIC:-0}" \
   -e SKIP_APT_INSTALL=1 \
-  -e USE_CLANG9=0 \
   -e CC=gcc \
   -e CXX=g++ \
   -e WDIR=/workspace \
@@ -109,7 +108,6 @@ register_git_safe_dirs
 chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
   builder/package-metamod.sh builder/build-metamod.sh \
   builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
-  builder/install-clang9.sh builder/install-clang10.sh \
   builder/install-sysroot-i386.sh \
   builder/patches/patch-ambuild-linker.sh \
   builder/splice-reference-logic.sh builder/splice-reference-extras.sh \

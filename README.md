@@ -209,8 +209,8 @@ No root package symlinks are created.
 manylinux2014 (glibc 2.17). `check-package.sh` fails the package if any ELF needs a
 GLIBC newer than `GLIBC_FLOOR` (default 2.17).
 
-`builder/run/linux.sh` on a normal distro still defaults to clang-9 (`USE_CLANG9=1`).
-That path is not what CI ships. Inside the manylinux image it uses devtoolset-10 GCC.
+`builder/run/linux.sh` uses `CC` / `CXX` from the environment. `build.sh` sets
+them to devtoolset-10 `gcc` / `g++` inside the manylinux image.
 
 Windows (x86 MSVC env):
 

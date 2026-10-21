@@ -1219,9 +1219,8 @@ else:
     print('==> No bundled DHooks AMBuilder entry (pre-6970 SourceMod)')
 PY
 
-# css34: sourcemod.logic.so must match rom4s (old libstdc++ ABI, pthread/rt NEEDED,
-# no HL2 malloc hooks). rom4s built logic with clang 10 (hlmod #588406); clang-9
-# logic hangs srcds before the first mapchange in smoke tests.
+# css34: sourcemod.logic.so keeps a static libstdc++, pthread/rt NEEDED,
+# and no HL2 malloc hooks.
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
@@ -1453,76 +1452,6 @@ logic_loop_new = """for arch in SM.archs:
 logic_loop_old_variants = [
     """for arch in SM.archs:
   binary = SM.Library(builder, 'sourcemod.logic', arch)""",
-    """for arch in SM.archs:
-  if builder.target.platform == 'linux':
-    # css34: logic must be built with g++-9 (clang-9 object code hangs in srcds).
-    import shutil as _shutil
-    logic_cxx = builder.cxx.clone()
-    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
-    _cc_bin = _shutil.which((_os.environ.get('CC') or 'gcc').split()[0]) or (_os.environ.get('CC') or 'gcc').split()[0]
-    logic_cxx.cxx_argv = [_cxx_bin]
-    logic_cxx.cc_argv = [_cc_bin]
-    logic_cxx.linker_argv = [_cxx_bin]
-    if arch == 'x86':
-      logic_cxx.cflags += ['-m32']
-      logic_cxx.linkflags += ['-m32']
-    _clang_only = [
-      '-Wno-nonportable-include-path', '-Wno-macro-redefined', '-Wno-writable-strings',
-      '-Wno-sometimes-uninitialized', '-Wno-inconsistent-missing-override',
-      '-Wno-implicit-exception-spec-mismatch', '-Wno-deprecated-register',
-    ]
-    for _attr in ('cflags', 'cxxflags'):
-      _flags = getattr(logic_cxx, _attr)
-      setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
-    logic_cxx.cxxflags += [
-      '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
-      '-Wno-stringop-truncation', '-Wno-unused-result',
-    ]
-    for _flag in ('-lgcc_eh',):
-      if _flag in logic_cxx.linkflags:
-        logic_cxx.linkflags.remove(_flag)
-    if '-static-libgcc' not in logic_cxx.linkflags:
-      logic_cxx.linkflags += ['-static-libgcc']
-    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
-  else:
-    binary = SM.Library(builder, 'sourcemod.logic', arch)""",
-    """for arch in SM.archs:
-  if builder.target.platform == 'linux':
-    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT trusty libstdc++4.8.
-    import shutil as _shutil
-    import os as _os
-    logic_cxx = builder.cxx.clone()
-    _deps = _os.environ.get('DEPS_DIR', '')
-    _clangpp = _os.path.join(_deps, 'clang-10/usrbin/clang++-10') if _deps else ''
-    _clang = _os.path.join(_deps, 'clang-10/usrbin/clang-10') if _deps else ''
-    if not _os.path.isfile(_clangpp):
-      _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
-      _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
-    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
-    logic_cxx.cxx_argv = [_clangpp]
-    logic_cxx.cc_argv = [_clang]
-    logic_cxx.linker_argv = [_cxx_bin]
-    if arch == 'x86':
-      logic_cxx.cflags += ['-m32']
-      logic_cxx.linkflags += ['-m32']
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    if _sysroot and arch == 'x86':
-      logic_cxx.cxxflags += [
-        '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.8/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.8/backward'),
-      ]
-    for _flag in ('-lgcc_eh',):
-      if _flag in logic_cxx.linkflags:
-        logic_cxx.linkflags.remove(_flag)
-    if '-static-libgcc' not in logic_cxx.linkflags:
-      logic_cxx.linkflags += ['-static-libgcc']
-    logic_cxx.cxxflags += ['-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0']
-    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
-  else:
-    binary = SM.Library(builder, 'sourcemod.logic', arch)""",
 ]
 
 if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' in text:
@@ -1539,83 +1468,7 @@ if 'SM_LOGIC_CXX_SYSROOT gcc-4.9 g++-9' in text:
             raise SystemExit('Failed to add -fno-sized-deallocation to logic AMBuilder')
 else:
     replaced = False
-    clang10_loop = """for arch in SM.archs:
-  if builder.target.platform == 'linux':
-    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT gcc-4.9 libstdc++.
-    import shutil as _shutil
-    import os as _os
-    logic_cxx = builder.cxx.clone()
-    _deps = _os.environ.get('DEPS_DIR', '')
-    _clangpp = _os.path.join(_deps, 'clang-10/usrbin/clang++-10') if _deps else ''
-    _clang = _os.path.join(_deps, 'clang-10/usrbin/clang-10') if _deps else ''
-    if not _os.path.isfile(_clangpp):
-      _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
-      _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
-    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
-    logic_cxx.cxx_argv = [_clangpp]
-    logic_cxx.cc_argv = [_clang]
-    logic_cxx.linker_argv = [_cxx_bin]
-    if arch == 'x86':
-      logic_cxx.cflags += ['-m32']
-      logic_cxx.linkflags += ['-m32']
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    if _sysroot and arch == 'x86':
-      logic_cxx.cxxflags += [
-        '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/4.9/32'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/4.9/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/4.9/backward'),
-      ]
-    for _flag in ('-lgcc_eh',):
-      if _flag in logic_cxx.linkflags:
-        logic_cxx.linkflags.remove(_flag)
-    if '-static-libgcc' not in logic_cxx.linkflags:
-      logic_cxx.linkflags += ['-static-libgcc']
-    logic_cxx.cxxflags += ['-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0']
-    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
-  else:
-    binary = SM.Library(builder, 'sourcemod.logic', arch)"""
-    gcc8_loop = """for arch in SM.archs:
-  if builder.target.platform == 'linux':
-    # css34: rom4s built logic with clang 10; SM_LOGIC_CXX_SYSROOT gcc-8 libstdc++.
-    import shutil as _shutil
-    import os as _os
-    logic_cxx = builder.cxx.clone()
-    _deps = _os.environ.get('DEPS_DIR', '')
-    _clangpp = _os.path.join(_deps, 'clang-10/usrbin/clang++-10') if _deps else ''
-    _clang = _os.path.join(_deps, 'clang-10/usrbin/clang-10') if _deps else ''
-    if not _os.path.isfile(_clangpp):
-      _clangpp = _shutil.which('clang++-10') or '/usr/bin/clang++-10'
-      _clang = _shutil.which('clang-10') or '/usr/bin/clang-10'
-    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
-    logic_cxx.cxx_argv = [_clangpp]
-    logic_cxx.cc_argv = [_clang]
-    logic_cxx.linker_argv = [_cxx_bin]
-    if arch == 'x86':
-      logic_cxx.cflags += ['-m32']
-      logic_cxx.linkflags += ['-m32']
-    _sysroot = _os.environ.get('SM_LOGIC_CXX_SYSROOT', '')
-    if _sysroot and arch == 'x86':
-      logic_cxx.cxxflags += [
-        '-nostdinc++',
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/8'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/x86_64-linux-gnu/c++/8/32'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/8'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/i386-linux-gnu/c++/8/i686-linux-gnu'),
-        '-isystem', _os.path.join(_sysroot, 'usr/include/c++/8/backward'),
-      ]
-    for _flag in ('-lgcc_eh',):
-      if _flag in logic_cxx.linkflags:
-        logic_cxx.linkflags.remove(_flag)
-    if '-static-libgcc' not in logic_cxx.linkflags:
-      logic_cxx.linkflags += ['-static-libgcc']
-    logic_cxx.cxxflags += ['-Wno-tautological-overlap-compare', '-D_GLIBCXX_USE_CXX11_ABI=0']
-    binary = SM.LibraryBuilder(logic_cxx, 'sourcemod.logic', arch)
-  else:
-    binary = SM.Library(builder, 'sourcemod.logic', arch)"""
-    for old in logic_loop_old_variants + [gcc8_loop, clang10_loop]:
+    for old in logic_loop_old_variants:
         if old in text:
             text = text.replace(old, logic_loop_new, 1)
             replaced = True

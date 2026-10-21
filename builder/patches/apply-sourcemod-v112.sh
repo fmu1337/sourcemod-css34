@@ -176,15 +176,15 @@ if "CSS34 SDK compatibility" not in text:
 else:
     print('==> CSS34 compiler flags already present')
 
-# SM 7461+ sets -std=c++20; css34 uses gcc-9/clang-9 (max c++17).
+# SM 7461+ sets -std=c++20. css34 still pins c++17 (removed in T1.3).
 if "cxx.cxxflags += ['-std=c++20']" in text:
     text = text.replace(
         "cxx.cxxflags += ['-std=c++20']",
-        "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+        "cxx.cxxflags += ['-std=c++17']  # css34: pin c++17",
         1,
     )
     print('==> Downgraded AMBuildScript c++20 -> c++17 for css34 toolchain')
-elif "css34: gcc-9/clang-9 lack c++20" in text:
+elif "css34: pin c++17" in text:
     print('==> AMBuildScript c++17 downgrade already present')
 
 # SM 7461+ SourcePawn uses std::span (C++20); provide a polyfill via -I cxx17-compat.
@@ -194,7 +194,7 @@ if pool_allocator.exists() and '#include <span>' in pool_allocator.read_text():
     span_marker = "cxx.cxxflags += ['-I"  # css34: C++17 std::span polyfill
     if span_marker not in text:
         cxx17_markers = [
-            "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+            "cxx.cxxflags += ['-std=c++17']  # css34: pin c++17",
             "cxx.cxxflags += ['-std=c++17']",
         ]
         inserted = False
@@ -923,7 +923,7 @@ if smn_core.exists():
     else:
         print('==> ParseTime has no std::get_time (ok)')
 
-# bundled curl fortify noise on gcc only (clang-9 rejects -Wno-stringop-*)
+# bundled curl fortify noise on gcc only
 curl_ambuild = sm / 'extensions/curl/curl-src/lib/AMBuilder'
 if curl_ambuild.exists() and 'stringop-truncation' not in curl_ambuild.read_text():
     ct = curl_ambuild.read_text()

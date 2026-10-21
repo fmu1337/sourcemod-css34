@@ -32,9 +32,8 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `/opt/python/cp311-cp311/bin/python`. The script runs under `linux32` so
   AMBuild sees i686. `builder/docker/legacy-build.sh` is a wrapper that calls
   `build.sh` (removed in T1.4).
-- `builder/run/linux.sh` still knows the old clang-9 path (`USE_CLANG9=1` by
-  default outside the manylinux image). Inside manylinux it forces `USE_CLANG9=0`
-  and `gcc`/`g++` from devtoolset-10. Do not export `gcc-9` there.
+- `builder/run/linux.sh` uses `CC` / `CXX` from the environment. `build.sh`
+  sets them to devtoolset-10 `gcc` / `g++`.
 - `git config --global --add safe.directory '*'` inside the container (the repo
   is bind-mounted and owned by uid 1000, git blocks submodule ops otherwise).
   `build.sh` does this itself.
