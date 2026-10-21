@@ -390,7 +390,6 @@ if logic_am.exists():
       '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
       '-Wno-stringop-truncation', '-Wno-unused-result',
       '-D_GLIBCXX_USE_CXX11_ABI=0',
-      '-fno-sized-deallocation',  # css34: no UND _ZdlPvj/_ZdaPvj at dlopen
     ]
     binary = SM.Library(builder, logic_cxx, 'sourcemod.logic')
   else:
@@ -824,58 +823,6 @@ if gc.exists():
             gc.write_text(gt)
             print('==> Patched GameConfigs CacheGameBinaryInfo for css34 RTLD_NOLOAD')
 
-# ParseTime uses std::get_time (C++11 <iomanip>); gcc-4.9 sysroot headers lack it.
-# SM 1.13+ uses host g++-9 headers — keep upstream std::get_time.
-smn_core = sm / 'core/logic/smn_core.cpp'
-if smn_core.exists():
-    sc = smn_core.read_text()
-    pv_parts = (sm / 'product.version').read_text().strip().split('.')
-    sm_minor = int(pv_parts[1]) if len(pv_parts) > 1 else 11
-    if sm_minor >= 13:
-        print('==> ParseTime strptime shim skipped (SM 1.13+ uses g++-9 headers)')
-    elif 'css34: ParseTime via strptime' in sc:
-        print('==> ParseTime strptime already patched')
-    elif 'std::get_time' in sc:
-        old_pt = """\t// https://stackoverflow.com/a/33542189
-\tstd::tm t{};
-\tstd::istringstream input(datetime);
-
-\tauto previousLocale = input.imbue(std::locale::classic());
-\tinput >> std::get_time(&t, format);
-\tbool failed = input.fail();
-\tinput.imbue(previousLocale);
-
-\tif (failed)
-\t{
-\t\treturn pContext->ThrowNativeError("Invalid date/time string or time format.");
-\t}
-"""
-        new_pt = """\t/* css34: ParseTime via strptime (gcc-4.9 sysroot has no std::get_time) */
-\tstd::tm t{};
-#if defined PLATFORM_WINDOWS
-\tstd::istringstream input(datetime);
-\tauto previousLocale = input.imbue(std::locale::classic());
-\tinput >> std::get_time(&t, format);
-\tbool failed = input.fail();
-\tinput.imbue(previousLocale);
-\tif (failed)
-#else
-\tif (strptime(datetime, format, &t) == NULL)
-#endif
-\t{
-\t\treturn pContext->ThrowNativeError("Invalid date/time string or time format.");
-\t}
-"""
-        if old_pt not in sc:
-            print('==> WARN: ParseTime get_time block not found')
-        else:
-            sc = sc.replace(old_pt, new_pt, 1)
-            # Drop unused iostream helpers when possible (keep if used elsewhere).
-            smn_core.write_text(sc)
-            print('==> Patched ParseTime to use strptime for gcc-4.9 sysroot')
-    else:
-        print('==> ParseTime has no std::get_time (ok)')
-
 # bundled curl fortify noise on gcc only
 curl_ambuild = sm / 'extensions/curl/curl-src/lib/AMBuilder'
 if curl_ambuild.exists() and 'stringop-truncation' not in curl_ambuild.read_text():
@@ -899,63 +846,6 @@ if shell.exists() and 'if (index > params[0])' in shell.read_text():
     ))
 PY
 
-# --- CheckedMul __mulodi4 patch for 32-bit spcomp ---
-SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMUL'
-from pathlib import Path
-import os
-cf_cpp = Path(os.environ['SOURCEMOD_DIR']) / 'sourcepawn/compiler/constant-fold.cpp'
-if cf_cpp.exists():
-    text = cf_cpp.read_text()
-    old_mul = """template <typename T>
-static inline bool CheckedMul(T a, T b, T* result) {
-#if defined(__clang__) || defined(__GNUC__)
-    return !__builtin_mul_overflow(a, b, result);
-#elif defined(_MSC_VER)
-    if (a == 0 || b == 0) {"""
-    new_mul = """template <typename T>
-static inline bool CheckedMul(T a, T b, T* result) {
-    if (a == 0 || b == 0) {"""
-    if old_mul in text:
-        # Also remove trailing #endif for the #elif
-        old_full = """template <typename T>
-static inline bool CheckedMul(T a, T b, T* result) {
-#if defined(__clang__) || defined(__GNUC__)
-    return !__builtin_mul_overflow(a, b, result);
-#elif defined(_MSC_VER)
-    if (a == 0 || b == 0) {
-        *result = 0;
-        return true;
-    }
-    // INT_MIN * -1 breaks the round-trip check below.
-    if ((a == std::numeric_limits<T>::min() && b == T(-1)) ||
-        (b == std::numeric_limits<T>::min() && a == T(-1))) {
-        return false;
-    }
-    T product = a * b;
-    *result = product;
-    return product / b == a;
-#endif
-}"""
-        new_full = """template <typename T>
-static inline bool CheckedMul(T a, T b, T* result) {
-    if (a == 0 || b == 0) {
-        *result = 0;
-        return true;
-    }
-    // INT_MIN * -1 breaks the round-trip check below.
-    if ((a == std::numeric_limits<T>::min() && b == T(-1)) ||
-        (b == std::numeric_limits<T>::min() && a == T(-1))) {
-        return false;
-    }
-    T product = a * b;
-    *result = product;
-    return product / b == a;
-}"""
-        cf_cpp.write_text(text.replace(old_full, new_full, 1))
-        print('==> Patched CheckedMul in constant-fold.cpp (avoid __mulodi4)')
-    elif 'css34: avoid __mulodi4' in text or 'return product / b == a;' in text:
-        print('==> CheckedMul in constant-fold.cpp already patched')
-PYMUL
 
 # --- Safe GET_V_IFACE macros in sourcemm_api.cpp ---
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYIFACE'
