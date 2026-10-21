@@ -191,11 +191,10 @@ jobs:
           CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
           PURE_SOURCE_BUILD: "1"
         run: |
-          chmod +x builder/docker/build.sh builder/docker/legacy-build.sh builder/run/linux.sh \
+          chmod +x builder/docker/build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
             builder/build-metamod.sh builder/prepare-package.sh builder/write-build-stamps.sh \
-            builder/resolve-version.sh builder/py.sh builder/patches/*.sh \
-            builder/install-clang9.sh builder/install-clang10.sh
+            builder/resolve-version.sh builder/py.sh builder/patches/*.sh
           builder/docker/build.sh
 
       - name: Static package checks
@@ -276,6 +275,8 @@ jobs:
             builder/build-metamod.sh builder/write-build-stamps.sh builder/resolve-version.sh \
             builder/py.sh builder/patches/*.sh
           builder/run/windows.sh
+          source builder/package-paths.sh
+          python builder/package_windows.py check "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE"
 
       - name: Attach Windows packages to GitHub Release
         if: github.ref_type == 'tag'
@@ -299,10 +300,9 @@ jobs:
           if ! gh release view "${tag}" >/dev/null 2>&1; then
             gh release create "${tag}" --title "${tag}" --notes "${notes}" --latest=false
           fi
+          source builder/package-paths.sh
           gh release upload "${tag}" \
-            packages/sourcemod-*-css34-windows.zip \
-            packages/mmsource-*-css34-windows.zip \
-            --clobber
+            "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE" --clobber
           if [[ "$(gh release view "${tag}" --json isDraft -q .isDraft)" == "true" ]]; then
             gh release edit "${tag}" --draft=false --latest=false
           fi

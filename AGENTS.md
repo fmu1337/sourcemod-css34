@@ -30,11 +30,9 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   Image `quay.io/pypa/manylinux2014_i686@sha256:30305867f278896ee117b0d162a8e4f9b7b16819e6590f6139e14c5ed5b23fdd`
   (CentOS 7.9 i686, glibc 2.17, devtoolset-10 GCC 10.2.1). Python for AMBuild is
   `/opt/python/cp311-cp311/bin/python`. The script runs under `linux32` so
-  AMBuild sees i686. `builder/docker/legacy-build.sh` is a wrapper that calls
-  `build.sh` (removed in T1.4).
-- `builder/run/linux.sh` still knows the old clang-9 path (`USE_CLANG9=1` by
-  default outside the manylinux image). Inside manylinux it forces `USE_CLANG9=0`
-  and `gcc`/`g++` from devtoolset-10. Do not export `gcc-9` there.
+  AMBuild sees i686.
+- `builder/run/linux.sh` uses `CC` / `CXX` from the environment. `build.sh`
+  sets them to devtoolset-10 `gcc` / `g++`.
 - `git config --global --add safe.directory '*'` inside the container (the repo
   is bind-mounted and owned by uid 1000, git blocks submodule ops otherwise).
   `build.sh` does this itself.
@@ -61,8 +59,8 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   testing/scripts/check-metamod-package.sh`. Uses host `binutils` (reads 32-bit
   ELF fine). The **manylinux2014** package must PASS with `GLIBC_FLOOR=2.17`
   (the default): every ELF ≤ GLIBC 2.17, logic.so exports no `std::` /
-  `__cxxabiv1`, and no Metamod `.so` needs `libstdc++.so.6`. A jammy-native
-  package still fails those checks.
+  `__cxxabiv1`, and no Metamod `.so` needs `libstdc++.so.6`. A package built
+  outside this manylinux image still fails those checks.
 - **Full smoke test** (CI primary gate `test-built-debian`): prepare the server
   tree on the host (`fetch-server.sh` → `apply-valve-rc-fix.sh` →
   `apply-srcds-patch.sh` → `KEEP_MAPS=de_dust2,de_inferno,de_nuke trim-server-maps.sh`,
@@ -70,9 +68,11 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `install-addons.sh` → `smoke-test.sh` with `SM_PACKAGE` / `MM_PACKAGE` set (without
   them `install-addons.sh` falls back to downloading rom4s 6572 + MM 1.10.6). The
   559 MB server zip is cached under `.ci-cache/`. It boots a 32-bit `srcds_i686`
-  and probes `sm version` / `sm exts list` / `sm plugins list` via `expect`
-  (~2 min). Pass `CSS34_LINE=<line>` (or the `*_EXPECT` variables) so the expected
-  versions match the package.
+  and probes `meta version` / `sm version` / `sm exts list` / `sm plugins list`
+  via `expect` (~2 min). Pass `CSS34_LINE=<line>` (or the `*_EXPECT` variables) so
+  the expected versions match the package. `meta version` must contain
+  `+<MM_REV>` and `Build ID: <MM_REV>:<sha prefix>`; `sm version` must be
+  `<major>.<SM_REV>` (the revs come from `builder/lines.json`).
 
 ### Lint
 Run `actionlint` after workflow edits. The ABI export

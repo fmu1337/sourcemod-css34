@@ -18,33 +18,55 @@ SMOKE_CONDEBUG="${SMOKE_CONDEBUG:-1}"
 CSS34_CI="${CSS34_CI:-0}"
 ENGINE_CONSOLE_LOG="${SERVER_DIR}/cstrike/console.log"
 
-# Expected versions. Resolve dynamically if not set.
-if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" || -z "${MM_COMMIT_EXPECT:-}" || -z "${SM_COMMIT_EXPECT:-}" ]]; then
-  if [[ -f "${ROOT}/builder/resolve-version.sh" ]]; then
-    eval "$(
-      CSS34_LINE="${CSS34_LINE:-sm13-latest}" bash -c "
-        source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
-        echo \"RESOLVED_SM_COMMIT='\${SOURCEMOD_BUILD_COMMIT:-\$SOURCEMOD_COMMIT}'\"
-        echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"
-        echo \"RESOLVED_SM_MAJOR='\${SOURCEMOD_MAJOR}'\"
-        echo \"RESOLVED_MM_COMMIT='\${MMS_COMMIT}'\"
-        echo \"RESOLVED_MM_MODE='\${MMS_MODE}'\"
-      "
-    )"
-    if [[ -n "${RESOLVED_SM_REV:-}" ]]; then
-      SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.${RESOLVED_SM_MAJOR}.0.${RESOLVED_SM_REV}}"
-      SM_COMMIT_EXPECT="${SM_COMMIT_EXPECT:-${RESOLVED_SM_COMMIT}}"
-      MM_COMMIT_EXPECT="${MM_COMMIT_EXPECT:-${RESOLVED_MM_COMMIT}}"
-      if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
-        case "${RESOLVED_MM_MODE:-}" in
-          1.10) MM_VERSION_EXPECT="1.10.7" ;;
-          1.11) MM_VERSION_EXPECT="1.11.0" ;;
-          1.12) MM_VERSION_EXPECT="1.12.0" ;;
-          2.0)  MM_VERSION_EXPECT="2.0.0" ;;
-          *)    MM_VERSION_EXPECT="1.12.0" ;;
-        esac
-      fi
-    fi
+# Expected versions. Always resolve pins so build-number checks have MM_REV
+# even when CI passes only the short product version (1.12.0 / 1.10.7).
+# versions.env defaults CSS34_LINE to sm13-latest. Smoke containers often have
+# the pinned commits but not the line name, and sm11's Metamod rev is not 1226.
+RESOLVED_SM_REV=""
+RESOLVED_MM_REV=""
+RESOLVED_MM_MODE=""
+resolve_line="${CSS34_LINE:-}"
+if [[ -z "$resolve_line" && -f "${ROOT}/builder/versions.env" ]]; then
+  # shellcheck disable=SC1091
+  eval "$(grep -E '^(SM_|MM_)[A-Z0-9_]+=' "${ROOT}/builder/versions.env")"
+  case "${MM_COMMIT_EXPECT:-}" in
+    "${MM_110_COMMIT:-}") resolve_line=sm11-oldstable ;;
+    "${MM_112_COMMIT:-}")
+      case "${SM_COMMIT_EXPECT:-}" in
+        "${SM_LATEST_COMMIT:-}") resolve_line=sm12-latest ;;
+        "${SM_DEV_COMMIT:-}") resolve_line=sm13-dev ;;
+        *) resolve_line=sm13-latest ;;
+      esac
+      ;;
+    *) resolve_line=sm13-latest ;;
+  esac
+fi
+resolve_line="${resolve_line:-sm13-latest}"
+if [[ -f "${ROOT}/builder/resolve-version.sh" ]]; then
+  eval "$(
+    CSS34_LINE="${resolve_line}" bash -c "
+      source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
+      echo \"RESOLVED_SM_COMMIT='\${SOURCEMOD_BUILD_COMMIT:-\$SOURCEMOD_COMMIT}'\"
+      echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"
+      echo \"RESOLVED_SM_MAJOR='\${SOURCEMOD_MAJOR}'\"
+      echo \"RESOLVED_MM_COMMIT='\${MMS_COMMIT}'\"
+      echo \"RESOLVED_MM_REV='\${MMS_GIT_REV}'\"
+      echo \"RESOLVED_MM_MODE='\${MMS_MODE}'\"
+    "
+  )"
+fi
+if [[ -n "${RESOLVED_SM_REV:-}" ]]; then
+  SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.${RESOLVED_SM_MAJOR}.0.${RESOLVED_SM_REV}}"
+  SM_COMMIT_EXPECT="${SM_COMMIT_EXPECT:-${RESOLVED_SM_COMMIT}}"
+  MM_COMMIT_EXPECT="${MM_COMMIT_EXPECT:-${RESOLVED_MM_COMMIT}}"
+  if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
+    case "${RESOLVED_MM_MODE:-}" in
+      1.10) MM_VERSION_EXPECT="1.10.7" ;;
+      1.11) MM_VERSION_EXPECT="1.11.0" ;;
+      1.12) MM_VERSION_EXPECT="1.12.0" ;;
+      2.0)  MM_VERSION_EXPECT="2.0.0" ;;
+      *)    MM_VERSION_EXPECT="1.12.0" ;;
+    esac
   fi
 fi
 
@@ -52,8 +74,20 @@ MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
 SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6970}"
 MM_COMMIT_EXPECT="${MM_COMMIT_EXPECT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
 SM_COMMIT_EXPECT="${SM_COMMIT_EXPECT:-f53cb134ef83b580c83e1f4bf35f60d11c4571dd}"
+MM_REV_EXPECT="${MM_REV_EXPECT:-${RESOLVED_MM_REV}}"
 # Packaging repo commit (CSS34 pack line). Empty skips the check.
 CSS34_PACK_COMMIT_EXPECT="${CSS34_PACK_COMMIT_EXPECT:-}"
+# Upstream prints the abbreviated commit. Seven characters is git's minimum.
+MM_SHA_PREFIX="${MM_COMMIT_EXPECT:0:7}"
+SM_SHA_PREFIX="${SM_COMMIT_EXPECT:0:7}"
+# 1.12.0-dev+1226 / 1.10.7-dev+976. CI often sets only the product prefix.
+if [[ -n "${MM_REV_EXPECT}" && "${MM_VERSION_EXPECT}" != *"+${MM_REV_EXPECT}" ]]; then
+  META_VERSION_NEEDLE="${MM_VERSION_EXPECT}-dev+${MM_REV_EXPECT}"
+else
+  META_VERSION_NEEDLE="${MM_VERSION_EXPECT}"
+fi
+META_BUILD_ID_NEEDLE="Build ID: ${MM_REV_EXPECT}:${MM_SHA_PREFIX}"
+SM_VERSION_NEEDLE="SourceMod Version: ${SM_VERSION_EXPECT}"
 
 cd "${SERVER_DIR}"
 export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
@@ -87,8 +121,11 @@ ls -la "${SERVER_DIR}/cstrike/maps"/*.bsp 2>/dev/null || echo "(no .bsp maps fou
 export SERVER_DIR MAP PORT SRCDS_BINARY CONSOLE_PROBE_LOG
 export CONSOLE_PROBE_TIMEOUT="${TIMEOUT_SECS}"
 export SMOKE_VERBOSE SMOKE_CONDEBUG
+export META_VERSION_NEEDLE META_BUILD_ID_NEEDLE SM_VERSION_NEEDLE
 rm -f "${ENGINE_CONSOLE_LOG}"
-/usr/bin/expect "${ROOT}/testing/scripts/console-probe.exp" >"${LOG_FILE}" 2>&1 || {
+probe_rc=0
+/usr/bin/expect "${ROOT}/testing/scripts/console-probe.exp" >"${LOG_FILE}" 2>&1 || probe_rc=$?
+if [[ "${probe_rc}" -ne 0 ]]; then
   echo "Console probe failed (see ${LOG_FILE})" >&2
   echo "----- smoke.log (last 120) -----" >&2
   tail -n 120 "${LOG_FILE}" >&2 || true
@@ -102,8 +139,7 @@ rm -f "${ENGINE_CONSOLE_LOG}"
     echo "----- SourceMod logs on failure -----" >&2
     cat "${SM_LOG_DIR}"/L*.log >&2 || true
   fi
-  exit 1
-}
+fi
 
 echo "----- console probe log (first 40 lines) -----"
 head -n 40 "${CONSOLE_PROBE_LOG}" || true
@@ -117,6 +153,9 @@ else
 fi
 
 fail=0
+if [[ "${probe_rc}" -ne 0 ]]; then
+  fail=1
+fi
 require_grep() {
   local file="$1" pat="$2" label="$3"
   if [[ -f "${file}" ]] && grep -Eiq -- "${pat}" "${file}"; then
@@ -127,22 +166,37 @@ require_grep() {
   fi
 }
 
+require_fixed() {
+  local file="$1" pat="$2" label="$3"
+  if [[ -f "${file}" ]] && grep -Fq -- "${pat}" "${file}"; then
+    echo "OK: ${label}"
+  else
+    echo "FAIL: ${label} (fixed '${pat}' in ${file})" >&2
+    fail=1
+  fi
+}
+
 require_grep "${CONSOLE_PROBE_LOG}" 'Started map "'"${MAP}"'"' "engine started map (${MAP})"
 require_grep "${CONSOLE_PROBE_LOG}" 'hostname|# [0-9]+' "status command output"
 require_grep "${CONSOLE_PROBE_LOG}" 'Protocol version|version' "version command output"
 require_grep "${CONSOLE_PROBE_LOG}" 'Metamod|metamod|MM:S' "meta version command output"
 require_grep "${CONSOLE_PROBE_LOG}" 'SourceMod|SM' "sm version command output"
 
-require_grep "${CONSOLE_PROBE_LOG}" "${MM_VERSION_EXPECT}" "Metamod version ${MM_VERSION_EXPECT}"
-require_grep "${CONSOLE_PROBE_LOG}" "${SM_VERSION_EXPECT}" "SourceMod version ${SM_VERSION_EXPECT}"
+require_fixed "${CONSOLE_PROBE_LOG}" "${META_VERSION_NEEDLE}" \
+  "meta version ${META_VERSION_NEEDLE}"
+require_fixed "${CONSOLE_PROBE_LOG}" "${META_BUILD_ID_NEEDLE}" \
+  "meta ${META_BUILD_ID_NEEDLE}"
+require_fixed "${CONSOLE_PROBE_LOG}" "${SM_VERSION_NEEDLE}" \
+  "sm version ${SM_VERSION_EXPECT}"
 
-# Explicit build identity from version headers (Built from / CSS34 pack).
-require_grep "${CONSOLE_PROBE_LOG}" \
-  "metamod-source/commit/${MM_COMMIT_EXPECT}" \
-  "meta Built from commit ${MM_COMMIT_EXPECT}"
-require_grep "${CONSOLE_PROBE_LOG}" \
-  "sourcemod/commit/${SM_COMMIT_EXPECT}" \
-  "sm Built from commit ${SM_COMMIT_EXPECT}"
+# Upstream prints the abbreviated commit in Built from. The prefix is the
+# pinned SHA, so a longer abbreviation still matches.
+require_fixed "${CONSOLE_PROBE_LOG}" \
+  "metamod-source/commit/${MM_SHA_PREFIX}" \
+  "meta Built from commit ${MM_SHA_PREFIX}"
+require_fixed "${CONSOLE_PROBE_LOG}" \
+  "sourcemod/commit/${SM_SHA_PREFIX}" \
+  "sm Built from commit ${SM_SHA_PREFIX}"
 if [[ -n "${CSS34_PACK_COMMIT_EXPECT}" ]]; then
   require_grep "${CONSOLE_PROBE_LOG}" \
     "sourcemod-css34/commit/${CSS34_PACK_COMMIT_EXPECT}" \

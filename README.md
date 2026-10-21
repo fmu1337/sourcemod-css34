@@ -60,9 +60,10 @@ The manifest records line status and known-bad release tags; it is separate from
 Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
 A daily bump edits `lines.json` and regenerates — see [docs/JULES_DAILY_VERSION_BUMP.md](docs/JULES_DAILY_VERSION_BUMP.md).
 
-> `meta version` prints the Metamod build number as `+1` (e.g. `1.12.0-dev+1`): Metamod is cloned
-> shallow and its versioning counts commits. The real revision is in the asset name and in
-> `addons/metamod/css34-package.json` (`mm_version`). See [docs/REVIEW_2026-10.md](docs/REVIEW_2026-10.md).
+> `meta version` prints the Metamod build number from `lines.json` (`1.12.0-dev+1226`,
+> or `1.10.7-dev+976` on `sm11-oldstable`) and `Build ID: <rev>:<commit prefix>`.
+> `sm version` prints `<major>.<minor>.0.<SM_REV>` (for example `1.13.0.7472`).
+> The clones stay shallow; `generate_headers.py` reads `MMS_GIT_REV` / `SOURCEMOD_GIT_REV`.
 
 ### What pairs with what
 
@@ -106,7 +107,10 @@ current lines were moved to `b1f5192` and rebuilt on 2026-10-12, before the `-r<
 
 Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}` and
 `mmsource-<ver>-git<mmrev>-css34-{linux.tar.gz|windows.zip}` for packages built from this tree.
-Tags published before that Windows Metamod rename keep `mmsource-<ver>-dev-css34-windows.zip`.
+Older Linux tags before `-r2` keep `mmsource-<ver>-dev-css34-linux.tar.gz`;
+tags published before the Windows rename keep `mmsource-<ver>-dev-css34-windows.zip`.
+Historical URLs in `testing/versions/matrix.json` intentionally retain those names.
+The rename consumer audit and installer migration are in [docs/WINDOWS_ASSETS.md](docs/WINDOWS_ASSETS.md).
 
 ### Installer contract (fmu1337/v34_server_base)
 
@@ -200,8 +204,6 @@ CSS34_LINE=sm11-oldstable  builder/docker/build.sh
 CSS34_LINE=sm12-latest     builder/docker/build.sh
 ```
 
-`builder/docker/legacy-build.sh` calls `build.sh`.
-
 MM 2.0 builds (`sm13-mm20`, `sm13-mm20-khook`) are archived outside CI in
 [`archive/khook`](https://github.com/fmu1337/sourcemod-css34/tree/archive/khook).
 Use that branch to reproduce them; master rejects those build selections. Existing
@@ -215,8 +217,8 @@ No root package symlinks are created.
 manylinux2014 (glibc 2.17). `check-package.sh` fails the package if any ELF needs a
 GLIBC newer than `GLIBC_FLOOR` (default 2.17).
 
-`builder/run/linux.sh` on a normal distro still defaults to clang-9 (`USE_CLANG9=1`).
-That path is not what CI ships. Inside the manylinux image it uses devtoolset-10 GCC.
+`builder/run/linux.sh` uses `CC` / `CXX` from the environment. `build.sh` sets
+them to devtoolset-10 `gcc` / `g++` inside the manylinux image.
 
 Windows (x86, `windows-2022`, MSVC toolset 14.44, Windows SDK 10.0.26100.0; see `builder/windows-toolchain.env`):
 

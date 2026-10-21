@@ -75,13 +75,6 @@ else
   bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$MMS_DIR"
 fi
 
-if [[ "$BUILD_PLATFORM" != "windows" && "${USE_CLANG9:-1}" == "1" && -f "$DEPS_DIR/clang9.env" ]]; then
-  # shellcheck source=/dev/null
-  source "$DEPS_DIR/clang9.env"
-  export CC="${CC:-clang-9}"
-  export CXX="${CXX:-clang++-9}"
-fi
-
 if [[ "$BUILD_PLATFORM" == "windows" ]]; then
   MM_BIN="$MMS_DIR/build/package/addons/metamod/bin/metamod.${MM_EXT}.dll"
   PY=(python)
@@ -93,6 +86,7 @@ else
   echo "    CC=${CC:-} CXX=${CXX:-}"
 fi
 echo "    MMS_DIR=$MMS_DIR"
+echo "    MMS_GIT_REV=${MMS_GIT_REV:-<unset>}"
 echo "    BUILD_PLATFORM=$BUILD_PLATFORM"
 
 cd "$MMS_DIR"

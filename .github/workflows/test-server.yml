@@ -111,11 +111,10 @@ jobs:
           CSS34_LINE: ${{ matrix.line }}
           PURE_SOURCE_BUILD: "1"
         run: |
-          chmod +x builder/docker/build.sh builder/docker/legacy-build.sh builder/run/linux.sh \
+          chmod +x builder/docker/build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
             builder/build-metamod.sh builder/prepare-package.sh builder/write-build-stamps.sh \
-            builder/resolve-version.sh builder/py.sh builder/patches/*.sh \
-            builder/install-clang9.sh builder/install-clang10.sh
+            builder/resolve-version.sh builder/py.sh builder/patches/*.sh
           builder/docker/build.sh
 
       - name: ABI / export checks
@@ -254,6 +253,7 @@ jobs:
             -e MM_COMMIT_EXPECT \
             -e SM_COMMIT_EXPECT \
             -e CSS34_PACK_COMMIT_EXPECT \
+            -e CSS34_LINE="${{ matrix.line }}" \
             -e TIMEOUT_SECS=120 \
             -e SMOKE_CONDEBUG=1 \
             -e SMOKE_VERBOSE=1 \
@@ -467,6 +467,7 @@ jobs:
             -e MM_COMMIT_EXPECT \
             -e SM_COMMIT_EXPECT \
             -e CSS34_PACK_COMMIT_EXPECT \
+            -e CSS34_LINE="${{ matrix.line }}" \
             -e SRCDS_BINARY \
             -e TIMEOUT_SECS=120 \
             -e SMOKE_CONDEBUG=1 \
@@ -562,7 +563,8 @@ jobs:
           chmod +x testing/scripts/*.sh
           mkdir -p .ci-server .ci-cache
           tar -xzf server-art/css34-server.tar.gz -C .ci-server
-          CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
+          export CSS34_LINE="${{ matrix.line }}"
+          source builder/package-paths.sh
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
           export SM_PACKAGE MM_PACKAGE
           testing/scripts/install-addons.sh

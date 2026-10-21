@@ -219,6 +219,10 @@ def ci_matrix(data):
             host.append(row_expect(part, True))
         if line.get("windows"):
             item = row_expect(part, False)
+            # Runtime meta version is 1.12.0-dev+<rev> (1.10.7-dev+<rev> on MM 1.10).
+            item["mm_expect"] = "{}-dev+{}".format(part["mm_expect"], part["mm_rev"])
+            item["mm_rev"] = part["mm_rev"]
+            item["mm_commit"] = part["mm_commit"]
             item["exts"] = WINDOWS_EXTS
             item["load_exts"] = WINDOWS_LOAD_EXTS
             windows.append(item)

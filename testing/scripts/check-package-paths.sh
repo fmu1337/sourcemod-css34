@@ -9,18 +9,24 @@ export PACKAGES_DIR="$tmp/packages with spaces"
 touch "$PACKAGES_DIR/sourcemod-1.0.0-git1-css34-linux.tar.gz"
 touch "$PACKAGES_DIR/mmsource-1.0.0-git1-css34-linux.tar.gz"
 
+touch "$PACKAGES_DIR/mmsource-1.12.0-dev-css34-windows.zip"
+touch "$PACKAGES_DIR/mmsource-1.12.0-git1-css34-windows.zip"
 for line in sm11-oldstable sm12-latest sm13-latest; do
   (
     export CSS34_LINE="$line"
     source "$root/builder/package-paths.sh"
     [[ ! -e "$SM_PACKAGE" && ! -e "$MM_PACKAGE" ]]
     [[ "$SM_PACKAGE" == "$PACKAGES_DIR/"* && "$MM_PACKAGE" == "$PACKAGES_DIR/"* ]]
+    [[ "$SM_WIN_PACKAGE" == "$PACKAGES_DIR/sourcemod-1.${SOURCEMOD_MAJOR}.0-git${SOURCEMOD_GIT_REV}-css34-windows.zip" ]]
+    [[ "$MM_WIN_PACKAGE" == "$PACKAGES_DIR/mmsource-"*-git${MMS_GIT_REV}-css34-windows.zip ]]
+    [[ ! -e "$SM_WIN_PACKAGE" && ! -e "$MM_WIN_PACKAGE" ]]
+    touch "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE"
     touch "$SM_PACKAGE" "$MM_PACKAGE"
     expected_sm="$SM_PACKAGE" expected_mm="$MM_PACKAGE"
     source "$root/builder/package-paths.sh"
     [[ "$SM_PACKAGE" == "$expected_sm" && "$MM_PACKAGE" == "$expected_mm" ]]
     [[ -f "$SM_PACKAGE" && -f "$MM_PACKAGE" ]]
-    rm "$SM_PACKAGE" "$MM_PACKAGE"
+    rm "$SM_PACKAGE" "$MM_PACKAGE" "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE"
   )
 done
 for line in sm13-mm20 sm13-mm2 sm13-mm20-khook sm13-khook khook; do

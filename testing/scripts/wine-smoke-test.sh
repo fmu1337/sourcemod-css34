@@ -194,6 +194,13 @@ out="$(rcon "meta version" "meta list" "sm version" "sm exts list" "sm plugins l
 echo "$out"
 grep -q "Metamod:Source version ${MM_VERSION_EXPECT}" <<<"$out" || fail "Metamod ${MM_VERSION_EXPECT} not reported"
 grep -q "SourceMod Version: ${SM_VERSION_EXPECT}" <<<"$out" || fail "SourceMod ${SM_VERSION_EXPECT} not reported"
+if [[ -n "${MM_REV_EXPECT:-}" ]]; then
+  grep -q "+${MM_REV_EXPECT}" <<<"$out" || fail "meta version missing +${MM_REV_EXPECT}"
+  if [[ -n "${MM_COMMIT_EXPECT:-}" ]]; then
+    grep -q "Build ID: ${MM_REV_EXPECT}:${MM_COMMIT_EXPECT:0:7}" <<<"$out" \
+      || fail "meta Build ID ${MM_REV_EXPECT}:${MM_COMMIT_EXPECT:0:7} not reported"
+  fi
+fi
 require_exts() {
   local list="$1" e
   IFS=',' read -r -a exts <<<"${EXPECT_EXTS}"

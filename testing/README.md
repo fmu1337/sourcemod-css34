@@ -31,7 +31,7 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 
 1. Game DLL loads (`Counter-Strike: Source`)
 2. Map / dedicated server config starts (`Mapchange to …` in console)
-3. `sm version` — expected MM/SM versions
+3. `meta version` / `sm version` — `+<MM_REV>` and `Build ID: <MM_REV>:<sha prefix>`, and `SourceMod Version: <major>.<SM_REV>`
 4. `sm exts list` — prints full list; fails on `<FAILED>`; requires BinTools + SDK Tools + CS Tools + **SDK Hooks**
 5. `sm plugins list` — every enabled `.smx` listed as Running (not `<Failed>`)
 6. SourceMod session log (`addons/sourcemod/logs/L*.log`) — no error markers
@@ -163,7 +163,7 @@ probe is not part of the gate.
 ```bash
 chmod +x testing/scripts/*.sh
 
-# Test freshly built SM + MM from builder/docker/legacy-build.sh (primary path).
+# Test freshly built SM + MM from builder/docker/build.sh (primary path).
 # run-smoke.sh picks packages/*.tar.gz by itself; CSS34_LINE sets the expected versions.
 CSS34_LINE=sm13-latest testing/scripts/run-smoke.sh
 
