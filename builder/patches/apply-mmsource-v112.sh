@@ -198,6 +198,9 @@ for d in ('NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE'):
     if d not in defs:
         defs.append(d)
         changed = True
+if '_GLIBCXX_USE_CXX11_ABI=0' in defs:
+    defs.remove('_GLIBCXX_USE_CXX11_ABI=0')
+    changed = True
 if changed:
     man.write_text(json.dumps(data, indent=4) + '\n')
     print('==> Patched MM episode1.json linux defines for css34')
