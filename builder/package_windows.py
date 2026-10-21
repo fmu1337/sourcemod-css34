@@ -89,12 +89,28 @@ def rewrite_metamod_vdf(staging):
     vdf.write_text(new, encoding="utf-8", newline="\n")
 
 
+def git_bash_path(path):
+    """Git Bash does not treat D:\\foo as a path (dirname only splits on '/')."""
+    text = Path(path).resolve().as_posix()
+    if len(text) >= 2 and text[1] == ":":
+        return "/" + text[0].lower() + text[2:]
+    return text
+
+
 def write_manifest(out_path, metamod_binary):
     script = BUILDER / "write-package-manifest.sh"
-    subprocess.run(
-        ["bash", str(script), str(out_path), metamod_binary],
-        check=True,
+    result = subprocess.run(
+        ["bash", git_bash_path(script), git_bash_path(out_path), metamod_binary],
+        check=False,
+        capture_output=True,
+        text=True,
     )
+    if result.stdout:
+        sys.stdout.write(result.stdout)
+    if result.stderr:
+        sys.stderr.write(result.stderr)
+    if result.returncode != 0:
+        fail("write-package-manifest.sh exited " + str(result.returncode))
 
 
 def core_name(package_dir, folder, candidates):
