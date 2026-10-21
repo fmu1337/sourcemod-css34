@@ -175,7 +175,12 @@ proc probe_ext_load {name} {
     global probe_failed
     send "sm exts load $name\r"
     expect {
-        -re {successfully|already loaded|Unable to load|[Ff]ailed to load|Could not|could not|error|Error} {}
+        -re {successfully|already loaded} {}
+        -re {Unable to load|[Ff]ailed to load|Could not|could not|error|Error} {
+            if {$name eq "dbi.mysql.ext" || $name eq "dbi.pgsql.ext"} {
+                set probe_failed 1
+            }
+        }
         eof {
             puts stderr "srcds exited while loading extension $name"
             exit 10
