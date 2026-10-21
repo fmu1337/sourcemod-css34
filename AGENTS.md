@@ -64,9 +64,11 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `install-addons.sh` → `smoke-test.sh` with `SM_PACKAGE` / `MM_PACKAGE` set (without
   them `install-addons.sh` falls back to downloading rom4s 6572 + MM 1.10.6). The
   559 MB server zip is cached under `.ci-cache/`. It boots a 32-bit `srcds_i686`
-  and probes `sm version` / `sm exts list` / `sm plugins list` via `expect`
-  (~2 min). Pass `CSS34_LINE=<line>` (or the `*_EXPECT` variables) so the expected
-  versions match the package.
+  and probes `meta version` / `sm version` / `sm exts list` / `sm plugins list`
+  via `expect` (~2 min). Pass `CSS34_LINE=<line>` (or the `*_EXPECT` variables) so
+  the expected versions match the package. `meta version` must contain
+  `+<MM_REV>` and `Build ID: <MM_REV>:<sha prefix>`; `sm version` must be
+  `<major>.<SM_REV>` (the revs come from `builder/lines.json`).
 
 ### Lint
 Run `actionlint` after workflow edits. The ABI export

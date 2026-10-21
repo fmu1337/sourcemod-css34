@@ -773,29 +773,6 @@ if natives.exists():
     else:
         print('==> WARN: cstrike natives FindInDataMap block not found')
 
-# Prefer full upstream SHA in sourcemod_version_auto.h (smoke checks Built from).
-gen = sm / 'tools/buildbot/generate_headers.py'
-if gen.exists():
-    gt = gen.read_text()
-    if 'css34: full commit SHA' in gt:
-        print('==> SM generate_headers already prefers full SHA')
-    else:
-        old = '""".format(tag, shorthash, major, minor, release, fullstring, count))'
-        new = '""".format(tag, longhash, major, minor, release, fullstring, count))'
-        if old not in gt:
-            print('==> WARN: SM generate_headers SHA format unchanged')
-        else:
-            # Replace both .h and .inc emitters (two identical format(...) lines).
-            gt = gt.replace(old, new)
-            gt = gt.replace(
-                "  with open(os.path.join(OutputFolder, 'sourcemod_version_auto.h'), 'w') as fp:\n",
-                "  # css34: full commit SHA for sm version Built from\n"
-                "  with open(os.path.join(OutputFolder, 'sourcemod_version_auto.h'), 'w') as fp:\n",
-                1,
-            )
-            gen.write_text(gt)
-            print('==> Patched SM generate_headers.py to emit full commit SHA')
-
 # css34: CacheGameBinaryInfo dlopen(engine_i486.so)+dlclose leaves dangling
 # ConVars on vstdlib's s_pConCommandBases (srcds loads engine_i686.so). Prefer
 # RTLD_NOLOAD and the already-loaded _i686 sibling; never RTLD_NOW a second copy.
@@ -945,6 +922,11 @@ if shell.exists() and 'if (index > params[0])' in shell.read_text():
         'if (index > (size_t)params[0])',
     ))
 PY
+
+# css34: lines.json SOURCEMOD_GIT_REV (do not trust a shallow rev-list count).
+"${PY[@]}" "$script_dir/pin-generate-headers.py" \
+  "$sourcemod_dir/tools/buildbot/generate_headers.py" \
+  --env SOURCEMOD_GIT_REV
 
 # --- CheckedMul __mulodi4 patch for 32-bit spcomp ---
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMUL'
