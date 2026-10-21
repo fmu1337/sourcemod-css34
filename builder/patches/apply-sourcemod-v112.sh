@@ -37,6 +37,10 @@ else:
     print('==> SM episode1.json linux defines already ok')
 PYMAN
 
+# Manifests can add flags GCC 10 does not know (hl2sdk-manifests ebd6e10).
+"${PY[@]}" "$script_dir/manifest_flag_guard.py" \
+  "$sourcemod_dir/hl2sdk-manifests/SdkHelpers.ambuild"
+
 # --- AMBuildScript / SdkHelpers (1.12 structure) ---
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path

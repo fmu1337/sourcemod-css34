@@ -436,6 +436,14 @@ else
   echo "SKIP: dhooks.ext not shipped on this line (css34_dhooks_probe available=0)"
 fi
 
+# Sound Plugin_Changed (#2586), entity output cleanup (#2589), userid lookup (#2577).
+if [[ ${#sm_probe_sources[@]} -eq 0 ]]; then
+  echo "FAIL: upstream probe has no SM logs" >&2
+  record_failed=1
+elif ! "${ROOT}/testing/scripts/check-upstream-probe.sh" --sm-version "${SM_VERSION_EXPECT}" "${sm_probe_sources[@]}"; then
+  record_failed=1
+fi
+
 if [[ "${record_failed}" -ne 0 ]]; then
   echo "Botplay test FAILED"
   exit 1
