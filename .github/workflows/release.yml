@@ -1,16 +1,9 @@
 name: Release
 
-# Tag format examples (must match builder/versions.env pins):
-#   1.11.0.6970-mm1.10.7   → sm11-oldstable
-#   1.12.0.7253-mm1.12.0   → sm12-latest
-#   1.13.0.7404-mm1.12.0   → sm13-dev (legacy alias; line retired from CI matrix)
-#   1.13.0.7404-mm2.0.0    → sm13-mm20
-#   1.13.0.7472-mm1.12.0   → sm13-latest
-#   1.13.0.7565-mm2.0.0-khook → sm13-mm20-khook
-#   1.13.0.7565-mm2.0.0-khook-dhooks → sm13-mm20-khook (+ dhooks.ext linux x86)
-#
-# Rebuilds of the same pins get a packaging-revision suffix `-r<N>` (tags are
-# never moved): 1.13.0.7472-mm1.12.0-r2 → sm13-latest.
+# Tag → CSS34_LINE comes from builder/generated/tag-map.sh (python3 builder/lines.py gen).
+# A packaging rebuild of the same pins uses a `-r<N>` suffix; the base tag selects the line.
+# Lines with releasable=false (archived MM 2.0 / KHook) are rejected.
+# known_bad tags can resolve to a line but can never publish a line pointer.
 #
 # Linux/Windows jobs attach packages directly to the GitHub Release.
 # No Actions artifacts (those count against the 0.5 GB storage quota).
@@ -32,6 +25,13 @@ on:
       # Pointer / index releases are created by this workflow itself.
       - '!line-*'
       - '!lines-*'
+  pull_request:
+    paths:
+      - 'builder/lines.json'
+      - 'builder/lines.py'
+      - 'builder/generated/**'
+      - 'builder/versions.env'
+      - '.github/workflows/release.yml'
   workflow_dispatch:
     inputs:
       css34_line:
@@ -50,16 +50,88 @@ env:
   PURE_SOURCE_BUILD: "1"
 
 jobs:
+  print-tag-map:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print generated release tag map
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source builder/generated/tag-map.sh
+          echo "=== builder/generated/tag-map.sh ==="
+          cat builder/generated/tag-map.sh
+          python3 - <<'PY' > /tmp/tag-map-rows.tsv
+          import importlib.util
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("lines", "builder/lines.py")
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          data = mod.load_manifest(Path("builder/lines.json"))
+          for name in data["lines"]:
+              part = mod.line_parts(data, name)
+              tags = [part["tag"]] + part["extra_tags"]
+              for tag in tags:
+                  print("\t".join([
+                      tag, name, "1" if part["pointer"] else "0",
+                      "1" if part["releasable"] else "0",
+                  ]))
+          for tag in sorted(data["known_bad"]):
+              print("\t".join(["known", tag]))
+          PY
+          echo "=== resolved tags ==="
+          while IFS=$'\t' read -r kind a b c; do
+            if [[ "$kind" == "known" ]]; then
+              tag="$a"
+              css34_tag_is_known_bad "$tag" || { echo "known_bad missing from tag map: $tag" >&2; exit 1; }
+              if mapped="$(css34_line_for_tag "$tag")" && css34_line_has_pointer "$mapped"; then
+                echo "known-bad tag $tag maps to pointer line $mapped" >&2
+                exit 1
+              fi
+              echo "known-bad $tag (not a pointer)"
+              continue
+            fi
+            tag="$kind"
+            name="$a"
+            pointer="$b"
+            releasable="$c"
+            mapped="$(css34_line_for_tag "$tag")" || { echo "tag $tag did not resolve" >&2; exit 1; }
+            [[ "$mapped" == "$name" ]] || { echo "tag $tag resolved to $mapped, expected $name" >&2; exit 1; }
+            if [[ "$pointer" == 1 ]]; then
+              css34_line_has_pointer "$name" || { echo "$name should publish a pointer" >&2; exit 1; }
+            elif css34_line_has_pointer "$name"; then
+              echo "$name must not publish a pointer" >&2
+              exit 1
+            fi
+            if [[ "$releasable" == 1 ]]; then
+              css34_line_can_release "$name" || { echo "$name should be releasable" >&2; exit 1; }
+            elif css34_line_can_release "$name"; then
+              echo "archived line $name must not take a new release tag" >&2
+              exit 1
+            fi
+            echo "$tag -> $name pointer=$pointer releasable=$releasable"
+          done < /tmp/tag-map-rows.tsv
+          echo "Tag map checks passed (no release published)"
+
   resolve-line:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
     outputs:
       css34_line: ${{ steps.map.outputs.css34_line }}
       pointer: ${{ steps.map.outputs.pointer }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Map tag / input → CSS34_LINE
         id: map
         run: |
           set -euo pipefail
+          # shellcheck disable=SC1091
+          source builder/generated/tag-map.sh
+          known_bad=0
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             tag="${GITHUB_REF_NAME}"
             # -r<N>: packaging rebuild of the same pins (existing tags stay put).
@@ -67,34 +139,36 @@ jobs:
             if [[ "${tag}" =~ ^(.+)-r[0-9]+$ ]]; then
               base="${BASH_REMATCH[1]}"
             fi
-            case "${base}" in
-              1.11.0.6970-mm1.10.7) line=sm11-oldstable ;;
-              1.12.0.7253-mm1.12.0) line=sm12-latest ;;
-              1.13.0.7404-mm1.12.0) line=sm13-dev ;;
-              1.13.0.7404-mm2.0.0)  line=sm13-mm20 ;;
-              1.13.0.7472-mm1.12.0) line=sm13-latest ;;
-              1.13.0.7565-mm2.0.0-khook) line=sm13-mm20-khook ;;
-              1.13.0.7565-mm2.0.0-khook-dhooks) line=sm13-mm20-khook ;;
-              *)
-                echo "Unknown release tag '${tag}' — add a mapping in release.yml" >&2
-                exit 1
-                ;;
-            esac
+            if css34_tag_is_known_bad "${base}"; then
+              known_bad=1
+            fi
+            line="$(css34_line_for_tag "${base}")" || {
+              echo "Unknown release tag '${tag}' — add the line in builder/lines.json and regenerate" >&2
+              exit 1
+            }
           else
-            line="${{ github.event.inputs.css34_line || 'sm13-latest' }}"
+            line="${{ github.event.inputs.css34_line }}"
+            if [[ -z "$line" ]]; then
+              line="$(python3 -c 'import json; print(json.load(open("builder/lines.json"))["default_line"])')"
+            fi
           fi
-          case "$line" in
-            sm13-mm20|sm13-mm20-khook)
-              echo "Archived build line: use archive/khook; published pointers are unchanged" >&2
-              exit 1 ;;
-          esac
+          if ! css34_line_can_release "${line}"; then
+            echo "Archived build line: use archive/khook; published pointers are unchanged" >&2
+            exit 1
+          fi
           echo "css34_line=${line}" >> "$GITHUB_OUTPUT"
-          # line-<line> pointers: only for live lines. sm13-dev is retired;
-          # sm11-oldstable is withheld (SIGABRT on rom4s 4044 servers, README).
-          case "${line}" in
-            sm12-latest|sm13-latest|sm13-mm20|sm13-mm20-khook) pointer=1 ;;
-            *) pointer=0 ;;
-          esac
+          if css34_line_has_pointer "${line}"; then
+            pointer=1
+          else
+            pointer=0
+          fi
+          if [[ "$known_bad" == 1 ]]; then
+            if [[ "$pointer" == 1 ]]; then
+              echo "known-bad tag ${base} cannot be published as a line pointer" >&2
+              exit 1
+            fi
+            pointer=0
+          fi
           echo "pointer=${pointer}" >> "$GITHUB_OUTPUT"
           echo "Resolved CSS34_LINE=${line} (ref=${GITHUB_REF_NAME})"
 

@@ -28,12 +28,12 @@ MM 2.0 git1450+ (KHook) lives in its own line, `sm13-mm20-khook` ([MM20_KHOOK.md
 | **SourcePawn** | Static `libsourcepawn_static` only | `BuildStaticCoreLib` pthread/rt; logic.so embeds SP |
 | **Init flow** | `InitializeBridge()` moved to `InitializeSourceMod()` | Boot-trace in `apply-sm-boot-trace.sh` |
 | **MySQL** | MariaDB connector on 7461+ | `db-configure-args.sh` + `checkout-deps.sh` |
-| **C++** | Upstream wants c++20 / `std::span` | Downgrade to c++17 + `patches/cxx17-compat/span` |
+| **C++** | Upstream `-std=c++20` / `std::span` | Kept. GCC 10.2 in manylinux2014 compiles it; no span polyfill |
 
 ## Patches for 7472 (this line)
 
 - `apply-sm-boot-trace.sh` — `InitializeSourceMod` traces `LoadBridge` + `InitializeBridge`
-- `apply-sourcemod-v112.sh` — `BuildStaticCoreLib` pthread/rt, c++17 downgrade, span polyfill
+- `apply-sourcemod-v112.sh` — `BuildStaticCoreLib` pthread/rt; upstream `-std=c++20` left in place, sourcepawn `-Wno-sign-compare` anchored on that line
 - `db-configure-args.sh` / `checkout-deps.sh` — MariaDB vs mysql configure flags
 
 ## Release tag

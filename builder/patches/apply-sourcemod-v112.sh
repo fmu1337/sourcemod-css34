@@ -8,8 +8,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PY=(bash "$script_dir/../py.sh")
 
 sourcemod_dir="${1:?sourcemod directory required}"
-builder_dir="$(cd "$script_dir/.." && pwd)"
-
 echo "==> Applying SourceMod 1.12+ css34 patches (Metamod 1.12 / 2.ep1)"
 
 # --- manifests ---
@@ -43,12 +41,11 @@ else:
 PYMAN
 
 # --- AMBuildScript / SdkHelpers (1.12 structure) ---
-SOURCEMOD_DIR="$sourcemod_dir" BUILDER_DIR="$builder_dir" "${PY[@]}" - <<'PY'
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 
 sm = Path(os.environ['SOURCEMOD_DIR'])
-builder_dir = os.environ.get('BUILDER_DIR', '')
 ambuild = sm / 'AMBuildScript'
 text = ambuild.read_text()
 
@@ -176,47 +173,15 @@ if "CSS34 SDK compatibility" not in text:
 else:
     print('==> CSS34 compiler flags already present')
 
-# SM 7461+ sets -std=c++20. css34 still pins c++17 (removed in T1.3).
-if "cxx.cxxflags += ['-std=c++20']" in text:
-    text = text.replace(
-        "cxx.cxxflags += ['-std=c++20']",
-        "cxx.cxxflags += ['-std=c++17']  # css34: pin c++17",
-        1,
-    )
-    print('==> Downgraded AMBuildScript c++20 -> c++17 for css34 toolchain')
-elif "css34: pin c++17" in text:
-    print('==> AMBuildScript c++17 downgrade already present')
-
-# SM 7461+ SourcePawn uses std::span (C++20); provide a polyfill via -I cxx17-compat.
-pool_allocator = sm / 'sourcepawn/utils/pool-allocator.h'
-if pool_allocator.exists() and '#include <span>' in pool_allocator.read_text():
-    compat_inc = os.path.join(builder_dir, 'patches', 'cxx17-compat')
-    span_marker = "cxx.cxxflags += ['-I"  # css34: C++17 std::span polyfill
-    if span_marker not in text:
-        cxx17_markers = [
-            "cxx.cxxflags += ['-std=c++17']  # css34: pin c++17",
-            "cxx.cxxflags += ['-std=c++17']",
-        ]
-        inserted = False
-        for marker in cxx17_markers:
-            if marker in text:
-                text = text.replace(
-                    marker,
-                    marker + f"\n    cxx.cxxflags += ['-I{compat_inc}']  # css34: C++17 std::span polyfill",
-                    1,
-                )
-                inserted = True
-                break
-        if inserted:
-            print('==> Added cxx17-compat include path for std::span polyfill')
-        else:
-            raise SystemExit('Failed to locate cxx std flag for span polyfill include')
-    else:
-        print('==> cxx17-compat span polyfill include already present')
+# SM 7461+ sets -std=c++20. devtoolset-10 GCC 10.2 compiles that standard,
+# including <span>, so the upstream flag is left unchanged.
 
 ambuild.write_text(text, encoding='utf-8')
 
-# SourcePawn sign-compare under -Werror on gcc-9
+# SourcePawn builds with -Werror. GCC 10 still errors on sign-compare in the
+# JIT/compiler, so keep -Wno-sign-compare. Anchor the C++ flag on the upstream
+# -std=c++20 line (SM 1.13). SM 1.12 sourcepawn is still -std=c++17; that line
+# gets the same flag so this shared patcher does not drop it.
 sp = sm / 'sourcepawn/AMBuildScript'
 if sp.exists():
     sp_text = sp.read_text()
@@ -226,12 +191,29 @@ if sp.exists():
             "'-Werror',\n            '-Wno-sign-compare',  # CSS34 sign-compare\n",
             1,
         )
-        if "cxx.cxxflags += ['-std=c++17']" in sp_text and "CSS34 sign-compare" not in "".join(sp_text.split("cxx.cxxflags")[1:2]):
-            sp_text = sp_text.replace(
-                "cxx.cxxflags += ['-std=c++17']\n",
-                "cxx.cxxflags += ['-std=c++17']\n        cxx.cxxflags += ['-Wno-sign-compare']  # CSS34 sign-compare\n",
-                1,
-            )
+        std_anchors = (
+            "cxx.cxxflags += ['-std=c++20']\n",
+            "cxx.cxxflags += ['-std=c++17']\n",
+        )
+        cxx_slice = "".join(sp_text.split("cxx.cxxflags")[1:2])
+        if "CSS34 sign-compare" not in cxx_slice:
+            anchored = False
+            for anchor in std_anchors:
+                if anchor in sp_text:
+                    sp_text = sp_text.replace(
+                        anchor,
+                        anchor + "        cxx.cxxflags += ['-Wno-sign-compare']  # CSS34 sign-compare\n",
+                        1,
+                    )
+                    anchored = True
+                    break
+            if not anchored:
+                raise SystemExit(
+                    'Failed to anchor sourcepawn -Wno-sign-compare on '
+                    '-std=c++20 or -std=c++17'
+                )
+        if 'CSS34 sign-compare' not in sp_text:
+            raise SystemExit('Failed to add sourcepawn -Wno-sign-compare')
         sp.write_text(sp_text)
         print('==> Patched sourcepawn AMBuildScript for sign-compare')
         sp_text = sp.read_text()

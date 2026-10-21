@@ -64,27 +64,31 @@ env:
   PURE_SOURCE_BUILD: "1"
 
 jobs:
+  pins:
+    runs-on: ubuntu-22.04
+    outputs:
+      build: ${{ steps.m.outputs.build }}
+      debian: ${{ steps.m.outputs.debian }}
+      botplay: ${{ steps.m.outputs.botplay }}
+      rhel: ${{ steps.m.outputs.rhel }}
+      host: ${{ steps.m.outputs.host }}
+      release_botplay: ${{ steps.m.outputs.release_botplay }}
+      botplay_extra: ${{ steps.m.outputs.botplay_extra }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Emit CI matrices from lines.json
+        id: m
+        run: python3 builder/lines.py gha >> "$GITHUB_OUTPUT"
+
   build-linux:
+    needs: pins
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - line: sm11-oldstable
-            sm_expect: "1.11.0.6970"
-            mm_expect: "1.10.7"
-            sm_commit: f53cb134ef83b580c83e1f4bf35f60d11c4571dd
-            mm_commit: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
-          - line: sm12-latest
-            sm_expect: "1.12.0.7253"
-            mm_expect: "1.12.0"
-            sm_commit: 2e229b111534b1be007dc3bd9acfcf2fc472e893
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
-          - line: sm13-latest
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
-            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
+        include: ${{ fromJSON(needs.pins.outputs.build) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -187,72 +191,13 @@ jobs:
   # Primary gate: pure-source matched SM×MM lines.
   # Packages are produced in manylinux2014_i686 (builder/docker/build.sh, glibc 2.17).
   test-built-debian:
-    needs: [build-linux, prepare-server]
+    needs: [pins, build-linux, prepare-server]
     runs-on: ubuntu-22.04
+    continue-on-error: ${{ matrix.allow_failure }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - line: sm11-oldstable
-            image: debian:11
-            sm_expect: "1.11.0.6970"
-            mm_expect: "1.10.7"
-            sm_commit: f53cb134ef83b580c83e1f4bf35f60d11c4571dd
-            mm_commit: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
-          - line: sm12-latest
-            image: debian:11
-            sm_expect: "1.12.0.7253"
-            mm_expect: "1.12.0"
-            sm_commit: 2e229b111534b1be007dc3bd9acfcf2fc472e893
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
-          - line: sm13-latest
-            image: debian:11
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
-            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
-          - line: sm13-latest
-            image: debian:latest
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
-            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
-          - line: sm11-oldstable
-            image: ubuntu:24.04
-            sm_expect: "1.11.0.6970"
-            mm_expect: "1.10.7"
-            sm_commit: f53cb134ef83b580c83e1f4bf35f60d11c4571dd
-            mm_commit: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
-          - line: sm11-oldstable
-            image: debian:13
-            sm_expect: "1.11.0.6970"
-            mm_expect: "1.10.7"
-            sm_commit: f53cb134ef83b580c83e1f4bf35f60d11c4571dd
-            mm_commit: 80e8ff0be3b62386bbd6f937e97b819ef8be6dd2
-          - line: sm12-latest
-            image: ubuntu:24.04
-            sm_expect: "1.12.0.7253"
-            mm_expect: "1.12.0"
-            sm_commit: 2e229b111534b1be007dc3bd9acfcf2fc472e893
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
-          - line: sm12-latest
-            image: debian:13
-            sm_expect: "1.12.0.7253"
-            mm_expect: "1.12.0"
-            sm_commit: 2e229b111534b1be007dc3bd9acfcf2fc472e893
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
-          - line: sm13-latest
-            image: ubuntu:24.04
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
-            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
-          - line: sm13-latest
-            image: debian:13
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
-            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
+        include: ${{ fromJSON(needs.pins.outputs.debian) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -346,22 +291,13 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch'
       || github.event.inputs.run_full_botplay_matrix == 'true'
-    needs: [build-linux, prepare-server]
+    needs: [pins, build-linux, prepare-server]
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - line: sm11-oldstable
-            sm_expect: "1.11.0.6970"
-            mm_expect: "1.10.7"
-          - line: sm12-latest
-            sm_expect: "1.12.0.7253"
-            mm_expect: "1.12.0"
-          - line: sm13-latest
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
+        include: ${{ fromJSON(needs.pins.outputs.botplay) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -468,18 +404,12 @@ jobs:
           retention-days: 7
 
   test-built-rhel:
-    needs: [build-linux, prepare-server]
+    needs: [pins, build-linux, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - line: sm13-latest
-            image: rockylinux:9
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
-            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
+        include: ${{ fromJSON(needs.pins.outputs.rhel) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -571,17 +501,12 @@ jobs:
 
   # Boots freshly built Metamod + SourceMod on the GitHub Actions host runner.
   test-built-smoke:
-    needs: [build-linux, prepare-server]
+    needs: [pins, build-linux, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - line: sm13-latest
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
-            sm_commit: 6eb5f8fa381100ed7cac1ab62a4ece11795a5d92
-            mm_commit: 9fd977df3b49ec76cdf865a4af13a90c0f5c8814
+        include: ${{ fromJSON(needs.pins.outputs.host) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -803,23 +728,11 @@ jobs:
 
   test-built-botplay-extra:
     if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
-    needs: [build-linux, prepare-server]
+    needs: [pins, build-linux, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
-      matrix:
-        image: [debian:11, debian:12, rockylinux:9]
-        line: [sm13-latest]
-        include:
-          - image: debian:11
-            image_id: debian11
-          - image: debian:12
-            image_id: debian12
-          - image: rockylinux:9
-            image_id: rocky9
-          - line: sm13-latest
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
+      matrix: ${{ fromJSON(needs.pins.outputs.botplay_extra) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -914,24 +827,12 @@ jobs:
   # Botplay against published GitHub Release packages (SM 1.12 + SM 1.13 lines).
   test-release-botplay:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_botplay == 'true'
-    needs: [prepare-server]
+    needs: [pins, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - line: sm12
-            tag: 1.12.0.7253-mm1.12.0
-            sm_asset: sourcemod-1.12.0-git7253-css34-linux.tar.gz
-            mm_asset: mmsource-1.12.0-dev-css34-linux.tar.gz
-            sm_expect: "1.12.0.7253"
-            mm_expect: "1.12.0"
-          - line: sm13
-            tag: 1.13.0.7472-mm1.12.0
-            sm_asset: sourcemod-1.13.0-git7472-css34-linux.tar.gz
-            mm_asset: mmsource-1.12.0-dev-css34-linux.tar.gz
-            sm_expect: "1.13.0.7472"
-            mm_expect: "1.12.0"
+        include: ${{ fromJSON(needs.pins.outputs.release_botplay) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
