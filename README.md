@@ -60,9 +60,10 @@ The manifest records line status and known-bad release tags; it is separate from
 Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
 A daily bump edits `lines.json` and regenerates — see [docs/JULES_DAILY_VERSION_BUMP.md](docs/JULES_DAILY_VERSION_BUMP.md).
 
-> `meta version` prints the Metamod build number as `+1` (e.g. `1.12.0-dev+1`): Metamod is cloned
-> shallow and its versioning counts commits. The real revision is in the asset name and in
-> `addons/metamod/css34-package.json` (`mm_version`). See [docs/REVIEW_2026-10.md](docs/REVIEW_2026-10.md).
+> `meta version` prints the Metamod build number from `lines.json` (`1.12.0-dev+1226`,
+> or `1.10.7-dev+976` on `sm11-oldstable`) and `Build ID: <rev>:<commit prefix>`.
+> `sm version` prints `<major>.<minor>.0.<SM_REV>` (for example `1.13.0.7472`).
+> The clones stay shallow; `generate_headers.py` reads `MMS_GIT_REV` / `SOURCEMOD_GIT_REV`.
 
 ### What pairs with what
 

@@ -1708,34 +1708,10 @@ if [[ "${CSS34_DEBUG_TRACE:-0}" == "1" ]]; then
   bash "$script_dir/apply-sm-boot-trace.sh" "$sourcemod_dir"
 fi
 
-# css34: full upstream SHA in sourcemod_version_auto.h + CSS34 pack line in `sm version`.
-SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYHDR'
-from pathlib import Path
-import os
-path = Path(os.environ['SOURCEMOD_DIR']) / 'tools/buildbot/generate_headers.py'
-text = path.read_text()
-old = '    """.format(tag, shorthash, major, minor, release, fullstring, count))'
-# There are two format() calls (h + inc); replace both to use longhash for CSET.
-if 'css34: full commit SHA' in text:
-    print('==> SM generate_headers already uses full SHA')
-else:
-    if text.count(old) < 1:
-        # tolerate slight formatting diffs
-        old2 = '.format(tag, shorthash, major, minor, release, fullstring, count)'
-        if old2 not in text:
-            raise SystemExit('Failed to locate SM generate_headers format(shorthash) call')
-        text = text.replace(old2, '.format(tag, longhash, major, minor, release, fullstring, count)')
-    else:
-        text = text.replace(old, '    """.format(tag, longhash, major, minor, release, fullstring, count))')
-    # Annotate once
-    text = text.replace(
-        'def output_version_headers():\n',
-        'def output_version_headers():\n  # css34: full commit SHA for sm version Built from\n',
-        1,
-    )
-    path.write_text(text)
-    print('==> Patched SM generate_headers.py to emit full commit SHA')
-PYHDR
+# css34: lines.json SOURCEMOD_GIT_REV (do not trust a shallow rev-list count).
+"${PY[@]}" "$script_dir/pin-generate-headers.py" \
+  "$sourcemod_dir/tools/buildbot/generate_headers.py" \
+  --env SOURCEMOD_GIT_REV
 
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYVER'
 from pathlib import Path

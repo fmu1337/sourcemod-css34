@@ -60,45 +60,10 @@ else:
         print('==> Patched MM Versioning for detached MMS_COMMIT checkouts')
 PYVER
 
-# Prefer full upstream SHA in metamod_version_auto.h when the generator uses shorthash.
-MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYHDR'
-from pathlib import Path
-import os
-path = Path(os.environ['MMS_DIR']) / 'support/buildbot/generate_headers.py'
-if not path.exists():
-    print('==> WARN: generate_headers.py missing')
-    raise SystemExit(0)
-text = path.read_text()
-if 'css34: full commit SHA' in text:
-    print('==> MM generate_headers already prefers full SHA')
-else:
-    # Note: file already mentions longhash in get_git_version(); only CSET format matters.
-    old = '""".format(tag, shorthash, major, minor, release, fullstring, count))'
-    new = '""".format(tag, longhash, major, minor, release, fullstring, count))'
-    # MM 1.12 may omit fullstring in the format call:
-    old_alt = '""".format(tag, shorthash, major, minor, release, count))'
-    new_alt = '""".format(tag, longhash, major, minor, release, count))'
-    if old in text:
-        text = text.replace(
-            '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
-            '  # css34: full commit SHA for meta version Built from\n'
-            '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
-            1,
-        )
-        path.write_text(text.replace(old, new, 1))
-        print('==> Patched MM generate_headers.py to emit full commit SHA')
-    elif old_alt in text:
-        text = text.replace(
-            '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
-            '  # css34: full commit SHA for meta version Built from\n'
-            '  with open(os.path.join(OutputFolder, \'metamod_version_auto.h\'), \'w\') as fp:\n',
-            1,
-        )
-        path.write_text(text.replace(old_alt, new_alt, 1))
-        print('==> Patched MM generate_headers.py to emit full commit SHA (alt)')
-    else:
-        print('==> WARN: generate_headers.py SHA format unchanged (continuing)')
-PYHDR
+# css34: lines.json MMS_GIT_REV (shallow clone cannot count commits).
+"${PY[@]}" "$script_dir/pin-generate-headers.py" \
+  "$mms_dir/support/buildbot/generate_headers.py" \
+  --env MMS_GIT_REV
 
 # Print CSS34 pack commit from `meta version`.
 MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYCONS'

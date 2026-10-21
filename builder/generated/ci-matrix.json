@@ -145,7 +145,9 @@
     {
       "line": "sm13-latest",
       "sm_expect": "1.13.0.7472",
-      "mm_expect": "1.12.0",
+      "mm_expect": "1.12.0-dev+1226",
+      "mm_rev": 1226,
+      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
       "exts": "CS Tools,SDK Tools,BinTools",
       "load_exts": ""
     }

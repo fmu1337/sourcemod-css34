@@ -253,6 +253,7 @@ jobs:
             -e MM_COMMIT_EXPECT \
             -e SM_COMMIT_EXPECT \
             -e CSS34_PACK_COMMIT_EXPECT \
+            -e CSS34_LINE="${{ matrix.line }}" \
             -e TIMEOUT_SECS=120 \
             -e SMOKE_CONDEBUG=1 \
             -e SMOKE_VERBOSE=1 \
@@ -466,6 +467,7 @@ jobs:
             -e MM_COMMIT_EXPECT \
             -e SM_COMMIT_EXPECT \
             -e CSS34_PACK_COMMIT_EXPECT \
+            -e CSS34_LINE="${{ matrix.line }}" \
             -e SRCDS_BINARY \
             -e TIMEOUT_SECS=120 \
             -e SMOKE_CONDEBUG=1 \
@@ -561,7 +563,8 @@ jobs:
           chmod +x testing/scripts/*.sh
           mkdir -p .ci-server .ci-cache
           tar -xzf server-art/css34-server.tar.gz -C .ci-server
-          CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
+          export CSS34_LINE="${{ matrix.line }}"
+          source builder/package-paths.sh
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
           export SM_PACKAGE MM_PACKAGE
           testing/scripts/install-addons.sh
