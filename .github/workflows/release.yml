@@ -117,7 +117,7 @@ jobs:
           CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
           PURE_SOURCE_BUILD: "1"
         run: |
-          chmod +x builder/docker/build.sh builder/docker/legacy-build.sh builder/run/linux.sh \
+          chmod +x builder/docker/build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
             builder/build-metamod.sh builder/prepare-package.sh builder/write-build-stamps.sh \
             builder/resolve-version.sh builder/py.sh builder/patches/*.sh

@@ -6,7 +6,7 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 
 | Job | Images | Lines |
 |---|---|---|
-| `build-linux` (+ "ABI / export checks") | `legacy-build.sh` in `debian:11` on ubuntu-22.04 | all three active lines |
+| `build-linux` (+ "ABI / export checks") | `builder/docker/build.sh` (manylinux2014_i686) on ubuntu-22.04 | all three active lines |
 | `test-built-debian` | `debian:11` | all three active lines |
 | `test-built-debian` | `debian:latest` | `sm13-latest` |
 | `test-built-rhel` | `rockylinux:9` | `sm13-latest` |
@@ -15,7 +15,7 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 
 CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` from `build-linux` (handed to later jobs via Actions cache, not artifacts). rom4s reference drops are not used in this workflow.
 
-Packages come from `legacy-build.sh` (`debian:11`), so the smoke matrix starts at Debian 11+ / Rocky 9.
+Packages come from `builder/docker/build.sh` (manylinux2014, glibc 2.17). The smoke matrix covers Debian 11+ / Rocky 9 and current Ubuntu.
 
 When the CI server tree is trimmed to a single map (`de_dust2`), `testing/scripts/trim-server-maps.sh` also rewrites `mapcycle.txt` so the engine does not spam `Map_IsValid: No such map` for deleted BSPs.
 
@@ -155,7 +155,7 @@ SM_VERSION_EXPECT=1.13.0.7472 MM_VERSION_EXPECT=1.12.0 \
 ```bash
 chmod +x testing/scripts/*.sh
 
-# Test freshly built SM + MM from builder/docker/legacy-build.sh (primary path).
+# Test freshly built SM + MM from builder/docker/build.sh (primary path).
 # run-smoke.sh picks packages/*.tar.gz by itself; CSS34_LINE sets the expected versions.
 CSS34_LINE=sm13-latest testing/scripts/run-smoke.sh
 

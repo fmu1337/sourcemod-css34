@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Build SourceMod css34 in manylinux2014_i686 (glibc 2.17, devtoolset-10 GCC 10.2.1).
-# legacy-build.sh is a thin wrapper around this script until T1.4 removes it.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

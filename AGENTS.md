@@ -30,8 +30,7 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   Image `quay.io/pypa/manylinux2014_i686@sha256:30305867f278896ee117b0d162a8e4f9b7b16819e6590f6139e14c5ed5b23fdd`
   (CentOS 7.9 i686, glibc 2.17, devtoolset-10 GCC 10.2.1). Python for AMBuild is
   `/opt/python/cp311-cp311/bin/python`. The script runs under `linux32` so
-  AMBuild sees i686. `builder/docker/legacy-build.sh` is a wrapper that calls
-  `build.sh` (removed in T1.4).
+  AMBuild sees i686.
 - `builder/run/linux.sh` uses `CC` / `CXX` from the environment. `build.sh`
   sets them to devtoolset-10 `gcc` / `g++`.
 - `git config --global --add safe.directory '*'` inside the container (the repo

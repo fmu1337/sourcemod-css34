@@ -200,7 +200,7 @@ fi
 logic_cxx11="$(printf '%s\n' "${logic_dynsyms}" | grep -c '__cxx11' || true)"
 if [[ "${logic_cxx11}" -gt 0 ]]; then
   if [[ "${STATIC_SP}" -eq 1 ]]; then
-    echo "WARN: logic.so exports ${logic_cxx11} __cxx11 symbols (static SourcePawn embed; verify on legacy-build smoke)"
+    echo "WARN: logic.so exports ${logic_cxx11} __cxx11 symbols (static SourcePawn embed; verify on manylinux smoke)"
   else
     echo "FAIL: logic.so exports ${logic_cxx11} C++11 std::string ABI symbols (rom4s logic has none)" >&2
     fail=1

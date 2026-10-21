@@ -194,8 +194,6 @@ CSS34_LINE=sm11-oldstable  builder/docker/build.sh
 CSS34_LINE=sm12-latest     builder/docker/build.sh
 ```
 
-`builder/docker/legacy-build.sh` calls `build.sh`.
-
 MM 2.0 builds (`sm13-mm20`, `sm13-mm20-khook`) are archived outside CI in
 [`archive/khook`](https://github.com/fmu1337/sourcemod-css34/tree/archive/khook).
 Use that branch to reproduce them; master rejects those build selections. Existing
