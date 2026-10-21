@@ -53,8 +53,8 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   testing/scripts/check-metamod-package.sh`. Uses host `binutils` (reads 32-bit
   ELF fine). The **manylinux2014** package must PASS with `GLIBC_FLOOR=2.17`
   (the default): every ELF ≤ GLIBC 2.17, logic.so exports no `std::` /
-  `__cxxabiv1`, and no Metamod `.so` needs `libstdc++.so.6`. A jammy-native
-  package still fails those checks.
+  `__cxxabiv1`, and no Metamod `.so` needs `libstdc++.so.6`. A package built
+  outside this manylinux image still fails those checks.
 - **Full smoke test** (CI primary gate `test-built-debian`): prepare the server
   tree on the host (`fetch-server.sh` → `apply-valve-rc-fix.sh` →
   `apply-srcds-patch.sh` → `KEEP_MAPS=de_dust2,de_inferno,de_nuke trim-server-maps.sh`,
