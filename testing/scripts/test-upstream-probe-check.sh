@@ -62,4 +62,13 @@ expect_fail "userid lookup" "1.12.0.7256" \
 expect_fail "missing probe line" "1.13.0.7478" \
   'L 00/00/0000 - 00:00:00: [css34_dhooks_probe] round=1 available=1'
 
+no_chain="${good/sound_second=1 sound_saw=1/sound_second=0 sound_saw=0}"
+for version in 1.11.0.6970 1.12.0.7257 1.13.0.7474; do
+  expect_pass "pre-fix without chain ${version}" "${version}" "${no_chain}"
+done
+for version in 1.11.0.6970 1.12.0.7257 1.13.0.7478; do
+  expect_fail "sound never fired ${version}" "${version}" "${no_chain/sound_first=1/sound_first=0}"
+done
+expect_fail "chain required at fix boundary" "1.13.0.7475" "${no_chain}"
+expect_fail "edits missing without bad counter" "1.13.0.7478" "${good/sound_saw=1/sound_saw=0}"
 echo "upstream probe checker fixtures passed"

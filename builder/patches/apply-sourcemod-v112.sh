@@ -54,32 +54,36 @@ import os
 path = Path(os.environ['SOURCEMOD_DIR']) / 'extensions/sdktools/output.cpp'
 text = path.read_text()
 marker = 'css34: OnMapEnd uses SourceHook::List on SM 1.12'
+old = (
+    "void EntityOutputManager::OnMapEnd()\n"
+    "{\n"
+    "\tIPluginIterator *plugins = plsys->GetPluginIterator();\n"
+    "\tfor (; plugins->MorePlugins(); plugins->NextPlugin())\n"
+    "\t{\n"
+    "\t\tstd::list<omg_hooks *> *pList = NULL;\n"
+)
+new = old.replace("{\n\tIPluginIterator", "{\n\t// " + marker + "\n\tIPluginIterator", 1).replace(
+    'std::list<omg_hooks *>', 'SourceHook::List<omg_hooks *>')
+sh_list = 'SourceHook::List<omg_hooks *>'
+std_list = 'std::list<omg_hooks *>'
+# Validate the stored list declarations as well as the map-end anchor. A marker
+# alone, a missing function, or an unknown type must never count as success.
+sh_storage = text.count('\t' + sh_list + ' *pList = NULL;\n')
+std_storage = text.count('\t' + std_list + ' *pList = NULL;\n')
 if marker in text:
+    if text.count(new) != 1 or std_list in text or sh_storage != 3:
+        raise SystemExit('FAIL: malformed OnMapEnd SourceHook::List patch')
     print('==> OnMapEnd SourceHook::List patch already present')
-elif 'SourceHook::List<omg_hooks *>' in text and 'std::list<omg_hooks *>' in text:
-    old = (
-        "void EntityOutputManager::OnMapEnd()\n"
-        "{\n"
-        "\tIPluginIterator *plugins = plsys->GetPluginIterator();\n"
-        "\tfor (; plugins->MorePlugins(); plugins->NextPlugin())\n"
-        "\t{\n"
-        "\t\tstd::list<omg_hooks *> *pList = NULL;\n"
-    )
-    new = (
-        "void EntityOutputManager::OnMapEnd()\n"
-        "{\n"
-        "\t// css34: OnMapEnd uses SourceHook::List on SM 1.12\n"
-        "\tIPluginIterator *plugins = plsys->GetPluginIterator();\n"
-        "\tfor (; plugins->MorePlugins(); plugins->NextPlugin())\n"
-        "\t{\n"
-        "\t\tSourceHook::List<omg_hooks *> *pList = NULL;\n"
-    )
-    if old not in text:
-        raise SystemExit('FAIL: OnMapEnd std::list anchor not found in output.cpp')
+elif sh_list in text:
+    if text.count(old) != 1 or text.count(std_list) != 1 or sh_storage != 2:
+        raise SystemExit('FAIL: OnMapEnd std::list anchor or storage declarations drifted')
     path.write_text(text.replace(old, new, 1))
     print('==> Patched OnMapEnd to SourceHook::List (SM 1.12 #2589 cherry-pick)')
+elif text.count(old) == 1 and std_storage == 3 and '#include <list>' in text:
+    print('==> OnMapEnd uses std::list consistently (SM 1.13)')
 else:
-    print('==> OnMapEnd hook-list type already matches this tree')
+    raise SystemExit('FAIL: unrecognized OnMapEnd hook-list layout in output.cpp')
+
 PYOUT
 
 # --- AMBuildScript / SdkHelpers (1.12 structure) ---

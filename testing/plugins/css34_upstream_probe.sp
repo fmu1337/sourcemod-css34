@@ -24,7 +24,7 @@
 #pragma newdecls required
 
 #define PROBE_TAG "[css34_upstream_probe]"
-#define PROBE_SAMPLE "weapons/ak47/ak47-1.wav"
+#define PROBE_SAMPLE "buttons/button17.wav"
 #define PROBE_MARK 137
 #define PROBE_PITCH 173
 
@@ -63,15 +63,17 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
-	// v34 drops EmitSound before the sound hook when the sample is not
-	// precached (SV_StartSound: not precached). A bot firing the weapon
-	// precaches it only sometimes, so do it on every map.
-	PrecacheSound(PROBE_SAMPLE, true);
+	// Own non-weapon sample: no dependency on bots firing or weapon precaches.
+	if (!PrecacheSound(PROBE_SAMPLE, true))
+	{
+		SetFailState("Could not precache upstream sound probe");
+	}
 	CreateTimer(1.5, Timer_OutputProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
+	CreateTimer(2.0, Timer_SoundProbe, 0, TIMER_FLAG_NO_MAPCHANGE);
 	CreateTimer(2.0, Timer_ClientProbes, 0, TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -86,10 +88,6 @@ public Action Timer_ClientProbes(Handle timer, int retry)
 	if (client != -1)
 	{
 		ProbeUserId(client);
-		if (g_SoundFirst == 0)
-		{
-			ProbeSound(client);
-		}
 	}
 	return Plugin_Stop;
 }
@@ -172,22 +170,18 @@ void ProbeUserId(int client)
 	}
 }
 
-void ProbeSound(int client)
+public Action Timer_SoundProbe(Handle timer)
 {
-	int clients[1];
-	clients[0] = client;
-	// Pitch PROBE_MARK identifies this emit. The hook may run after EmitSound
-	// returns, so it cannot depend on a flag cleared below this call.
-	EmitSound(clients, 1, PROBE_SAMPLE, client, SNDCHAN_STATIC, SNDLEVEL_NORMAL, SND_NOFLAGS, 0.8, PROBE_MARK);
-	if (g_SoundFirst > 0 && g_SoundSecond > 0 && g_SoundSaw == 0)
-	{
-		g_SoundBad++;
-	}
+	// Broadcast after every round_start, including after map changes. Pitch
+	// identifies our emit without relying on synchronous hook delivery.
+	EmitSoundToAll(PROBE_SAMPLE, SOUND_FROM_WORLD, SNDCHAN_STATIC,
+		SNDLEVEL_NORMAL, SND_NOFLAGS, 0.8, PROBE_MARK);
+	return Plugin_Stop;
 }
 
 bool IsProbeSample(const char[] sample, int pitch)
 {
-	return StrContains(sample, "ak47-1.wav") != -1 && (pitch == PROBE_MARK || pitch == PROBE_PITCH);
+	return StrEqual(sample, PROBE_SAMPLE) && (pitch == PROBE_MARK || pitch == PROBE_PITCH);
 }
 
 public Action Sound_First(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH],
@@ -215,6 +209,10 @@ public Action Sound_Second(int clients[MAXPLAYERS], int &numClients, char sample
 	if (pitch == PROBE_PITCH)
 	{
 		g_SoundSaw++;
+	}
+	else
+	{
+		g_SoundBad++;
 	}
 	return Plugin_Continue;
 }
