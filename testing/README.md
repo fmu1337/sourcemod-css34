@@ -31,7 +31,7 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 
 1. Game DLL loads (`Counter-Strike: Source`)
 2. Map / dedicated server config starts (`Mapchange to …` in console)
-3. `sm version` — expected MM/SM versions
+3. `meta version` / `sm version` — `+<MM_REV>` and `Build ID: <MM_REV>:<sha prefix>`, and `SourceMod Version: <major>.<SM_REV>`
 4. `sm exts list` — prints full list; fails on `<FAILED>`; requires BinTools + SDK Tools + CS Tools + **SDK Hooks**
 5. `sm plugins list` — every enabled `.smx` listed as Running (not `<Failed>`)
 6. SourceMod session log (`addons/sourcemod/logs/L*.log`) — no error markers
