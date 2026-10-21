@@ -200,8 +200,6 @@ CSS34_LINE=sm11-oldstable  builder/docker/build.sh
 CSS34_LINE=sm12-latest     builder/docker/build.sh
 ```
 
-`builder/docker/legacy-build.sh` calls `build.sh`.
-
 MM 2.0 builds (`sm13-mm20`, `sm13-mm20-khook`) are archived outside CI in
 [`archive/khook`](https://github.com/fmu1337/sourcemod-css34/tree/archive/khook).
 Use that branch to reproduce them; master rejects those build selections. Existing
@@ -215,8 +213,8 @@ No root package symlinks are created.
 manylinux2014 (glibc 2.17). `check-package.sh` fails the package if any ELF needs a
 GLIBC newer than `GLIBC_FLOOR` (default 2.17).
 
-`builder/run/linux.sh` on a normal distro still defaults to clang-9 (`USE_CLANG9=1`).
-That path is not what CI ships. Inside the manylinux image it uses devtoolset-10 GCC.
+`builder/run/linux.sh` uses `CC` / `CXX` from the environment. `build.sh` sets
+them to devtoolset-10 `gcc` / `g++` inside the manylinux image.
 
 Windows (x86 MSVC env):
 
