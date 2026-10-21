@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fail when version pins drift across builder/versions.env, matrix.json, CI, and fallbacks.
+# Fail when generated pin copies drift, or a commit SHA is copied back into a workflow.
+# MM fallback SHAs in the builder scripts stay until a later change removes them.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -18,7 +19,7 @@ expect_file_contains() {
   local file="$1"
   local needle="$2"
   local label="$3"
-  if ! grep -Fq "$needle" "$file"; then
+  if ! grep -Fq -- "$needle" "$file"; then
     note_fail "${label}: ${file} missing '${needle}'"
   fi
 }
@@ -37,61 +38,23 @@ echo "    sm12-latest SM ${sm12_rev} (${sm12_commit:0:12})"
 echo "    sm13-latest SM ${sm13_rev} (${sm13_commit:0:12})"
 echo "    MM 1.12 (${mm112_commit:0:12})"
 
-# matrix.json lines must match versions.env
-python3 - "$repo_root/testing/versions/matrix.json" "$sm12_rev" "$sm12_commit" "$mm112_commit" \
-  "$sm13_rev" "$sm13_commit" <<'PY'
-import json, sys
-path, sm12_rev, sm12_commit, mm_commit, sm13_rev, sm13_commit = sys.argv[1:7]
-with open(path) as f:
-    data = json.load(f)
-lines = data["lines"]
-checks = [
-    ("sm12-latest", f"1.12.0.{sm12_rev}", sm12_commit, mm_commit),
-    ("sm13-latest", f"1.13.0.{sm13_rev}", sm13_commit, mm_commit),
-]
-for line, expect_sm, commit, mm in checks:
-    row = lines[line]
-    if row["sourcemod"] != expect_sm:
-        print(f"FAIL: matrix lines.{line}.sourcemod = {row['sourcemod']} (expected {expect_sm})", file=sys.stderr)
-        sys.exit(1)
-    if row["sourcemod_commit"] != commit:
-        print(f"FAIL: matrix lines.{line}.sourcemod_commit mismatch", file=sys.stderr)
-        sys.exit(1)
-    if row["metamod_commit"] != mm:
-        print(f"FAIL: matrix lines.{line}.metamod_commit mismatch", file=sys.stderr)
-        sys.exit(1)
+matrix="$repo_root/builder/generated/ci-matrix.json"
+expect_file_contains "$matrix" "$sm12_commit" "ci-matrix.json sm12 commit"
+expect_file_contains "$matrix" "$sm13_commit" "ci-matrix.json sm13-latest commit"
+expect_file_contains "$matrix" "$mm112_commit" "ci-matrix.json MM 1.12 commit"
+expect_file_contains "$matrix" "1.12.0.${sm12_rev}" "ci-matrix.json sm12 version string"
+expect_file_contains "$matrix" "1.13.0.${sm13_rev}" "ci-matrix.json sm13-latest version string"
 
-releases = data["releases"]
-sm12_key = f"1.12.0.{sm12_rev}-mm1.12.0"
-sm13_key = f"1.13.0.{sm13_rev}-mm1.12.0"
-if sm12_key not in releases:
-    print(f"FAIL: matrix releases missing '{sm12_key}' (stale release key still present?)", file=sys.stderr)
-    sys.exit(1)
-if sm13_key not in releases:
-    print(f"FAIL: matrix releases missing '{sm13_key}'", file=sys.stderr)
-    sys.exit(1)
-if releases[sm12_key]["sourcemod"] != f"1.12.0-git{sm12_rev}":
-    print("FAIL: matrix releases sm12-latest sourcemod string mismatch", file=sys.stderr)
-    sys.exit(1)
-if releases[sm13_key]["sourcemod"] != f"1.13.0-git{sm13_rev}":
-    print("FAIL: matrix releases sm13-latest sourcemod string mismatch", file=sys.stderr)
-    sys.exit(1)
-print("OK: testing/versions/matrix.json")
-PY
+tag_map="$repo_root/builder/generated/tag-map.sh"
+expect_file_contains "$tag_map" "${sm12_tag})" "tag-map.sh sm12 tag"
+expect_file_contains "$tag_map" "${sm13_tag})" "tag-map.sh sm13-latest tag"
 
-# CI workflow matrices (test-server.yml embeds commit SHAs)
-ci_matrix="$repo_root/.github/workflows/test-server.yml"
-expect_file_contains "$ci_matrix" "$sm12_commit" "test-server.yml sm12 commit"
-expect_file_contains "$ci_matrix" "$sm13_commit" "test-server.yml sm13-latest commit"
-expect_file_contains "$ci_matrix" "$mm112_commit" "test-server.yml MM 1.12 commit"
-expect_file_contains "$ci_matrix" "1.12.0.${sm12_rev}" "test-server.yml sm12 version string"
-expect_file_contains "$ci_matrix" "1.13.0.${sm13_rev}" "test-server.yml sm13-latest version string"
+# Workflows load matrices at runtime. A full SHA here is a second pin copy.
+if grep -R -E -n '[0-9a-f]{40}' .github/workflows; then
+  note_fail ".github/workflows still embeds a full commit SHA; generate the matrix from lines.json"
+fi
 
-# release.yml maps tags only (no commit SHAs)
-expect_file_contains "$repo_root/.github/workflows/release.yml" "${sm12_tag})" "release.yml sm12 tag mapping"
-expect_file_contains "$repo_root/.github/workflows/release.yml" "${sm13_tag})" "release.yml sm13-latest tag mapping"
-
-# Local build fallbacks (Jules often forgets these)
+# Local build fallbacks are still hand-written (not part of the generated matrix).
 expect_file_contains "$repo_root/builder/checkout-deps.sh" "$mm112_commit" "checkout-deps.sh MM fallback"
 expect_file_contains "$repo_root/builder/write-build-stamps.sh" "$mm112_commit" "write-build-stamps.sh MM fallback"
 
@@ -100,4 +63,5 @@ if [[ "$failures" -gt 0 ]]; then
   exit 1
 fi
 
-echo "==> All version pins consistent"
+echo "==> Generated matrices, tag map, and MM fallbacks match"
+echo "OK: testing/versions/matrix.json is historical and is not a pin source"

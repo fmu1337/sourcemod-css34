@@ -63,32 +63,109 @@
     "sm11-oldstable": {
       "sourcemod": "SM_OLDSTABLE",
       "metamod": "MM_110",
-      "status": "active"
+      "status": "active",
+      "pointer": false,
+      "releasable": true,
+      "role": "OldStable, withheld from pointers",
+      "smoke": [
+        {
+          "image": "debian:11"
+        },
+        {
+          "image": "ubuntu:24.04"
+        },
+        {
+          "image": "debian:13"
+        }
+      ]
     },
     "sm12-latest": {
       "sourcemod": "SM_LATEST",
       "metamod": "MM_112",
-      "status": "active"
+      "status": "active",
+      "pointer": true,
+      "releasable": true,
+      "role": "Latest 1.12",
+      "smoke": [
+        {
+          "image": "debian:11"
+        },
+        {
+          "image": "ubuntu:24.04"
+        },
+        {
+          "image": "debian:13"
+        }
+      ]
     },
     "sm13-latest": {
       "sourcemod": "SM_LATEST_13",
       "metamod": "MM_112",
-      "status": "active"
+      "status": "active",
+      "pointer": true,
+      "releasable": true,
+      "role": "Latest 1.13 (default)",
+      "install_role": "**Default / recommended**",
+      "smoke": [
+        {
+          "image": "debian:11"
+        },
+        {
+          "image": "ubuntu:24.04"
+        },
+        {
+          "image": "debian:13"
+        }
+      ],
+      "rhel_image": "rockylinux:9",
+      "host_smoke": true,
+      "windows": true,
+      "botplay_extra_images": [
+        {
+          "image": "debian:11",
+          "image_id": "debian11"
+        },
+        {
+          "image": "debian:12",
+          "image_id": "debian12"
+        },
+        {
+          "image": "rockylinux:9",
+          "image_id": "rocky9"
+        }
+      ]
     },
     "sm13-dev": {
       "sourcemod": "SM_DEV",
       "metamod": "MM_112",
-      "status": "retired"
+      "status": "retired",
+      "pointer": false,
+      "releasable": true,
+      "role": "Retired alias of 7404 + MM 1.12"
     },
     "sm13-mm20": {
       "sourcemod": "SM_DEV",
       "metamod": "MM_20",
-      "status": "retired"
+      "status": "retired",
+      "pointer": true,
+      "releasable": false,
+      "role": "Retired outside CI ([docs](docs/SM13_MM20.md))",
+      "install_role": "Retired outside CI",
+      "mm_note": "(last SourceHook MM 2.0)"
     },
     "sm13-mm20-khook": {
       "sourcemod": "SM_KHOOK",
       "metamod": "MM_20K",
-      "status": "frozen"
+      "status": "frozen",
+      "pointer": true,
+      "releasable": false,
+      "extra_tags": [
+        "1.13.0.7565-mm2.0.0-khook-dhooks"
+      ],
+      "role": "Frozen outside CI ([docs](docs/MM20_KHOOK.md))",
+      "install_role": "Frozen outside CI; archived builder, ships `dhooks.ext`",
+      "sm_note": "(KHook branch + master)",
+      "mm_note": "(KHook)"
     }
   },
   "known_bad": {

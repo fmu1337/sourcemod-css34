@@ -16,47 +16,37 @@ Repository: fmu1337/sourcemod-css34
    - SM 1.13: git fetch origin master on alliedmodders/sourcemod.
    - MM 1.12: git fetch origin 1.12-dev on alliedmodders/metamod-source.
 
-3. Update ALL of these (source of truth is builder/lines.json):
-   - builder/lines.json               ← edit pins here, then run python3 builder/lines.py gen
-   - builder/versions.env             ← generated; do not edit by hand
-   - builder/checkout-deps.sh          ← MM fallback commit (easy to forget)
-   - builder/write-build-stamps.sh     ← MM fallback commit (easy to forget)
-   - testing/versions/matrix.json      ← lines AND releases AND metamod_pins
-   - .github/workflows/test-server.yml ← sm_expect / mm_expect / sm_commit / mm_commit in build-linux,
-                                         test-built-debian (debian:11 AND debian:latest rows),
-                                         test-built-botplay-matrix, test-built-rhel, test-built-smoke,
-                                         test-built-botplay-extra; tag + asset names in test-release-botplay
-   - .github/workflows/build.yml       ← windows job SM_VERSION_EXPECT and wine-smoke matrix sm_expect
-                                         (NOT checked by check-version-pins.sh — Windows smoke goes red)
-   - .github/workflows/release.yml     ← tag → CSS34_LINE mappings (new base tag per new SM rev)
-   - README.md                         ← "What to install" + version matrix + releases tables
-   - testing/README.md                 ← test-release-botplay table
-   - docs/SM13_LATEST.md               ← if sm13-latest SM pin changed
-   - pins.SM_KHOOK.merge_master in lines.json equals the sm13-latest commit today; do NOT bump it
-     with sm13-latest (moving it means redoing the KHook merge, see docs/MM20_KHOOK.md)
+3. Edit pins in builder/lines.json, then run: python3 builder/lines.py gen
+   Generated (do not edit by hand):
+   - builder/versions.env
+   - builder/generated/ci-matrix.json
+   - builder/generated/tag-map.sh
+   - the install and version tables in README.md
+   CI loads those matrices at runtime. release.yml sources the tag map.
+   When the MM 1.12 commit moves, also update the hand-written fallback SHA in
+   builder/checkout-deps.sh and builder/write-build-stamps.sh. Do not edit smoke scripts.
+   testing/versions/matrix.json is historical compatibility/reference data, not a pin source.
+   docs/SM13_LATEST.md if the sm13-latest SM pin changed.
+   pins.SM_KHOOK.merge_master equals the sm13-latest commit today; do NOT bump it
+   with sm13-latest (moving it means redoing the KHook merge, see docs/MM20_KHOOK.md).
+   sm13-mm20 still uses SM 7404 (SM_DEV_*) with MM 2.0; do not reintroduce sm13-dev.
 
-4. matrix.json rules:
-   - Rename release key when SM rev changes (e.g. 1.12.0.7245-mm1.12.0 → 1.12.0.7253-mm1.12.0).
-   - Add/update 1.13.0.<rev>-mm1.12.0 for sm13-latest.
-   - Update metamod_pins "1.12-<rev>" when MM 1.12 moves.
-   - sm13-mm20 still uses SM 7404 (SM_DEV_*) with MM 2.0; do not reintroduce sm13-dev.
-
-5. Before opening PR, MUST pass locally:
+4. Before opening PR, MUST pass locally:
    python3 builder/lines.py check
 
-6. Open ONE draft PR. Do NOT duplicate if cursor/* PR already exists for the same pins.
+5. Open ONE draft PR. Do NOT duplicate if cursor/* PR already exists for the same pins.
    Title: "Bump sm12-latest (SM <rev>) and sm13-latest (SM <rev>) + MM <rev>"
 
-7. Wait for CI Test Server workflow:
+6. Wait for CI Test Server workflow:
    - build-linux (all lines)
    - test-built-debian (smoke, sdkhooks gamedata)
    - test-built-botplay-matrix (sdkhooks OnTakeDamage + sdktools probe)
 
-8. If CI fails on sm12-latest or sm13-latest only, fix patches in builder/patches/ — do not weaken CI checks.
+7. If CI fails on sm12-latest or sm13-latest only, fix patches in builder/patches/ — do not weaken CI checks.
 
-9. Do NOT merge. Leave PR for human review.
+8. Do NOT merge. Leave PR for human review.
 
-10. After a human merges it, the release is a new base tag pushed by a human, e.g.
+9. After a human merges it, the release is a new base tag pushed by a human, e.g.
     git tag 1.13.0.<rev>-mm1.12.0 && git push origin 1.13.0.<rev>-mm1.12.0
     release.yml builds it, smokes the public URLs and switches line-sm13-latest.
 ```
@@ -74,9 +64,10 @@ PR #57 updated `versions.env` and CI build matrix but **missed**:
 | `README.md` | No sm13-latest release row |
 | `test-server.yml` `test-release-botplay` | Tag still `1.12.0.7245-mm1.12.0` |
 
-`testing/scripts/check-version-pins.sh` now fails CI if any of these drift. It covers only
-`sm12-latest`, `sm13-latest` and MM 1.12 in `versions.env`, `matrix.json`, `test-server.yml`,
-`release.yml` and the two fallbacks — not `build.yml`, the README / docs tables, or the other three lines.
+`testing/scripts/check-version-pins.sh` now fails CI when `python3 builder/lines.py gen`
+would change a generated file, when a workflow copies a full commit SHA back in, or when
+the MM 1.12 fallback in `checkout-deps.sh` / `write-build-stamps.sh` drifts. `matrix.json`
+is no longer part of that check.
 
 ## Lines to bump daily
 
@@ -101,5 +92,6 @@ python3 builder/lines.py check
 ```
 
 `check-version-pins.sh` remains a compatibility entry point for `lines.py check`.
-The generated-file check covers all pins. Existing cross-file checks remain in
-`check-version-copies.sh` until T4.1 generates CI matrices and removes fallbacks.
+`lines.py gen` refreshes `versions.env`, the CI matrices, the release tag map, and the
+README pin tables. `check-version-copies.sh` still requires the MM 1.12 fallback SHA in
+`checkout-deps.sh` and `write-build-stamps.sh`.
