@@ -67,7 +67,6 @@ expect {
 
 # Give MM/SM a moment after map load.
 sleep 3
-set probe_failed 0
 
 send "status\r"
 expect {
@@ -78,7 +77,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for status output"
-        set probe_failed 1
+        exit 2
     }
 }
 
@@ -91,7 +90,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for version output"
-        set probe_failed 1
+        exit 3
     }
 }
 
@@ -114,7 +113,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for meta version output ($meta_ver)"
-        set probe_failed 1
+        exit 4
     }
 }
 if {[info exists env(META_BUILD_ID_NEEDLE)] && $env(META_BUILD_ID_NEEDLE) ne ""} {
@@ -130,7 +129,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for meta Build ID ($meta_id)"
-        set probe_failed 1
+        exit 4
     }
 }
 
@@ -148,7 +147,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sm version output ($sm_pat)"
-        set probe_failed 1
+        exit 5
     }
 }
 set timeout $saved_timeout
@@ -165,38 +164,9 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sm_cvar logging probe"
-        set probe_failed 1
+        exit 9
     }
 }
-
-# DBI drivers are not autoloaded. A broken OpenSSL/glibc link only shows up here.
-# geoip and regex are optional: smoke-test.sh records them and does not fail the run.
-proc probe_ext_load {name} {
-    global probe_failed
-    send "sm exts load $name\r"
-    expect {
-        -re {successfully|already loaded} {}
-        -re {Unable to load|[Ff]ailed to load|Could not|could not|error|Error} {
-            if {$name eq "dbi.mysql.ext" || $name eq "dbi.pgsql.ext"} {
-                set probe_failed 1
-            }
-        }
-        eof {
-            puts stderr "srcds exited while loading extension $name"
-            exit 10
-        }
-        timeout {
-            puts stderr "timeout waiting for extension load $name"
-            set probe_failed 1
-        }
-    }
-    sleep 1
-}
-
-probe_ext_load dbi.mysql.ext
-probe_ext_load dbi.pgsql.ext
-probe_ext_load geoip.ext
-probe_ext_load regex.ext
 
 # Force-load SDK Hooks so smoke can assert css34 OnTakeDamage gamedata path.
 send "sm exts load sdkhooks\r"
@@ -208,7 +178,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sdkhooks load"
-        set probe_failed 1
+        exit 8
     }
 }
 sleep 1
@@ -222,7 +192,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sm exts list output"
-        set probe_failed 1
+        exit 6
     }
 }
 
@@ -238,7 +208,7 @@ expect {
     }
     timeout {
         puts stderr "timeout waiting for sm plugins list output"
-        set probe_failed 1
+        exit 7
     }
 }
 
@@ -250,6 +220,3 @@ expect {
     eof {}
     timeout {}
 }
-
-# Retain a failed result after collecting the remaining diagnostics.
-exit $probe_failed

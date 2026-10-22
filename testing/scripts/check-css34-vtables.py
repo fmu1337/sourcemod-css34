@@ -73,7 +73,7 @@ class Elf32:
         self.data = open(path, 'rb').read()
         d = self.data
         if d[:4] != b'\x7fELF' or d[4] != 1:
-            raise SystemExit('{0}: not a 32-bit ELF'.format(path))
+            raise SystemExit(f'{path}: not a 32-bit ELF')
         (self.shoff,) = struct.unpack_from('<I', d, 0x20)
         self.shentsize, self.shnum, self.shstrndx = struct.unpack_from('<HHH', d, 0x2E)
         (phoff,) = struct.unpack_from('<I', d, 0x1C)
@@ -105,7 +105,7 @@ class Elf32:
         for vaddr, off, filesz in self.loads:
             if vaddr <= va and va + n <= vaddr + filesz:
                 return self.data[off + va - vaddr: off + va - vaddr + n]
-        raise ValueError('address {0:#x} not in a PT_LOAD segment'.format(va))
+        raise ValueError(f'address {va:#x} not in a PT_LOAD segment')
 
 
 def load_vtables(path, wanted):
@@ -132,7 +132,7 @@ def load_vtables(path, wanted):
     mangled = {}
     for vt in wanted:
         if vt not in syms:
-            raise SystemExit('{0}: vtable symbol {1} not found'.format(path, vt))
+            raise SystemExit(f'{path}: vtable symbol {vt} not found')
         addr, size = syms[vt]
         raw = elf.read(addr, size)
         entries = []
@@ -141,16 +141,14 @@ def load_vtables(path, wanted):
             entries.append(relocs.get(addr + i * 4) or funcs.get(val, ''))
         mangled[vt] = entries[2:]  # skip offset-to-top + typeinfo
     flat = [n for v in mangled.values() for n in v]
-    # Python 3.4 (Debian 8 / Ubuntu 14.04) has no subprocess.run.
-    proc = subprocess.Popen(
+    # Python 3.6 (CentOS 7) has no capture_output= / text=.
+    demangled = subprocess.run(
         ['c++filt'],
-        stdin=subprocess.PIPE,
+        input='\n'.join(flat),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-    )
-    demangled, _err = proc.communicate('\n'.join(flat))
-    demangled = demangled.split('\n')
+    ).stdout.split('\n')
     out, pos = {}, 0
     for vt, entries in mangled.items():
         out[vt] = demangled[pos:pos + len(entries)]
@@ -185,7 +183,7 @@ def main():
     vtables = load_vtables(server_so, {vt for f in CHECKS.values() for vt, _ in f.values()})
     failures = 0
     for rel, checks in CHECKS.items():
-        offsets = gamedata_offsets('{0}/{1}'.format(gamedata, rel))
+        offsets = gamedata_offsets(f'{gamedata}/{rel}')
         for key, (vt, method) in checks.items():
             if key not in offsets:
                 continue
@@ -193,21 +191,15 @@ def main():
             slots = [i for i, n in enumerate(vtables[vt]) if pat.search(n)]
             got = offsets[key]
             if got in slots:
-                print('OK: {0} {1} linux={2}'.format(rel, key, got))
+                print(f'OK: {rel} {key} linux={got}')
             elif not slots:
-                if got < len(vtables[vt]):
-                    slot = vtables[vt][got]
-                else:
-                    slot = 'out of range'
-                print('FAIL: {0} {1} linux={2}: {3} is not virtual on v34 (slot {2} is {4})'.format(
-                    rel, key, got, method, slot))
+                print(f'FAIL: {rel} {key} linux={got}: {method} is not virtual on v34 (slot {got} is {vtables[vt][got] if got < len(vtables[vt]) else "out of range"})')
                 failures += 1
             else:
-                print('FAIL: {0} {1} linux={2}, v34 vtable slot is {3} ({4})'.format(
-                    rel, key, got, slots, vtables[vt][slots[0]]))
+                print(f'FAIL: {rel} {key} linux={got}, v34 vtable slot is {slots} ({vtables[vt][slots[0]]})')
                 failures += 1
     if failures:
-        print('css34 vtable check FAILED ({0})'.format(failures))
+        print(f'css34 vtable check FAILED ({failures})')
         return 1
     print('css34 vtable check PASSED')
     return 0

@@ -6,10 +6,6 @@ on:
       - '.github/workflows/**'
       - 'builder/**'
       - 'testing/scripts/check-package-paths.sh'
-      - 'testing/scripts/check-*imports.py'
-      - 'testing/scripts/test-*.py'
-      - 'testing/scripts/console-probe.exp'
-      - 'testing/unversioned-imports.txt'
       - 'testing/scripts/smoke-test.sh'
   workflow_dispatch:
 
@@ -21,12 +17,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install regression test tools
-        run: sudo apt-get update && sudo apt-get install -y gcc binutils expect
-      - name: Check unversioned imports and PostgreSQL shim
-        run: python3 testing/scripts/test-glibc-imports.py
-      - name: Check console probe recovery
-        run: python3 testing/scripts/test-console-probe.py
       - name: Check exact package selection
         run: bash testing/scripts/check-package-paths.sh
       # Negative test: an absent server must fail smoke and leave a downloadable

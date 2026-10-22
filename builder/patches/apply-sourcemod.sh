@@ -95,9 +95,15 @@ mms_inc_old = """    compiler.cxxincludes += [
       os.path.join(self.mms_root, 'core', 'sourcehook'),
     ]"""
 mms_inc_new = """    legacy_core = os.path.join(self.mms_root, 'core-css34legacy')
-    if sdk.name in ('ep1', 'episode1') and os.path.isdir(legacy_core):
-      mms_core = legacy_core
-      print('==> Using Metamod core-css34legacy include path for ' + sdk.name + ': ' + mms_core)
+    sdk_name = sdk.get('name') if isinstance(sdk, dict) else getattr(sdk, 'name', None)
+    if sdk_name in ('ep1', 'episode1'):
+      if os.path.isdir(legacy_core):
+        mms_core = legacy_core
+        print('==> Using Metamod core-css34legacy include path for ' + str(sdk_name) + ': ' + mms_core)
+      elif os.path.isdir(os.path.join(self.mms_root, 'core-legacy')):
+        raise Exception('MM 1.10 detected (core-legacy exists) but core-css34legacy is missing in ' + self.mms_root + '! Run checkout-deps.sh / apply-mmsource-css34.sh first.')
+      else:
+        mms_core = os.path.join(self.mms_root, 'core')
     else:
       mms_core = os.path.join(self.mms_root, 'core')
     compiler.cxxincludes += [
@@ -109,6 +115,8 @@ if 'core-css34legacy' in text:
 elif mms_inc_old in text:
     text = text.replace(mms_inc_old, mms_inc_new, 1)
     print('==> Patched ConfigureForHL2 cxxincludes for core-css34legacy')
+else:
+    raise SystemExit('FAIL: ConfigureForHL2 cxxincludes anchor not found in AMBuildScript')
 
 path_block_old = """    if sdk.name == 'episode1' or sdk.name == 'darkm':
       paths.append(['public', 'dlls'])

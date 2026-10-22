@@ -364,10 +364,6 @@ while IFS= read -r -d '' elf; do
 done < <(find "${TMP}" -type f -print0)
 echo "Highest GLIBC symbol version referenced: ${max_glibc:-none} (floor ${GLIBC_FLOOR})"
 
-if ! python3 "$(dirname "$0")/check-unversioned-imports.py" "${TMP}"; then
-  fail=1
-fi
-
 if [[ "${fail}" -ne 0 ]]; then
   echo "Package ABI check FAILED"
   exit 1

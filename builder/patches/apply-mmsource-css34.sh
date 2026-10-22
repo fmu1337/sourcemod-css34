@@ -78,52 +78,6 @@ if [ -d "$legacy_dir/sourcehook" ]; then
   export MMS_CSS34_SH_H="$legacy_core_dir/sourcehook/sourcehook.h"
   export MMS_CSS34_ROOT="$mms_dir"
   "${PY[@]}" "$script_dir/gen-sh-decl-extern-v4.py"
-
-  # bintools uses modern PassInfo/ProtoInfo; omit legacy ProtoInfo when the shim is active.
-  export MMS_CSS34_SH_H
-  export MMS_PATCH_DIR="$script_dir"
-  "${PY[@]}" - <<'PY'
-from pathlib import Path
-import os
-
-path = Path(os.environ['MMS_CSS34_SH_H'])
-text = path.read_text()
-marker = 'SOURCEMOD_BINTOOLS_PROTO_SHIM'
-if marker in text:
-    print('==> sourcehook.h ProtoInfo shim guard already present in core-css34legacy')
-else:
-    old = """\tstruct ProtoInfo
-\t{
-\t\tProtoInfo(int rtsz, int nop, const int *p) : beginningNull(0), retTypeSize(rtsz), numOfParams(nop), params(p)
-\t\t{
-\t\t}
-\t\tint beginningNull;\t\t//!< To distinguish from old protos (which never begin with 0)
-\t\tint retTypeSize;\t\t//!< 0 if void
-\t\tint numOfParams;\t\t//!< number of parameters
-\t\tconst int *params;\t\t//!< params[0]=0 (or -1 for vararg), params[1]=size of first param, ...
-\t};"""
-    new = """#ifndef SOURCEMOD_BINTOOLS_PROTO_SHIM
-\tstruct ProtoInfo
-\t{
-\t\tProtoInfo(int rtsz, int nop, const int *p) : beginningNull(0), retTypeSize(rtsz), numOfParams(nop), params(p)
-\t\t{
-\t\t}
-\t\tint beginningNull;\t\t//!< To distinguish from old protos (which never begin with 0)
-\t\tint retTypeSize;\t\t//!< 0 if void
-\t\tint numOfParams;\t\t//!< number of parameters
-\t\tconst int *params;\t\t//!< params[0]=0 (or -1 for vararg), params[1]=size of first param, ...
-\t};
-#endif // !SOURCEMOD_BINTOOLS_PROTO_SHIM"""
-    if old not in text:
-        raise SystemExit('Failed to locate legacy ProtoInfo in sourcehook.h')
-    path.write_text(text.replace(old, new, 1))
-    print('==> Wrapped legacy ProtoInfo for bintools shim in core-css34legacy sourcehook.h')
-
-shim_src = Path(os.environ['MMS_PATCH_DIR']) / 'sourcehook-pibuilder-shim.h'
-shim_dst = path.parent / 'sourcehook_pibuilder.h'
-shim_dst.write_text(shim_src.read_text())
-print(f'==> Installed {shim_dst.name} into core-css34legacy/sourcehook for css34 bintools builds')
-PY
 else
   echo "Missing $legacy_dir/sourcehook — cannot target css34 Metamod" >&2
   exit 1
@@ -131,31 +85,22 @@ fi
 
 export MMS_LEGACY_CORE_DIR="$legacy_core_dir"
 export MMS_LEGACY_DIR="$legacy_dir"
-export MMS_LEGACY_SHA="${MMS_LEGACY_SHA:-a112f84e1fe9659918300c65102ad97cdc5b106d}"
 "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 import re
-import urllib.request
 
 legacy_core = Path(os.environ['MMS_LEGACY_CORE_DIR'])
 legacy_dir = Path(os.environ['MMS_LEGACY_DIR'])
-legacy_sha = os.environ['MMS_LEGACY_SHA']
 
 api_path = legacy_dir / 'ISmmAPI.h'
 plugin_path = legacy_dir / 'ISmmPlugin.h'
 
-if api_path.is_file() and plugin_path.is_file():
-    api = api_path.read_text()
-    plugin = plugin_path.read_text()
-else:
-    print(f'==> Fetching Metamod core-legacy ISmm headers ({legacy_sha})')
-    api_url = f'https://raw.githubusercontent.com/alliedmodders/metamod-source/{legacy_sha}/core-legacy/ISmmAPI.h'
-    plugin_url = f'https://raw.githubusercontent.com/alliedmodders/metamod-source/{legacy_sha}/core-legacy/ISmmPlugin.h'
-    with urllib.request.urlopen(api_url) as resp:
-        api = resp.read().decode('utf-8')
-    with urllib.request.urlopen(plugin_url) as resp:
-        plugin = resp.read().decode('utf-8')
+if not (api_path.is_file() and plugin_path.is_file()):
+    raise SystemExit(f'FAIL: missing {api_path} or {plugin_path} in Metamod tree')
+
+api = api_path.read_text()
+plugin = plugin_path.read_text()
 
 def strip_old_gcc_guard(text: str) -> str:
     return re.sub(

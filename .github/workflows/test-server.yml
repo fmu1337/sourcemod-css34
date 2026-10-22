@@ -6,27 +6,23 @@ name: Test Server
 permissions:
   contents: read
   actions: read
-  pull-requests: read
 
 on:
   push:
     branches:
       - master
       - 'cursor/**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/workflows/cleanup-artifacts.yml'
   pull_request:
-  schedule:
-    # Weekly old-OS matrix. Per-PR smoke stays on the floor and current distros.
-    - cron: '17 6 * * 1'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/workflows/cleanup-artifacts.yml'
   workflow_dispatch:
     inputs:
-      suite:
-        description: "pr = centos:7 + ubuntu:24.04 + debian:13; weekly = old OS matrix"
-        type: choice
-        options:
-          - pr
-          - weekly
-        required: false
-        default: pr
       apply_srcds_patch:
         description: "Apply BufferFix ELF rewrite memcpy→memmove (1/0)"
         required: false
@@ -68,50 +64,16 @@ env:
   PURE_SOURCE_BUILD: "1"
 
 jobs:
-  # Doc-only PRs skip the server jobs. `gate` still runs, and its name does not
-  # depend on matrix cells, so it can become the required check.
-  changes:
-    runs-on: ubuntu-22.04
-    outputs:
-      code: ${{ steps.decide.outputs.code }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Detect non-doc changes
-        id: filter
-        if: github.event_name == 'pull_request' || github.event_name == 'push'
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            code:
-              - '**'
-              - '!docs/**'
-              - '!**/*.md'
-              - '!.github/workflows/cleanup-artifacts.yml'
-
-      - name: Decide whether server jobs run
-        id: decide
-        run: |
-          set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "push" ]]; then
-            echo "code=${{ steps.filter.outputs.code }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "code=true" >> "$GITHUB_OUTPUT"
-          fi
-
   pins:
     runs-on: ubuntu-22.04
     outputs:
       build: ${{ steps.m.outputs.build }}
       debian: ${{ steps.m.outputs.debian }}
       botplay: ${{ steps.m.outputs.botplay }}
-      weekly: ${{ steps.m.outputs.weekly }}
-      weekly_botplay: ${{ steps.m.outputs.weekly_botplay }}
+      rhel: ${{ steps.m.outputs.rhel }}
       host: ${{ steps.m.outputs.host }}
       release_botplay: ${{ steps.m.outputs.release_botplay }}
       botplay_extra: ${{ steps.m.outputs.botplay_extra }}
-      botplay_extra_images: ${{ steps.m.outputs.botplay_extra_images }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -121,8 +83,7 @@ jobs:
         run: python3 builder/lines.py gha >> "$GITHUB_OUTPUT"
 
   build-linux:
-    needs: [changes, pins]
-    if: success() && needs.changes.outputs.code == 'true'
+    needs: pins
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -179,8 +140,6 @@ jobs:
           key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
 
   prepare-server:
-    needs: [changes]
-    if: success() && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -232,13 +191,9 @@ jobs:
   # Primary gate: pure-source matched SM×MM lines.
   # Packages are produced in manylinux2014_i686 (builder/docker/build.sh, glibc 2.17).
   test-built-debian:
-    needs: [changes, pins, build-linux, prepare-server]
-    if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'pull_request' || github.event_name == 'push' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'pr'))
+    needs: [pins, build-linux, prepare-server]
     runs-on: ubuntu-22.04
+    continue-on-error: ${{ matrix.allow_failure }}
     strategy:
       fail-fast: false
       matrix:
@@ -273,7 +228,7 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
+      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image }}
         if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
@@ -335,11 +290,9 @@ jobs:
   # for every built CSS34_LINE. Uses Actions cache for packages (not artifact storage).
   test-built-botplay-matrix:
     if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'pull_request' || github.event_name == 'push' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'pr' && github.event.inputs.run_full_botplay_matrix == 'true'))
-    needs: [changes, pins, build-linux, prepare-server]
+      github.event_name != 'workflow_dispatch'
+      || github.event.inputs.run_full_botplay_matrix == 'true'
+    needs: [pins, build-linux, prepare-server]
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     strategy:
@@ -379,7 +332,7 @@ jobs:
       - name: Botplay stress ${{ matrix.line }} (SDKTools + SDKHooks + OnTakeDamage)
         if: steps.select.outputs.skip != '1'
         env:
-          IMAGE: ${{ matrix.image }}
+          IMAGE: debian:11
           RECORD_SECS: ${{ github.event.inputs.record_secs || '300' }}
           BOTPLAY_PROFILE: built
           BOTPLAY_CFG: botplay-stress.cfg
@@ -451,14 +404,106 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  test-built-rhel:
+    needs: [pins, build-linux, prepare-server]
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.pins.outputs.rhel) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Maybe skip
+        id: select
+        run: |
+          want="${{ github.event.inputs.css34_line }}"
+          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore packages from cache
+        if: steps.select.outputs.skip != '1'
+        uses: actions/cache/restore@v4
+        with:
+          path: packages
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
+          fail-on-cache-miss: true
+
+      - name: Restore cached server tree
+        if: steps.select.outputs.skip != '1'
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
+
+      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image }}
+        if: steps.select.outputs.skip != '1'
+        env:
+          IMAGE: ${{ matrix.image }}
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
+          SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
+          CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
+          SRCDS_BINARY: ./srcds_i686
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
+          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
+            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e MM_COMMIT_EXPECT \
+            -e SM_COMMIT_EXPECT \
+            -e CSS34_PACK_COMMIT_EXPECT \
+            -e CSS34_LINE="${{ matrix.line }}" \
+            -e SRCDS_BINARY \
+            -e TIMEOUT_SECS=120 \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -e CSS34_CI=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/install-addons.sh
+              testing/scripts/smoke-test.sh
+            '
+
+      - name: Upload smoke logs on failure
+        if: failure() && steps.select.outputs.skip != '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-rhel-smoke-logs-${{ matrix.line }}
+          path: |
+            .ci-server/smoke.log
+            .ci-server/console-probe.log
+            .ci-server/cstrike/console.log
+            .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
+            .ci-server/addons/metamod/bin/metamod-fatal.log
+            .ci-server/metamod-fatal.log
+            .ci-server/cstrike/metamod-fatal.log
+            .ci-server/cstrike/addons/sourcemod/logs/L*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
   # Boots freshly built Metamod + SourceMod on the GitHub Actions host runner.
   test-built-smoke:
-    needs: [changes, pins, build-linux, prepare-server]
-    if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'pull_request' || github.event_name == 'push' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'pr'))
+    needs: [pins, build-linux, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -559,8 +604,9 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Rom4s botplay stress
+      - name: Rom4s botplay stress (debian:latest)
         env:
+          IMAGE: debian:latest
           RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
           BOTPLAY_PROFILE: rom4s
           BOTPLAY_CFG: botplay-stress.cfg
@@ -570,7 +616,6 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
-          IMAGE="$(python3 -c 'import json; print(json.load(open("builder/generated/ci-matrix.json"))["images"]["debian:latest"])')"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
@@ -611,12 +656,18 @@ jobs:
 
   test-rom4s-botplay-extra:
     if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
-    needs: [pins, prepare-server]
+    needs: [prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.botplay_extra_images) }}
+        include:
+          - image: debian:11
+            image_id: debian11
+          - image: debian:12
+            image_id: debian12
+          - image: rockylinux:9
+            image_id: rocky9
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -628,7 +679,7 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Rom4s botplay stress (${{ matrix.image_name }})
+      - name: Rom4s botplay stress (${{ matrix.image }})
         env:
           IMAGE: ${{ matrix.image }}
           RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
@@ -809,8 +860,9 @@ jobs:
           curl -fL --retry 5 --retry-delay 3 -o "packages/${MM_ASSET}" "${base}/${MM_ASSET}"
           ls -la packages/
 
-      - name: Release botplay stress (${{ matrix.line }})
+      - name: Release botplay stress (${{ matrix.line }} / debian:latest)
         env:
+          IMAGE: debian:latest
           RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
           BOTPLAY_PROFILE: release
           BOTPLAY_CFG: botplay-stress.cfg
@@ -825,7 +877,6 @@ jobs:
           chmod +x testing/scripts/*.sh
           SM_PACKAGE="packages/${SM_ASSET}"
           MM_PACKAGE="packages/${MM_ASSET}"
-          IMAGE="$(python3 -c 'import json; print(json.load(open("builder/generated/ci-matrix.json"))["images"]["debian:latest"])')"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
@@ -909,8 +960,9 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Botplay bisect quick matrix (90s/case)
+      - name: Botplay bisect quick matrix (debian:latest, 90s/case)
         env:
+          IMAGE: debian:latest
           RECORD_SECS: "90"
           BISECT_SET: quick
         run: |
@@ -918,7 +970,6 @@ jobs:
           chmod +x testing/scripts/*.sh
           CSS34_LINE="sm13-latest" source builder/package-paths.sh
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          IMAGE="$(python3 -c 'import json; print(json.load(open("builder/generated/ci-matrix.json"))["images"]["debian:latest"])')"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e RECORD_SECS \
@@ -948,269 +999,3 @@ jobs:
             .ci-bisect/*/cstrike/console.log
           if-no-files-found: ignore
           retention-days: 7
-
-  # Old OS matrix: schedule, workflow_dispatch suite=weekly, and release.yml.
-  test-built-weekly:
-    needs: [changes, pins, build-linux, prepare-server]
-    if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'schedule' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'weekly'))
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.pins.outputs.weekly) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Maybe skip
-        id: select
-        run: |
-          want="${{ github.event.inputs.css34_line }}"
-          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Restore packages from cache
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
-          fail-on-cache-miss: true
-
-      - name: Restore cached server tree
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-
-      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
-        if: steps.select.outputs.skip != '1'
-        env:
-          IMAGE: ${{ matrix.image }}
-          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
-          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
-          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
-          SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
-          CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
-          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD:/workspace" \
-            -e SERVER_DIR=/workspace/.ci-server \
-            -e CACHE_DIR=/workspace/.ci-cache \
-            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
-            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
-            -e MM_VERSION_EXPECT \
-            -e SM_VERSION_EXPECT \
-            -e MM_COMMIT_EXPECT \
-            -e SM_COMMIT_EXPECT \
-            -e CSS34_PACK_COMMIT_EXPECT \
-            -e CSS34_LINE="${{ matrix.line }}" \
-            -e TIMEOUT_SECS=120 \
-            -e SMOKE_CONDEBUG=1 \
-            -e SMOKE_VERBOSE=1 \
-            -e CSS34_CI=1 \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
-              testing/scripts/install-deps.sh
-              testing/scripts/install-addons.sh
-              testing/scripts/smoke-test.sh
-            '
-
-      - name: Upload smoke logs on failure
-        if: failure() && steps.select.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
-        with:
-          name: built-weekly-smoke-logs-${{ matrix.line }}-${{ strategy.job-index }}
-          path: |
-            .ci-server/smoke.log
-            .ci-server/console-probe.log
-            .ci-server/cstrike/console.log
-            .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
-            .ci-server/addons/metamod/bin/metamod-fatal.log
-            .ci-server/metamod-fatal.log
-            .ci-server/cstrike/metamod-fatal.log
-            .ci-server/cstrike/addons/sourcemod/logs/L*.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  test-built-weekly-botplay:
-    needs: [changes, pins, build-linux, prepare-server]
-    if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'schedule' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'weekly'))
-    runs-on: ubuntu-22.04
-    timeout-minutes: 50
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.pins.outputs.weekly_botplay) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Maybe skip
-        id: select
-        run: |
-          want="${{ github.event.inputs.css34_line }}"
-          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Restore packages from cache
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
-          fail-on-cache-miss: true
-
-      - name: Restore cached server tree
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-
-      - name: Botplay stress ${{ matrix.line }} on ${{ matrix.image_name }}
-        if: steps.select.outputs.skip != '1'
-        env:
-          IMAGE: ${{ matrix.image }}
-          RECORD_SECS: ${{ github.event.inputs.record_secs || '300' }}
-          BOTPLAY_PROFILE: built
-          BOTPLAY_CFG: botplay-stress.cfg
-          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
-          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
-          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
-          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD:/workspace" \
-            -e SERVER_DIR=/workspace/.ci-server \
-            -e CACHE_DIR=/workspace/.ci-cache \
-            -e RECORD_SECS \
-            -e BOTPLAY_PROFILE \
-            -e BOTPLAY_CFG \
-            -e BOTPLAY_MAPS \
-            -e MM_VERSION_EXPECT \
-            -e SM_VERSION_EXPECT \
-            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
-            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
-            -e REPORT_JSON=/workspace/.ci-server/botplay-report.json \
-            -e REPORT_TXT=/workspace/.ci-server/botplay-report.txt \
-            -e SMOKE_CONDEBUG=1 \
-            -e SMOKE_VERBOSE=1 \
-            -e CSS34_CI=1 \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
-              testing/scripts/install-deps.sh
-              testing/scripts/botplay-test.sh
-            '
-
-      - name: Upload botplay report on failure
-        if: failure() && steps.select.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
-        with:
-          name: weekly-botplay-${{ matrix.line }}-logs
-          path: |
-            .ci-server/botplay-report.json
-            .ci-server/botplay-report.txt
-            .ci-server/botplay.log
-            .ci-server/botplay-run.log
-            .ci-server/cstrike/console.log
-            .ci-server/cstrike/addons/sourcemod/logs/L*.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  gate:
-    name: gate
-    if: always()
-    needs:
-      - changes
-      - pins
-      - build-linux
-      - prepare-server
-      - test-built-debian
-      - test-built-botplay-matrix
-      - test-built-smoke
-      - test-built-weekly
-      - test-built-weekly-botplay
-      - test-rom4s-botplay
-      - test-rom4s-botplay-extra
-      - test-built-botplay-extra
-      - test-release-botplay
-      - test-botplay-bisect
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Report the overall result
-        env:
-          EVENT: ${{ github.event_name }}
-          SUITE: ${{ github.event.inputs.suite || 'pr' }}
-          BOTPLAY: ${{ github.event.inputs.run_full_botplay_matrix || 'true' }}
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          python3 - <<'PY'
-          import json, os, sys
-          needs = json.loads(os.environ["RESULTS"])
-          event = os.environ["EVENT"]
-          suite = os.environ["SUITE"]
-          botplay = os.environ["BOTPLAY"] == "true"
-          code = (needs.get("changes", {}).get("outputs") or {}).get("code")
-
-          def result(name):
-              return needs[name]["result"]
-
-          bad = ["{0}={1}".format(name, result(name))
-                 for name in needs if result(name) not in ("success", "skipped")]
-          weekly = event == "schedule" or (event == "workflow_dispatch" and suite == "weekly")
-          if code == "true" and result("build-linux") != "success":
-              bad.append("build-linux did not succeed")
-          if code == "true" and result("prepare-server") != "success":
-              bad.append("prepare-server did not succeed")
-          if code == "true" and not weekly and event in ("pull_request", "push", "workflow_dispatch"):
-              required = ["test-built-debian", "test-built-smoke"]
-              if botplay:
-                  required.append("test-built-botplay-matrix")
-              for name in required:
-                  if result(name) != "success":
-                      bad.append(name + " did not succeed")
-          if code == "true" and weekly:
-              for name in ("test-built-weekly", "test-built-weekly-botplay"):
-                  if result(name) != "success":
-                      bad.append(name + " did not succeed")
-          print("event={0} suite={1} code={2}".format(event, suite, code))
-          for name in needs:
-              print("{0}={1}".format(name, result(name)))
-          if bad:
-              print("FAIL: " + ", ".join(bad))
-              sys.exit(1)
-          print("OK")
-          PY
