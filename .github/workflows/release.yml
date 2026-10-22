@@ -215,6 +215,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
+          CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
@@ -244,7 +245,8 @@ jobs:
 
   windows:
     needs: [resolve-line]
-    runs-on: windows-latest
+    # Same pin as build.yml (builder/windows-toolchain.env).
+    runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -256,10 +258,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Set up MSVC (x86)
+      - name: Set up MSVC (x86, toolset 14.44, SDK 10.0.26100.0)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x86
+          toolset: "14.44"
+          sdk: 10.0.26100.0
 
       - name: Build SourceMod + Metamod for CS:S v34
         shell: bash
@@ -272,6 +276,8 @@ jobs:
             builder/build-metamod.sh builder/write-build-stamps.sh builder/resolve-version.sh \
             builder/py.sh builder/patches/*.sh
           builder/run/windows.sh
+          source builder/package-paths.sh
+          python builder/package_windows.py check "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE"
 
       - name: Attach Windows packages to GitHub Release
         if: github.ref_type == 'tag'
@@ -279,6 +285,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
+          CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
@@ -295,10 +302,9 @@ jobs:
           if ! gh release view "${tag}" >/dev/null 2>&1; then
             gh release create "${tag}" --title "${tag}" --notes "${notes}" --latest=false
           fi
+          source builder/package-paths.sh
           gh release upload "${tag}" \
-            packages/sourcemod-*-css34-windows.zip \
-            packages/mmsource-*-css34-windows.zip \
-            --clobber
+            "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE" --clobber
           if [[ "$(gh release view "${tag}" --json isDraft -q .isDraft)" == "true" ]]; then
             gh release edit "${tag}" --draft=false --latest=false
           fi

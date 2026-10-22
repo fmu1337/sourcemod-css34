@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Boot the Windows CS:S v34 dedicated server (srcds.exe) with the Windows
 # Metamod + SourceMod packages and probe them over RCON: under Wine on Linux,
-# or natively from Git Bash on Windows (MINGW/MSYS, e.g. the windows-latest runner).
+# or natively from Git Bash on Windows (MINGW/MSYS, e.g. the windows-2022 runner).
 #
 # Inputs (env):
 #   SM_WIN_PACKAGE / MM_WIN_PACKAGE  Windows zips (sourcemod-*-windows.zip, mmsource-*-windows.zip)
@@ -178,8 +178,17 @@ echo "==> srcds.exe answers RCON"
 
 IFS=',' read -r -a load <<<"${LOAD_EXTS:-}"
 for e in "${load[@]}"; do
+  [[ -n "$e" ]] || continue
   rcon "sm exts load ${e}"
 done
+# DHooks ships in sm12/sm13 packages (dhooks.ext.dll) and is absent on lines
+# that do not build it. Require it only when the zip actually contains it.
+if [[ -f "${SM_DIR}/extensions/dhooks.ext.dll" ]]; then
+  case ",${LOAD_EXTS:-}," in
+    *,dhooks,*) ;;
+    *) rcon "sm exts load dhooks" ;;
+  esac
+fi
 
 out="$(rcon "meta version" "meta list" "sm version" "sm exts list" "sm plugins list")"
 echo "$out"
@@ -192,11 +201,28 @@ if [[ -n "${MM_REV_EXPECT:-}" ]]; then
       || fail "meta Build ID ${MM_REV_EXPECT}:${MM_COMMIT_EXPECT:0:7} not reported"
   fi
 fi
-IFS=',' read -r -a exts <<<"${EXPECT_EXTS}"
-for e in "${exts[@]}"; do
-  grep -q "\] ${e} (" <<<"$out" || fail "extension '${e}' not loaded"
-done
-grep -qi "<FAILED>\|<ERROR>" <<<"$out" && fail "an extension or plugin failed to load"
+require_exts() {
+  local list="$1" e
+  IFS=',' read -r -a exts <<<"${EXPECT_EXTS}"
+  for e in "${exts[@]}"; do
+    [[ -n "$e" ]] || continue
+    # A bare grep -q under set -e aborts the caller when this function's
+    # status is the miss (1). Keep the failure inside the if.
+    if ! grep -q "\] ${e} (" <<<"$list"; then
+      fail "extension '${e}' not loaded"
+    fi
+  done
+  if [[ -f "${SM_DIR}/extensions/dhooks.ext.dll" ]]; then
+    if ! grep -q "\] DHooks (" <<<"$list"; then
+      fail "extension 'DHooks' not loaded"
+    fi
+  fi
+  if grep -qi "<FAILED>\|<ERROR>" <<<"$list"; then
+    fail "an extension or plugin failed to load"
+  fi
+  return 0
+}
+require_exts "$out"
 
 if [[ "${DHOOKS_PROBE_SECS}" -gt 0 ]]; then
   echo "==> Playing ${DHOOKS_PROBE_SECS}s with bots (DHooks probe)"
@@ -232,6 +258,7 @@ done
 out="$(rcon "status" "sm exts list")"
 echo "$out"
 grep -q "map     :  ${MAP2}" <<<"$out" || fail "map is not ${MAP2} after changelevel"
+require_exts "$out"
 
 rcon "quit" >/dev/null 2>&1 || true
 if [[ "${NATIVE}" == 1 ]]; then echo "Windows smoke test PASSED"; else echo "Wine smoke test PASSED"; fi

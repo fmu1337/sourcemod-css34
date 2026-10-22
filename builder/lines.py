@@ -28,7 +28,10 @@ GENERATED = (
     ("builder/generated/tag-map.sh", "tags"),
     ("README.md", "readme"),
 )
-WINDOWS_EXTS = "CS Tools,SDK Tools,BinTools"
+# SDK Hooks is optional autoload; the Windows job passes sdkhooks in load_exts.
+# DHooks is required by wine-smoke-test.sh only when dhooks.ext.dll was built.
+WINDOWS_EXTS = "CS Tools,SDK Tools,BinTools,SDK Hooks"
+WINDOWS_LOAD_EXTS = "sdkhooks"
 IMAGE_RE = re.compile(r"[a-z0-9][a-z0-9._:/-]*")
 TAG_RE = re.compile(r"[A-Za-z0-9._-]+")
 
@@ -265,7 +268,7 @@ def ci_matrix(data):
             item["mm_rev"] = part["mm_rev"]
             item["mm_commit"] = part["mm_commit"]
             item["exts"] = WINDOWS_EXTS
-            item["load_exts"] = ""
+            item["load_exts"] = WINDOWS_LOAD_EXTS
             windows.append(item)
     require(host and windows, "host and windows matrices must be non-empty")
     release = []

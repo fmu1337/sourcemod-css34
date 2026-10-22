@@ -105,9 +105,12 @@ current lines were moved to `b1f5192` and rebuilt on 2026-10-12, before the `-r<
 | `1.11.0.6572-mm1.10.7`, `1.12.0.7245-mm1.12.0` | pre-matrix | 6572 / 7245 | 1.10.7-dev / 1.12.0-dev (git1224) | historical, superseded |
 | `1.12.0.7239-mm1.12.0`, `1.13.0.7394-mm1.12.0` | pre-matrix | 7239 / 7394 | 1.12.0-dev | **known-bad** (below) |
 
-Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}`; Linux Metamod is
-`mmsource-<ver>-git<mmrev>-css34-linux.tar.gz` on the `-r2` tags and `mmsource-<ver>-dev-css34-linux.tar.gz`
-on older ones; Windows Metamod is still `mmsource-<ver>-dev-css34-windows.zip` everywhere.
+Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}` and
+`mmsource-<ver>-git<mmrev>-css34-{linux.tar.gz|windows.zip}` for packages built from this tree.
+Older Linux tags before `-r2` keep `mmsource-<ver>-dev-css34-linux.tar.gz`;
+tags published before the Windows rename keep `mmsource-<ver>-dev-css34-windows.zip`.
+Historical URLs in `testing/versions/matrix.json` intentionally retain those names.
+The rename consumer audit and installer migration are in [docs/WINDOWS_ASSETS.md](docs/WINDOWS_ASSETS.md).
 
 ### Installer contract (fmu1337/v34_server_base)
 
@@ -147,6 +150,7 @@ the *Release Maintenance* workflow (Actions → Release Maintenance → Run).
 **Manifest in every package** (tags built after #69, i.e. the `-r2` tags and the pointers).
 `addons/sourcemod/css34-package.json` and `addons/metamod/css34-package.json`:
 `line, sm_version, sm_commit, mm_version, mm_commit, extension_api, extension_api_min, metamod_binary, build_date`.
+Windows packages also record `msvc_toolset` and `windows_sdk` (the pinned `windows-2022` vcvars toolset and SDK).
 `extension_api` / `extension_api_min` are `SMINTERFACE_EXTENSIONAPI_VERSION` / `_MIN` of the build
 (SM 1.11/1.12 have no `_MIN` → `1`; 1.12.0.7253: 8; 1.13.0.7404: 9–9; 1.13.0.7472 / 7565: 9–11).
 
@@ -205,7 +209,7 @@ MM 2.0 builds (`sm13-mm20`, `sm13-mm20-khook`) are archived outside CI in
 Use that branch to reproduce them; master rejects those build selections. Existing
 release assets, line IDs and pointer URLs remain available.
 
-`builder/package-paths.sh` resolves exact Linux package names from the selected
+`builder/package-paths.sh` resolves exact Linux and Windows package names from the selected
 line and revisions. Stale packages cannot silently replace the expected build.
 No root package symlinks are created.
 
@@ -218,9 +222,10 @@ libgcc_s and CS:S v34 engine allowlist. See [the patch inventory](docs/PATCHES.m
 `builder/run/linux.sh` uses `CC` / `CXX` from the environment. `build.sh` sets
 them to devtoolset-10 `gcc` / `g++` inside the manylinux image.
 
-Windows (x86 MSVC env):
+Windows (x86, `windows-2022`, MSVC toolset 14.44, Windows SDK 10.0.26100.0; see `builder/windows-toolchain.env`):
 
 ```bash
+CSS34_LINE=sm12-latest builder/run/windows.sh
 CSS34_LINE=sm13-latest builder/run/windows.sh
 ```
 
@@ -238,8 +243,8 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
   **Actions cache**. Reference (rom4s / published-release) botplay, extra distros and bisect are
   `workflow_dispatch` opt-ins.
 - `.github/workflows/build.yml` — Linux build of `sm13-latest` with `builder/docker/build.sh`
-  (manylinux2014); **Windows** build of `sm13-latest`, booted
-  natively on `windows-latest` and under Wine (`wine-smoke`).
+  (manylinux2014); **Windows** builds of `sm12-latest` and `sm13-latest` on `windows-2022`
+  (MSVC 14.44, SDK 10.0.26100.0), booted natively and under Wine (`wine-smoke`).
 - `.github/workflows/release.yml` — tag-driven; tag (minus `-r<N>`) maps to `CSS34_LINE`; packages attach with
   `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke
   on the weekly OS matrix, botplay on `centos:7`, line pointer, pointer smoke.
