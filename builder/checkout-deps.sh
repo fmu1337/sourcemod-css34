@@ -29,9 +29,11 @@ fetch_verified() {
 # Static OpenSSL 1.1.1w. CentOS 7 only ships 1.0.2, and the MariaDB connector
 # links -lssl/-lcrypto. OpenSSL 3.x needs perl modules this image does not have.
 install_openssl_111w() {
-  local prefix="$DEPS/openssl"
+  local abs_deps
+  abs_deps="$(cd "$DEPS" && pwd)"
+  local prefix="$abs_deps/openssl"
   local stamp="$prefix/.css34-openssl-1.1.1w"
-  local tarball="$DEPS/openssl-1.1.1w.tar.gz"
+  local tarball="$abs_deps/openssl-1.1.1w.tar.gz"
   local sha="cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8"
   if [[ -f "$stamp" && -f "$prefix/lib/libssl.a" && -f "$prefix/lib/libcrypto.a" ]]; then
     echo "==> OpenSSL 1.1.1w already built at $prefix"
@@ -42,7 +44,7 @@ install_openssl_111w() {
     tar -C "$DEPS" -xzf "$tarball"
     (
       cd "$DEPS/openssl-1.1.1w"
-      ./Configure linux-elf no-shared no-tests no-dso -fPIC --prefix="$prefix"
+      ./Configure linux-elf -m32 no-shared no-tests no-dso -fPIC --prefix="$prefix"
       make -j"$(nproc)"
       make install_sw
     )

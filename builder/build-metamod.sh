@@ -60,7 +60,7 @@ esac
 
 if [[ "$MMS_MODE" == "1.10" ]]; then
   # Headers must already be css34-patched (checkout-deps applies apply-mmsource-css34.sh).
-  if ! grep -q 'SH_IFACE_VERSION 4' "$MMS_DIR/core/sourcehook/sourcehook.h" 2>/dev/null; then
+  if ! grep -q 'SH_IFACE_VERSION 4' "$MMS_DIR/core-css34legacy/sourcehook/sourcehook.h" 2>/dev/null; then
     echo "==> Applying css34 Metamod header patches before build"
     BUILD_PLATFORM="$BUILD_PLATFORM" MMS_DIR="$MMS_DIR" \
       bash "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$MMS_DIR"

@@ -5,10 +5,12 @@
 # registering hooks (HookManPubFunc / AddHook ABI mismatch → null call).
 #
 # We:
-#  1) Replace core/sourcehook with core-legacy (SH_IFACE_VERSION 4)
-#  2) Keep legacy ISmmAPI *vtable order* (and PLAPI 11) but rename methods to
-#     modern SourceMod-facing names so SM compiles without metamod_wrappers.h
-#     macros that break Valve IConCommandBaseAccessor::RegisterConCommandBase.
+#  1) Generate $mms_dir/core-css34legacy/ containing core/*.h and
+#     core-legacy/sourcehook (SH_IFACE_VERSION 4).
+#  2) Keep legacy ISmmAPI *vtable order* (and PLAPI 11 in core-css34legacy/ISmmPluginExt.h)
+#     but rename methods to modern SourceMod-facing names so SM compiles without
+#     metamod_wrappers.h macros that break Valve IConCommandBaseAccessor::RegisterConCommandBase.
+#  3) Keep core/ untouched (except core/metamod_console.cpp for CSS34 pack commit stamp).
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,7 +20,7 @@ PY=(bash "$script_dir/../py.sh")
 mms_dir="${1:?mmsource directory required}"
 core_dir="$mms_dir/core"
 legacy_dir="$mms_dir/core-legacy"
-ext_h="$core_dir/ISmmPluginExt.h"
+legacy_core_dir="$mms_dir/core-css34legacy"
 
 if [ ! -d "$core_dir" ]; then
   echo "Missing Metamod core dir: $core_dir" >&2
@@ -58,98 +60,56 @@ for path, old, new in edits:
     print(f'==> Patched {path.relative_to(root)} __GNUC__ guard for GCC >= 4')
 PYGNUC
 
+echo "==> Generating $legacy_core_dir with core/*.h"
+mkdir -p "$legacy_core_dir"
+cp -a "$core_dir/"*.h "$legacy_core_dir/"
+
 # --- SourceHook v4 (required by css34 metamod.1.ep1.so) ---
 if [ -d "$legacy_dir/sourcehook" ]; then
-  echo "==> Installing core-legacy SourceHook (SH_IFACE_VERSION 4) into core/"
-  rm -rf "$core_dir/sourcehook"
-  cp -a "$legacy_dir/sourcehook" "$core_dir/sourcehook"
-  # loader/AMBuilder also looks for $mms_root/sourcehook
-  if [ "${BUILD_PLATFORM:-linux}" = "windows" ]; then
-    rm -rf "$mms_dir/sourcehook"
-    cp -a "$core_dir/sourcehook" "$mms_dir/sourcehook"
-  else
-    ln -sfn core/sourcehook "$mms_dir/sourcehook"
-  fi
-  if ! grep -q 'SH_IFACE_VERSION 4' "$core_dir/sourcehook/sourcehook.h"; then
+  echo "==> Installing core-legacy SourceHook (SH_IFACE_VERSION 4) into core-css34legacy/"
+  rm -rf "$legacy_core_dir/sourcehook"
+  cp -a "$legacy_dir/sourcehook" "$legacy_core_dir/sourcehook"
+  if ! grep -q 'SH_IFACE_VERSION 4' "$legacy_core_dir/sourcehook/sourcehook.h"; then
     echo "Expected SH_IFACE_VERSION 4 after core-legacy sourcehook install" >&2
     exit 1
   fi
   # SourceMod 1.11 uses SH_DECL_EXTERN* (modern-only). Emit v4-ABI equivalents
   # (AddHook has no AddHookMode; VP hooks use separate FHVPAdd).
-  export MMS_CSS34_SH_H="$core_dir/sourcehook/sourcehook.h"
+  export MMS_CSS34_SH_H="$legacy_core_dir/sourcehook/sourcehook.h"
   export MMS_CSS34_ROOT="$mms_dir"
   "${PY[@]}" "$script_dir/gen-sh-decl-extern-v4.py"
-
-  # bintools uses modern PassInfo/ProtoInfo; omit legacy ProtoInfo when the shim is active.
-  export MMS_CSS34_SH_H
-  export MMS_PATCH_DIR="$script_dir"
-  "${PY[@]}" - <<'PY'
-from pathlib import Path
-import os
-
-path = Path(os.environ['MMS_CSS34_SH_H'])
-text = path.read_text()
-marker = 'SOURCEMOD_BINTOOLS_PROTO_SHIM'
-if marker in text:
-    print('==> sourcehook.h ProtoInfo shim guard already present')
-else:
-    old = """\tstruct ProtoInfo
-\t{
-\t\tProtoInfo(int rtsz, int nop, const int *p) : beginningNull(0), retTypeSize(rtsz), numOfParams(nop), params(p)
-\t\t{
-\t\t}
-\t\tint beginningNull;\t\t//!< To distinguish from old protos (which never begin with 0)
-\t\tint retTypeSize;\t\t//!< 0 if void
-\t\tint numOfParams;\t\t//!< number of parameters
-\t\tconst int *params;\t\t//!< params[0]=0 (or -1 for vararg), params[1]=size of first param, ...
-\t};"""
-    new = """#ifndef SOURCEMOD_BINTOOLS_PROTO_SHIM
-\tstruct ProtoInfo
-\t{
-\t\tProtoInfo(int rtsz, int nop, const int *p) : beginningNull(0), retTypeSize(rtsz), numOfParams(nop), params(p)
-\t\t{
-\t\t}
-\t\tint beginningNull;\t\t//!< To distinguish from old protos (which never begin with 0)
-\t\tint retTypeSize;\t\t//!< 0 if void
-\t\tint numOfParams;\t\t//!< number of parameters
-\t\tconst int *params;\t\t//!< params[0]=0 (or -1 for vararg), params[1]=size of first param, ...
-\t};
-#endif // !SOURCEMOD_BINTOOLS_PROTO_SHIM"""
-    if old not in text:
-        raise SystemExit('Failed to locate legacy ProtoInfo in sourcehook.h')
-    path.write_text(text.replace(old, new, 1))
-    print('==> Wrapped legacy ProtoInfo for bintools shim in sourcehook.h')
-
-shim_src = Path(os.environ['MMS_PATCH_DIR']) / 'sourcehook-pibuilder-shim.h'
-shim_dst = path.parent / 'sourcehook_pibuilder.h'
-shim_dst.write_text(shim_src.read_text())
-print(f'==> Installed {shim_dst.name} for css34 bintools builds')
-PY
 else
   echo "Missing $legacy_dir/sourcehook — cannot target css34 Metamod" >&2
   exit 1
 fi
 
-MMS_LEGACY_SHA="${MMS_LEGACY_SHA:-a112f84e1fe9659918300c65102ad97cdc5b106d}"
-tmpdir="$(mktemp -d)"
-cleanup() { rm -rf "$tmpdir"; }
-trap cleanup EXIT
-
-echo "==> Fetching Metamod core-legacy ISmm headers (${MMS_LEGACY_SHA})"
-curl -fsSL -o "$tmpdir/ISmmAPI.h" \
-  "https://raw.githubusercontent.com/alliedmodders/metamod-source/${MMS_LEGACY_SHA}/core-legacy/ISmmAPI.h"
-curl -fsSL -o "$tmpdir/ISmmPlugin.h" \
-  "https://raw.githubusercontent.com/alliedmodders/metamod-source/${MMS_LEGACY_SHA}/core-legacy/ISmmPlugin.h"
-
-export MMS_CORE_DIR="$core_dir"
-export MMS_TMPDIR="$tmpdir"
+export MMS_LEGACY_CORE_DIR="$legacy_core_dir"
+export MMS_LEGACY_DIR="$legacy_dir"
+export MMS_LEGACY_SHA="${MMS_LEGACY_SHA:-a112f84e1fe9659918300c65102ad97cdc5b106d}"
 "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 import re
+import urllib.request
 
-core = Path(os.environ['MMS_CORE_DIR'])
-tmpdir = Path(os.environ['MMS_TMPDIR'])
+legacy_core = Path(os.environ['MMS_LEGACY_CORE_DIR'])
+legacy_dir = Path(os.environ['MMS_LEGACY_DIR'])
+legacy_sha = os.environ['MMS_LEGACY_SHA']
+
+api_path = legacy_dir / 'ISmmAPI.h'
+plugin_path = legacy_dir / 'ISmmPlugin.h'
+
+if api_path.is_file() and plugin_path.is_file():
+    api = api_path.read_text()
+    plugin = plugin_path.read_text()
+else:
+    print(f'==> Fetching Metamod core-legacy ISmm headers ({legacy_sha})')
+    api_url = f'https://raw.githubusercontent.com/alliedmodders/metamod-source/{legacy_sha}/core-legacy/ISmmAPI.h'
+    plugin_url = f'https://raw.githubusercontent.com/alliedmodders/metamod-source/{legacy_sha}/core-legacy/ISmmPlugin.h'
+    with urllib.request.urlopen(api_url) as resp:
+        api = resp.read().decode('utf-8')
+    with urllib.request.urlopen(plugin_url) as resp:
+        plugin = resp.read().decode('utf-8')
 
 def strip_old_gcc_guard(text: str) -> str:
     return re.sub(
@@ -196,13 +156,11 @@ api_renames = [
     ('UnregisterConCmdBase', 'UnregisterConCommandBase'),
 ]
 
-api = (tmpdir / 'ISmmAPI.h').read_text()
 for old, new in api_renames:
     # Only rename method declarations / references that are the identifier.
     api = re.sub(rf'\b{old}\b', new, api)
 
 # META_REG* macros in legacy ISmmPlugin still say RegisterConCmdBase — fix after wrap.
-plugin = (tmpdir / 'ISmmPlugin.h').read_text()
 plugin = plugin.replace('RegisterConCmdBase', 'RegisterConCommandBase')
 plugin = plugin.replace('UnregisterConCmdBase', 'UnregisterConCommandBase')
 
@@ -263,21 +221,21 @@ if 'PLAPI_VERSION' not in plugin:
 if '#if (__GNUC__ >= 4)' not in plugin:
     raise SystemExit('Failed to patch SMM_API visibility for modern GCC')
 
-(core / 'ISmmAPI.h').write_text(api)
-(core / 'ISmmPlugin.h').write_text(plugin)
-print('==> Installed legacy-layout ISmmAPI/ISmmPlugin with modern method names')
+(legacy_core / 'ISmmAPI.h').write_text(api)
+(legacy_core / 'ISmmPlugin.h').write_text(plugin)
+print('==> Installed legacy-layout ISmmAPI/ISmmPlugin into core-css34legacy with modern method names')
 print('==> Gated legacy HL2SDK includes for META_NO_HL2SDK (DHooks)')
 PY
 
 # Ext.h: define METAMOD_PLAPI_VERSION=11 so smsdk_ext takes the modern-name code path
 # against our renamed legacy-layout ISmmAPI. GetApiVersion still returns PLAPI_VERSION (11)
 # from ISmmPlugin.h.
-if [ -f "$ext_h" ]; then
+if [ -f "$legacy_core_dir/ISmmPluginExt.h" ]; then
   "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 import re
-path = Path(os.environ['MMS_CORE_DIR']) / 'ISmmPluginExt.h'
+path = Path(os.environ['MMS_LEGACY_CORE_DIR']) / 'ISmmPluginExt.h'
 text = path.read_text()
 if re.search(r'^#define METAMOD_PLAPI_VERSION\s+11\b', text, re.M):
     print('==> ISmmPluginExt.h already has METAMOD_PLAPI_VERSION 11')
@@ -290,7 +248,7 @@ elif 'css34 uses PLAPI_VERSION 11' in text or 'METAMOD_PLAPI_VERSION omitted' in
         flags=re.S,
     )
     path.write_text(text2)
-    print('==> Restored METAMOD_PLAPI_VERSION 11 in ISmmPluginExt.h')
+    print('==> Restored METAMOD_PLAPI_VERSION 11 in core-css34legacy/ISmmPluginExt.h')
 else:
     text2, n = re.subn(
         r'^#define METAMOD_PLAPI_VERSION\s+\d+.*$',
@@ -300,9 +258,9 @@ else:
         flags=re.M,
     )
     if n != 1:
-        raise SystemExit('Failed to pin METAMOD_PLAPI_VERSION in ISmmPluginExt.h')
+        raise SystemExit('Failed to pin METAMOD_PLAPI_VERSION in core-css34legacy/ISmmPluginExt.h')
     path.write_text(text2)
-    print('==> Pinned METAMOD_PLAPI_VERSION to 11 in ISmmPluginExt.h')
+    print('==> Pinned METAMOD_PLAPI_VERSION to 11 in core-css34legacy/ISmmPluginExt.h')
 PY
 fi
 
@@ -330,7 +288,8 @@ if not os.path.exists(git_head_path):
 """
     new = """# css34: detached HEAD / MMS_COMMIT pin stores raw SHA in .git/HEAD
 import re
-with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
+mms_root = os.environ.get('MMS_DIR', builder.sourcePath)
+with open(os.path.join(mms_root, '.git', 'HEAD')) as fp:
   head_contents = fp.read().strip()
 if re.search('^[a-fA-F0-9]{40}$', head_contents):
   git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
@@ -434,8 +393,8 @@ old = """      if cxx.name == 'gcc':
 new = """      if cxx.name == 'gcc':
         # css34: libgcc_s stays dynamic; hide static libstdc++ (GCC 10 / glibc 2.17)
         cfg.linkflags += ['-lgcc_s', '-static-libstdc++', '-Wl,--exclude-libs=libstdc++.a:libsupc++.a']
-        cfg.cflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-sign-compare']
-        cfg.cxxflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-volatile']
+        cfg.cflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-sign-compare', '-Wno-unused-result']
+        cfg.cxxflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-volatile', '-Wno-unused-result']
       elif cxx.name == 'clang':
         cfg.linkflags += ['-lgcc_eh']
 """
