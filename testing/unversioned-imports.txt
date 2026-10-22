@@ -98,3 +98,6 @@ _ITM_registerTMCloneTable optional-weak-toolchain
 _ZGTtdlPv optional-weak-toolchain
 _ZGTtnaj optional-weak-toolchain
 __gmon_start__ optional-weak-toolchain
+compress2 libz.so.1
+getentropy optional-weak-toolchain
+uncompress libz.so.1
