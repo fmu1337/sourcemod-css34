@@ -22,6 +22,42 @@ detect_family() {
   fi
 }
 
+fix_ubuntu_archives() {
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  [[ "${ID:-}" == "ubuntu" ]] || return 0
+  local codename="${VERSION_CODENAME:-}"
+  case "${VERSION_ID:-}" in
+    14.04) codename=trusty ;;
+    16.04) codename=xenial ;;
+    18.04) codename=bionic ;;
+    *) return 0 ;;
+  esac
+  echo "Configuring apt for Ubuntu ${codename}"
+  cat >/etc/apt/apt.conf.d/99oldubuntu <<'EOF'
+Acquire::Check-Valid-Until "false";
+Acquire::AllowInsecureRepositories "true";
+Acquire::AllowDowngradeToInsecureRepositories "true";
+EOF
+  write_ubuntu_sources() {
+    local host="$1"
+    cat >/etc/apt/sources.list <<EOF
+deb [trusted=yes] http://${host}/ubuntu ${codename} main universe multiverse
+deb [trusted=yes] http://${host}/ubuntu ${codename}-updates main universe multiverse
+deb [trusted=yes] http://${host}/ubuntu ${codename}-security main universe multiverse
+EOF
+  }
+  # 14.04/16.04 still answer on archive.ubuntu.com; old-releases is the fallback
+  # once a suite is removed. 18.04 is on archive.ubuntu.com.
+  rm -f /etc/apt/sources.list.d/* || true
+  write_ubuntu_sources archive.ubuntu.com
+  if ! apt-get update -y; then
+    echo "archive.ubuntu.com failed for ${codename}; trying old-releases.ubuntu.com"
+    write_ubuntu_sources old-releases.ubuntu.com
+    apt-get update -y || apt-get update -y --allow-unauthenticated
+  fi
+}
+
 fix_debian_archives() {
   # shellcheck disable=SC1091
   . /etc/os-release
@@ -87,10 +123,11 @@ apt_install() {
 
 install_debian() {
   export DEBIAN_FRONTEND=noninteractive
+  fix_ubuntu_archives
   fix_debian_archives
   dpkg --add-architecture i386 || true
   rm -rf /var/lib/apt/lists/* 2>/dev/null || true
-  apt-get update -y || apt-get update -y --allow-unauthenticated || true
+  apt-get update -y || apt-get update -y --allow-unauthenticated
 
   local pkgs=(
     ca-certificates curl wget unzip bzip2 file procps expect git python3 binutils

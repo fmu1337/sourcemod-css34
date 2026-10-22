@@ -7,14 +7,18 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 | Job | Images | Lines |
 |---|---|---|
 | `build-linux` (+ "ABI / export checks") | `builder/docker/build.sh` (manylinux2014) on ubuntu-22.04 | all three active lines |
-| `test-built-debian` | `debian:11`, `ubuntu:24.04`, `debian:13` | all three active lines |
-| `test-built-rhel` | `rockylinux:9` | `sm13-latest` |
+| `test-built-debian` (every PR) | `centos:7`, `ubuntu:24.04`, `debian:13` | all three active lines |
 | `test-built-smoke` | ubuntu-22.04 host | `sm13-latest` |
-| `test-built-botplay-matrix` | `debian:11` | all three active lines |
+| `test-built-botplay-matrix` (every PR, one run per line) | `debian:11` | all three active lines |
+| `test-built-weekly` (schedule, `suite=weekly`, release) | `debian:8`, `debian:9`, `debian:10`, `debian:11`, `ubuntu:14.04`, `ubuntu:16.04`, `ubuntu:18.04`, `rockylinux:9` | all three active lines |
+| `test-built-weekly-botplay` | `centos:7` | all three active lines |
+| `gate` | — | always, including doc-only PRs |
+
+`debian:11` is no longer a per-PR smoke image. The single per-PR botplay run still uses it. Every image above is pinned by digest in `builder/lines.json` (`python3 builder/lines.py gen`).
 
 CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` from `build-linux` (handed to later jobs via Actions cache, not artifacts). rom4s reference drops are not used in this workflow.
 
-Packages come from `builder/docker/build.sh` (manylinux2014, glibc 2.17). The per-PR smoke images are listed above; `debian:latest` remains only on the opt-in reference botplay jobs.
+Packages come from `builder/docker/build.sh` (manylinux2014, glibc 2.17). `debian:latest` remains only on the opt-in reference botplay jobs, and that tag is pinned too.
 
 When the CI server tree is trimmed to a single map (`de_dust2`), `testing/scripts/trim-server-maps.sh` also rewrites `mapcycle.txt` so the engine does not spam `Map_IsValid: No such map` for deleted BSPs.
 
@@ -32,11 +36,11 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 1. Game DLL loads (`Counter-Strike: Source`)
 2. Map / dedicated server config starts (`Mapchange to …` in console)
 3. `meta version` / `sm version` — `+<MM_REV>` and `Build ID: <MM_REV>:<sha prefix>`, and `SourceMod Version: <major>.<SM_REV>`
-4. `sm exts list` — prints full list; fails on `<FAILED>`; requires BinTools + SDK Tools + CS Tools + **SDK Hooks**
+4. `sm exts load dbi.mysql.ext` and `sm exts load dbi.pgsql.ext` must succeed. `geoip.ext` and `regex.ext` are loaded too, and a failure there is recorded but does not fail the run. `sm exts list` prints the full list; fails on `<FAILED>`; requires BinTools + SDK Tools + CS Tools + **SDK Hooks**
 5. `sm plugins list` — every enabled `.smx` listed as Running (not `<Failed>`)
 6. SourceMod session log (`addons/sourcemod/logs/L*.log`) — no error markers
 7. **sdkhooks.games** `OnTakeDamage` linux offset **61** (css34)
-8. Every SDKTools / SDKHooks vtable offset in the installed gamedata matches the `CCSPlayer` / `CWeaponCSBase` vtables of the v34 `server_i486.so` (`check-css34-vtables.py`; needs `python3` + `c++filt`, otherwise SKIP — the `debian` / `rockylinux` smoke containers have neither, so in CI it only runs in `test-built-smoke` on the host runner)
+8. Every SDKTools / SDKHooks vtable offset in the installed gamedata matches the `CCSPlayer` / `CWeaponCSBase` vtables of the v34 `server_i486.so` (`check-css34-vtables.py`; needs `python3` + `c++filt`, which `install-deps.sh` provides, including Python 3.4 on Debian 8 and Ubuntu 14.04). `CSS34_CI=1` fails the run if that check is skipped.
 9. No segfault; not flooded with `Unknown command` (buffer bug signature)
 
 The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs) + `css34_cstrike_forward_probe.smx` (requires cstrike TerminateRound / buy / price detour hits and a `GetPlayerWeaponSlot` → `CS_DropWeapon` → `GivePlayerItem` round, `css34_cs_probe_mode 8` in `botplay-stress.cfg`)) + `css34_dhooks_probe.smx` (where dhooks.ext ships: DHooks virtual hooks on `CCSPlayer::OnTakeDamage`, `CBasePlayer::EyePosition` (Vector return, override) and `CCSPlayer::PlayStepSound` (float param, `MRES_ChangedHandled` recall), and detours on `CCSPlayer::RoundRespawn` and `CWeaponCSBase::GetMaxSpeed` (float return, override) must install, fire and return sane values; probe gamedata lives in `testing/plugins/gamedata/`; lines without DHooks log `available=0` and are skipped). Runs for all `CSS34_LINE` builds on every `master` push.
@@ -69,7 +73,7 @@ SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/`. Our package
 
 **Stress profile (default):** `botplay-stress.cfg` execs `botplay-server.cfg` (fast 1‑minute rounds) then raises `bot_quota` to 8. Plugin `css34_botplay_stress.smx` rotates maps every 3 rounds (`de_dust2` → `de_inferno` → `de_nuke`) and logs sdkhooks/sdktools ABI probe results each round.
 
-**When they run:** `test-built-botplay-matrix` (`debian:11`, 300 s per line) runs on every push / PR. `test-rom4s-botplay` and `test-release-botplay` (`debian:latest`) only on `workflow_dispatch` with `run_reference_botplay=true`; extra images (`debian:11`, `debian:12`, `rockylinux:9`) for rom4s / built (`sm13-latest`) only with `botplay_extra_distros=true`.
+**When they run:** `test-built-botplay-matrix` (`debian:11`, 300 s per line) runs on every push / PR. `test-built-weekly-botplay` runs the same session on `centos:7` for the weekly suite and on release. `test-rom4s-botplay` and `test-release-botplay` (pinned `debian:latest`) only on `workflow_dispatch` with `run_reference_botplay=true`; extra images (`debian:11`, `debian:12`, `rockylinux:9`) for rom4s / built (`sm13-latest`) only with `botplay_extra_distros=true`.
 
 | File | Role |
 |------|------|
@@ -184,6 +188,10 @@ Published release pairs of the five `CSS34_LINE`s, mix PASS/FAIL notes, and hist
 ## CI hygiene regression checks
 
 Run `bash testing/scripts/check-package-paths.sh` and `actionlint` after workflow changes.
+With GCC, binutils and Expect installed, run
+`python3 testing/scripts/test-glibc-imports.py` and
+`python3 testing/scripts/test-console-probe.py` for the unversioned-import gate,
+PostgreSQL shim and console recovery regressions. CI Hygiene runs both.
 `ci-hygiene.yml` deliberately runs smoke against an empty server directory, requires
 the expected missing-server failure, and uploads `negative-smoke-logs` for seven days.
 After that workflow completes, verify the artifact is still downloadable. This
