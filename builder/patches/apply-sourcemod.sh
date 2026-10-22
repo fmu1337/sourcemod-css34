@@ -1204,7 +1204,9 @@ else:
     raise SystemExit('Failed to patch static-libstdc++ block for css34')
 PYLINK
 
-# bintools: modern ProtoInfo/CProtoInfoBuilder via sourcehook_pibuilder.h shim (see apply-mmsource-css34.sh).
+# bintools uses SM.ExtLibrary and includes core/sourcehook directly, retaining
+# upstream SourceHook v5 ProtoInfo/CProtoInfoBuilder. Only ConfigureForHL2 uses
+# core-css34legacy; no ProtoInfo shim is needed for bintools.
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
@@ -1217,7 +1219,7 @@ skipped = (
 enabled = "  'extensions/bintools/AMBuilder',\n"
 if skipped in text:
     path.write_text(text.replace(skipped, enabled, 1))
-    print('==> Re-enabled bintools extension (ProtoInfo shim installed in MMS sourcehook)')
+    print('==> Re-enabled bintools extension (upstream SourceHook v5 in core/sourcehook)')
 elif enabled in text:
     print('==> bintools extension already enabled')
 else:
