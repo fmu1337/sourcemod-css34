@@ -9,17 +9,17 @@
     },
     {
       "line": "sm12-latest",
-      "sm_expect": "1.12.0.7253",
+      "sm_expect": "1.12.0.7257",
       "mm_expect": "1.12.0",
-      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814"
+      "sm_commit": "e68dada2979eb3093d81d2e3766f741e7d431e4a",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f"
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7472",
+      "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0",
-      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814"
+      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f"
     }
   ],
   "debian": [
@@ -34,19 +34,19 @@
     },
     {
       "line": "sm12-latest",
-      "sm_expect": "1.12.0.7253",
+      "sm_expect": "1.12.0.7257",
       "mm_expect": "1.12.0",
-      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "sm_commit": "e68dada2979eb3093d81d2e3766f741e7d431e4a",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "image": "debian:11",
       "allow_failure": false
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7472",
+      "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0",
-      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "image": "debian:11",
       "allow_failure": false
     },
@@ -61,19 +61,19 @@
     },
     {
       "line": "sm12-latest",
-      "sm_expect": "1.12.0.7253",
+      "sm_expect": "1.12.0.7257",
       "mm_expect": "1.12.0",
-      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "sm_commit": "e68dada2979eb3093d81d2e3766f741e7d431e4a",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "image": "ubuntu:24.04",
       "allow_failure": false
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7472",
+      "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0",
-      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "image": "ubuntu:24.04",
       "allow_failure": false
     },
@@ -88,19 +88,19 @@
     },
     {
       "line": "sm12-latest",
-      "sm_expect": "1.12.0.7253",
+      "sm_expect": "1.12.0.7257",
       "mm_expect": "1.12.0",
-      "sm_commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "sm_commit": "e68dada2979eb3093d81d2e3766f741e7d431e4a",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "image": "debian:13",
       "allow_failure": false
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7472",
+      "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0",
-      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "image": "debian:13",
       "allow_failure": false
     }
@@ -113,50 +113,50 @@
     },
     {
       "line": "sm12-latest",
-      "sm_expect": "1.12.0.7253",
+      "sm_expect": "1.12.0.7257",
       "mm_expect": "1.12.0"
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7472",
+      "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0"
     }
   ],
   "rhel": [
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7472",
+      "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0",
-      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "image": "rockylinux:9"
     }
   ],
   "host": [
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7472",
+      "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0",
-      "sm_commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814"
+      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f"
     }
   ],
   "windows": [
     {
       "line": "sm12-latest",
-      "sm_expect": "1.12.0.7253",
-      "mm_expect": "1.12.0-dev+1226",
-      "mm_rev": 1226,
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "sm_expect": "1.12.0.7257",
+      "mm_expect": "1.12.0-dev+1228",
+      "mm_rev": 1228,
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
       "load_exts": "sdkhooks"
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7472",
-      "mm_expect": "1.12.0-dev+1226",
-      "mm_rev": 1226,
-      "mm_commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "sm_expect": "1.13.0.7478",
+      "mm_expect": "1.12.0-dev+1228",
+      "mm_rev": 1228,
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
       "load_exts": "sdkhooks"
     }
@@ -164,18 +164,18 @@
   "release_botplay": [
     {
       "line": "sm12-latest",
-      "tag": "1.12.0.7253-mm1.12.0",
-      "sm_asset": "sourcemod-1.12.0-git7253-css34-linux.tar.gz",
+      "tag": "1.12.0.7257-mm1.12.0",
+      "sm_asset": "sourcemod-1.12.0-git7257-css34-linux.tar.gz",
       "mm_asset": "mmsource-1.12.0-dev-css34-linux.tar.gz",
-      "sm_expect": "1.12.0.7253",
+      "sm_expect": "1.12.0.7257",
       "mm_expect": "1.12.0"
     },
     {
       "line": "sm13-latest",
-      "tag": "1.13.0.7472-mm1.12.0",
-      "sm_asset": "sourcemod-1.13.0-git7472-css34-linux.tar.gz",
+      "tag": "1.13.0.7478-mm1.12.0",
+      "sm_asset": "sourcemod-1.13.0-git7478-css34-linux.tar.gz",
       "mm_asset": "mmsource-1.12.0-dev-css34-linux.tar.gz",
-      "sm_expect": "1.13.0.7472",
+      "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0"
     }
   ],
@@ -203,7 +203,7 @@
       },
       {
         "line": "sm13-latest",
-        "sm_expect": "1.13.0.7472",
+        "sm_expect": "1.13.0.7478",
         "mm_expect": "1.12.0"
       }
     ]
