@@ -101,7 +101,7 @@ mms_inc_new = """    legacy_core = os.path.join(self.mms_root, 'core-css34legacy
         mms_core = legacy_core
         print('==> Using Metamod core-css34legacy include path for ' + str(sdk_name) + ': ' + mms_core)
       elif os.path.isdir(os.path.join(self.mms_root, 'core-legacy')):
-        raise Exception('MM 1.10 detected (core-legacy exists) but core-css34legacy is missing in ' + self.mms_root + '! Run checkout-deps.sh / apply-mmsource-css34.sh first.')
+        raise SystemExit('MM 1.10 detected (core-legacy exists) but core-css34legacy is missing in ' + self.mms_root + '! Run checkout-deps.sh / apply-mmsource-css34.sh first.')
       else:
         mms_core = os.path.join(self.mms_root, 'core')
     else:

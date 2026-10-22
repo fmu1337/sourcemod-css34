@@ -69,25 +69,40 @@ class LinesTest(unittest.TestCase):
 
     def test_debian_matrix_requires_new_os_and_drops_latest(self):
         matrix = json.loads((self.root / "builder/generated/ci-matrix.json").read_text())
-        pairs = [(row["line"], row["image"]) for row in matrix["debian"]]
+        lines = ("sm11-oldstable", "sm12-latest", "sm13-latest")
+        per_pr = ("centos:7", "ubuntu:24.04", "debian:13")
+        weekly = ("debian:8", "debian:9", "debian:10", "debian:11",
+                  "ubuntu:14.04", "ubuntu:16.04", "ubuntu:18.04", "rockylinux:9")
+        pairs = [(row["line"], row["image_name"]) for row in matrix["debian"]]
         self.assertNotIn(("sm13-latest", "debian:latest"), pairs)
-        for line in ("sm11-oldstable", "sm12-latest", "sm13-latest"):
-            for image in ("debian:11", "ubuntu:24.04", "debian:13"):
+        self.assertNotIn(("sm13-latest", "debian:11"), pairs)
+        for line in lines:
+            for image in per_pr:
                 self.assertIn((line, image), pairs)
-        self.assertTrue(all(row["allow_failure"] is False for row in matrix["debian"]))
-        self.assertEqual([row["line"] for row in matrix["rhel"]], ["sm13-latest"])
-        self.assertEqual(matrix["rhel"][0]["image"], "rockylinux:9")
+            for image in weekly:
+                self.assertNotIn((line, image), pairs)
+        self.assertTrue(all("allow_failure" not in row for row in matrix["debian"]))
+        self.assertTrue(all(row["image"] == matrix["images"][row["image_name"]] for row in matrix["debian"]))
+        weekly_pairs = [(row["line"], row["image_name"]) for row in matrix["weekly"]]
+        for line in lines:
+            for image in weekly:
+                self.assertIn((line, image), weekly_pairs)
+        self.assertEqual([row["image_name"] for row in matrix["botplay"]], ["debian:11"] * 3)
+        self.assertEqual([row["image_name"] for row in matrix["weekly_botplay"]], ["centos:7"] * 3)
+        self.assertEqual([row["line"] for row in matrix["botplay"]], list(lines))
+        self.assertTrue(all("@sha256:" in row["image"] for row in matrix["weekly"] + matrix["botplay"]))
         self.assertEqual([row["line"] for row in matrix["host"]], ["sm13-latest"])
-        self.assertEqual([row["line"] for row in matrix["botplay"]],
-                         ["sm11-oldstable", "sm12-latest", "sm13-latest"])
+        self.assertNotIn("rhel", matrix)
+        for name in (".github/workflows/test-server.yml", ".github/workflows/release.yml"):
+            self.assertNotIn("sha256:", (self.root / name).read_text(), name)
 
     def test_duplicate_image_is_rejected(self):
         target = self.root / "builder/lines.json"
         data = json.loads(target.read_text())
-        data["lines"]["sm12-latest"]["smoke"].append({"image": "debian:11"})
+        data["lines"]["sm12-latest"]["smoke"].append({"image": "ubuntu:24.04"})
         target.write_text(json.dumps(data))
         original = (self.root / "builder/versions.env").read_bytes()
-        self.assertIn("lists image debian:11 twice", self.run_command("gen", False).stderr)
+        self.assertIn("lists image ubuntu:24.04 twice", self.run_command("gen", False).stderr)
         self.assertEqual((self.root / "builder/versions.env").read_bytes(), original)
 
     def test_known_bad_pointer_pin_is_rejected(self):
@@ -97,6 +112,24 @@ class LinesTest(unittest.TestCase):
         target.write_text(json.dumps(data))
         original = (self.root / "builder/versions.env").read_bytes()
         self.assertIn("known-bad tag", self.run_command("check", False).stderr)
+        self.assertEqual((self.root / "builder/versions.env").read_bytes(), original)
+
+    def test_allow_failure_is_rejected(self):
+        target = self.root / "builder/lines.json"
+        data = json.loads(target.read_text())
+        data["lines"]["sm13-latest"]["smoke"][0]["allow_failure"] = True
+        target.write_text(json.dumps(data))
+        original = (self.root / "builder/versions.env").read_bytes()
+        self.assertIn("invalid smoke entry", self.run_command("gen", False).stderr)
+        self.assertEqual((self.root / "builder/versions.env").read_bytes(), original)
+
+    def test_unpinned_weekly_image_is_rejected(self):
+        target = self.root / "builder/lines.json"
+        data = json.loads(target.read_text())
+        data["weekly_smoke"].append("debian:7")
+        target.write_text(json.dumps(data))
+        original = (self.root / "builder/versions.env").read_bytes()
+        self.assertIn("not pinned", self.run_command("gen", False).stderr)
         self.assertEqual((self.root / "builder/versions.env").read_bytes(), original)
 
     def test_malformed_sha_does_not_overwrite_generated_file(self):

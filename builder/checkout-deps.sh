@@ -26,11 +26,37 @@ fetch_verified() {
   fi
 }
 
+# The sm13 MariaDB archive uses zlib. Embed a pinned PIC build so the
+# extension has no unversioned compression imports or additional runtime ABI.
+install_zlib() {
+  local prefix="$DEPS/zlib"
+  local stamp="$prefix/.css34-zlib-1.3.1-pic"
+  local tarball="$DEPS/zlib-1.3.1.tar.gz"
+  if [[ -f "$stamp" && -f "$prefix/lib/libz.a" ]]; then
+    echo "==> Static PIC zlib 1.3.1 already built at $prefix"
+    return
+  fi
+  fetch_verified \
+    "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz" \
+    "$tarball" "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+  rm -rf "$DEPS/zlib-1.3.1" "$prefix"
+  tar -C "$DEPS" -xzf "$tarball"
+  (
+    cd "$DEPS/zlib-1.3.1"
+    CFLAGS="${CFLAGS:-} -O2 -fPIC" ./configure --static --prefix="$prefix"
+    make -j"$(nproc)"
+    make check
+    make install
+  )
+  rm -rf "$DEPS/zlib-1.3.1" "$tarball"
+  touch "$stamp"
+}
+
 # Static OpenSSL 1.1.1w. CentOS 7 only ships 1.0.2, and the MariaDB connector
 # links -lssl/-lcrypto. OpenSSL 3.x needs perl modules this image does not have.
 install_openssl_111w() {
   local prefix="$DEPS/openssl"
-  local stamp="$prefix/.css34-openssl-1.1.1w"
+  local stamp="$prefix/.css34-openssl-1.1.1w-linux-syscall-v1"
   local tarball="$DEPS/openssl-1.1.1w.tar.gz"
   local sha="cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8"
   if [[ -f "$stamp" && -f "$prefix/lib/libssl.a" && -f "$prefix/lib/libcrypto.a" ]]; then
@@ -42,16 +68,19 @@ install_openssl_111w() {
     tar -C "$DEPS" -xzf "$tarball"
     (
       cd "$DEPS/openssl-1.1.1w"
+      bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/patches/patch-openssl-getentropy.py" "$PWD"
       ./Configure linux-elf no-shared no-tests no-dso -fPIC --prefix="$prefix"
       make -j"$(nproc)"
+      # Exercise the retained OS entropy path; never accept a seedless build.
+      ./apps/openssl rand -hex 32 >/dev/null
       make install_sw
     )
     rm -rf "$DEPS/openssl-1.1.1w" "$tarball"
     touch "$stamp"
   fi
   cat > "$DEPS/openssl.env" <<EOF
-export CPATH="$prefix/include"
-export LIBRARY_PATH="$prefix/lib"
+export CPATH="$prefix/include:$DEPS/zlib/include"
+export LIBRARY_PATH="$prefix/lib:$DEPS/zlib/lib"
 EOF
 }
 
@@ -106,6 +135,7 @@ patch_episode1_sdk() {
 }
 
 if [ "$BUILD_PLATFORM" != "windows" ]; then
+  install_zlib
   install_openssl_111w
 fi
 
@@ -180,7 +210,7 @@ MMS_BRANCH="${MMS_BRANCH:-}"
 
 if [[ -z "$MMS_MODE" || -z "$MMS_DIRNAME" || -z "$MMS_COMMIT" ]]; then
   if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
-    MMS_COMMIT="${MMS_COMMIT:-9fd977df3b49ec76cdf865a4af13a90c0f5c8814}"
+    MMS_COMMIT="${MMS_COMMIT:-cb47755826fad1483291e5dc00222aa64303d12f}"
     MMS_BRANCH="${MMS_BRANCH:-1.12-dev}"
     MMS_DIRNAME="${MMS_DIRNAME:-mmsource-1.12}"
     MMS_MODE="${MMS_MODE:-1.12}"
