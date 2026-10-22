@@ -90,6 +90,21 @@ elif ep1_marker not in text:
         raise SystemExit('Failed to locate episode1 SDK anchor in AMBuildScript')
     text = text.replace(episode1_anchor, episode1_anchor + "\n  " + ep1_marker, 1)
 
+mms_inc_old = """    compiler.cxxincludes += [
+      os.path.join(self.mms_root, 'core'),
+      os.path.join(self.mms_root, 'core', 'sourcehook'),
+    ]"""
+mms_inc_new = """    mms_core = os.path.join(self.mms_root, 'core-css34legacy') if (sdk.name == 'ep1' and os.path.isdir(os.path.join(self.mms_root, 'core-css34legacy'))) else os.path.join(self.mms_root, 'core')
+    compiler.cxxincludes += [
+      mms_core,
+      os.path.join(mms_core, 'sourcehook'),
+    ]"""
+if 'core-css34legacy' in text:
+    print('==> ConfigureForHL2 cxxincludes already patched for core-css34legacy')
+elif mms_inc_old in text:
+    text = text.replace(mms_inc_old, mms_inc_new, 1)
+    print('==> Patched ConfigureForHL2 cxxincludes for core-css34legacy')
+
 path_block_old = """    if sdk.name == 'episode1' or sdk.name == 'darkm':
       paths.append(['public', 'dlls'])
       paths.append(['game_shared'])"""

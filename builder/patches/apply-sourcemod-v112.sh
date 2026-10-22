@@ -49,6 +49,21 @@ sm = Path(os.environ['SOURCEMOD_DIR'])
 ambuild = sm / 'AMBuildScript'
 text = ambuild.read_text()
 
+mms_inc_old = """    compiler.cxxincludes += [
+      os.path.join(self.mms_root, 'core'),
+      os.path.join(self.mms_root, 'core', 'sourcehook'),
+    ]"""
+mms_inc_new = """    mms_core = os.path.join(self.mms_root, 'core-css34legacy') if (sdk.get('name') == 'ep1' and os.path.isdir(os.path.join(self.mms_root, 'core-css34legacy'))) else os.path.join(self.mms_root, 'core')
+    compiler.cxxincludes += [
+      mms_core,
+      os.path.join(mms_core, 'sourcehook'),
+    ]"""
+if 'core-css34legacy' in text:
+    print('==> ConfigureForHL2 cxxincludes already patched for core-css34legacy')
+elif mms_inc_old in text:
+    text = text.replace(mms_inc_old, mms_inc_new, 1)
+    print('==> Patched ConfigureForHL2 cxxincludes for core-css34legacy')
+
 # css34: for episode1 (and optional ep1) embed ConVar from static tier1 before
 # shared vstdlib, and record pthread/rt DT_NEEDED on older glibc.
 needle = "    SdkHelpers.configureCxx(context, binary, sdk)\n\n    return binary"
