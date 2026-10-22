@@ -8,8 +8,8 @@
       "major": 11
     },
     "SM_LATEST": {
-      "commit": "2e229b111534b1be007dc3bd9acfcf2fc472e893",
-      "rev": 7253,
+      "commit": "e68dada2979eb3093d81d2e3766f741e7d431e4a",
+      "rev": 7257,
       "major": 12
     },
     "SM_DEV": {
@@ -18,8 +18,8 @@
       "major": 13
     },
     "SM_LATEST_13": {
-      "commit": "6eb5f8fa381100ed7cac1ab62a4ece11795a5d92",
-      "rev": 7472,
+      "commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "rev": 7478,
       "major": 13
     },
     "SM_KHOOK": {
@@ -38,10 +38,10 @@
       "mode": "1.10"
     },
     "MM_112": {
-      "commit": "9fd977df3b49ec76cdf865a4af13a90c0f5c8814",
+      "commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "branch": "1.12-dev",
       "dirname": "mmsource-1.12",
-      "rev": 1226,
+      "rev": 1228,
       "mode": "1.12"
     },
     "MM_20": {

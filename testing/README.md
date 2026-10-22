@@ -43,7 +43,7 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 8. Every SDKTools / SDKHooks vtable offset in the installed gamedata matches the `CCSPlayer` / `CWeaponCSBase` vtables of the v34 `server_i486.so` (`check-css34-vtables.py`; needs `python3` + `c++filt`, which `install-deps.sh` provides, including Python 3.4 on Debian 8 and Ubuntu 14.04). `CSS34_CI=1` fails the run if that check is skipped.
 9. No segfault; not flooded with `Unknown command` (buffer bug signature)
 
-The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs) + `css34_cstrike_forward_probe.smx` (requires cstrike TerminateRound / buy / price detour hits and a `GetPlayerWeaponSlot` → `CS_DropWeapon` → `GivePlayerItem` round, `css34_cs_probe_mode 8` in `botplay-stress.cfg`)) + `css34_dhooks_probe.smx` (where dhooks.ext ships: DHooks virtual hooks on `CCSPlayer::OnTakeDamage`, `CBasePlayer::EyePosition` (Vector return, override) and `CCSPlayer::PlayStepSound` (float param, `MRES_ChangedHandled` recall), and detours on `CCSPlayer::RoundRespawn` and `CWeaponCSBase::GetMaxSpeed` (float return, override) must install, fire and return sane values; probe gamedata lives in `testing/plugins/gamedata/`; lines without DHooks log `available=0` and are skipped). Runs for all `CSS34_LINE` builds on every `master` push.
+The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs) + `css34_cstrike_forward_probe.smx` (requires cstrike TerminateRound / buy / price detour hits and a `GetPlayerWeaponSlot` → `CS_DropWeapon` → `GivePlayerItem` round, `css34_cs_probe_mode 8` in `botplay-stress.cfg`)) + `css34_dhooks_probe.smx` (where dhooks.ext ships: DHooks virtual hooks on `CCSPlayer::OnTakeDamage`, `CBasePlayer::EyePosition` (Vector return, override) and `CCSPlayer::PlayStepSound` (float param, `MRES_ChangedHandled` recall), and detours on `CCSPlayer::RoundRespawn` and `CWeaponCSBase::GetMaxSpeed` (float return, override) must install, fire and return sane values; probe gamedata lives in `testing/plugins/gamedata/`; lines without DHooks log `available=0` and are skipped) + `css34_upstream_probe.smx` (sound hook `Plugin_Changed` continues into the next hook on SM 1.13.0.7475+, a `HookSingleEntityOutput` does not fire on a new `logic_relay` after a map change, and `GetClientOfUserId` rejects out-of-range userids). Runs for all `CSS34_LINE` builds on every `master` push.
 
 ## `srcds_run` / engine launch flags
 
@@ -66,8 +66,8 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 
 | Line | Tag | Packages |
 |------|-----|----------|
-| sm12 | `1.12.0.7253-mm1.12.0` | SM 1.12.0.7253 + MM 1.12.0-dev (git1226) |
-| sm13 | `1.13.0.7472-mm1.12.0` | SM 1.13.0.7472 + MM 1.12.0-dev (git1226) |
+| sm12 | `1.12.0.7257-mm1.12.0` | SM 1.12.0.7257 + MM 1.12.0-dev (git1228) |
+| sm13 | `1.13.0.7478-mm1.12.0` | SM 1.13.0.7478 + MM 1.12.0-dev (git1228) |
 
 SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/`. Our packages ship `GeoLite2-Country.mmdb` (`prepare-package.sh`, enforced by `check-package.sh`); `botplay-test.sh` also installs one via `install-geoip2-db.sh` when it is missing (e.g. for rom4s packages).
 
@@ -81,6 +81,7 @@ SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/`. Our package
 | `testing/cfg/botplay-stress.cfg` | Stress overlay (more bots, map/plugin cvars) |
 | `testing/plugins/css34_botplay_stress.sp` | Map rotation + ABI probe |
 | `testing/plugins/css34_sm_api_probe.sp` | Broad SM API exerciser: extensions inventory, core/clients/entity/sdktools/sdkhooks/cstrike, menus, usermessages, geoip, clientprefs, dbi/sqlite, regex, adt, sorting, keyvalues, lang. Skips `SlapPlayer` / `ForcePlayerSuicide` on bots (SM 1.12/1.13 CI segfault; wrong CommitSuicide/Teleport slots before #60); kills via `FakeClientCommand("kill")` instead. |
+| `testing/plugins/css34_upstream_probe.sp` | Sound `Plugin_Changed` chain (#2586), entity output hook cleared across a map change (#2589), userid lookup bounds (#2577). `testing/scripts/check-upstream-probe.sh` reads the log line. |
 
 Override: `BOTPLAY_CFG=botplay-server.cfg` for the lighter profile without extra bots / plugin cvars.
 
@@ -151,7 +152,7 @@ uploaded as the `windows-smoke-<line>` artifact on a failure).
 # needs wine32, xvfb, unzip, python3 (e.g. an ubuntu:22.04 container)
 SM_WIN_PACKAGE="$(ls packages/sourcemod-*-css34-windows.zip)" \
 MM_WIN_PACKAGE="$(ls packages/mmsource-*-css34-windows.zip)" \
-SM_VERSION_EXPECT=1.13.0.7472 MM_VERSION_EXPECT=1.12.0 \
+SM_VERSION_EXPECT=1.13.0.7478 MM_VERSION_EXPECT=1.12.0 \
 EXPECT_EXTS='CS Tools,SDK Tools,BinTools,SDK Hooks' LOAD_EXTS=sdkhooks \
   testing/scripts/wine-smoke-test.sh
 ```
