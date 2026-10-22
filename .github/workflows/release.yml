@@ -327,11 +327,55 @@ jobs:
           cat ../SHA256SUMS
           gh release upload "${tag}" --repo "${GITHUB_REPOSITORY}" ../SHA256SUMS --clobber
 
-  # Installer contract on the *published* URLs: plain tar -x + srcds boot.
+  # Weekly OS list for this line, generated from lines.json (no hand-written rows).
+  release-pins:
+    if: github.ref_type == 'tag'
+    needs: [resolve-line]
+    runs-on: ubuntu-22.04
+    outputs:
+      weekly: ${{ steps.m.outputs.weekly }}
+      weekly_botplay: ${{ steps.m.outputs.weekly_botplay }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: OS matrix for the released line
+        id: m
+        env:
+          LINE: ${{ needs.resolve-line.outputs.css34_line }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("lines", "builder/lines.py")
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          data = mod.load_manifest(Path("builder/lines.json"))
+          matrix = mod.ci_matrix(data)
+          line = os.environ["LINE"]
+          weekly = [row for row in matrix["weekly"] if row["line"] == line]
+          botplay = [row for row in matrix["weekly_botplay"] if row["line"] == line]
+          if not weekly or not botplay:
+              raise SystemExit("empty release OS matrix for " + line)
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a", encoding="utf-8") as fh:
+              for name, rows in (("weekly", weekly), ("weekly_botplay", botplay)):
+                  fh.write("{0}<<EOF\n{1}\nEOF\n".format(name, json.dumps(rows)))
+          PY
+
+  # Installer contract on the *published* URLs: plain tar -x + srcds boot
+  # on every weekly image (debian 8–11, ubuntu 14.04/16.04/18.04, rockylinux 9).
   smoke-release:
-    needs: [resolve-line, linux, checksums]
+    needs: [resolve-line, linux, checksums, release-pins]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.release-pins.outputs.weekly) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -361,11 +405,12 @@ jobs:
           tar -C .ci-server -czf server-art/css34-server.tar.gz .
           rm -rf .ci-server
 
-      - name: Smoke public release URLs (plain tar install)
+      - name: Smoke public release URLs in ${{ matrix.image_name }}
         env:
           BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
           SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
           MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
+          IMAGE: ${{ matrix.image }}
         run: |
           chmod +x testing/scripts/*.sh
           testing/scripts/release-smoke.sh
@@ -374,21 +419,116 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: release-smoke-logs
+          name: release-smoke-logs-${{ matrix.image_name }}
           retention-days: 7
           path: |
             .ci-server/smoke.log
             .ci-server/console-probe.log
             .ci-server/cstrike/addons/sourcemod/logs/*.log
 
-  # Switch line-<line> only after a green public-URL smoke. On red, record the
-  # failed candidate in lines.json and keep serving the previous build.
+  # Weekly botplay on centos:7 against the published URLs.
+  botplay-release:
+    needs: [resolve-line, linux, checksums, release-pins]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.release-pins.outputs.weekly_botplay) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore cached server tree
+        id: server-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+
+      - name: Prepare server tree (cache miss)
+        if: steps.server-cache.outputs.cache-hit != 'true'
+        env:
+          SERVER_DIR: ${{ github.workspace }}/.ci-server
+          CACHE_DIR: ${{ github.workspace }}/.ci-cache
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl unzip unrar
+          chmod +x testing/scripts/*.sh
+          testing/scripts/fetch-server.sh
+          testing/scripts/apply-valve-rc-fix.sh
+          testing/scripts/apply-srcds-patch.sh
+          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
+          mkdir -p server-art
+          tar -C .ci-server -czf server-art/css34-server.tar.gz .
+          rm -rf .ci-server
+
+      - name: Botplay public release URLs on ${{ matrix.image_name }}
+        env:
+          IMAGE: ${{ matrix.image }}
+          BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          RECORD_SECS: "300"
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          mkdir -p packages
+          curl -fL --retry 8 --retry-delay 5 -o "packages/${SM_ASSET}" "${BASE_URL}/${SM_ASSET}"
+          curl -fL --retry 8 --retry-delay 5 -o "packages/${MM_ASSET}" "${BASE_URL}/${MM_ASSET}"
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/workspace" \
+            -e SERVER_DIR=/workspace/.ci-server \
+            -e CACHE_DIR=/workspace/.ci-cache \
+            -e RECORD_SECS \
+            -e BOTPLAY_PROFILE=release \
+            -e BOTPLAY_CFG=botplay-stress.cfg \
+            -e BOTPLAY_MAPS=de_dust2,de_inferno,de_nuke \
+            -e MM_VERSION_EXPECT \
+            -e SM_VERSION_EXPECT \
+            -e SM_PACKAGE="/workspace/packages/${SM_ASSET}" \
+            -e MM_PACKAGE="/workspace/packages/${MM_ASSET}" \
+            -e REPORT_JSON=/workspace/.ci-server/botplay-report.json \
+            -e REPORT_TXT=/workspace/.ci-server/botplay-report.txt \
+            -e SMOKE_CONDEBUG=1 \
+            -e SMOKE_VERBOSE=1 \
+            -e CSS34_CI=1 \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              rm -rf /workspace/.ci-server
+              mkdir -p /workspace/.ci-server /workspace/.ci-cache
+              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
+              testing/scripts/install-deps.sh
+              testing/scripts/botplay-test.sh
+            '
+
+      - name: Upload botplay logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-botplay-logs-${{ matrix.line }}
+          retention-days: 7
+          path: |
+            .ci-server/botplay-report.json
+            .ci-server/botplay-report.txt
+            .ci-server/botplay.log
+            .ci-server/cstrike/addons/sourcemod/logs/*.log
+
+  # Switch line-<line> only after a green public-URL smoke and centos:7 botplay.
+  # On red, record the failed candidate and keep serving the previous build.
   line-pointer:
-    needs: [resolve-line, linux, smoke-release]
+    needs: [resolve-line, linux, smoke-release, botplay-release]
     if: >-
       always() && github.ref_type == 'tag' &&
       needs.resolve-line.outputs.pointer == '1' &&
-      (needs.smoke-release.result == 'success' || needs.smoke-release.result == 'failure')
+      (needs.smoke-release.result == 'success' || needs.smoke-release.result == 'failure') &&
+      (needs.botplay-release.result == 'success' || needs.botplay-release.result == 'failure')
     runs-on: ubuntu-22.04
     # One writer per line-<line>. Per line, not global: a concurrency group holds
     # one running + one pending job and a newer pending one cancels it, so a
@@ -415,7 +555,7 @@ jobs:
       - name: Update line-${{ needs.resolve-line.outputs.css34_line }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SMOKE: ${{ needs.smoke-release.result == 'success' && 'pass' || 'fail' }}
+          SMOKE: ${{ needs.smoke-release.result == 'success' && needs.botplay-release.result == 'success' && 'pass' || 'fail' }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
           SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
           MM_ASSET: ${{ needs.linux.outputs.mm_asset }}

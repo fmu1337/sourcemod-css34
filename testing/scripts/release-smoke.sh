@@ -4,7 +4,7 @@
 # Downloads SM + MM by public URL (exactly what fmu1337/v34_server_base does),
 # verifies SHA256SUMS, runs the static package checks, installs with a plain
 # `tar -xzf mm -C cstrike && tar -xzf sm -C cstrike` (PLAIN_TAR_INSTALL=1) and
-# boots srcds in debian:11 via smoke-test.sh.
+# boots srcds via smoke-test.sh. The default image is the pinned botplay image.
 #
 # Env:
 #   BASE_URL      https://github.com/<repo>/releases/download/<tag>   (required)
@@ -13,7 +13,7 @@
 #   SUMS_ASSET    checksum file name (default SHA256SUMS; "" to skip)
 #   SERVER_TREE   packed server tree (default server-art/css34-server.tar.gz)
 #   OUT_DIR       download dir (default .ci-release-smoke)
-#   IMAGE         container image (default debian:11)
+#   IMAGE         container image (default: pinned botplay image from lines.json)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -23,9 +23,18 @@ MM_ASSET="${MM_ASSET:?MM_ASSET is required}"
 SUMS_ASSET="${SUMS_ASSET-SHA256SUMS}"
 SERVER_TREE="${SERVER_TREE:-server-art/css34-server.tar.gz}"
 OUT_DIR="${OUT_DIR:-.ci-release-smoke}"
-IMAGE="${IMAGE:-debian:11}"
-
 cd "${ROOT}"
+if [[ -z "${IMAGE:-}" ]]; then
+  IMAGE="$(python3 - <<'PY'
+import json
+from pathlib import Path
+data = json.loads(Path("builder/lines.json").read_text(encoding="utf-8"))
+name = data["botplay_image"]
+print(name + "@" + data["images"][name])
+PY
+)"
+fi
+echo "==> Release smoke image ${IMAGE}"
 rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}"
 

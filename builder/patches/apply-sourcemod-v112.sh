@@ -10,6 +10,10 @@ PY=(bash "$script_dir/../py.sh")
 sourcemod_dir="${1:?sourcemod directory required}"
 echo "==> Applying SourceMod 1.12+ css34 patches (Metamod 1.12 / 2.ep1)"
 
+# sm13's vendored libpq imports explicit_bzero (glibc >= 2.25).
+"${PY[@]}" "$script_dir/patch-pgsql-explicit-bzero.py" "$sourcemod_dir"
+"${PY[@]}" "$script_dir/patch-mysql-static-zlib.py" "$sourcemod_dir"
+
 # --- manifests ---
 manifests_dir="$sourcemod_dir/hl2sdk-manifests/manifests"
 if [ ! -d "$manifests_dir" ]; then

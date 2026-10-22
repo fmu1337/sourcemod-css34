@@ -69,7 +69,7 @@
       "role": "OldStable, withheld from pointers",
       "smoke": [
         {
-          "image": "debian:11"
+          "image": "centos:7"
         },
         {
           "image": "ubuntu:24.04"
@@ -88,7 +88,7 @@
       "role": "Latest 1.12",
       "smoke": [
         {
-          "image": "debian:11"
+          "image": "centos:7"
         },
         {
           "image": "ubuntu:24.04"
@@ -109,7 +109,7 @@
       "install_role": "**Default / recommended**",
       "smoke": [
         {
-          "image": "debian:11"
+          "image": "centos:7"
         },
         {
           "image": "ubuntu:24.04"
@@ -118,7 +118,6 @@
           "image": "debian:13"
         }
       ],
-      "rhel_image": "rockylinux:9",
       "host_smoke": true,
       "windows": true,
       "botplay_extra_images": [
@@ -175,5 +174,32 @@
     "1.12.0.7245-mm1.12.0": "Incorrect CSS v34 gamedata; fails vtable validation.",
     "1.13.0.7394-mm1.12.0": "Missing CSS v34 sdktools gamedata.",
     "1.11.0.6970-mm1.10.7": "Startup SIGABRT on newer operating systems; 2.ep1 core does not load."
-  }
+  },
+  "images": {
+    "centos:7": "sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+    "ubuntu:14.04": "sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
+    "ubuntu:16.04": "sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
+    "ubuntu:18.04": "sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
+    "ubuntu:24.04": "sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+    "debian:8": "sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
+    "debian:9": "sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+    "debian:10": "sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+    "debian:11": "sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+    "debian:12": "sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
+    "debian:13": "sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "debian:latest": "sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+    "rockylinux:9": "sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6"
+  },
+  "weekly_smoke": [
+    "debian:8",
+    "debian:9",
+    "debian:10",
+    "debian:11",
+    "ubuntu:14.04",
+    "ubuntu:16.04",
+    "ubuntu:18.04",
+    "rockylinux:9"
+  ],
+  "botplay_image": "debian:11",
+  "weekly_botplay_image": "centos:7"
 }
