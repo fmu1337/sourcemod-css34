@@ -32,7 +32,7 @@ SMOKE="${SMOKE:-pass}"
 REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY required}"
 PTR_TAG="line-${LINE}"
 INDEX_TAG="lines-index"
-TARGET="${GITHUB_SHA:-$(git rev-parse HEAD)}"
+TARGET="${TARGET:-${GITHUB_SHA:-$(git rev-parse HEAD)}}"
 # Unique per run: parallel runs must never touch each other's temp assets.
 RUN_KEY="${GITHUB_RUN_ID:-$$}-${GITHUB_RUN_ATTEMPT:-0}"
 # Commit time of the tagged commit: when two tags of one line finish out of
