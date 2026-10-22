@@ -20,6 +20,10 @@ fi
 
 echo "==> Applying Metamod 1.12+ css34 light patches"
 
+# Manifests can add flags GCC 10 does not know (hl2sdk-manifests ebd6e10).
+"${PY[@]}" "$script_dir/manifest_flag_guard.py" \
+  "$mms_dir/hl2sdk-manifests/SdkHelpers.ambuild"
+
 # Detached MMS_COMMIT checkout stores a raw SHA in .git/HEAD (no "ref: ...").
 MMS_DIR="$mms_dir" "${PY[@]}" - <<'PYVER'
 from pathlib import Path

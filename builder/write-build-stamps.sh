@@ -7,7 +7,7 @@ WDIR="${WDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 SOURCEMOD_DIR="${SOURCEMOD_DIR:-$WDIR/sourcemod}"
 MMS_DIR="${MMS_DIR:-$WDIR/deps/mmsource-1.12}"
 SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:-b951843d42f7b9204615c14885468ea131a24002}"
-MMS_COMMIT="${MMS_COMMIT:-9fd977df3b49ec76cdf865a4af13a90c0f5c8814}"
+MMS_COMMIT="${MMS_COMMIT:-cb47755826fad1483291e5dc00222aa64303d12f}"
 # Fall back to MMS 1.10 tree when building the 1.11 css34 track.
 if [[ ! -d "$MMS_DIR/.git" && -d "$WDIR/deps/mmsource-1.10/.git" ]]; then
   MMS_DIR="$WDIR/deps/mmsource-1.10"

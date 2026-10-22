@@ -38,6 +38,7 @@ RUN_KEY="${GITHUB_RUN_ID:-$$}-${GITHUB_RUN_ATTEMPT:-0}"
 # Commit time of the tagged commit: when two tags of one line finish out of
 # order, the older one must not switch the pointer back.
 SRC_TIME="${SRC_TIME:-$(git show -s --format=%ct "$TARGET" 2>/dev/null || echo 0)}"
+FORCE_REPOINT="${FORCE_REPOINT:-0}"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -164,15 +165,16 @@ else
 fi
 
 decision="${work}/decision"
-python3 - "$line_json" "$LINE" "$SRC_TAG" "$SMOKE" "$manifest" "$mm_manifest" "$PTR_TAG" "$REPO" "$SRC_TIME" "$decision" <<'PY'
+python3 - "$line_json" "$LINE" "$SRC_TAG" "$SMOKE" "$manifest" "$mm_manifest" "$PTR_TAG" "$REPO" "$SRC_TIME" "$FORCE_REPOINT" "$decision" <<'PY'
 import json, sys, datetime
-path, line, tag, smoke, sm, mm, ptr, repo, src_time, decision = sys.argv[1:11]
+path, line, tag, smoke, sm, mm, ptr, repo, src_time, force_repoint, decision = sys.argv[1:12]
 sm, mm = json.loads(sm), json.loads(mm)
 src_time = int(src_time or 0)
+force = force_repoint == "1"
 current = json.load(open(path)).get(line)
 now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 served_time = int((current or {}).get("source_commit_time") or 0)
-if smoke == "pass" and current and current.get("smoke") == "pass" and served_time > src_time:
+if not force and smoke == "pass" and current and current.get("smoke") == "pass" and served_time > src_time:
     # A newer tag of this line already switched the pointer: leave it.
     open(decision, "w").write("stale")
     print(f"pointer already serves {current['tag']} (commit time {served_time} > {src_time}); not switching",
