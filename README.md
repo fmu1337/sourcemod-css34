@@ -18,8 +18,8 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 <!-- lines-install:begin -->
 | `<line>` | SourceMod | Metamod | Role |
 |----------|-----------|---------|------|
-| `sm13-latest` | 1.13.0.7472 | 1.12.0 git1226 | **Default / recommended** |
-| `sm12-latest` | 1.12.0.7253 | 1.12.0 git1226 | Latest 1.12 |
+| `sm13-latest` | 1.13.0.7478 | 1.12.0 git1228 | **Default / recommended** |
+| `sm12-latest` | 1.12.0.7257 | 1.12.0 git1228 | Latest 1.12 |
 | `sm13-mm20-khook` | 1.13.0.7565 (KHook branch + master) | 2.0.0 git1472 (KHook) | Frozen outside CI; archived builder, ships `dhooks.ext` |
 | `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Retired outside CI |
 <!-- lines-install:end -->
@@ -42,8 +42,8 @@ attached to the per-tag releases (pointers are Linux-only).
 | Line (`CSS34_LINE`) | SourceMod | Metamod | Role |
 |---------------------|-----------|---------|------|
 | `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.10-dev git976** (`80e8ff0b…`) | OldStable, withheld from pointers |
-| `sm12-latest` | **1.12.0.7253** (`2e229b11…`) | **1.12 git1226** (`9fd977df…`) | Latest 1.12 |
-| `sm13-latest` | **1.13.0.7472** (`6eb5f8fa…`) | **1.12 git1226** (`9fd977df…`) | Latest 1.13 (default) |
+| `sm12-latest` | **1.12.0.7257** (`e68dada2…`) | **1.12 git1228** (`cb477558…`) | Latest 1.12 |
+| `sm13-latest` | **1.13.0.7478** (`b34de51b…`) | **1.12 git1228** (`cb477558…`) | Latest 1.13 (default) |
 | `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | 2.0 git1407 (last SourceHook MM 2.0) (`0084b86a…`) | Retired outside CI ([docs](docs/SM13_MM20.md)) |
 | `sm13-mm20-khook` | **1.13.0.7565** (KHook branch + master) (`25954d4a…`) | **2.0 git1472 (KHook)** (`05c5c63a…`) | Frozen outside CI ([docs](docs/MM20_KHOOK.md)) |
 <!-- lines-versions:end -->
@@ -60,9 +60,9 @@ The manifest records line status and known-bad release tags; it is separate from
 Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
 A daily bump edits `lines.json` and regenerates — see [docs/JULES_DAILY_VERSION_BUMP.md](docs/JULES_DAILY_VERSION_BUMP.md).
 
-> `meta version` prints the Metamod build number from `lines.json` (`1.12.0-dev+1226`,
+> `meta version` prints the Metamod build number from `lines.json` (`1.12.0-dev+1228`,
 > or `1.10.7-dev+976` on `sm11-oldstable`) and `Build ID: <rev>:<commit prefix>`.
-> `sm version` prints `<major>.<minor>.0.<SM_REV>` (for example `1.13.0.7472`).
+> `sm version` prints `<major>.<minor>.0.<SM_REV>` (for example `1.13.0.7478`).
 > The clones stay shallow; `generate_headers.py` reads `MMS_GIT_REV` / `SOURCEMOD_GIT_REV`.
 
 ### What pairs with what
@@ -71,7 +71,7 @@ A daily bump edits `lines.json` and regenerates — see [docs/JULES_DAILY_VERSIO
 |--|--|--|
 | **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable`) | no |
 | **MM 1.11** (`metamod.2.ep1`) | no (myarena bundle; `11 < 14`) | not a release path |
-| **MM 1.12** git1226 | no | **matched** (`sm12-latest`, `sm13-latest`) |
+| **MM 1.12** git1228 | no | **matched** (`sm12-latest`, `sm13-latest`) |
 | **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
 | **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
 
@@ -196,7 +196,7 @@ Needs Docker. The build runs in pinned `quay.io/pypa/manylinux2014_i686` (glibc 
 ```bash
 git submodule update --init --recursive
 
-# Default (SM 1.13.7472 + MM 1.12.1226):
+# Default (SM 1.13.7478 + MM 1.12.1228):
 CSS34_LINE=sm13-latest builder/docker/build.sh
 
 # Other lines:
@@ -215,7 +215,9 @@ No root package symlinks are created.
 
 `PURE_SOURCE_BUILD=1` is the default. Packages land in `packages/`. `build.sh` builds in
 manylinux2014 (glibc 2.17). `check-package.sh` fails the package if any ELF needs a
-GLIBC newer than `GLIBC_FLOOR` (default 2.17).
+GLIBC newer than `GLIBC_FLOOR` (default 2.17). Both SM and MM package checks also
+reject unversioned undefined dynamic imports outside the verified glibc 2.17,
+libgcc_s and CS:S v34 engine allowlist. See [the patch inventory](docs/PATCHES.md).
 
 `builder/run/linux.sh` uses `CC` / `CXX` from the environment. `build.sh` sets
 them to devtoolset-10 `gcc` / `g++` inside the manylinux image.
@@ -229,19 +231,23 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 
 ## CI
 
-- `.github/workflows/test-server.yml` — the real gate (push to `master` / `cursor/**`, PRs; `docs/**` and `*.md` are ignored).
+- `.github/workflows/test-server.yml` — the real gate (push to `master` / `cursor/**`, PRs, and a weekly schedule).
+  Doc-only changes skip the server jobs; the `gate` job always reports the result.
   Builds **three active** lines (`sm11-oldstable`, `sm12-latest`, `sm13-latest`) with `builder/docker/build.sh` + `check-package.sh` / `check-metamod-package.sh`;
-  smoke on `debian:11`, `ubuntu:24.04` and `debian:13` for every active line, plus `rockylinux:9` and the ubuntu-22.04 host for
-  `sm13-latest`; **botplay-stress matrix** on `debian:11` for all lines
-  (SMAC + SDKHooks OnTakeDamage + SM API / cstrike / DHooks probes). Packages pass between jobs via
+  every PR smokes `centos:7`, `ubuntu:24.04` and `debian:13` for every active line, plus the ubuntu-22.04 host for
+  `sm13-latest`, and one **botplay-stress** run per line on `debian:11`
+  (SMAC + SDKHooks OnTakeDamage + SM API / cstrike / DHooks probes).
+  `debian:11` smoke itself, plus `debian:8`/`9`/`10`, `ubuntu:14.04`/`16.04`/`18.04`, `rockylinux:9`, and botplay on `centos:7`,
+  run on the weekly schedule, on `workflow_dispatch` with `suite=weekly`, and on release.
+  Images are pinned by digest in `builder/lines.json`. Packages pass between jobs via
   **Actions cache**. Reference (rom4s / published-release) botplay, extra distros and bisect are
   `workflow_dispatch` opt-ins.
 - `.github/workflows/build.yml` — Linux build of `sm13-latest` with `builder/docker/build.sh`
   (manylinux2014); **Windows** builds of `sm12-latest` and `sm13-latest` on `windows-2022`
   (MSVC 14.44, SDK 10.0.26100.0), booted natively and under Wine (`wine-smoke`).
 - `.github/workflows/release.yml` — tag-driven; tag (minus `-r<N>`) maps to `CSS34_LINE`; packages attach with
-  `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke,
-  line pointer, pointer smoke.
+  `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke
+  on the weekly OS matrix, botplay on `centos:7`, line pointer, pointer smoke.
 - `.github/workflows/version-pins.yml` — `python3 builder/lines.py check` on pin-related PRs.
 - `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts.
 - `.github/workflows/cleanup-artifacts.yml` — weekly / manual purge of Actions artifacts.
