@@ -25,3 +25,20 @@ Optional GCC instrumentation hooks are permitted only for weak undefined imports
 strong references to those names still fail. Unknown weak imports also fail.
 Both SourceMod and Metamod package checks inspect every shipped ELF, including
 executables, using `nm -D --undefined-only`; inspection errors fail closed.
+
+## sm13 MySQL dependencies
+
+The strict import check also found `compress2`, `uncompress` and weak
+`getentropy` in sm13's MariaDB extension. The builder compiles checksum-pinned
+zlib 1.3.1 with PIC and runs its tests; `patch-mysql-static-zlib.py` moves zlib
+inside the extension's existing static-library link group. Compression therefore
+has no unversioned imports or new runtime dependency.
+
+OpenSSL 1.1.1w normally probes libc's `getentropy` through a weak symbol (glibc
+2.25+), then uses its Linux `getrandom` syscall path and existing random-device
+fallback. `patch-openssl-getentropy.py` omits only that libc probe on Linux.
+The upstream syscall path, kernel-seeding checks and device fallback remain
+intact. The build runs `openssl rand` to verify entropy acquisition and changes
+the build stamp so cached, unpatched libcrypto archives cannot be reused.
+Both patchers fail on missing or inconsistent anchors. No new unsupported libc
+symbol is allowlisted. Revisit the OpenSSL patch when replacing OpenSSL 1.1.1w.

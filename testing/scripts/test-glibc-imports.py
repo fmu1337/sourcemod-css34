@@ -42,6 +42,13 @@ class Imports(unittest.TestCase):
                      'void probe(void) { if (future_glibc) future_glibc(); }')
         self.assertEqual(self.check().returncode, 1)
 
+    def test_weak_getentropy_still_rejected(self):
+        self.compile('extern int getentropy(void*, unsigned long) __attribute__((weak));\n'
+                     'int probe(void *p) { return getentropy ? getentropy(p, 32) : -1; }')
+        result = self.check()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('unversioned undefined symbol getentropy', result.stderr)
+
     def test_toolchain_hook_only_allowed_when_weak(self):
         for declaration, expected in [('__attribute__((weak))', 0), ('', 1)]:
             self.compile('extern void __gmon_start__(void) ' + declaration + ';\n'
