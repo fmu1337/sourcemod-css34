@@ -12,14 +12,35 @@ source "$BUILDER_DIR/resolve-version.sh"
 MMS_DIR="${MMS_DIR:-$DEPS_DIR/$MMS_DIRNAME}"
 
 export BUILD_PLATFORM=windows
-export SOURCEMOD_MAJOR MMS_MODE MMS_DIRNAME MMS_COMMIT MMS_BRANCH MMS_GIT_REV
+export SOURCEMOD_MAJOR MMS_MODE MMS_DIR MMS_DIRNAME MMS_COMMIT MMS_BRANCH MMS_GIT_REV
 export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV SOURCEMOD_DIR WDIR
 export PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-1}"
+# One timestamp for both css34-package.json manifests of this build.
+export BUILD_DATE="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 
 if ! command -v cl >/dev/null 2>&1; then
   echo "MSVC compiler (cl.exe) not found. Run inside a Visual Studio Developer shell." >&2
   exit 1
 fi
+
+# shellcheck source=../windows-toolchain.env
+source "$BUILDER_DIR/windows-toolchain.env"
+msvc_toolset="${VCToolsVersion:-${VCTOOLSVERSION:-}}"
+windows_sdk="${WindowsSDKVersion:-${WINDOWSSDKVERSION:-}}"
+windows_sdk="${windows_sdk//\\/}"
+windows_sdk="${windows_sdk%/}"
+sdk_prefix="${WINDOWS_SDK_PIN%.*}"
+if [[ "$msvc_toolset" != "${MSVC_TOOLSET_PREFIX}".* ]]; then
+  echo "FAIL: MSVC toolset '${msvc_toolset:-unset}' is not ${MSVC_TOOLSET_PREFIX}.* (vcvars -vcvars_ver=${MSVC_TOOLSET_PREFIX})" >&2
+  exit 1
+fi
+if [[ "$windows_sdk" != "$WINDOWS_SDK_PIN" && "$windows_sdk" != "${sdk_prefix}".* ]]; then
+  echo "FAIL: Windows SDK '${windows_sdk:-unset}' is not ${WINDOWS_SDK_PIN}" >&2
+  exit 1
+fi
+export MSVC_TOOLSET="$msvc_toolset"
+export WINDOWS_SDK="$windows_sdk"
+echo "==> MSVC toolset ${MSVC_TOOLSET}, Windows SDK ${WINDOWS_SDK}"
 
 echo "==> Initializing SourceMod submodule"
 cd "$WDIR"
@@ -34,7 +55,7 @@ git -C "$SOURCEMOD_DIR" submodule update --init --recursive
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
 chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/write-build-stamps.sh" \
-  "$BUILDER_DIR"/patches/*.sh 2>/dev/null || true
+  "$BUILDER_DIR/write-package-manifest.sh" "$BUILDER_DIR"/patches/*.sh 2>/dev/null || true
 
 python -m pip install --upgrade pip
 python -m pip install "$DEPS_DIR/ambuild"
@@ -57,7 +78,7 @@ MM_ARTIFACT="$(
     -File "$BUILDER_DIR/package-metamod-windows.ps1" \
     -PackageDir "$MMS_DIR/build/package" \
     -OutputDir "$PACKAGES_DIR" \
-    -MmsDir "$MMS_DIR"
+    -MmsDir "$MMS_DIR" | tail -n1 | tr -d '\r'
 )"
 cp -f "$MM_ARTIFACT" "$WDIR/$(basename "$MM_ARTIFACT")"
 echo "==> Metamod package: $MM_ARTIFACT"
@@ -121,7 +142,7 @@ ARTIFACT="$(
     -File "$BUILDER_DIR/package-windows.ps1" \
     -PackageDir "$PACKAGE_DIR" \
     -OutputDir "$PACKAGES_DIR" \
-    -SourceModDir "$SOURCEMOD_DIR"
+    -SourceModDir "$SOURCEMOD_DIR" | tail -n1 | tr -d '\r'
 )"
 
 cp -f "$ARTIFACT" "$WDIR/$(basename "$ARTIFACT")"

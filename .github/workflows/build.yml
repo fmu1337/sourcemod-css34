@@ -37,6 +37,9 @@ jobs:
         id: m
         run: python3 builder/lines.py gha >> "$GITHUB_OUTPUT"
 
+      - name: Windows zip layout self-test
+        run: python3 builder/package_windows.py self-test
+
   linux:
     needs: pins
     runs-on: ubuntu-22.04
@@ -62,7 +65,9 @@ jobs:
 
   windows:
     needs: pins
-    runs-on: windows-latest
+    # Pin the image. windows-latest moves, and with it the default MSVC toolset.
+    # toolset/sdk match builder/windows-toolchain.env (-vcvars_ver=14.44).
+    runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
@@ -78,10 +83,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Set up MSVC (x86)
+      - name: Set up MSVC (x86, toolset 14.44, SDK 10.0.26100.0)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x86
+          toolset: "14.44"
+          sdk: 10.0.26100.0
 
       - name: Build SourceMod + Metamod for CS:S v34 (${{ matrix.line }})
         shell: bash
@@ -99,6 +106,13 @@ jobs:
         shell: bash
         run: |
           ls -lh packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip
+          python builder/package_windows.py check \
+            packages/sourcemod-*-css34-windows.zip \
+            packages/mmsource-*-css34-windows.zip
+          if command -v unzip >/dev/null 2>&1; then
+            unzip -l packages/sourcemod-*-css34-windows.zip
+            unzip -l packages/mmsource-*-css34-windows.zip
+          fi
 
       # Packages + debug symbols for wine-smoke (Actions cache, not artifact storage)
       - name: Collect packages and PDBs
@@ -212,4 +226,9 @@ jobs:
           # github.workspace is the host path, not the container's
           export PDB_DIR="$PWD/win-art/pdb"
           [[ -f server-art/css34-server.tar.gz ]] && export SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"
+          echo "==== unzip -l ${SM_WIN_PACKAGE} ===="
+          unzip -l "${SM_WIN_PACKAGE}"
+          echo "==== unzip -l ${MM_WIN_PACKAGE} ===="
+          unzip -l "${MM_WIN_PACKAGE}"
+          python3 builder/package_windows.py check "${SM_WIN_PACKAGE}" "${MM_WIN_PACKAGE}"
           bash testing/scripts/wine-smoke-test.sh

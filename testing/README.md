@@ -126,13 +126,15 @@ binaries from rom4s `srcds_css34_w_a.zip` (`srcds.exe`, `bin/*.dll`,
 `cstrike/bin/server.dll`), run with 32-bit Wine under Xvfb.
 `testing/scripts/wine-smoke-test.sh` drives it over RCON
 (`testing/scripts/rcon.py`): Metamod / SourceMod versions, the expected
-extensions (`LOAD_EXTS` are loaded first), then a `changelevel`. On a failure
+extensions (`LOAD_EXTS` are loaded first; the matrix loads `sdkhooks` and
+requires **SDK Hooks**). When the package contains `dhooks.ext.dll` the script
+also loads it and requires **DHooks**. Then a `changelevel`. On a failure
 `testing/scripts/wine-crash-report.py` maps every access violation in the
 Wine log (`WINEDEBUG=+seh,+loaddll`) to module + RVA and symbolizes it with
 `llvm-symbolizer` when the `.pdb` from the Windows build sits next to the DLL.
 
 The same script runs natively under Git Bash on Windows (`uname -s` MINGW /
-MSYS): the `build.yml` `windows` job runs it on `windows-latest` right after
+MSYS): the `build.yml` `windows` job runs it on `windows-2022` right after
 the build, with `spcomp.exe` run directly and `srcds.exe` started in its own
 console window (`Start-Process`; with a pipe as stdin `-console` spins on
 `GetNumberOfConsoleInputEvents` and never loads the map), game content
@@ -146,8 +148,15 @@ uploaded as the `windows-smoke-<line>` artifact on a failure).
 SM_WIN_PACKAGE="$(ls packages/sourcemod-*-css34-windows.zip)" \
 MM_WIN_PACKAGE="$(ls packages/mmsource-*-css34-windows.zip)" \
 SM_VERSION_EXPECT=1.13.0.7472 MM_VERSION_EXPECT=1.12.0 \
+EXPECT_EXTS='CS Tools,SDK Tools,BinTools,SDK Hooks' LOAD_EXTS=sdkhooks \
   testing/scripts/wine-smoke-test.sh
 ```
+
+**Accepted gap:** this smoke is not the Linux botplay-stress profile. It does not
+run SMAC, the cstrike native round, or the SDKHooks `OnTakeDamage` hit counter.
+When `dhooks.ext.dll` is in the package, `DHOOKS_PROBE_SECS` still plays bots on
+`de_dust2` and checks the DHooks probe. A separate short Wine botplay beyond that
+probe is not part of the gate.
 
 ## Local run
 
