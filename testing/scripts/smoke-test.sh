@@ -259,6 +259,25 @@ for required_ext in 'BinTools' 'SDK Tools' 'CS Tools' 'SDK Hooks'; do
   require_grep "${CONSOLE_PROBE_LOG}" "${required_ext}" "required extension (${required_ext})"
 done
 
+# Explicit loads. Autoload never opens dbi.mysql / dbi.pgsql, so a bad link
+# (OpenSSL, glibc) used to pass smoke. geoip and regex stay optional.
+require_ext_loaded() {
+  local ext="$1"
+  require_grep "${CONSOLE_PROBE_LOG}" \
+    "Loaded extension ${ext}(\\.so)? successfully|Extension ${ext}(\\.so)? is already loaded" \
+    "sm exts load ${ext}"
+}
+require_ext_loaded dbi.mysql.ext
+require_ext_loaded dbi.pgsql.ext
+for optional_ext in geoip.ext regex.ext; do
+  if grep -Eiq "Loaded extension ${optional_ext}(\\.so)? successfully|Extension ${optional_ext}(\\.so)? is already loaded" \
+      "${CONSOLE_PROBE_LOG}"; then
+    echo "OK: sm exts load ${optional_ext}"
+  else
+    echo "NOTE: optional extension ${optional_ext} did not load"
+  fi
+done
+
 # css34 OnTakeDamage vtables must be the packaged overlay (windows 60 / linux 61).
 # Match the exact Offsets key (not OnTakeDamage_Alive). linux is 3 lines after the key
 # when windows is listed first — use enough context.
@@ -314,9 +333,15 @@ else
     "sm plugins list reports ${expected_plugins} running plugins"
 fi
 
-if grep -Eiq 'Error loading|Failed to load|could not be loaded|Encountered error' "${CONSOLE_PROBE_LOG}"; then
+# geoip/regex failures are optional and must not fail the run. DBI failures are not.
+plugin_errors="$(
+  grep -Ei 'Error loading|Failed to load|could not be loaded|Encountered error|Unable to load extension' \
+    "${CONSOLE_PROBE_LOG}" 2>/dev/null \
+    | grep -Eiv 'geoip|regex' || true
+)"
+if [[ -n "${plugin_errors}" ]]; then
   echo "FAIL: plugin load errors in console probe log" >&2
-  grep -Ei 'Error loading|Failed to load|could not be loaded|Encountered error' "${CONSOLE_PROBE_LOG}" >&2 || true
+  printf '%s\n' "${plugin_errors}" >&2
   fail=1
 else
   echo "OK: no plugin load errors in console probe log"

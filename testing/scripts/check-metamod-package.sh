@@ -102,6 +102,10 @@ while IFS= read -r -d '' elf; do
 done < <(find "${TMP}" -type f -name '*.so' -print0)
 echo "Highest GLIBC symbol version referenced: ${max_glibc:-none} (floor ${GLIBC_FLOOR})"
 
+if ! python3 "$(dirname "$0")/check-unversioned-imports.py" "${TMP}"; then
+  fail=1
+fi
+
 manifest="${TMP}/addons/metamod/css34-package.json"
 if [[ ! -f "${manifest}" ]]; then
   echo "FAIL: missing addons/metamod/css34-package.json" >&2
