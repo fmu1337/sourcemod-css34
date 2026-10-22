@@ -42,7 +42,7 @@ mm_base="${mm_product%%-*}"
 build_date="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 pack_commit="$(git -C "${WDIR:-$SOURCEMOD_DIR/..}" rev-parse HEAD 2>/dev/null || echo unknown)"
 
-# Windows packages record the vcvars toolset and SDK that produced the binaries.
+# Windows packages record toolset/SDK; Linux packages record min_glibc.
 toolchain_fields=""
 if [[ "${BUILD_PLATFORM:-}" == "windows" ]]; then
   msvc_toolset="${MSVC_TOOLSET:?MSVC_TOOLSET required for Windows packages}"
@@ -53,6 +53,8 @@ if [[ "${BUILD_PLATFORM:-}" == "windows" ]]; then
   fi
   toolchain_fields=$(printf '  "msvc_toolset": "%s",\n  "windows_sdk": "%s",\n' \
     "$msvc_toolset" "$windows_sdk")
+else
+  toolchain_fields=$(printf '  "min_glibc": "2.17",\n')
 fi
 
 mkdir -p "$(dirname "$OUT")"
