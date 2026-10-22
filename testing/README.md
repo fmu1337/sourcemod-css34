@@ -179,6 +179,10 @@ Published release pairs of the five `CSS34_LINE`s, mix PASS/FAIL notes, and hist
 ## CI hygiene regression checks
 
 Run `bash testing/scripts/check-package-paths.sh` and `actionlint` after workflow changes.
+With GCC, binutils and Expect installed, run
+`python3 testing/scripts/test-glibc-imports.py` and
+`python3 testing/scripts/test-console-probe.py` for the unversioned-import gate,
+PostgreSQL shim and console recovery regressions. CI Hygiene runs both.
 `ci-hygiene.yml` deliberately runs smoke against an empty server directory, requires
 the expected missing-server failure, and uploads `negative-smoke-logs` for seven days.
 After that workflow completes, verify the artifact is still downloadable. This

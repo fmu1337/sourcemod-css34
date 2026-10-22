@@ -211,7 +211,9 @@ No root package symlinks are created.
 
 `PURE_SOURCE_BUILD=1` is the default. Packages land in `packages/`. `build.sh` builds in
 manylinux2014 (glibc 2.17). `check-package.sh` fails the package if any ELF needs a
-GLIBC newer than `GLIBC_FLOOR` (default 2.17).
+GLIBC newer than `GLIBC_FLOOR` (default 2.17). Both SM and MM package checks also
+reject unversioned undefined dynamic imports outside the verified glibc 2.17,
+libgcc_s and CS:S v34 engine allowlist. See [the patch inventory](docs/PATCHES.md).
 
 `builder/run/linux.sh` uses `CC` / `CXX` from the environment. `build.sh` sets
 them to devtoolset-10 `gcc` / `g++` inside the manylinux image.

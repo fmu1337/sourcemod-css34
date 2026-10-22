@@ -2,6 +2,7 @@
 # glibc 2.17/libgcc_s and CS:S v34 build 4044 engine libraries.
 # symbol provider; no glob patterns. Additions require provider verification.
 AssertValidStringPtr tier0_i486.so
+CommandLine vstdlib_i486.so
 CommandLine_Tier0 tier0_i486.so
 DevMsg tier0_i486.so
 DoNewAssertDialog tier0_i486.so
@@ -12,6 +13,7 @@ GetSpewOutputFunc tier0_i486.so
 KeyValuesSystem vstdlib_i486.so
 MemAllocScratch tier0_i486.so
 MemFreeScratch tier0_i486.so
+Msg tier0_i486.so
 RandomFloat vstdlib_i486.so
 RandomInt vstdlib_i486.so
 RandomSeed vstdlib_i486.so
@@ -38,6 +40,7 @@ _ZNK10__cxxabiv117__class_type_info11__do_upcastEPKS0_PPv tier0_i486.so
 _ZNK10__cxxabiv120__si_class_type_info11__do_upcastEPKNS_17__class_type_infoEPKvRNS1_15__upcast_resultE tier0_i486.so
 _ZNK10__cxxabiv120__si_class_type_info12__do_dyncastEiNS_17__class_type_info10__sub_kindEPKS1_PKvS4_S6_RNS1_16__dyncast_resultE tier0_i486.so
 _ZNK10__cxxabiv120__si_class_type_info20__do_find_public_srcEiPKvPKNS_17__class_type_infoES2_ tier0_i486.so
+_ZNKSt9exception4whatEv tier0_i486.so
 _ZNKSt9type_info14__is_pointer_pEv tier0_i486.so
 _ZNKSt9type_info15__is_function_pEv tier0_i486.so
 _ZNSt10bad_typeidD1Ev tier0_i486.so
@@ -62,6 +65,7 @@ _ZTVSt10bad_typeid tier0_i486.so
 _ZTVSt13bad_exception tier0_i486.so
 _ZTVSt8bad_cast tier0_i486.so
 _ZTVSt9bad_alloc tier0_i486.so
+_ZTVSt9exception tier0_i486.so
 _ZdaPv engine_i686.so
 _ZdlPv engine_i686.so
 _Znaj engine_i686.so
