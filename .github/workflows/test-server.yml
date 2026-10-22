@@ -144,14 +144,6 @@ jobs:
             echo "skip=0" >> "$GITHUB_OUTPUT"
           fi
 
-      # One-off evidence for #127; remove after recording the run in the PR.
-      - name: Reproduce master sm13 unversioned import failure
-        if: matrix.line == 'sm13-latest' && steps.select.outputs.skip != '1'
-        env:
-          CSS34_LINE: sm13-latest
-        run: |
-          bash testing/scripts/reproduce-master-pgsql.sh
-
       - name: Build SourceMod+Metamod (${{ matrix.line }}) pure-source
         if: steps.select.outputs.skip != '1'
         env:
