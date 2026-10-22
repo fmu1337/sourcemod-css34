@@ -96,7 +96,8 @@
         {
           "image": "debian:13"
         }
-      ]
+      ],
+      "windows": true
     },
     "sm13-latest": {
       "sourcemod": "SM_LATEST_13",

@@ -43,8 +43,14 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   are sha256-pinned.
 - Packages stay in `packages/` (or `PACKAGES_DIR`); the builder creates no root
   symlinks. Source `builder/package-paths.sh` with `CSS34_LINE` to resolve exact
-  SM/MM archive paths. Archived MM 2.0/KHook builds live in `archive/khook`;
+  SM/MM archive paths (Linux tar.gz and Windows zip, both with `git<rev>`).
+  Archived MM 2.0/KHook builds live in `archive/khook`;
   master rejects those build lines, while their published pointers stay intact.
+- Windows (`builder/run/windows.sh`) builds on `windows-2022` with MSVC toolset
+  `14.44` (`-vcvars_ver=14.44`) and Windows SDK `10.0.26100.0`
+  (`builder/windows-toolchain.env`). `builder/package_windows.py` writes the zips
+  (POSIX `/` paths, `css34-package.json` inside, full toolset and SDK versions
+  in the manifest). `sm12-latest` and `sm13-latest` have `"windows": true`.
 
 ### Verifying / testing
 - **Static ABI check** (the "ABI / export checks" step of `build-linux` in

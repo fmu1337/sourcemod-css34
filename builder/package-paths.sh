@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Source to resolve exact Linux archive paths for the selected build line.
+# Source to resolve exact Linux and Windows archive paths for the selected line.
 # This does not require the packages to exist (local runners may use URLs).
+# Windows Metamod is mmsource-<ver>-git<rev>-css34-windows.zip (revision from lines.json).
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/resolve-version.sh"
 
 case "$MMS_MODE" in
@@ -10,5 +11,7 @@ case "$MMS_MODE" in
 esac
 SM_PACKAGE="${PACKAGES_DIR:-packages}/sourcemod-1.${SOURCEMOD_MAJOR}.0-git${SOURCEMOD_GIT_REV}-css34-linux.tar.gz"
 MM_PACKAGE="${PACKAGES_DIR:-packages}/mmsource-${package_mm_version}-git${MMS_GIT_REV}-css34-linux.tar.gz"
-export SM_PACKAGE MM_PACKAGE
+SM_WIN_PACKAGE="${PACKAGES_DIR:-packages}/sourcemod-1.${SOURCEMOD_MAJOR}.0-git${SOURCEMOD_GIT_REV}-css34-windows.zip"
+MM_WIN_PACKAGE="${PACKAGES_DIR:-packages}/mmsource-${package_mm_version}-git${MMS_GIT_REV}-css34-windows.zip"
+export SM_PACKAGE MM_PACKAGE SM_WIN_PACKAGE MM_WIN_PACKAGE
 unset package_mm_version

@@ -143,13 +143,22 @@
   ],
   "windows": [
     {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7257",
+      "mm_expect": "1.12.0-dev+1228",
+      "mm_rev": 1228,
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
+      "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
+      "load_exts": "sdkhooks"
+    },
+    {
       "line": "sm13-latest",
       "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0-dev+1228",
       "mm_rev": 1228,
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
-      "exts": "CS Tools,SDK Tools,BinTools",
-      "load_exts": ""
+      "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
+      "load_exts": "sdkhooks"
     }
   ],
   "release_botplay": [
