@@ -140,6 +140,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOINT_TAG: ${{ inputs.repoint_tag || github.event.inputs.repoint_tag }}
+          CSS34_LINE_INPUT: ${{ inputs.css34_line || github.event.inputs.css34_line }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC1091
@@ -181,12 +182,7 @@ jobs:
               echo "Could not find SM/MM linux tarballs in release tag ${repoint_tag}" >&2
               exit 1
             fi
-            tag_info="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/tags/${repoint_tag}")"
-            target_sha="$(jq -r '.[0].object.sha // empty' <<<"$tag_info")"
-            if [[ -z "$target_sha" ]]; then
-              target_sha="$(jq -r '.target_commitish // empty' <<<"$rel_info")"
-            fi
-            commit_info="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${target_sha}")"
+            commit_info="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${repoint_tag}")"
             target_commit="$(jq -r '.sha' <<<"$commit_info")"
             target_time="$(jq -r '.commit.committer.date | fromdateiso8601' <<<"$commit_info")"
           elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
@@ -215,7 +211,7 @@ jobs:
               pointer=0
             fi
           else
-            line="${{ github.event.inputs.css34_line }}"
+            line="${CSS34_LINE_INPUT:-}"
             if [[ -z "$line" ]]; then
               line="$(python3 -c 'import json; print(json.load(open("builder/lines.json"))["default_line"])')"
             fi
@@ -438,7 +434,10 @@ jobs:
   # on every weekly image (debian 8–11, ubuntu 14.04/16.04/18.04, rockylinux 9).
   smoke-release:
     needs: [resolve-line, linux, checksums, release-pins]
-    if: (github.ref_type == 'tag' || needs.resolve-line.outputs.repoint == '1') && (needs.linux.result == 'success' || needs.resolve-line.outputs.repoint == '1')
+    if: >-
+      always() && needs.resolve-line.result == 'success' && needs.release-pins.result == 'success' &&
+      ((github.ref_type == 'tag' && needs.linux.result == 'success' && needs.checksums.result == 'success') ||
+       needs.resolve-line.outputs.repoint == '1')
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -497,7 +496,10 @@ jobs:
   # Weekly botplay on centos:7 against the published URLs.
   botplay-release:
     needs: [resolve-line, linux, checksums, release-pins]
-    if: (github.ref_type == 'tag' || needs.resolve-line.outputs.repoint == '1') && (needs.linux.result == 'success' || needs.resolve-line.outputs.repoint == '1')
+    if: >-
+      always() && needs.resolve-line.result == 'success' && needs.release-pins.result == 'success' &&
+      ((github.ref_type == 'tag' && needs.linux.result == 'success' && needs.checksums.result == 'success') ||
+       needs.resolve-line.outputs.repoint == '1')
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     strategy:
@@ -597,7 +599,7 @@ jobs:
       needs.resolve-line.outputs.pointer == '1' &&
       (needs.smoke-release.result == 'success' || needs.smoke-release.result == 'failure') &&
       (needs.botplay-release.result == 'success' || needs.botplay-release.result == 'failure') &&
-      (needs.linux.result == 'success' || needs.resolve-line.outputs.repoint == '1')
+      ((github.ref_type == 'tag' && needs.linux.result == 'success') || needs.resolve-line.outputs.repoint == '1')
     runs-on: ubuntu-22.04
     # One writer per line-<line>. Per line, not global: a concurrency group holds
     # one running + one pending job and a newer pending one cancels it, so a
