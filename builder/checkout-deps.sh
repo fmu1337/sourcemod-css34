@@ -44,7 +44,7 @@ install_openssl_111w() {
     tar -C "$DEPS" -xzf "$tarball"
     (
       cd "$DEPS/openssl-1.1.1w"
-      ./Configure linux-elf -m32 no-shared no-tests no-dso -fPIC --prefix="$prefix"
+      ./Configure linux-elf no-shared no-tests no-dso -fPIC --prefix="$prefix"
       make -j"$(nproc)"
       make install_sw
     )

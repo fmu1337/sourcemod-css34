@@ -78,6 +78,52 @@ if [ -d "$legacy_dir/sourcehook" ]; then
   export MMS_CSS34_SH_H="$legacy_core_dir/sourcehook/sourcehook.h"
   export MMS_CSS34_ROOT="$mms_dir"
   "${PY[@]}" "$script_dir/gen-sh-decl-extern-v4.py"
+
+  # bintools uses modern PassInfo/ProtoInfo; omit legacy ProtoInfo when the shim is active.
+  export MMS_CSS34_SH_H
+  export MMS_PATCH_DIR="$script_dir"
+  "${PY[@]}" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ['MMS_CSS34_SH_H'])
+text = path.read_text()
+marker = 'SOURCEMOD_BINTOOLS_PROTO_SHIM'
+if marker in text:
+    print('==> sourcehook.h ProtoInfo shim guard already present in core-css34legacy')
+else:
+    old = """\tstruct ProtoInfo
+\t{
+\t\tProtoInfo(int rtsz, int nop, const int *p) : beginningNull(0), retTypeSize(rtsz), numOfParams(nop), params(p)
+\t\t{
+\t\t}
+\t\tint beginningNull;\t\t//!< To distinguish from old protos (which never begin with 0)
+\t\tint retTypeSize;\t\t//!< 0 if void
+\t\tint numOfParams;\t\t//!< number of parameters
+\t\tconst int *params;\t\t//!< params[0]=0 (or -1 for vararg), params[1]=size of first param, ...
+\t};"""
+    new = """#ifndef SOURCEMOD_BINTOOLS_PROTO_SHIM
+\tstruct ProtoInfo
+\t{
+\t\tProtoInfo(int rtsz, int nop, const int *p) : beginningNull(0), retTypeSize(rtsz), numOfParams(nop), params(p)
+\t\t{
+\t\t}
+\t\tint beginningNull;\t\t//!< To distinguish from old protos (which never begin with 0)
+\t\tint retTypeSize;\t\t//!< 0 if void
+\t\tint numOfParams;\t\t//!< number of parameters
+\t\tconst int *params;\t\t//!< params[0]=0 (or -1 for vararg), params[1]=size of first param, ...
+\t};
+#endif // !SOURCEMOD_BINTOOLS_PROTO_SHIM"""
+    if old not in text:
+        raise SystemExit('Failed to locate legacy ProtoInfo in sourcehook.h')
+    path.write_text(text.replace(old, new, 1))
+    print('==> Wrapped legacy ProtoInfo for bintools shim in core-css34legacy sourcehook.h')
+
+shim_src = Path(os.environ['MMS_PATCH_DIR']) / 'sourcehook-pibuilder-shim.h'
+shim_dst = path.parent / 'sourcehook_pibuilder.h'
+shim_dst.write_text(shim_src.read_text())
+print(f'==> Installed {shim_dst.name} into core-css34legacy/sourcehook for css34 bintools builds')
+PY
 else
   echo "Missing $legacy_dir/sourcehook — cannot target css34 Metamod" >&2
   exit 1
@@ -288,8 +334,7 @@ if not os.path.exists(git_head_path):
 """
     new = """# css34: detached HEAD / MMS_COMMIT pin stores raw SHA in .git/HEAD
 import re
-mms_root = os.environ.get('MMS_DIR', builder.sourcePath)
-with open(os.path.join(mms_root, '.git', 'HEAD')) as fp:
+with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
   head_contents = fp.read().strip()
 if re.search('^[a-fA-F0-9]{40}$', head_contents):
   git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
@@ -393,8 +438,8 @@ old = """      if cxx.name == 'gcc':
 new = """      if cxx.name == 'gcc':
         # css34: libgcc_s stays dynamic; hide static libstdc++ (GCC 10 / glibc 2.17)
         cfg.linkflags += ['-lgcc_s', '-static-libstdc++', '-Wl,--exclude-libs=libstdc++.a:libsupc++.a']
-        cfg.cflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-sign-compare', '-Wno-unused-result']
-        cfg.cxxflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-volatile', '-Wno-unused-result']
+        cfg.cflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-sign-compare']
+        cfg.cxxflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-volatile']
       elif cxx.name == 'clang':
         cfg.linkflags += ['-lgcc_eh']
 """

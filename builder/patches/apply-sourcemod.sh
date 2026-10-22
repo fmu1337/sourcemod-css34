@@ -94,7 +94,12 @@ mms_inc_old = """    compiler.cxxincludes += [
       os.path.join(self.mms_root, 'core'),
       os.path.join(self.mms_root, 'core', 'sourcehook'),
     ]"""
-mms_inc_new = """    mms_core = os.path.join(self.mms_root, 'core-css34legacy') if (sdk.name == 'ep1' and os.path.isdir(os.path.join(self.mms_root, 'core-css34legacy'))) else os.path.join(self.mms_root, 'core')
+mms_inc_new = """    legacy_core = os.path.join(self.mms_root, 'core-css34legacy')
+    if sdk.name in ('ep1', 'episode1') and os.path.isdir(legacy_core):
+      mms_core = legacy_core
+      print('==> Using Metamod core-css34legacy include path for ' + sdk.name + ': ' + mms_core)
+    else:
+      mms_core = os.path.join(self.mms_root, 'core')
     compiler.cxxincludes += [
       mms_core,
       os.path.join(mms_core, 'sourcehook'),
