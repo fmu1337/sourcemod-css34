@@ -201,6 +201,11 @@ if [ "$need_mariadb" = 1 ]; then
   fi
 fi
 
+if [ -f "$BUILDER_DIR/versions.env" ]; then
+  # shellcheck source=versions.env
+  source "$BUILDER_DIR/versions.env"
+fi
+
 echo "==> Fetching Metamod:Source"
 # MMS_MODE / MMS_DIRNAME / MMS_COMMIT come from resolve-version.sh (or env).
 MMS_MODE="${MMS_MODE:-}"
@@ -210,37 +215,51 @@ MMS_BRANCH="${MMS_BRANCH:-}"
 
 if [[ -z "$MMS_MODE" || -z "$MMS_DIRNAME" || -z "$MMS_COMMIT" ]]; then
   if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
-    MMS_COMMIT="${MMS_COMMIT:-cb47755826fad1483291e5dc00222aa64303d12f}"
-    MMS_BRANCH="${MMS_BRANCH:-1.12-dev}"
-    MMS_DIRNAME="${MMS_DIRNAME:-mmsource-1.12}"
+    MMS_COMMIT="${MMS_COMMIT:-${MM_112_COMMIT:-cb47755826fad1483291e5dc00222aa64303d12f}}"
+    MMS_BRANCH="${MMS_BRANCH:-${MM_112_BRANCH:-1.12-dev}}"
+    MMS_DIRNAME="${MMS_DIRNAME:-${MM_112_DIRNAME:-mmsource-1.12}}"
     MMS_MODE="${MMS_MODE:-1.12}"
   else
-    MMS_COMMIT="${MMS_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-    MMS_BRANCH="${MMS_BRANCH:-1.10-dev}"
-    MMS_DIRNAME="${MMS_DIRNAME:-mmsource-1.10}"
+    MMS_COMMIT="${MMS_COMMIT:-${MM_110_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}}"
+    MMS_BRANCH="${MMS_BRANCH:-${MM_110_BRANCH:-1.10-dev}}"
+    MMS_DIRNAME="${MMS_DIRNAME:-${MM_110_DIRNAME:-mmsource-1.10}}"
     MMS_MODE="${MMS_MODE:-1.10}"
   fi
 fi
 
-clone_repo "$MMS_DIRNAME" "https://github.com/alliedmodders/metamod-source" "$MMS_BRANCH" "$MMS_COMMIT"
-echo "==> Metamod:Source (${MMS_MODE}) at $(git -C "$DEPS/$MMS_DIRNAME" rev-parse HEAD)"
+fetch_and_patch_mms() {
+  local dirname="$1"
+  local mode="$2"
+  local branch="$3"
+  local commit="$4"
 
-case "$MMS_MODE" in
-  1.10)
-    MMS_DIR="$DEPS/$MMS_DIRNAME" bash "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/$MMS_DIRNAME"
-    ;;
-  1.11)
-    bash "$BUILDER_DIR/patches/apply-mmsource-v111.sh" "$DEPS/$MMS_DIRNAME"
-    ;;
-  1.12|2.0)
-    git -C "$DEPS/$MMS_DIRNAME" submodule update --init --recursive
-    bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/$MMS_DIRNAME"
-    ;;
-  *)
-    echo "Unsupported MMS_MODE=$MMS_MODE" >&2
-    exit 1
-    ;;
-esac
+  clone_repo "$dirname" "https://github.com/alliedmodders/metamod-source" "$branch" "$commit"
+  echo "==> Metamod:Source (${mode}) in $dirname at $(git -C "$DEPS/$dirname" rev-parse HEAD)"
+
+  case "$mode" in
+    1.10)
+      MMS_DIR="$DEPS/$dirname" bash "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/$dirname"
+      ;;
+    1.11)
+      bash "$BUILDER_DIR/patches/apply-mmsource-v111.sh" "$DEPS/$dirname"
+      ;;
+    1.12|2.0)
+      git -C "$DEPS/$dirname" submodule update --init --recursive
+      bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/$dirname"
+      ;;
+    *)
+      echo "Unsupported MMS_MODE=$mode" >&2
+      exit 1
+      ;;
+  esac
+}
+
+if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
+  fetch_and_patch_mms "${MM_110_DIRNAME:-mmsource-1.10}" "1.10" "${MM_110_BRANCH:-1.10-dev}" "${MM_110_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
+  fetch_and_patch_mms "${MM_112_DIRNAME:-mmsource-1.12}" "1.12" "${MM_112_BRANCH:-1.12-dev}" "${MM_112_COMMIT:-cb47755826fad1483291e5dc00222aa64303d12f}"
+else
+  fetch_and_patch_mms "$MMS_DIRNAME" "$MMS_MODE" "$MMS_BRANCH" "$MMS_COMMIT"
+fi
 
 # Pinned 2026-10-20 (episode1 / ep1c tips). Override only to reproduce another tree.
 HL2SDK_EPISODE1_COMMIT="${HL2SDK_EPISODE1_COMMIT:-4b0cde271be6806b95842e78348009712a8b3fbe}"

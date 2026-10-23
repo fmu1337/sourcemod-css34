@@ -85,20 +85,35 @@ WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
   SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" MMS_COMMIT="$MMS_COMMIT" MMS_DIR="$MMS_DIR" \
   bash "$BUILDER_DIR/write-build-stamps.sh"
 
-echo "==> Building Metamod:Source (css34 episode1, ${MMS_MODE})"
-WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
-  CC="$CC" CXX="$CXX" \
-  SOURCEMOD_MAJOR="$SOURCEMOD_MAJOR" MMS_DIR="$MMS_DIR" \
-  MMS_MODE="$MMS_MODE" MMS_DIRNAME="$MMS_DIRNAME" \
-  bash "$BUILDER_DIR/build-metamod.sh"
+build_and_package_mm() {
+  local mm_dir="$1"
+  local mm_mode="$2"
+  local mm_dirname="$3"
+  local mm_rev="${4:-}"
 
-MM_ARTIFACT="$(
-  bash "$BUILDER_DIR/package-metamod.sh" \
-    "$MMS_DIR/build/package" \
-    "$PACKAGES_DIR" \
-    "$MMS_DIR"
-)"
-echo "==> Metamod package: $MM_ARTIFACT"
+  echo "==> Building Metamod:Source (css34 episode1, ${mm_mode}) in ${mm_dir}"
+  WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
+    CC="$CC" CXX="$CXX" \
+    SOURCEMOD_MAJOR="$SOURCEMOD_MAJOR" MMS_DIR="$mm_dir" \
+    MMS_MODE="$mm_mode" MMS_DIRNAME="$mm_dirname" MMS_GIT_REV="$mm_rev" \
+    bash "$BUILDER_DIR/build-metamod.sh"
+
+  local mm_art
+  mm_art="$(
+    MMS_GIT_REV="$mm_rev" bash "$BUILDER_DIR/package-metamod.sh" \
+      "$mm_dir/build/package" \
+      "$PACKAGES_DIR" \
+      "$mm_dir"
+  )"
+  echo "==> Metamod package: $mm_art"
+}
+
+if [[ "$SOURCEMOD_MAJOR" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
+  build_and_package_mm "${DEPS_DIR}/${MM_110_DIRNAME:-mmsource-1.10}" "1.10" "${MM_110_DIRNAME:-mmsource-1.10}" "${MM_110_REV:-976}"
+  build_and_package_mm "${DEPS_DIR}/${MM_112_DIRNAME:-mmsource-1.12}" "1.12" "${MM_112_DIRNAME:-mmsource-1.12}" "${MM_112_REV:-1228}"
+else
+  build_and_package_mm "$MMS_DIR" "$MMS_MODE" "$MMS_DIRNAME" "${MMS_GIT_REV:-}"
+fi
 
 echo "==> Applying CS:S v34 compatibility patches"
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
