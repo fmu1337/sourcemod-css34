@@ -108,7 +108,12 @@ build_and_package_mm() {
   echo "==> Metamod package: $mm_art"
 }
 
-if [[ "$SOURCEMOD_MAJOR" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
+if [ -f "$BUILDER_DIR/versions.env" ]; then
+  # shellcheck source=../versions.env
+  source "$BUILDER_DIR/versions.env"
+fi
+
+if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
   build_and_package_mm "${DEPS_DIR}/${MM_110_DIRNAME:-mmsource-1.10}" "1.10" "${MM_110_DIRNAME:-mmsource-1.10}" "${MM_110_REV:-976}"
   build_and_package_mm "${DEPS_DIR}/${MM_112_DIRNAME:-mmsource-1.12}" "1.12" "${MM_112_DIRNAME:-mmsource-1.12}" "${MM_112_REV:-1228}"
 else

@@ -53,6 +53,9 @@ EOF
 if [[ -d "$SOURCEMOD_DIR/public" ]]; then
   write_stamp "$SOURCEMOD_DIR/public/css34_build_stamp.h"
 fi
-if [[ -d "$MMS_DIR/public" ]]; then
-  write_stamp "$MMS_DIR/public/css34_build_stamp.h"
-fi
+
+for mms_path in "$DEPS_DIR"/mmsource-*/public; do
+  if [[ -d "$mms_path" ]]; then
+    write_stamp "$mms_path/css34_build_stamp.h"
+  fi
+done
