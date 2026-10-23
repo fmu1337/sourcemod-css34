@@ -90,6 +90,34 @@ elif ep1_marker not in text:
         raise SystemExit('Failed to locate episode1 SDK anchor in AMBuildScript')
     text = text.replace(episode1_anchor, episode1_anchor + "\n  " + ep1_marker, 1)
 
+mms_inc_old = """    compiler.cxxincludes += [
+      os.path.join(self.mms_root, 'core'),
+      os.path.join(self.mms_root, 'core', 'sourcehook'),
+    ]"""
+mms_inc_new = """    legacy_core = os.path.join(self.mms_root, 'core-css34legacy')
+    sdk_name = sdk.get('name') if isinstance(sdk, dict) else getattr(sdk, 'name', None)
+    if sdk_name in ('ep1', 'episode1'):
+      if os.path.isdir(legacy_core):
+        mms_core = legacy_core
+        print('==> Using Metamod core-css34legacy include path for ' + str(sdk_name) + ': ' + mms_core)
+      elif os.path.isdir(os.path.join(self.mms_root, 'core-legacy')):
+        raise SystemExit('MM 1.10 detected (core-legacy exists) but core-css34legacy is missing in ' + self.mms_root + '! Run checkout-deps.sh / apply-mmsource-css34.sh first.')
+      else:
+        mms_core = os.path.join(self.mms_root, 'core')
+    else:
+      mms_core = os.path.join(self.mms_root, 'core')
+    compiler.cxxincludes += [
+      mms_core,
+      os.path.join(mms_core, 'sourcehook'),
+    ]"""
+if 'core-css34legacy' in text:
+    print('==> ConfigureForHL2 cxxincludes already patched for core-css34legacy')
+elif mms_inc_old in text:
+    text = text.replace(mms_inc_old, mms_inc_new, 1)
+    print('==> Patched ConfigureForHL2 cxxincludes for core-css34legacy')
+else:
+    raise SystemExit('FAIL: ConfigureForHL2 cxxincludes anchor not found in AMBuildScript')
+
 path_block_old = """    if sdk.name == 'episode1' or sdk.name == 'darkm':
       paths.append(['public', 'dlls'])
       paths.append(['game_shared'])"""
@@ -1176,7 +1204,9 @@ else:
     raise SystemExit('Failed to patch static-libstdc++ block for css34')
 PYLINK
 
-# bintools: modern ProtoInfo/CProtoInfoBuilder via sourcehook_pibuilder.h shim (see apply-mmsource-css34.sh).
+# bintools uses SM.ExtLibrary and includes core/sourcehook directly, retaining
+# upstream SourceHook v5 ProtoInfo/CProtoInfoBuilder. Only ConfigureForHL2 uses
+# core-css34legacy; no ProtoInfo shim is needed for bintools.
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
@@ -1189,7 +1219,7 @@ skipped = (
 enabled = "  'extensions/bintools/AMBuilder',\n"
 if skipped in text:
     path.write_text(text.replace(skipped, enabled, 1))
-    print('==> Re-enabled bintools extension (ProtoInfo shim installed in MMS sourcehook)')
+    print('==> Re-enabled bintools extension (upstream SourceHook v5 in core/sourcehook)')
 elif enabled in text:
     print('==> bintools extension already enabled')
 else:
