@@ -119,10 +119,10 @@ exp_rev = os.environ.get("EXPECTED_MM_REV")
 if b not in ("metamod.1.ep1", "metamod.2.ep1") or not d.get("mm_version") or not d.get("mm_commit"):
     sys.exit(1)
 if exp_commit and d.get("mm_commit") != exp_commit:
-    print(f"FAIL: manifest mm_commit {d.get(\"mm_commit\")} != expected {exp_commit}", file=sys.stderr)
+    print("FAIL: manifest mm_commit " + str(d.get("mm_commit")) + " != expected " + str(exp_commit), file=sys.stderr)
     sys.exit(1)
-if exp_rev and f"git{exp_rev}" not in d.get("mm_version", ""):
-    print(f"FAIL: manifest mm_version {d.get(\"mm_version\")} does not contain git{exp_rev}", file=sys.stderr)
+if exp_rev and ("git" + str(exp_rev)) not in d.get("mm_version", ""):
+    print("FAIL: manifest mm_version " + str(d.get("mm_version")) + " does not contain git" + str(exp_rev), file=sys.stderr)
     sys.exit(1)
 ' "${manifest}"; then
   echo "OK: addons/metamod/css34-package.json"
