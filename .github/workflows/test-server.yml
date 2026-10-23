@@ -167,10 +167,19 @@ jobs:
           export SM_PACKAGE MM_PACKAGE
           echo "Checking ${SM_PACKAGE}"
           testing/scripts/check-package.sh
+          source builder/versions.env
           for mm_pkg in packages/mmsource-*.tar.gz; do
             if [[ -f "$mm_pkg" ]]; then
               echo "Checking Metamod package $mm_pkg"
-              MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
+              if [[ "$mm_pkg" == *"-git976-"* ]]; then
+                EXPECTED_MM_COMMIT="$MM_110_COMMIT" EXPECTED_MM_REV="$MM_110_REV" MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
+              elif [[ "$mm_pkg" == *"-git1227-"* ]]; then
+                EXPECTED_MM_COMMIT="$MM_112_FROZEN_COMMIT" EXPECTED_MM_REV="$MM_112_FROZEN_REV" MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
+              elif [[ "$mm_pkg" == *"-git1228-"* ]]; then
+                EXPECTED_MM_COMMIT="$MM_112_COMMIT" EXPECTED_MM_REV="$MM_112_REV" MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
+              else
+                MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
+              fi
             fi
           done
 

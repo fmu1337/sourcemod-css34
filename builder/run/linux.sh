@@ -117,7 +117,7 @@ fi
 
 if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
   build_and_package_mm "${DEPS_DIR}/${MM_110_DIRNAME:-mmsource-1.10}" "1.10" "${MM_110_DIRNAME:-mmsource-1.10}" "${MM_110_REV:-976}" "${MM_110_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-  build_and_package_mm "${DEPS_DIR}/${MM_112_FROZEN_DIRNAME:-mmsource-1.12-frozen}" "1.12" "${MM_112_FROZEN_DIRNAME:-mmsource-1.12-frozen}" "${MM_112_FROZEN_REV:-1227}" "${MM_112_FROZEN_COMMIT:-75dd7b264e150f5835fbff6ec0f3299723528b18}"
+  build_and_package_mm "${DEPS_DIR}/${MM_112_FROZEN_DIRNAME:-mmsource-1.12-frozen}" "1.12" "${MM_112_FROZEN_DIRNAME:-mmsource-1.12-frozen}" "${MM_112_FROZEN_REV:-1227}" "${MM_112_FROZEN_COMMIT:-75dd7b26fe92e535a11f0318ead73c3e05130d0b}"
 else
   build_and_package_mm "$MMS_DIR" "$MMS_MODE" "$MMS_DIRNAME" "${MMS_GIT_REV:-}" "${MMS_COMMIT:-}"
 fi
