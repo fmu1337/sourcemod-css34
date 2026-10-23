@@ -39,7 +39,7 @@ on:
         required: false
         default: "sm13-latest"
       repoint_tag:
-        description: "Target release tag to repoint line pointer to (e.g. 1.12.0.7255-mm1.12.0 or 1.12.0.7255-mm1.12.0-r2)"
+        description: "Target release tag to repoint line pointer to (e.g. 1.12.0.7253-mm1.12.0 or 1.12.0.7253-mm1.12.0-r2)"
         required: false
         default: ""
 
@@ -180,22 +180,35 @@ jobs:
             line="$(css34_line_for_tag "$base" || true)"
             if [[ -z "$line" ]]; then
               mkdir -p /tmp/repoint_check
-              if gh release download "$repoint_tag" --repo "${GITHUB_REPOSITORY}" -p "$sm_asset" -D /tmp/repoint_check 2>/dev/null; then
-                line="$(tar -xzOf "/tmp/repoint_check/$sm_asset" addons/sourcemod/css34-package.json 2>/dev/null | jq -r '.line // empty' || true)"
+              if gh release download "$repoint_tag" --repo "${GITHUB_REPOSITORY}" -p "$sm_asset" -D /tmp/repoint_check; then
+                manifest="$(tar -xzOf "/tmp/repoint_check/$sm_asset" addons/sourcemod/css34-package.json 2>/dev/null || echo '{}')"
+                line="$(jq -r '.line // empty' <<<"$manifest")"
+                pkg_mm_ver="$(jq -r '.mm_version // empty' <<<"$manifest")"
                 rm -rf /tmp/repoint_check
+                if [[ -n "$line" && "$line" != "null" && "$line" != "custom" ]]; then
+                  expected_mm="$(python3 - "$line" <<'PY'
+import json, sys
+data = json.load(open("builder/lines.json"))
+line = sys.argv[1]
+if line in data["lines"]:
+    mode = data["pins"][data["lines"][line]["metamod"]]["mode"]
+    print({"1.10": "1.10.7", "1.12": "1.12.0", "2.0": "2.0.0"}.get(mode, ""))
+PY
+)"
+                  if [[ -n "$expected_mm" && -n "$pkg_mm_ver" && "$pkg_mm_ver" != "${expected_mm}"* ]]; then
+                    echo "Metamod version mismatch for repoint_tag '$repoint_tag': package has $pkg_mm_ver, line $line expects $expected_mm" >&2
+                    exit 1
+                  fi
+                fi
               fi
             fi
             if [[ -z "$line" || "$line" == "null" || "$line" == "custom" ]]; then
-              if [[ "$base" =~ ^1\.12\. ]]; then
-                line="sm12-latest"
-              elif [[ "$base" =~ ^1\.13\. ]]; then
-                line="sm13-latest"
-              elif [[ "$base" =~ ^1\.11\. ]]; then
-                line="sm11-oldstable"
-              else
-                echo "Could not resolve build line for repoint_tag '$repoint_tag'" >&2
-                exit 1
-              fi
+              echo "Could not determine build line for repoint_tag '$repoint_tag'" >&2
+              exit 1
+            fi
+            if ! css34_line_has_pointer "$line"; then
+              echo "Line '$line' does not publish a pointer — repoint rejected for $repoint_tag" >&2
+              exit 1
             fi
             pointer=1
             commit_info="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${repoint_tag}")"
