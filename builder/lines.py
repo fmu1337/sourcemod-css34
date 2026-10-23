@@ -17,7 +17,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 
 LINE_FIELDS = {
-    "sourcemod", "metamod", "status", "pointer", "releasable", "role",
+    "sourcemod", "metamod", "secondary_metamod", "status", "pointer", "releasable", "role",
     "install_role", "extra_tags", "smoke", "host_smoke",
     "windows", "botplay_extra_images", "sm_note", "mm_note",
 }
@@ -102,6 +102,9 @@ def load_manifest(path):
         for component, prefix in (("sourcemod", "SM_"), ("metamod", "MM_")):
             ref = line[component]
             require(ref in pins and ref.startswith(prefix), "invalid pin reference for " + name)
+        if "secondary_metamod" in line:
+            ref = line["secondary_metamod"]
+            require(ref in pins and ref.startswith("MM_"), "invalid secondary_metamod reference for " + name)
     require(isinstance(data["known_bad"], dict), "known_bad must map release tags to reasons")
     for tag, reason in data["known_bad"].items():
         require(TAG_RE.fullmatch(tag), "invalid known_bad tag " + tag)
@@ -443,6 +446,11 @@ def render_versions(data):
     for prefix, fields in data["pins"].items():
         for field, value in fields.items():
             rows.append("{}={}".format(prefix + "_" + field.upper(), shlex.quote(str(value))))
+        rows.append("")
+    # Add backward compatibility aliases for SM11 frozen MM
+    if "MM_112_FROZEN" in data["pins"]:
+        for field, value in data["pins"]["MM_112_FROZEN"].items():
+            rows.append("MM_112_SM11_{}={}".format(field.upper(), shlex.quote(str(value))))
         rows.append("")
     rows.append("CSS34_LINE=${CSS34_LINE:-" + data["default_line"] + "}")
     return "\n".join(rows) + "\n"

@@ -37,6 +37,13 @@
       "rev": 976,
       "mode": "1.10"
     },
+    "MM_112_FROZEN": {
+      "commit": "75dd7b264e150f5835fbff6ec0f3299723528b18",
+      "branch": "1.12-dev",
+      "dirname": "mmsource-1.12-frozen",
+      "rev": 1227,
+      "mode": "1.12"
+    },
     "MM_112": {
       "commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "branch": "1.12-dev",
@@ -63,6 +70,7 @@
     "sm11-oldstable": {
       "sourcemod": "SM_OLDSTABLE",
       "metamod": "MM_110",
+      "secondary_metamod": "MM_112_FROZEN",
       "status": "active",
       "pointer": false,
       "releasable": true,

@@ -110,7 +110,21 @@ manifest="${TMP}/addons/metamod/css34-package.json"
 if [[ ! -f "${manifest}" ]]; then
   echo "FAIL: missing addons/metamod/css34-package.json" >&2
   fail=1
-elif python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); b=d.get("metamod_binary"); sys.exit(0 if b in ("metamod.1.ep1","metamod.2.ep1") and d.get("mm_version") and d.get("mm_commit") else 1)' "${manifest}"; then
+elif python3 -c '
+import json, sys, os
+d = json.load(open(sys.argv[1]))
+b = d.get("metamod_binary")
+exp_commit = os.environ.get("EXPECTED_MM_COMMIT")
+exp_rev = os.environ.get("EXPECTED_MM_REV")
+if b not in ("metamod.1.ep1", "metamod.2.ep1") or not d.get("mm_version") or not d.get("mm_commit"):
+    sys.exit(1)
+if exp_commit and d.get("mm_commit") != exp_commit:
+    print(f"FAIL: manifest mm_commit {d.get(\"mm_commit\")} != expected {exp_commit}", file=sys.stderr)
+    sys.exit(1)
+if exp_rev and f"git{exp_rev}" not in d.get("mm_version", ""):
+    print(f"FAIL: manifest mm_version {d.get(\"mm_version\")} does not contain git{exp_rev}", file=sys.stderr)
+    sys.exit(1)
+' "${manifest}"; then
   echo "OK: addons/metamod/css34-package.json"
 else
   echo "FAIL: invalid addons/metamod/css34-package.json" >&2

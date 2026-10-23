@@ -167,8 +167,12 @@ jobs:
           export SM_PACKAGE MM_PACKAGE
           echo "Checking ${SM_PACKAGE}"
           testing/scripts/check-package.sh
-          echo "Checking ${MM_PACKAGE}"
-          testing/scripts/check-metamod-package.sh
+          for mm_pkg in packages/mmsource-*.tar.gz; do
+            if [[ -f "$mm_pkg" ]]; then
+              echo "Checking Metamod package $mm_pkg"
+              MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
+            fi
+          done
 
       # Job-to-job handoff via Actions cache (does not count against the 0.5 GB artifact quota).
       - name: Cache packages for later jobs

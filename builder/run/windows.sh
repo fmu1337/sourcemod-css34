@@ -72,17 +72,19 @@ build_and_package_mm_win() {
   local mm_dir="$1"
   local mm_mode="$2"
   local mm_dirname="$3"
-  local mm_rev="${4:-}"
+  local mm_rev="$4"
+  local mm_commit="$5"
 
   echo "==> Building Metamod:Source (${mm_mode} episode1, Windows) in ${mm_dir}"
   WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
     BUILD_PLATFORM=windows SOURCEMOD_MAJOR="$SOURCEMOD_MAJOR" MMS_DIR="$mm_dir" \
-    MMS_MODE="$mm_mode" MMS_DIRNAME="$mm_dirname" MMS_GIT_REV="$mm_rev" \
+    MMS_MODE="$mm_mode" MMS_DIRNAME="$mm_dirname" MMS_GIT_REV="$mm_rev" MMS_COMMIT="$mm_commit" \
     bash "$BUILDER_DIR/build-metamod.sh"
 
   local mm_art
   mm_art="$(
-    MMS_GIT_REV="$mm_rev" powershell -NoProfile -ExecutionPolicy Bypass \
+    MMS_DIR="$mm_dir" MMS_GIT_REV="$mm_rev" MMS_COMMIT="$mm_commit" \
+      powershell -NoProfile -ExecutionPolicy Bypass \
       -File "$BUILDER_DIR/package-metamod-windows.ps1" \
       -PackageDir "$mm_dir/build/package" \
       -OutputDir "$PACKAGES_DIR" \
@@ -98,10 +100,10 @@ if [ -f "$BUILDER_DIR/versions.env" ]; then
 fi
 
 if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
-  build_and_package_mm_win "${DEPS_DIR}/${MM_110_DIRNAME:-mmsource-1.10}" "1.10" "${MM_110_DIRNAME:-mmsource-1.10}" "${MM_110_REV:-976}"
-  build_and_package_mm_win "${DEPS_DIR}/${MM_112_DIRNAME:-mmsource-1.12}" "1.12" "${MM_112_DIRNAME:-mmsource-1.12}" "${MM_112_REV:-1228}"
+  build_and_package_mm_win "${DEPS_DIR}/${MM_110_DIRNAME:-mmsource-1.10}" "1.10" "${MM_110_DIRNAME:-mmsource-1.10}" "${MM_110_REV:-976}" "${MM_110_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
+  build_and_package_mm_win "${DEPS_DIR}/${MM_112_FROZEN_DIRNAME:-mmsource-1.12-frozen}" "1.12" "${MM_112_FROZEN_DIRNAME:-mmsource-1.12-frozen}" "${MM_112_FROZEN_REV:-1227}" "${MM_112_FROZEN_COMMIT:-75dd7b264e150f5835fbff6ec0f3299723528b18}"
 else
-  build_and_package_mm_win "$MMS_DIR" "$MMS_MODE" "$MMS_DIRNAME" "${MMS_GIT_REV:-}"
+  build_and_package_mm_win "$MMS_DIR" "$MMS_MODE" "$MMS_DIRNAME" "${MMS_GIT_REV:-}" "${MMS_COMMIT:-}"
 fi
 
 echo "==> Applying CS:S v34 compatibility patches"
