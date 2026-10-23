@@ -1,0 +1,385 @@
+{
+ "summary": "The floor can and should drop from glibc 2.29 to 2.17. That covers CentOS/RHEL 7+, Debian 8+, Ubuntu 14.04+ and everything newer. The clean way to get there is to build all three lines inside quay.io/pypa/manylinux2014_i686 (CentOS 7 i686 userland, glibc 2.17, devtoolset-10 GCC 10.2.1). Link libstdc++ statically and hide it, following upstream's own fix.\n\nWhat sets the floor:\n- **The game server itself sets almost no floor.** The v34 server binaries need at most GLIBC_2.3.2. Only steamclient.so needs a 32-bit libstdc++.so.6 (GLIBCXX_3.4 / CXXABI_1.3). So the floor comes entirely from the SourceMod (SM) and Metamod:Source (MM) packages.\n- **rom4s packages:** floor 2.12 (pthread_setname_np).\n- **Official AlliedModders drops:** SM 6970 is 2.17. SM 7255/7477 and MM 1227/1476 are 2.29–2.30, because they are built on Debian 11 with clang 22 and libstdc++ 10.2.\n- **Our current packages:** 2.29 on every line. The causes are libm log/pow/exp@2.29 and logf/powf/expf@2.27 almost everywhere, fcntl/fcntl64@2.28, getentropy@2.25 (MySQL extension via Debian's static OpenSSL), explicit_bzero@2.25 (PostgreSQL extension), and spcomp needing GLIBCXX_3.4.26. On Ubuntu 18.04, the published sm13-latest metamod.2.ep1.so fails with \"GLIBC_2.29 not found\" and srcds exits.\n\nWhat I built and tested in manylinux2014_i686 (only a few toolchain tweaks to a copy of the builder):\n- **SM 1.13.0.7472 + MM 1.12 git1226 with real -std=c++20.** No C++17 downgrade, no span polyfill. Max GLIBC_2.17. check-package.sh passes. Smoke passes on CentOS 7, Ubuntu 14.04, 16.04, 18.04 and 24.04, and Debian 8, 9, 10 and 13.\n- **SM 1.12.0.7253 + MM 1.12.** Floor 2.17. Smoke passes on CentOS 7, Ubuntu 24.04 and Debian 13.\n- **SM 1.11.0.6970 + MM 1.10.7 (the frozen 1.11 line).** Floor 2.17. Smoke passes on CentOS 7, Ubuntu 24.04 and Debian 13. Ubuntu 24.04 and Debian 13 are exactly where the published sm11 build SIGABRTs.\n- None of these needed the clang-9 binaries from bitbucket, the jessie gcc-4.9 sysroot, or the C++17 downgrade.\n\nWhy the sm11 build crashes, and the two fixes it needed:\n- **The crash needs two ingredients together.** Our MM 1.10.7 binaries (server.so, metamod.1.ep1.so) load libstdc++.so.6 dynamically, and SM 6970's logic.so exports about 2,500 symbols, including std::locale ones, from its static libstdc++. The same sm11 SM package boots on Ubuntu 24.04 with rom4s MM 1.10.6, which does not load libstdc++.\n- **Fix 1: hide the static libstdc++ in every module.** Upstream added this only on master, in f2f10bc1 then 3069350d (`-Wl,--exclude-libs=libstdc++.a`). Our builder applies it only for SM ≥ 1.13, and check-package.sh currently fails any SM < 1.13 logic.so that exports fewer than 100 symbols, i.e. it fails the fixed build.\n- **Fix 2: a one-line `__GNUC__ == 4` check in MM 1.10 core-legacy.** That check is only true for clang, so a GCC build hid GetGameDllBridge/GetVspBridge and dropped MM's calloc-based operator new. This is very likely why the builder insists on clang-9 for the 1.11 line (comment at builder/run/linux.sh:46-48).\n\n`_GLIBCXX_USE_CXX11_ABI=0` is not needed for v34. The engine, server and dedicated binaries do not link libstdc++ at all, SM's public interfaces pass no std::string, and upstream sets the define only for csgo/blade. It is left over from the gcc-4.9 sysroot, but I have not built without it yet.\n\nThe other approaches are worse:\n- **Keeping Debian 11 and pinning symbol versions** (.symver / --wrap) reached only 2.18 on a toy library, because of `__cxa_thread_atexit_impl` inside libstdc++.a. Every upstream bump can add new symbols to chase.\n- **Modern clang plus a CentOS 7 sysroot** gives 2.17 too, but it is more plumbing. Keep it as plan B if SM master needs a C++ language feature GCC 10 lacks. The library side is not a risk: upstream's own release builds link the same libstdc++ 10.\n- **manylinux_2_28_i686** (AlmaLinux 8 i686, GCC 14.2) is a ready plan C at floor 2.28.\n- **Going below 2.17 (CentOS 6, glibc 2.12)** would need a custom GCC ≥ 9 toolchain and shims for clock_gettime@2.17, secure_getenv@2.17 and aligned_alloc@2.16. Those distros have been EOL since 2017–2020, and rom4s 6572 already serves that niche.\n\nOld-distro images still pull: centos:7, centos:6, ubuntu:12.04, 14.04, 16.04, 18.04, 20.04, debian:7, 8, 9, 10, i386/debian:8. testing/scripts/install-deps.sh needs three small fixes for them:\n- an unbound array under bash 4.3 (`set -u`) at line 82;\n- the CentOS 7 vault URL must be https (line 121);\n- `--no-install-recommends`, because archive.debian.org 404s on some recommended X11 packages.\n\n**Caveat:** these were container tests, so they cover old userlands only, on a 6.18 host kernel. Botplay was not run on the new builds.",
+ "facts": [
+  {
+   "fact": "The CS:S v34 server binaries need at most GLIBC_2.3.2. Only bin/steamclient.so (GLIBCXX_3.4, CXXABI_1.3, GCC_3.0) and libSteam2Auth.so (CXXABI_1.3) depend on libstdc++.so.6. engine/dedicated/server/tier0/vstdlib have no libstdc++ dependency and were built with GCC 2.95.3–3.4.1. libeST_SCI.so, libeST_STEAM2.so and steam_api_i486.so are statically linked against glibc (no DT_NEEDED).",
+   "evidence": "objdump -T / readelf -d over scratchpad/srv: /tmp/claude-0/-home-user-sourcemod-css34/ffbe8980-eece-56cf-8782-bc5e5af6297c/scratchpad/research/oldos/srv-floor.txt. Example lines: 'srv/bin/tier0_i486.so | GLIBC_2.3.2'; 'srv/bin/steamclient.so | GLIBC_2.3.2 GLIBCXX_3.4 CXXABI_1.3 GCC_3.0 | libm.so.6,libstdc++.so.6,libgcc_s.so.1,...'; 'srv/bin/engine_i686.so | GLIBC_2.3 | ... (no libstdc++)'.",
+   "confidence": "high"
+  },
+  {
+   "fact": "So srcds v34 itself runs on any x86/x86_64 Linux with i386 glibc ≥ 2.3.2 and a 32-bit libstdc++.so.6. The practical floor is set entirely by the SM/MM builds. srcds booted and changed map on every userland I tried, from glibc 2.17 to 2.41.",
+   "evidence": "Smoke 'Mapchange to de_dust2' + 'Smoke test PASSED' on centos:7 (2.17), ubuntu:14.04 (2.19), debian:8 (2.19), ubuntu:16.04 (2.23), debian:9 (2.24), ubuntu:18.04 (2.27), debian:10 (2.28), ubuntu:24.04 (2.39), debian:13 (2.41). Summaries in research/oldos/oldos-cxx20-*.out and oldos-ml2014full-*.out; logs in scratchpad/smoke-oldos-cxx20-*/run.log.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The rom4s reference packages have floor GLIBC_2.12, set only by pthread_setname_np in sourcemod.logic.so and sourcepawn.jit.x86.so; everything else is ≤ 2.4. rom4s spcomp needs GLIBCXX_3.4.20. rom4s MM 1.10.6 binaries need ≤ GLIBC_2.3 and do not link libstdc++.",
+   "evidence": "research/oldos/rel-floor.txt ('addons/sourcemod/bin/sourcemod.logic.so | GLIBC_2.12'); objdump -T rel/rom4s/x/addons/sourcemod/bin/sourcemod.logic.so | grep GLIBC_2.12 -> '(GLIBC_2.12) pthread_setname_np'; readelf -d on research/oldos/x-rom4s-mm -> 'server.so: [libc.so.6] | GLIBC_2.3'.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The official AlliedModders Linux drops have these floors. SM 1.11.0.6970: floor 2.17 (jit clock_gettime; logic 2.12), built with clang 11 against Debian 9 (GCC 6.3) libs. SM 1.12.0.7255 and 1.13.0.7477, MM 1.12 git1227 and MM 2.0 git1476: floor 2.29–2.30, built with clang 22.1.8 against Debian 11 (GCC 10.2.1) libstdc++. Official 7477 logic.so needs pthread_cond_clockwait@GLIBC_2.30 and spcomp needs GLIBC_2.30 + GLIBCXX_3.4.26. So upstream's own release builds link libstdc++ 10.2, the same library major as devtoolset-10.",
+   "evidence": "research/oldos/official-floor.txt, e.g. 'x-sourcemod-1.13.0-git7477-linux ... sourcemod.logic.so | GLIBC_2.30 ... pthread_cond_clockwait@2.30'; .comment: 'GCC: (Debian 10.2.1-6) 10.2.1 20210110;clang version 22.1.8'; 6970: 'GCC: (Debian 6.3.0-18+deb9u1) 6.3.0;clang version 11.0.1'.",
+   "confidence": "high"
+  },
+  {
+   "fact": "Every current css34 release package needs GLIBC_2.29. Offending symbols: log/pow/exp/log2@2.29 and logf/powf/expf@2.27 (libm, in nearly every module including MM metamod.2.ep1.so); fcntl/fcntl64@2.28 (sqlite, webternet, mysql, pgsql); getentropy@2.25 (dbi.mysql, from Debian's static OpenSSL); explicit_bzero@2.25 (dbi.pgsql, libpq); __cxa_thread_atexit_impl@2.18 (MM 2.0 KHook). spcomp needs GLIBC_2.29 + GLIBCXX_3.4.26. The sm11 MM 1.10.7 binaries (server.so, server_i486.so, metamod.1.ep1.so) have DT_NEEDED libstdc++.so.6.",
+   "evidence": "research/oldos/rel-floor.txt (floor2.sh over scratchpad/rel/*/x), e.g. 'sm13-latest ... dbi.mysql.ext.so | GLIBC_2.29 | ... fcntl64@2.28 fcntl@2.28 getentropy@2.25 log@2.29 ...'; 'sm11 addons/metamod/bin/server.so | NEEDED=libstdc++.so.6,libm.so.6,libgcc_s.so.1,libc.so.6'.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The published sm13-latest package does not load on Ubuntu 18.04 (glibc 2.27): MM fails to load and srcds exits.",
+   "evidence": "research/oldos/oldos-sm13pub-ubuntu-18-04.out: 'Failed to load plugin \"../cstrike/addons/metamod/bin/server\"', 'srcds exited while waiting for status output'. A dlopen probe in ubuntu:18.04 gave: 'metamod.2.ep1.so: dlopen: /lib/i386-linux-gnu/libm.so.6: version `GLIBC_2.29' not found'; same for sourcemod.logic.so.",
+   "confidence": "high"
+  },
+  {
+   "fact": "quay.io/pypa/manylinux2014_i686 is maintained and pulls. Tag 2026.10.10-1, digest sha256:30305867f278896ee117b0d162a8e4f9b7b16819e6590f6139e14c5ed5b23fdd. It is CentOS 7.9 AltArch i686 with glibc 2.17, devtoolset-10 GCC 10.2.1, git 2.56 and CPython 3.9–3.15. It has no static OpenSSL ≥1.1 and lacks perl IPC::Cmd/Time::Piece, which OpenSSL 3.x's build needs.",
+   "evidence": "docker inspect / quay API tag listing; docker run ... 'ls /opt/rh; gcc --version; git --version; ls /opt/python' -> devtoolset-10, 'gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11)', 'git version 2.56.0'; perl -MIPC::Cmd -> MISSING; rpm -q openssl-devel -> not installed.",
+   "confidence": "high"
+  },
+  {
+   "fact": "Toy C++20 test (concepts, std::span, <bit>, <=>, thread_local, iostream/locale, std::thread, libm), each built as a shared library with -static-libstdc++. ml2014/GCC 10: max GLIBC_2.4, loads and runs on glibc 2.17, 2.19 and 2.12. debian:11 GCC: GLIBC_2.29. debian:11 with .symver libm pins: GLIBC_2.18 (__cxa_thread_atexit_impl from libstdc++.a), fails on 2.17. debian:12 clang + CentOS 7 sysroot: 2.4. zig cc: 2.16. Ubuntu 18.04 + GCC 13: 2.27. None of the statically linked libs needs libstdc++.so.6.",
+   "evidence": "research/oldos/cxx20/{t.cpp,compat.h,t_*.so,main32}; objdump -T version lists; runs: i386/debian:8 't_ml2014: ret=11 ... t_deb11: GLIBC_2.29 not found'; manylinux2014_i686 't_deb11_symver: GLIBC_2.18 not found'; centos:6 't_ml2014.so: 11 1.79176 ...'.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The full css34 pipeline (builder/run/linux.sh) builds SM 1.13.0.7472 + MM 1.12 git1226 in manylinux2014_i686 with real -std=c++20 (328 TUs, 0 uses of the cxx17-compat polyfill). Tweaks needed: CC/CXX=devtoolset gcc with -Wno-format-truncation -Wno-stringop-truncation (MM 1.12 -Werror on metamod.cpp:852), the devtoolset libstdc++.a path added to the hardcoded logic-link candidates, static OpenSSL 1.1.1w built from source, and the C++20→17 downgrade disabled. Result: max GLIBC_2.17 (logic clock_gettime, mysql secure_getenv), dhooks aligned_alloc@2.16, rest ≤ 2.7. check-package.sh PASSED. Build log shows the same 3 patch WARNs and 36 compiler warnings as the C++17 build.",
+   "evidence": "research/oldos/cxx20-build.log ('EXIT=0'); research/oldos/cxx20-floor.txt; 'Highest GLIBC symbol version referenced: 2.17 (logic: 2.17) ... Package ABI check PASSED'; diff of builder changes: research/oldos/oldos-experiment-builder.diff; build script: research/oldos/scripts/build-css34-ml2014-cxx20.sh; package: research/oldos/repo-full/packages-cxx20/.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The C++20 manylinux2014 package passes the repo smoke test (26 OK checks: versions, commits, extension list incl. SDK Hooks/SDK Tools/CS Tools, 17 plugins, mapchange, no SM log errors) on CentOS 7, Ubuntu 14.04, 18.04 and 24.04, and Debian 8, 9, 10 and 13. The earlier C++17 variant also passed on Ubuntu 16.04.",
+   "evidence": "research/oldos/oldos-cxx20-{centos-7,ubuntu-14-04,ubuntu-18-04,ubuntu-24-04,debian-8,debian-9,debian-10,debian-latest}.out all 'rc=0 ... Smoke test PASSED OK-count: 26'; research/oldos/oldos-ml2014full-ubuntu-16-04.out PASSED.",
+   "confidence": "high"
+  },
+  {
+   "fact": "Vanilla upstream SM master tip ce7dccf (git7477) + MM 1.12-dev tip 75dd7b2 (git1227) also compile for episode1/x86 with devtoolset GCC 10.2 at -std=c++20. Only -Werror was removed; the resulting package floor is 2.17.",
+   "evidence": "research/oldos/src/ml2014-build.log ('MM build rc=0', 'SM build rc=0'); research/oldos/src/out-ml2014/sm-configure.log 'found gcc version 10.2, x86'; compile lines contain -std=c++20.",
+   "confidence": "high"
+  },
+  {
+   "fact": "SM 1.12.0.7253 + MM 1.12 built in manylinux2014 with -Wl,--exclude-libs=libstdc++.a: max GLIBC_2.17, logic.so exports 18 dynamic symbols (0 std::locale). Smoke PASSED on CentOS 7, Ubuntu 24.04 and Debian 13. But check-package.sh FAILS it with 'logic.so exports only 8 defined symbols (rom4s ~285; missing libstdc++ EH exports?)': the rule at testing/scripts/check-package.sh:230-231 effectively requires the libstdc++ leak.",
+   "evidence": "research/oldos/sm12-build.log EXIT=0; research/oldos/oldos-sm12ml-*.out PASSED; check-package output 'FAIL: logic.so exports only 8 defined symbols'; package research/oldos/repo-full/packages-sm12/.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The sm11 SIGABRT on Ubuntu 24.04 needs two things together: css34 MM 1.10.7 loading libstdc++.so.6 dynamically, and SM logic.so exporting its static libstdc++ (std::locale). The sm11 SM 6970 package with rom4s MM 1.10.6 (no libstdc++ NEEDED) boots on Ubuntu 24.04; the only failure is the expected MM commit-string check. With css34 MM 1.10.7 it aborts with 'free(): invalid pointer'.",
+   "evidence": "scratchpad/smoke-oldos-sm11sm-rom4smm-u2404/run.log: 'Metamod:Source version 1.10.6', 'OK: SourceMod version 1.11.0.6970', 'Mapchange to de_dust2', only FAIL 'meta Built from commit nocommit'. Contrast scratchpad/smoke-sm11-u2404/run.log 'free(): invalid pointer'. readelf: rel/sm11/x/addons/metamod/bin/server.so NEEDED libstdc++.so.6.",
+   "confidence": "high"
+  },
+  {
+   "fact": "I believe the mechanism is symbol interposition: default-visibility libstdc++ symbols exported from logic.so get bound to the system libstdc++.so.6 brought in by MM, mixing two locale implementations. Hiding the static copy, as upstream SM does since f2f10bc1 (#2533, 2026-09-15) narrowed by 3069350d (#2576), removes it. Neither SM 6970 nor the 1.12-dev tip 03865e00 contains that change. The css34 builder adds exclude-libs only for sm_minor ≥ 13 (builder/patches/apply-sourcemod-v112.sh:478-481).",
+   "evidence": "git -C tips/.../sourcemod-113 merge-base --is-ancestor f2f10bc1 <c>: 'f53cb134 lacks f2f10bc1', '03865e00 lacks f2f10bc1'; upstream AMBuildScript ce7dccff:422-423 '-static-libstdc++' + '-Wl,--exclude-libs=libstdc++.a'.",
+   "confidence": "medium"
+  },
+  {
+   "fact": "MM 1.10 core-legacy gates its export macro and its calloc-based operator new/delete on `__GNUC__ == 4` (or 3||4), which is true for clang but false for GCC ≥ 5. Locations: core-legacy/oslink.h:66, core-legacy/ISmmPlugin.h:384, core-legacy/sourcemm.cpp:638, core/metamod_oslink.h:93, core/metamod_oslink.cpp:97. A plain GCC 10 build therefore hides GetGameDllBridge/GetVspBridge, and srcds reports 'Failed to load plugin ../cstrike/addons/metamod/bin/server' (metamod-fatal.log: 'Detected engine 0 but could not find GetVspBridge callback'). Changing the gates to >= 4 / >= 3 fixes it. This very likely explains the clang-9 requirement (builder/run/linux.sh:46-48).",
+   "evidence": "First sm11 build: objdump -T metamod.1.ep1.so had no Bridge exports; scratchpad/smoke-oldos-sm11ml-dbg/metamod-fatal.log. After the fix (research/oldos/repo-full/builder/build-metamod.sh OLDOS_GNUC_FIX block): objdump shows GetGameDllBridge, GetVspBridge, _Znwj, _ZdlPv.",
+   "confidence": "high"
+  },
+  {
+   "fact": "SM 1.11.0.6970 + MM 1.10.7 (css34 core-legacy transplant, dual 1.ep1/2.ep1) builds with GCC 10.2 in manylinux2014, with no clang-9 and no jessie gcc-4.9 sysroot. Changes needed: the __GNUC__ fix, -static-libstdc++ plus -Wl,--exclude-libs for every module (logic via the g++-9 wrapper), and -Wno-sign-compare. Result: max GLIBC_2.17, no MM binary needs libstdc++.so.6, logic exports 15 symbols (0 locale). Smoke PASSED on CentOS 7, Ubuntu 24.04 and Debian 13. check-package.sh fails only the '>=100 logic exports' rule.",
+   "evidence": "research/oldos/sm11b-build.log EXIT=0; research/oldos/oldos-sm11ml-{centos-7,ubuntu-24-04,debian-latest}.out 'Smoke test PASSED OK-count: 26'; script research/oldos/scripts/build-css34-ml2014-sm11.sh; package research/oldos/repo-full/packages-sm11/.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The v34 engine does not need _GLIBCXX_USE_CXX11_ABI=0: no engine/server/dedicated binary links libstdc++, so no std::string crosses the engine boundary. SM's public interfaces (public/I*.h, core/logic/intercom.h) contain no std::string or other STL types. Upstream SM sets the define on Linux only for csgo/blade (AMBuildScript at f53cb134 lines ~627-630). It was needed only because of the pre-dual-ABI gcc-4.9 logic sysroot. I have not done a build without the define.",
+   "evidence": "srv-floor.txt NEEDED lists; git grep -nE 'std::string' ce7dccff -- public/*.h core/logic/intercom.h -> only sm_hashmap.h internals (header-only container); upstream AMBuildScript excerpt 'if sdk.name in [\"csgo\", \"blade\"]: ... _GLIBCXX_USE_CXX11_ABI=0'.",
+   "confidence": "medium"
+  },
+  {
+   "fact": "spcomp built in manylinux2014 needs only GLIBCXX_3.4.19 and GLIBC_2.17: devtoolset links against the system libstdc++ 4.8.5 plus libstdc++_nonshared.a. It compiles a plugin on glibc 2.17 and 2.19. The published spcomp needs GLIBCXX_3.4.26 + GLIBC_2.29, so it won't run on Ubuntu ≤ 18.04, Debian ≤ 10 or CentOS 7.",
+   "evidence": "cxx20-floor.txt 'scripting/spcomp | GLIBC_2.17'; floor2 GLIBCXX list ends at 3.4.19; spcomp runs in manylinux2014_i686 and i386/debian:8 -> 'Code size: 1073 bytes ... /tmp/t.smx'.",
+   "confidence": "high"
+  },
+  {
+   "fact": "For runtime dependencies on old hosts: webternet/updater use SM's bundled curl without TLS, so no host OpenSSL/libcurl is needed. dbi.mysql (SM 7461+ MariaDB Connector/C 3.4.9 prebuilt static archive) needs OpenSSL ≥ 1.1 APIs (OPENSSL_init_ssl, SSL_CTX_set_ciphersuites), which the build host must supply statically; CentOS 7 ships only 1.0.2k, so it must be built from source. The prebuilt connector archive has unversioned libc references (e.g. fcntl), so the link-time glibc decides the versions. Hosts need i386 glibc, libgcc_s.so.1, libstdc++.so.6 (steamclient, spcomp) and libz.so.1 (dbi.mysql/pgsql).",
+   "evidence": "nm -u dl/mariadb/.../libmariadbclient.a -> 'fcntl pthread_mutex_* ...' plus OpenSSL symbols (research/oldos/dl/mariadb/undef.txt); NEEDED lists in research/oldos/cxx20-floor.txt source (floor2.sh); builder/checkout-deps.sh:96-111.",
+   "confidence": "medium"
+  },
+  {
+   "fact": "Going below 2.17 is close but needs toolchain work. On CentOS 6 (glibc 2.12) the manylinux2014-built metamod.2.ep1.so dlopens fine; logic.so fails only on clock_gettime@GLIBC_2.17 (from libstdc++.a chrono). The other >2.12 symbols are secure_getenv@2.17 (mysql), aligned_alloc@2.16 (dhooks) and clock_gettime@2.17 (spcomp). manylinux2010_i686 is frozen (last tag 2022-08-05) with GCC 8.3.1, and SM's AMBuildScript rejects gcc < 9. The CentOS 6 vault needs HTTPS plus a CA bundle to install anything.",
+   "evidence": "centos:6 dlopen probe: 'sourcemod.logic.so: dlopen: /lib/libc.so.6: version `GLIBC_2.17' not found'; quay API manylinux2010_i686 'last_modified: Fri, 05 Aug 2022'; 'gcc (GCC) 8.3.1 ... ldd (GNU libc) 2.12'; SM AMBuildScript:186 'if cxx.version < 'gcc-9''.",
+   "confidence": "medium"
+  },
+  {
+   "fact": "quay.io/pypa/manylinux_2_28_i686 exists and is maintained (tag 2026.10.10). It is AlmaLinux 8.10 i686 with gcc-toolset-14 (GCC 14.2.1) and glibc 2.28: a ready plan C if a newer GCC is ever required, at the cost of dropping CentOS 7, Ubuntu ≤ 18.04 and Debian ≤ 9.",
+   "evidence": "docker run quay.io/pypa/manylinux_2_28_i686 -> 'AlmaLinux release 8.10 (Cerulean Leopard) i686 gcc-toolset-14 gcc (GCC) 14.2.1 ... ldd (GNU libc) 2.28'; g++ -std=c++20 -static-libstdc++ test compiled.",
+   "confidence": "high"
+  },
+  {
+   "fact": "Old-OS test images that pull with Docker 29 here: centos:7, centos:6, ubuntu:12.04/14.04/16.04/18.04/20.04, debian:7/8/9/10, i386/debian:8. Some first attempts failed transiently, and the disk was briefly full. testing/scripts/install-deps.sh has three bugs on old images: (1) line 82 `\"${extra_opts[@]}\"` is unbound under bash 4.3 with set -u (ubuntu:16.04: 'extra_opts[@]: unbound variable'); (2) line 121 sets the vault baseurl to http, which now 301s ('HTTPS Error 301 - Moved Permanently'); (3) installing Recommends pulls X11/tk packages that archive.debian.org 404s on (libsm6, x11-utils on jessie; xz-utils security on stretch). With fixes (`${extra_opts[@]+...}`, https, --no-install-recommends) all of them pass.",
+   "evidence": "research/oldos/pulls.txt, pulls2.txt; scratchpad/smoke-oldos-rom4s-ubuntu-16-04/run.log; smoke-oldos-rom4s-centos-7/run.log; debian-8/9 deps.log 404 lines (from first runs); research/oldos/oldos-install-deps.diff.",
+   "confidence": "high"
+  },
+  {
+   "fact": "CI currently smokes only debian:11, debian:latest and rockylinux:9, so nothing checks the floor. check-package.sh fails on GLIBC only for ≥ 2.34. The published packages are built with rom4s clang 9.0.1 (MM, core, extensions) plus gcc-9 with gcc-4.9 static libstdc++ for logic (SM < 1.13), via legacy-build.sh (IMAGE debian:11, USE_CLANG9=1).",
+   "evidence": ".github/workflows/test-server.yml:209-251,484-496; testing/scripts/check-package.sh:319-353 (glibc_too_new_for_logic >= 2.34); builder/docker/legacy-build.sh:7,42; readelf -p .comment rel/sm13-latest/x/.../sourcemod.2.ep1.so -> 'clang version 9.0.1', logic -> 'GCC: (Debian 9.3.0-22) 9.3.0'; sm11/sm12 logic also 'GCC: (Debian 4.9.2-10+deb8u1) 4.9.2'.",
+   "confidence": "high"
+  },
+  {
+   "fact": "Not covered by these tests. (1) Containers share the host's 6.18 kernel, so behaviour on old kernels (e.g. CentOS 7's 3.10) is untested; building against CentOS 7 kernel-headers bounds the syscall set, and SourcePawn's mimalloc has an ENOSYS fallback for getrandom. (2) Botplay/SMAC stress was not run on the manylinux2014 builds.",
+   "evidence": "Smoke only, via research/oldos/scripts/run-case-lite.sh; manylinux2014 kernel-headers-3.10.0-1160.62.1; sourcepawn/third_party/mimalloc/src/prim/unix/prim.c:906-914 (no_getrandom fallback).",
+   "confidence": "medium"
+  }
+ ],
+ "options": [
+  {
+   "id": "A",
+   "title": "Build all lines in quay.io/pypa/manylinux2014_i686 (glibc 2.17, devtoolset-10 GCC 10.2), hidden static libstdc++",
+   "description": "Replace the debian:11 build container with manylinux2014_i686, pinned by digest. Use the plain GCC driver: -static-libstdc++ -static-libgcc -Wl,--exclude-libs=libstdc++.a for every Linux ELF, which backports upstream f2f10bc1/3069350d to 1.11/1.12. Build static OpenSSL from a pinned tarball for dbi.mysql. Keep SM 1.13 at real -std=c++20. Patch the MM 1.10 core-legacy __GNUC__==4 gates. Remove the clang-9/10 binaries from bitbucket, the jessie gcc-4.9 sysroot, the C++17 downgrade + span polyfill, and the hardcoded libstdc++.a paths.",
+   "pros": [
+    "Proven here end to end on all three lines (6970+MM 1.10.7, 7253+MM 1.12, 7472+MM 1.12 C++20). Max GLIBC_2.17; smoke passes on CentOS 7 through Debian 13, including Ubuntu 24.04 where sm11 crashes today",
+    "Fixes the sm11 SIGABRT class at its root: no exported libstdc++, and no libstdc++.so.6 dependency in MM",
+    "Removes three toolchain crutches (clang-9/10 binaries with no checksums, gcc-4.9 sysroot, C++17 downgrade and polyfill)",
+    "Same libstdc++ major (10) that upstream's official release builds link, so upstream code that builds there builds here",
+    "PyPA-maintained image (tag 2026.10.10-1) with Python 3.12 and a modern git; spcomp needs only GLIBCXX_3.4.19",
+    "Same `docker run` pattern as legacy-build.sh, so no GitHub `container:` job (and its node/glibc limits) is needed"
+   ],
+   "cons": [
+    "GCC 10 is the compiler ceiling; a future SM master that uses newer language features would need plan B (clang + same sysroot) or C (manylinux_2_28, floor 2.28)",
+    "OpenSSL must be built from source (CentOS 7 has only 1.0.2k); OpenSSL 3.x needs perl-IPC-Cmd/perl-Time-Piece from the CentOS 7 vault",
+    "MM 1.12's -Werror trips GCC 10 format-truncation; needs -Wno-error flags (or upstream fix)",
+    "Depends on PyPA continuing to publish manylinux2014_i686, or a mirrored copy of the digest"
+   ],
+   "effort": "M",
+   "risk": "low-medium: smoke-proven on 10 userlands; botplay and old real kernels not yet tested"
+  },
+  {
+   "id": "B",
+   "title": "Modern clang (e.g. Debian 12/13 LLVM) + CentOS 7 i686 sysroot (glibc 2.17) + devtoolset-10 libstdc++",
+   "description": "Cross-compile with clang --target=i686-redhat-linux --sysroot=<CentOS 7 i686 rootfs> --gcc-toolchain=<devtoolset-10>, with lld. The sysroot comes from `docker export` of manylinux2014_i686 or from extracted RPMs.",
+   "pros": [
+    "Floor 2.17 (toy test: GLIBC_2.4 max, runs on 2.17)",
+    "Newest C++ language support; matches upstream's clang-based release builds",
+    "Also defines __GNUC__==4, so legacy MM 1.10 gates work without patches"
+   ],
+   "cons": [
+    "Library is still libstdc++ 10, so no C++ library gain over A",
+    "Two pieces to provision and pin (clang image + sysroot); AMBuild compiler detection with --target/--sysroot flags is untested at full-build scale",
+    "Not built end to end here (toy test only)"
+   ],
+   "effort": "M-L",
+   "risk": "medium"
+  },
+  {
+   "id": "C",
+   "title": "Keep debian:11 and pin symbol versions (.symver forced-include, -Wl,--wrap shims)",
+   "description": "Force-include a header with .symver pins for libm (pow/log/exp/...@GLIBC_2.0). Add wrappers or shims for fcntl64, getentropy, explicit_bzero and __cxa_thread_atexit_impl. Rebuild or patch the prebuilt static deps (Debian's libssl.a, libpq) compiled against glibc 2.31 headers.",
+   "pros": [
+    "Smallest change to the current pipeline",
+    "No new base image"
+   ],
+   "cons": [
+    "Toy test reaches only GLIBC_2.18 (__cxa_thread_atexit_impl inside libstdc++.a); 2.17 needs a wrapper for a libstdc++-internal symbol",
+    "Pinning fcntl64→fcntl changes large-file lock semantics; getentropy/explicit_bzero need hand-written replacements",
+    "Every SM/MM bump can add new versioned references (e.g. upstream 7477 already needs pthread_cond_clockwait@2.30), so this is permanent whack-a-mole",
+    "Keeps all the existing crutches and adds more"
+   ],
+   "effort": "M (plus ongoing maintenance)",
+   "risk": "high"
+  },
+  {
+   "id": "D",
+   "title": "quay.io/pypa/manylinux_2_28_i686 (AlmaLinux 8 i686, GCC 14.2, glibc 2.28)",
+   "description": "Same approach as A, but on the 2_28 image with gcc-toolset-14.",
+   "pros": [
+    "Modern GCC 14 with full C++20 and most of C++23; maintained image",
+    "Floor 2.28 still covers Debian 10+, Ubuntu 20.04+, RHEL 8+",
+    "Lower than today's 2.29, so Debian 10 gains support"
+   ],
+   "cons": [
+    "Drops CentOS 7, Ubuntu 14.04/16.04/18.04 and Debian 8/9, likely common on legacy v34 hosts",
+    "Not built end to end here (image toolchain verified only)"
+   ],
+   "effort": "M",
+   "risk": "low"
+  },
+  {
+   "id": "E",
+   "title": "Go below 2.17 (glibc 2.12 / CentOS 6, Debian 7, Ubuntu 12.04)",
+   "description": "Build a custom GCC ≥ 9 cross toolchain (crosstool-ng) against a CentOS 6 i686 sysroot, or keep A and add shims for clock_gettime@2.17 (inside libstdc++.a chrono), secure_getenv@2.17 and aligned_alloc@2.16. Test images would need HTTPS vault hacks.",
+   "pros": [
+    "Matches the rom4s floor (2.12)",
+    "The manylinux2014 output is already close: only 4 binaries exceed 2.12"
+   ],
+   "cons": [
+    "No maintained build image (manylinux2010 is frozen at GCC 8.3, which SM rejects)",
+    "Hacks inside libstdc++ or a self-built toolchain to maintain",
+    "Target distros have been EOL since 2017–2020; CentOS 6 repos are barely usable for installing 32-bit runtime packages",
+    "rom4s 6572 already serves that niche"
+   ],
+   "effort": "L-XL",
+   "risk": "high"
+  },
+  {
+   "id": "F",
+   "title": "Status quo (debian:11 + clang-9 + gcc-4.9 logic sysroot, floor 2.29)",
+   "description": "Change nothing.",
+   "pros": [
+    "No work"
+   ],
+   "cons": [
+    "Excludes CentOS 7, Ubuntu ≤ 18.04, Debian ≤ 10 (demonstrated on Ubuntu 18.04)",
+    "sm11 still SIGABRTs on Ubuntu 24.04 / Debian 13",
+    "Keeps checksum-less bitbucket clang binaries, the gcc-4.9 sysroot, the C++17 downgrade and the leak-enforcing check-package rule"
+   ],
+   "effort": "S",
+   "risk": "high"
+  }
+ ],
+ "recommendation": "Adopt option A and set the supported floor at glibc 2.17 for all three lines:\n- **Who it covers:** CentOS/RHEL/Oracle 7+, Debian 8+, Ubuntu 14.04+, and every current distro with i386 multiarch or multilib.\n- **Why not higher:** staying at 2.29 drops the very old VPS images legacy v34 servers tend to run on.\n- **Why not lower:** 2.12 would need a self-maintained toolchain for distros that have been EOL for 6–9 years, and rom4s 6572 already serves them.\n- **Why 2.17 is sensible:** it is better than upstream's own 2.29–2.30 and close to rom4s's practical 2.12.\n\nConcretely:\n1. Build inside quay.io/pypa/manylinux2014_i686, pinned by digest, using the devtoolset-10 GCC 10.2 driver.\n2. Link libstdc++ statically and hidden in every module: `-static-libstdc++ -static-libgcc -Wl,--exclude-libs=libstdc++.a`, a backport of upstream f2f10bc1/3069350d.\n3. Patch MM 1.10's `__GNUC__ == 4` gates.\n4. Keep SM 1.13 at real C++20 and delete the downgrade and polyfill.\n5. Retire the clang-9/10 binaries, the jessie gcc-4.9 sysroot and the hardcoded libstdc++.a paths.\n6. Probably drop `_GLIBCXX_USE_CXX11_ABI=0` too, but only behind a smoke and botplay gate.\n7. Rebuild 1.11.0.6970 (with its matching MM 1.10.7) once this way, verify it, and freeze it. This also fixes the Ubuntu 24.04 crash that keeps line-sm11-oldstable withheld.\n\nGate every package with a static check: no ELF may need anything above GLIBC_2.17, and no libstdc++/libsupc++ symbols may be exported. Smoke-test in CI on centos:7 as the floor and on ubuntu:24.04 / debian:latest as the ceiling. Write the floor into css34-package.json and the README.\n\nFallbacks:\n- If upstream SM master starts using a language feature GCC 10 cannot compile, switch the compiler to clang with the same CentOS 7 sysroot (option B). The library is unchanged; upstream itself ships against libstdc++ 10.\n- Only if upstream moves past libstdc++ 10 in its library usage, move to manylinux_2_28_i686 (option D, floor 2.28).",
+ "tasks": [
+  {
+   "title": "Add a manylinux2014_i686 build entrypoint",
+   "description": "Create builder/docker/ml2014-build.sh, or generalise legacy-build.sh with a toolchain switch. It runs builder/run/linux.sh inside quay.io/pypa/manylinux2014_i686@sha256:30305867f278896ee117b0d162a8e4f9b7b16819e6590f6139e14c5ed5b23fdd (tag 2026.10.10-1). Setup: PATH=/opt/python/cp312-cp312/bin:$PATH, CC=gcc CXX=g++ (devtoolset-10), USE_CLANG9=0, git safe.directory '*', and MM 1.12 -Werror relief (-Wno-error=format-truncation -Wno-error=stringop-truncation, or an upstream-style fix of metamod.cpp:852). Reference scripts: research/oldos/scripts/build-css34-ml2014*.sh and research/oldos/oldos-experiment-builder.diff in the scratchpad.",
+   "acceptance": "For each CSS34_LINE in {sm11-oldstable, sm12-latest, sm13-latest} the script exits 0 and writes packages/sourcemod-*-css34-linux.tar.gz and mmsource-*-css34-linux.tar.gz. `readelf -p .comment` on sourcemod.2.ep1.so shows 'Red Hat 10.2.1' and no 'clang version 9'. For every ELF in both tarballs, the highest GLIBC_ version from `objdump -T` is ≤ 2.17.",
+   "depends_on": [],
+   "effort": "M"
+  },
+  {
+   "title": "Hide static libstdc++ in every Linux module, using the compiler driver",
+   "description": "In builder/patches/apply-sourcemod-v112.sh (~lines 469-560) and apply-sourcemod.sh (~1104-1170, 1226-1400, plus every hardcoded '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a' candidate list), replace the custom logic link (-nodefaultlibs + explicit libstdc++.a/libsupc++.a paths + SM_LOGIC_CXX_SYSROOT) with the driver's -static-libstdc++ -static-libgcc. Add -Wl,--exclude-libs=libstdc++.a (plus libsupc++.a) to cxx.linkflags in configure_linux for all SM majors, as upstream master does. Make sure the MM 1.10 and 1.12 builds also link libstdc++ statically: no DT_NEEDED libstdc++.so.6 in server.so, server_i486.so, metamod.*.so.",
+   "acceptance": "For all three lines: `objdump -T sourcemod.logic.so | c++filt | grep -c 'std::locale'` is 0. `readelf -d` on every MM .so and every SM .so except spcomp shows no libstdc++.so.6. Smoke passes on ubuntu:24.04 and debian:latest for sm11-oldstable (published 6970 currently SIGABRTs there).",
+   "depends_on": [
+    "Add a manylinux2014_i686 build entrypoint"
+   ],
+   "effort": "M"
+  },
+  {
+   "title": "Fix MM 1.10 core-legacy GCC version gates",
+   "description": "In the MM 1.10 patch path (apply-mmsource-css34.sh or build-metamod.sh), change `#if (__GNUC__ == 4)` to `>= 4` in core-legacy/oslink.h:66, core/metamod_oslink.h:93 and core-legacy/ISmmPlugin.h:384 (drop the __GNUC_MINOR__ clause). Change `(__GNUC__ == 3 || __GNUC__ == 4)` to `(__GNUC__ >= 3)` in core-legacy/sourcemm.cpp:638 and core/metamod_oslink.cpp:97. The exact sed used in the experiment is in research/oldos/oldos-experiment-builder.diff.",
+   "acceptance": "`objdump -T addons/metamod/bin/metamod.1.ep1.so` lists GetGameDllBridge, GetVspBridge, _Znwj and _ZdlPv. sm11-oldstable smoke shows 'Metamod:Source version 1.10.7' and no 'Failed to load plugin \"../cstrike/addons/metamod/bin/server\"' / metamod-fatal.log.",
+   "depends_on": [
+    "Add a manylinux2014_i686 build entrypoint"
+   ],
+   "effort": "S"
+  },
+  {
+   "title": "Remove the C++20→C++17 downgrade and std::span polyfill for SM 1.13",
+   "description": "Delete the downgrade block in builder/patches/apply-sourcemod-v112.sh:176-212 and builder/patches/cxx17-compat/. Keep upstream's -std=c++20.",
+   "acceptance": "The build log for sm13-latest has '-std=c++20' on SM compile lines and 0 occurrences of 'cxx17-compat'. The package passes check-package.sh and smoke on centos:7 and ubuntu:24.04.",
+   "depends_on": [
+    "Add a manylinux2014_i686 build entrypoint"
+   ],
+   "effort": "S"
+  },
+  {
+   "title": "Static OpenSSL for dbi.mysql inside the build image",
+   "description": "Download a pinned OpenSSL tarball on the CI host with sha256 verification and cache it. Default 3.5 LTS (needs `yum install perl-IPC-Cmd perl-Time-Piece` from the CentOS 7 vault); 1.1.1w reproduces today's behaviour. Build it inside the image as linux-elf no-shared no-dso -fPIC and point the mysql link at it (CPATH/LIBRARY_PATH or db-configure-args.sh).",
+   "acceptance": "dbi.mysql.ext.so has no DT_NEEDED libssl/libcrypto. Max GLIBC ≤ 2.17. `strings dbi.mysql.ext.so | grep -m1 'OpenSSL [0-9]'` shows the pinned version. A sm13-latest smoke with `sm exts list` shows the MySQL-DBI extension loads, or at least no <FAILED>.",
+   "depends_on": [
+    "Add a manylinux2014_i686 build entrypoint"
+   ],
+   "effort": "S"
+  },
+  {
+   "title": "Replace leak-enforcing ABI rules with floor and hiding gates in check-package.sh",
+   "description": "Delete the '>=100 logic exports' rule (testing/scripts/check-package.sh:230-231) and the rom4s-motivated __cxx11 rule (193-198). Add: (a) GLIBC_FLOOR (default 2.17): fail if any ELF in the SM or MM tarball needs GLIBC_x > floor, printing the offending symbol@version; (b) fail if any ELF exports defined dynamic symbols matching std::locale, std::ios_base, __cxxabiv1 or __cxa_ (excluding SM/MM's own operator new/delete); (c) fail if any MM .so or SM .so other than spcomp has DT_NEEDED libstdc++.so.6; (d) spcomp GLIBCXX ≤ 3.4.19. Apply the same gates to check-metamod-package.sh.",
+   "acceptance": "Run with GLIBC_FLOOR=2.17 against scratchpad/rel: sm11, sm12-latest and sm13-latest all FAIL (2.29 symbols; sm11 also locale exports and MM libstdc++ NEEDED). The manylinux2014 packages in research/oldos/repo-full/packages-{cxx20,sm12,sm11} PASS.",
+   "depends_on": [],
+   "effort": "S"
+  },
+  {
+   "title": "Fix install-deps.sh for old distributions",
+   "description": "In testing/scripts/install-deps.sh: line 82 use `${extra_opts[@]+\"${extra_opts[@]}\"}` (bash 4.3 + set -u); line 121 use https://vault.centos.org; add --no-install-recommends to apt installs and an apt retry loop; on RHEL-family add libgcc.i686. Exact diff: research/oldos/oldos-install-deps.diff.",
+   "acceptance": "testing/scripts/install-deps.sh exits 0 in centos:7, ubuntu:14.04, ubuntu:16.04, ubuntu:18.04, debian:8, debian:9, debian:10, ubuntu:24.04, debian:latest and rockylinux:9. Smoke then passes on each with a 2.17-floor package.",
+   "depends_on": [],
+   "effort": "S"
+  },
+  {
+   "title": "Add old-OS smoke matrix to CI",
+   "description": "In .github/workflows/test-server.yml, smoke every line's package on centos:7 (floor) plus ubuntu:24.04 and debian:latest (ceiling) on each PR. Add a scheduled or release-time sweep over ubuntu:14.04/16.04/18.04 and debian:8/9/10. Keep using `docker run` from the ubuntu runner rather than `container:` jobs, because GitHub's node-based actions need a newer glibc than CentOS 7 has (from memory, not verified here).",
+   "acceptance": "The workflow has jobs or matrix entries for centos:7, ubuntu:24.04 and debian:latest for sm11-oldstable, sm12-latest and sm13-latest, and they pass on a branch that uses the new build entrypoint. A deliberately 2.29-floor package fails the centos:7 job.",
+   "depends_on": [
+    "Fix install-deps.sh for old distributions",
+    "Add a manylinux2014_i686 build entrypoint"
+   ],
+   "effort": "M"
+  },
+  {
+   "title": "Rebuild and freeze the SM 1.11 line (6970 + MM 1.10.7) on the new toolchain",
+   "description": "Build CSS34_LINE=sm11-oldstable once with the new pipeline. Run check-package, smoke on centos:7, ubuntu:24.04 and debian:latest, and the botplay-stress matrix. Publish it as the frozen 1.11 artifact, restore the line-sm11-oldstable pointer, and update the README 'Known-bad releases' entry: the root cause is the libstdc++ leak plus MM 1.10.7's libstdc++.so.6 dependency.",
+   "acceptance": "Release assets exist. Max GLIBC_2.17. Smoke PASSED on all three images. Botplay report has no crashes. The README no longer says the root cause is not reproduced. lines.json points sm11-oldstable at the new tag.",
+   "depends_on": [
+    "Hide static libstdc++ in every Linux module, using the compiler driver",
+    "Fix MM 1.10 core-legacy GCC version gates",
+    "Static OpenSSL for dbi.mysql inside the build image",
+    "Replace leak-enforcing ABI rules with floor and hiding gates in check-package.sh",
+    "Add old-OS smoke matrix to CI"
+   ],
+   "effort": "M"
+  },
+  {
+   "title": "Switch 1.12 and 1.13 releases to the new toolchain",
+   "description": "Build sm12-latest (and its 7255 bump) and sm13-latest (and its 7477 bump) via the new entrypoint. Run the full test-server workflow including botplay before tagging.",
+   "acceptance": "Both lines' new tags have max GLIBC_2.17, pass check-package with GLIBC_FLOOR=2.17, and pass smoke on centos:7, ubuntu:24.04 and debian:latest plus the existing botplay matrix.",
+   "depends_on": [
+    "Hide static libstdc++ in every Linux module, using the compiler driver",
+    "Remove the C++20→C++17 downgrade and std::span polyfill for SM 1.13",
+    "Static OpenSSL for dbi.mysql inside the build image",
+    "Replace leak-enforcing ABI rules with floor and hiding gates in check-package.sh",
+    "Add old-OS smoke matrix to CI"
+   ],
+   "effort": "M"
+  },
+  {
+   "title": "Retire legacy toolchain crutches",
+   "description": "After one release cycle on the new toolchain, delete: builder/install-clang9.sh, install-clang10.sh, install-sysroot-i386.sh, the USE_CLANG9 branches in builder/run/linux.sh and build-metamod.sh, the SM_LOGIC_CXX_SYSROOT code paths, legacy-build.sh's debian:11 + gcc-9 multilib install, and the rom4s-compat comments.",
+   "acceptance": "`git grep -nE 'clang-9|clang\\+\\+-9|gcc-4\\.9|SM_LOGIC_CXX_SYSROOT|sysroot-i386|cxx17-compat' builder testing .github` returns nothing, and all three lines still build and pass CI.",
+   "depends_on": [
+    "Rebuild and freeze the SM 1.11 line (6970 + MM 1.10.7) on the new toolchain",
+    "Switch 1.12 and 1.13 releases to the new toolchain"
+   ],
+   "effort": "S"
+  },
+  {
+   "title": "Evaluate dropping _GLIBCXX_USE_CXX11_ABI=0",
+   "description": "Remove the define added by apply-sourcemod*.sh and apply-mmsource-v112.sh (episode1.json), matching upstream, which uses it only for csgo/blade. Rebuild sm13-latest and run smoke and botplay. Keep it only if something regresses.",
+   "acceptance": "The build has no -D_GLIBCXX_USE_CXX11_ABI=0 on compile lines, and smoke plus botplay pass on centos:7 and ubuntu:24.04. Otherwise document the concrete failure that justifies keeping it.",
+   "depends_on": [
+    "Switch 1.12 and 1.13 releases to the new toolchain"
+   ],
+   "effort": "S"
+  },
+  {
+   "title": "Publish the OS support policy",
+   "description": "In the README, state minimum glibc 2.17 and the tested distros. List the 32-bit runtime packages: Debian/Ubuntu `libc6-i386 lib32gcc-s1|lib32gcc1 lib32stdc++6 lib32z1`; RHEL-family `glibc.i686 libgcc.i686 libstdc++.i686 zlib.i686`. Note that old kernels are untested. Add \"min_glibc\": \"2.17\" to css34-package.json (builder/write-package-manifest.sh) and lines.json so fmu1337/v34_server_base can pre-check the host with `getconf GNU_LIBC_VERSION`.",
+   "acceptance": "The README section exists. The css34-package.json in each new tarball contains min_glibc, and check-package.sh verifies it equals the GLIBC_FLOOR it enforced.",
+   "depends_on": [
+    "Replace leak-enforcing ABI rules with floor and hiding gates in check-package.sh"
+   ],
+   "effort": "S"
+  },
+  {
+   "title": "Keep a plan-B compiler path ready (clang + same CentOS 7 sysroot)",
+   "description": "Prototype a build using clang from a Debian 12/13 image with --target=i686-redhat-linux --sysroot=<exported manylinux2014_i686 rootfs> --gcc-toolchain=<devtoolset-10> -fuse-ld=lld, for use if SM master adopts a language feature GCC 10 rejects. Starting point: research/oldos/scripts/build-vanilla-clang-sysroot.sh.",
+   "acceptance": "sm13-latest builds with clang via the sysroot. Max GLIBC ≤ 2.17. Smoke passes on centos:7 and ubuntu:24.04.",
+   "depends_on": [
+    "Switch 1.12 and 1.13 releases to the new toolchain"
+   ],
+   "effort": "M"
+  }
+ ],
+ "questions_for_user": [
+  {
+   "question": "Which glibc floor should css34 Linux packages promise: 2.17 (CentOS/RHEL 7, Debian 8+, Ubuntu 14.04+), 2.28 (Debian 10+, Ubuntu 20.04+, RHEL 8+, with GCC 14), or 2.12 (CentOS 6 / Ubuntu 12.04, needs a custom toolchain)?",
+   "why": "It decides the build image (manylinux2014 vs manylinux_2_28 vs a custom toolchain) and which old VPS images your users can keep running. Today's packages are effectively 2.29, which excludes Ubuntu 18.04, Debian 10 and older.",
+   "suggested_default": "2.17 via manylinux2014_i686: proven on all three lines here, and it covers everything still realistically in use"
+  },
+  {
+   "question": "For the frozen 1.11 line, should 6970 + MM 1.10.7 be rebuilt once with the new toolchain (static hidden libstdc++, GCC __GNUC__ fix) and then frozen, or should 1.11 users keep being pointed at rom4s 6572 + MM 1.10.6?",
+   "why": "The current 6970 release SIGABRTs on Ubuntu 24.04 / Debian 13. The rebuild passed smoke on CentOS 7, Ubuntu 24.04 and Debian 13 here, but 'built once and frozen' means this is the one build that will live on.",
+   "suggested_default": "Rebuild 6970 once on the new toolchain, gate it with smoke + botplay on centos:7, ubuntu:24.04 and debian:latest, then freeze it and restore line-sm11-oldstable"
+  },
+  {
+   "question": "How much old-OS testing should CI run on every PR versus on a schedule?",
+   "why": "Archived mirrors (vault.centos.org, archive.debian.org) are slow and sometimes 404, so a full old-OS matrix on every PR adds minutes and flakiness.",
+   "suggested_default": "On every PR: centos:7 (floor) + ubuntu:24.04 + debian:latest. On release and weekly: the full sweep (ubuntu 14.04/16.04/18.04, debian 8/9/10, rockylinux:9)"
+  },
+  {
+   "question": "Which OpenSSL should be statically linked into dbi.mysql: keep 1.1.1 (same as today's Debian 11 build, upstream EOL since 2023) or move to a supported 3.x LTS?",
+   "why": "The new build image has no usable static OpenSSL, so one must be built from source either way. 3.x adds two perl build dependencies and about 1 MB to the binary.",
+   "suggested_default": "OpenSSL 3.5 LTS, pinned by sha256 and cached"
+  }
+ ]
+}

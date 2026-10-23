@@ -1,0 +1,92 @@
+diff --git a/builder/build-metamod.sh b/builder/build-metamod.sh
+index 95828fb..8e7c809 100755
+--- a/builder/build-metamod.sh
++++ b/builder/build-metamod.sh
+@@ -29,6 +29,12 @@ if [[ ! -f "$MMS_DIR/core/ISmmAPI.h" ]]; then
+   exit 1
+ fi
+ 
++# oldos experiment: MM 1.10 gates exports/allocator on __GNUC__ == 4 (true for clang only)
++if [[ "${OLDOS_GNUC_FIX:-0}" == 1 && -f "$MMS_DIR/core-legacy/oslink.h" ]]; then
++  sed -i 's/#if (__GNUC__ == 4)$/#if (__GNUC__ >= 4)/; s/#if (__GNUC__ == 4) \&\& (__GNUC_MINOR__ >= 1)/#if (__GNUC__ >= 4)/' "$MMS_DIR/core-legacy/oslink.h" "$MMS_DIR/core-legacy/ISmmPlugin.h" "$MMS_DIR/core/metamod_oslink.h"
++  sed -i 's/(__GNUC__ == 3 || __GNUC__ == 4)/(__GNUC__ >= 3)/' "$MMS_DIR/core-legacy/sourcemm.cpp" "$MMS_DIR/core/metamod_oslink.cpp"
++  grep -n '__GNUC__' "$MMS_DIR/core-legacy/oslink.h" "$MMS_DIR/core-legacy/ISmmPlugin.h" "$MMS_DIR/core-legacy/sourcemm.cpp" >&2
++fi
+ product="$(tr -d '\r\n' < "$MMS_DIR/product.version" 2>/dev/null || echo "")"
+ if [[ -z "$MMS_MODE" ]]; then
+   case "$product" in
+diff --git a/builder/patches/apply-sourcemod-v112.sh b/builder/patches/apply-sourcemod-v112.sh
+index 0835bea..1bb95eb 100755
+--- a/builder/patches/apply-sourcemod-v112.sh
++++ b/builder/patches/apply-sourcemod-v112.sh
+@@ -174,7 +174,7 @@ else:
+     print('==> CSS34 compiler flags already present')
+ 
+ # SM 7461+ sets -std=c++20; css34 uses gcc-9/clang-9 (max c++17).
+-if "cxx.cxxflags += ['-std=c++20']" in text:
++if os.environ.get('CSS34_KEEP_CXX20') != '1' and "cxx.cxxflags += ['-std=c++20']" in text:  # oldos experiment
+     text = text.replace(
+         "cxx.cxxflags += ['-std=c++20']",
+         "cxx.cxxflags += ['-std=c++17']  # css34: gcc-9/clang-9 lack c++20",
+@@ -186,7 +186,7 @@ elif "css34: gcc-9/clang-9 lack c++20" in text:
+ 
+ # SM 7461+ SourcePawn uses std::span (C++20); provide a polyfill via -I cxx17-compat.
+ pool_allocator = sm / 'sourcepawn/utils/pool-allocator.h'
+-if pool_allocator.exists() and '#include <span>' in pool_allocator.read_text():
++if os.environ.get('CSS34_KEEP_CXX20') != '1' and pool_allocator.exists() and '#include <span>' in pool_allocator.read_text():  # oldos experiment
+     compat_inc = os.path.join(builder_dir, 'patches', 'cxx17-compat')
+     span_marker = "cxx.cxxflags += ['-I"  # css34: C++17 std::span polyfill
+     if span_marker not in text:
+@@ -475,7 +475,7 @@ if logic_am.exists():
+ {mimalloc_link}    ]
+ """
+         exclude_libs = ""
+-        if sm_minor >= 13:
++        if sm_minor >= 13 or os.environ.get('CSS34_EXCLUDE_LIBS_ALL') == '1':  # oldos experiment
+             exclude_libs = """    # css34: hide static archive symbols from the dynamic export table (libsourcepawn_static)
+     if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
+       binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
+@@ -510,6 +510,7 @@ if logic_am.exists():
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
+diff --git a/builder/patches/apply-sourcemod.sh b/builder/patches/apply-sourcemod.sh
+index 5b09bd6..45b5d99 100755
+--- a/builder/patches/apply-sourcemod.sh
++++ b/builder/patches/apply-sourcemod.sh
+@@ -1354,6 +1354,7 @@ if _loop_old_mod in text or (
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
+@@ -1678,6 +1679,7 @@ linux_block_new = """  if builder.target.platform == 'linux':
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
+@@ -1804,6 +1806,7 @@ else:
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
+@@ -1844,6 +1847,7 @@ else:
+       for _cand in (
+           '/usr/lib/gcc/i686-linux-gnu/9/libstdc++.a',
+           '/usr/lib/gcc/x86_64-linux-gnu/9/32/libstdc++.a',
++          '/opt/rh/devtoolset-10/root/usr/lib/gcc/i686-redhat-linux/10/libstdc++.a',  # oldos experiment
+       ):
+         if _os.path.isfile(_cand):
+           _stdcxx = _cand
