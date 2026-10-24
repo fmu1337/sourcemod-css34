@@ -9,3 +9,5 @@
 /server-art/
 /.ci-release-smoke/
 /mmsource-*.tar.gz
+__pycache__/
+*.pyc

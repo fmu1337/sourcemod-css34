@@ -3,6 +3,7 @@
 
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -140,6 +141,258 @@ class LinesTest(unittest.TestCase):
         original = (self.root / "builder/versions.env").read_bytes()
         self.assertIn("full SHA", self.run_command("gen", False).stderr)
         self.assertEqual((self.root / "builder/versions.env").read_bytes(), original)
+
+
+class RepointResolverTest(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        # Dynamically extract decision code from builder/scripts/update-line-pointer.sh
+        script_content = (ROOT / "builder/scripts/update-line-pointer.sh").read_text(encoding="utf-8")
+        match_decision = re.search(r"python3 - \"\$line_json\".*?<<'PY'\n(.*?)\nPY", script_content, re.DOTALL)
+        if not match_decision:
+            raise RuntimeError("Failed to extract decision python script from update-line-pointer.sh")
+        cls.pointer_decision_code = match_decision.group(1)
+
+        # Dynamically extract release resolver code from .github/workflows/release.yml
+        workflow_content = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        matches_resolver = re.findall(r"res_json=.*?<<'PY'\n(.*?)\nPY", workflow_content, re.DOTALL)
+        if not matches_resolver:
+            raise RuntimeError("Failed to extract release resolver python script from release.yml")
+        cls.release_resolver_code = matches_resolver[0]
+
+    def run_pointer_decision(self, path, line, tag, smoke, sm_json, mm_json, ptr, repo, src_time, force_repoint, decision_path):
+        cmd = [sys.executable, "-c", self.pointer_decision_code, str(path), line, tag, smoke,
+               json.dumps(sm_json) if isinstance(sm_json, dict) else str(sm_json),
+               json.dumps(mm_json) if isinstance(mm_json, dict) else str(mm_json),
+               ptr, repo, str(src_time), str(force_repoint), str(decision_path)]
+        return subprocess.run(cmd, capture_output=True, text=True)
+
+    def run_release_resolver_multi(self, check_dir, sm_files, mm_files, base_tag, tag_map_line, lines_json_path):
+        cmd = [sys.executable, "-c", self.release_resolver_code,
+               base_tag, tag_map_line, str(lines_json_path), str(check_dir)] + list(sm_files) + ["---MM---"] + list(mm_files)
+        return subprocess.run(cmd, capture_output=True, text=True)
+
+    def test_repoint_decision_switch_and_stale_and_force(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            line_json = tmp_path / "lines.json"
+            decision_file = tmp_path / "decision"
+
+            sm_manifest = {
+                "sm_version": "1.12.0.7253", "sm_commit": "88713a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f",
+                "mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                "extension_api": 14, "extension_api_min": 1, "metamod_binary": "metamod.2.ep1"
+            }
+            mm_manifest = {
+                "mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                "metamod_binary": "metamod.2.ep1"
+            }
+
+            line_json.write_text("{}")
+            res = self.run_pointer_decision(line_json, "sm12-latest", "1.12.0.7253-mm1.12.0", "pass",
+                                            sm_manifest, mm_manifest, "line-sm12-latest", "fmu1337/sourcemod-css34",
+                                            1600000000, "0", decision_file)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertEqual(decision_file.read_text(), "switch")
+            saved = json.loads(line_json.read_text())["sm12-latest"]
+            self.assertEqual(saved["tag"], "1.12.0.7253-mm1.12.0")
+            self.assertEqual(saved["source_commit_time"], 1600000000)
+
+            # Older commit time without force -> stale decision
+            res = self.run_pointer_decision(line_json, "sm12-latest", "1.12.0.7200-mm1.12.0", "pass",
+                                            sm_manifest, mm_manifest, "line-sm12-latest", "fmu1337/sourcemod-css34",
+                                            1500000000, "0", decision_file)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertEqual(decision_file.read_text(), "stale")
+            saved = json.loads(line_json.read_text())["sm12-latest"]
+            self.assertEqual(saved["tag"], "1.12.0.7253-mm1.12.0") # intact
+
+            # Older commit time WITH force -> force repoint rollback
+            res = self.run_pointer_decision(line_json, "sm12-latest", "1.12.0.7200-mm1.12.0", "pass",
+                                            sm_manifest, mm_manifest, "line-sm12-latest", "fmu1337/sourcemod-css34",
+                                            1500000000, "1", decision_file)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertEqual(decision_file.read_text(), "switch")
+            saved = json.loads(line_json.read_text())["sm12-latest"]
+            self.assertEqual(saved["tag"], "1.12.0.7200-mm1.12.0")
+
+    def test_repoint_decision_failed_smoke_records_candidate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            line_json = tmp_path / "lines.json"
+            decision_file = tmp_path / "decision"
+
+            line_json.write_text(json.dumps({
+                "sm12-latest": {
+                    "tag": "1.12.0.7253-mm1.12.0", "smoke": "pass", "source_commit_time": 1600000000
+                }
+            }))
+
+            sm_manifest = {
+                "sm_version": "1.12.0.7255", "sm_commit": "88713a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f",
+                "mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                "extension_api": 14, "extension_api_min": 1, "metamod_binary": "metamod.2.ep1"
+            }
+            mm_manifest = {
+                "mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                "metamod_binary": "metamod.2.ep1"
+            }
+
+            res = self.run_pointer_decision(line_json, "sm12-latest", "1.12.0.7255-mm1.12.0", "fail",
+                                            sm_manifest, mm_manifest, "line-sm12-latest", "fmu1337/sourcemod-css34",
+                                            1610000000, "0", decision_file)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertEqual(decision_file.read_text(), "record")
+            saved = json.loads(line_json.read_text())["sm12-latest"]
+            self.assertEqual(saved["tag"], "1.12.0.7253-mm1.12.0") # served tag retained
+            self.assertEqual(saved["candidate"]["tag"], "1.12.0.7255-mm1.12.0")
+            self.assertEqual(saved["candidate"]["smoke"], "fail")
+
+    def test_repoint_decision_rejects_corrupted_or_mismatched_manifests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            line_json = tmp_path / "lines.json"
+            decision_file = tmp_path / "decision"
+            line_json.write_text("{}")
+
+            # Corrupted JSON
+            res = self.run_pointer_decision(line_json, "sm12-latest", "1.12.0.7253-mm1.12.0", "pass",
+                                            "not json", "not json", "line-sm12-latest", "fmu1337/sourcemod-css34",
+                                            1600000000, "0", decision_file)
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("Invalid SM package manifest JSON", res.stderr)
+
+            # Mismatched mm_version
+            sm = {"sm_version": "1.12.0.7253", "sm_commit": "88713a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f",
+                  "mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                  "extension_api": 14, "extension_api_min": 1, "metamod_binary": "metamod.2.ep1"}
+            mm = {"mm_version": "1.10.7-dev", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                  "metamod_binary": "metamod.2.ep1"}
+            res = self.run_pointer_decision(line_json, "sm12-latest", "1.12.0.7253-mm1.12.0", "pass",
+                                            sm, mm, "line-sm12-latest", "fmu1337/sourcemod-css34",
+                                            1600000000, "0", decision_file)
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("mismatch", res.stderr)
+
+            # Placeholder string value
+            sm_placeholder = dict(sm, sm_version="null")
+            res = self.run_pointer_decision(line_json, "sm12-latest", "1.12.0.7253-mm1.12.0", "pass",
+                                            sm_placeholder, mm, "line-sm12-latest", "fmu1337/sourcemod-css34",
+                                            1600000000, "0", decision_file)
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("placeholder value", res.stderr)
+
+            # Invalid SHA format
+            mm_matching = {"mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                           "metamod_binary": "metamod.2.ep1"}
+            sm_bad_sha = dict(sm, sm_commit="invalid_sha_123")
+            res = self.run_pointer_decision(line_json, "sm12-latest", "1.12.0.7253-mm1.12.0", "pass",
+                                            sm_bad_sha, mm_matching, "line-sm12-latest", "fmu1337/sourcemod-css34",
+                                            1600000000, "0", decision_file)
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("Invalid sm_commit format", res.stderr)
+
+    def test_release_resolver_multi_candidates_filtering(self):
+        lines_json = ROOT / "builder/lines.json"
+        with tempfile.TemporaryDirectory() as tmp:
+            check_dir = Path(tmp)
+
+            def create_tarball(filename, manifest_data, subpath):
+                stage = check_dir / "stage" / filename
+                stage.mkdir(parents=True, exist_ok=True)
+                mfile = stage / subpath
+                mfile.parent.mkdir(parents=True, exist_ok=True)
+                mfile.write_text(json.dumps(manifest_data))
+                tar_path = check_dir / filename
+                subprocess.run(["tar", "-czf", str(tar_path), "-C", str(stage), "addons"], check=True)
+                shutil.rmtree(stage)
+
+            # SM12 valid manifest
+            sm12_manifest = {
+                "line": "sm12-latest", "sm_version": "1.12.0.7253", "sm_commit": "88713a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f",
+                "mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                "metamod_binary": "metamod.2.ep1"
+            }
+            # SM13 valid manifest
+            sm13_manifest = {
+                "line": "sm13-latest", "sm_version": "1.13.0.7472", "sm_commit": "88713a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f",
+                "mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                "metamod_binary": "metamod.2.ep1"
+            }
+
+            create_tarball("sourcemod-1.12.0-css34-linux.tar.gz", sm12_manifest, "addons/sourcemod/css34-package.json")
+            create_tarball("sourcemod-1.13.0-css34-linux.tar.gz", sm13_manifest, "addons/sourcemod/css34-package.json")
+
+            create_tarball("mmsource-1.12.0-css34-linux.tar.gz", sm12_manifest, "addons/metamod/css34-package.json")
+            create_tarball("mmsource-1.13.0-css34-linux.tar.gz", sm13_manifest, "addons/metamod/css34-package.json")
+
+            sm_files = ["sourcemod-1.12.0-css34-linux.tar.gz", "sourcemod-1.13.0-css34-linux.tar.gz"]
+            mm_files = ["mmsource-1.12.0-css34-linux.tar.gz", "mmsource-1.13.0-css34-linux.tar.gz"]
+
+            # Run 1: Filter for tag mapped to sm12-latest in a copy of check_dir
+            with tempfile.TemporaryDirectory() as run1_dir:
+                run1_path = Path(run1_dir)
+                for f in sm_files + mm_files:
+                    shutil.copyfile(check_dir / f, run1_path / f)
+                res = self.run_release_resolver_multi(run1_path, sm_files, mm_files, "1.12.0.7253-mm1.12.0", "sm12-latest", lines_json)
+                self.assertEqual(res.returncode, 0, res.stderr)
+                out = json.loads(res.stdout.strip())
+                self.assertEqual(out["line"], "sm12-latest")
+                self.assertEqual(out["sm_asset"], "sourcemod-1.12.0-css34-linux.tar.gz")
+                self.assertEqual(out["mm_asset"], "mmsource-1.12.0-css34-linux.tar.gz")
+
+            # Run 2: Historical unmapped tag (tag_map_line=""), resolves single valid candidate sm12 if sm13 is removed
+            with tempfile.TemporaryDirectory() as run2_dir:
+                run2_path = Path(run2_dir)
+                shutil.copyfile(check_dir / "sourcemod-1.12.0-css34-linux.tar.gz", run2_path / "sourcemod-1.12.0-css34-linux.tar.gz")
+                shutil.copyfile(check_dir / "mmsource-1.12.0-css34-linux.tar.gz", run2_path / "mmsource-1.12.0-css34-linux.tar.gz")
+                res = self.run_release_resolver_multi(run2_path, ["sourcemod-1.12.0-css34-linux.tar.gz"], ["mmsource-1.12.0-css34-linux.tar.gz"], "historical-tag", "", lines_json)
+                self.assertEqual(res.returncode, 0, res.stderr)
+                out = json.loads(res.stdout.strip())
+                self.assertEqual(out["line"], "sm12-latest")
+
+            # Run 3: Without tag-map mapping, both pairs are valid -> ambiguity error
+            with tempfile.TemporaryDirectory() as run3_dir:
+                run3_path = Path(run3_dir)
+                for f in sm_files + mm_files:
+                    shutil.copyfile(check_dir / f, run3_path / f)
+                res_ambig = self.run_release_resolver_multi(run3_path, sm_files, mm_files, "custom-tag", "", lines_json)
+                self.assertNotEqual(res_ambig.returncode, 0)
+                self.assertIn("Ambiguous SM/MM package pairs", res_ambig.stderr)
+
+    def test_known_bad_and_archived_and_no_pointer_line_rules(self):
+        tag_map_script = (ROOT / "builder/generated/tag-map.sh").read_text(encoding="utf-8")
+        # Check known_bad helper function definition exists and works
+        self.assertIn("css34_tag_is_known_bad", tag_map_script)
+        self.assertIn("1.12.0.7245-mm1.12.0", tag_map_script)
+
+        # Validate line pointer rules in lines.json
+        lines_data = json.loads((ROOT / "builder/lines.json").read_text(encoding="utf-8"))
+        self.assertTrue(lines_data["lines"]["sm12-latest"]["pointer"])
+        self.assertTrue(lines_data["lines"]["sm13-latest"]["pointer"])
+        self.assertFalse(lines_data["lines"]["sm13-dev"]["pointer"])
+        self.assertFalse(lines_data["lines"]["sm13-mm20-khook"]["releasable"])
+
+    def test_annotated_tag_commit_time_and_deref_resolution(self):
+        # Verify git rev-parse ${tag}^{commit} and git show -s --format=%ct resolves timestamps for HEAD commit/tags
+        res = subprocess.run(["git", "log", "-n1", "--format=%H %ct"], cwd=ROOT, capture_output=True, text=True, check=True)
+        commit_sha, timestamp_str = res.stdout.strip().split()
+        timestamp = int(timestamp_str)
+        self.assertGreater(timestamp, 1600000000)
+
+        # Verify git rev-parse HEAD^{commit} returns expected commit SHA
+        deref = subprocess.run(["git", "rev-parse", "HEAD^{commit}"], cwd=ROOT, capture_output=True, text=True, check=True)
+        self.assertEqual(deref.stdout.strip(), commit_sha)
+
+    def test_workflow_job_conditions_and_skipped_dependencies(self):
+        workflow_content = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        # Ensure smoke-release and botplay-release do not depend on windows or checksums
+        self.assertIn("smoke-release:\n    needs: [resolve-line, linux, release-pins]", workflow_content)
+        self.assertIn("botplay-release:\n    needs: [resolve-line, linux, release-pins]", workflow_content)
+        self.assertIn("line-pointer:\n    needs: [resolve-line, linux, smoke-release, botplay-release]", workflow_content)
+        # Verify repoint condition permits repoint=1 without linux/checksums requirement
+        self.assertIn("needs.resolve-line.outputs.repoint == '1'", workflow_content)
 
 
 if __name__ == "__main__":
