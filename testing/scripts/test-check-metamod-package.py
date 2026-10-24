@@ -42,8 +42,8 @@ class TestCheckMetamodPackage(unittest.TestCase):
             open(os.path.join(bin_dir, fname), "w").close()
 
         rev = version.split("-git")[-1] if "-git" in version else "976"
-        mode = "1.10" if "1.10" in version else "1.12"
-        pkg_filename = f"mmsource-{mode}.0-git{rev}-css34-linux.tar.gz"
+        ver_base = "1.10.7" if "1.10" in version else "1.12.0"
+        pkg_filename = f"mmsource-{ver_base}-git{rev}-css34-linux.tar.gz"
         tar_path = os.path.join(self.tmp_dir, pkg_filename)
         subprocess.run(
             ["tar", "-czf", tar_path, "-C", pkg_staging, "addons"],

@@ -205,6 +205,8 @@ def line_parts(data, name):
         s_mm = data["pins"][line["secondary_metamod"]]
         res["secondary_mm_commit"] = s_mm["commit"]
         res["secondary_mm_rev"] = s_mm["rev"]
+        res["secondary_mm_mode"] = s_mm["mode"]
+        res["secondary_mm_expect"] = mm_version(s_mm["mode"])
     return res
 
 
@@ -222,6 +224,8 @@ def row_expect(row, with_commits):
         if "secondary_mm_commit" in row:
             item["secondary_mm_commit"] = row["secondary_mm_commit"]
             item["secondary_mm_rev"] = row["secondary_mm_rev"]
+            item["secondary_mm_mode"] = row["secondary_mm_mode"]
+            item["secondary_mm_expect"] = row["secondary_mm_expect"]
     return item
 
 
