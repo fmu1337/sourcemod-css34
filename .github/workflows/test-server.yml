@@ -168,28 +168,7 @@ jobs:
           echo "Checking ${SM_PACKAGE}"
           testing/scripts/check-package.sh
 
-          primary_commit="${{ matrix.mm_commit }}"
-          primary_rev="${{ matrix.mm_rev }}"
-          if [[ -f "$MM_PACKAGE" ]]; then
-            echo "Checking primary Metamod package $MM_PACKAGE"
-            EXPECTED_MM_COMMIT="$primary_commit" EXPECTED_MM_REV="$primary_rev" MM_PACKAGE="$MM_PACKAGE" testing/scripts/check-metamod-package.sh
-          else
-            echo "FAIL: expected primary Metamod package $MM_PACKAGE not found" >&2
-            exit 1
-          fi
-
-          sec_commit="${{ matrix.secondary_mm_commit }}"
-          sec_rev="${{ matrix.secondary_mm_rev }}"
-          if [[ -n "$sec_commit" && -n "$sec_rev" ]]; then
-            sec_pkg="packages/mmsource-1.12.0-git${sec_rev}-css34-linux.tar.gz"
-            if [[ -f "$sec_pkg" ]]; then
-              echo "Checking secondary Metamod package $sec_pkg"
-              EXPECTED_MM_COMMIT="$sec_commit" EXPECTED_MM_REV="$sec_rev" MM_PACKAGE="$sec_pkg" testing/scripts/check-metamod-package.sh
-            else
-              echo "FAIL: expected secondary Metamod package $sec_pkg not found" >&2
-              exit 1
-            fi
-          fi
+          testing/scripts/verify-line-metamod-packages.sh "${{ matrix.line }}"
 
       # Job-to-job handoff via Actions cache (does not count against the 0.5 GB artifact quota).
       - name: Cache packages for later jobs
