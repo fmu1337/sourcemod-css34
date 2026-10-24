@@ -94,14 +94,11 @@ build_and_package_mm_win() {
   echo "==> Metamod package: $mm_art"
 }
 
-if [ -f "$BUILDER_DIR/versions.env" ]; then
-  # shellcheck source=../versions.env
-  source "$BUILDER_DIR/versions.env"
-fi
-
 if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
-  build_and_package_mm_win "${DEPS_DIR}/${MM_110_DIRNAME:-mmsource-1.10}" "1.10" "${MM_110_DIRNAME:-mmsource-1.10}" "${MM_110_REV:-976}" "${MM_110_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-  build_and_package_mm_win "${DEPS_DIR}/${MM_112_FROZEN_DIRNAME:-mmsource-1.12-frozen}" "1.12" "${MM_112_FROZEN_DIRNAME:-mmsource-1.12-frozen}" "${MM_112_FROZEN_REV:-1227}" "${MM_112_FROZEN_COMMIT:-75dd7b26fe92e535a11f0318ead73c3e05130d0b}"
+  mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm11-oldstable}")"
+  while IFS=$'\t' read -r role dirname mode branch commit rev version; do
+    build_and_package_mm_win "$DEPS_DIR/$dirname" "$mode" "$dirname" "$rev" "$commit"
+  done <<< "$mm_inputs"
 else
   build_and_package_mm_win "$MMS_DIR" "$MMS_MODE" "$MMS_DIRNAME" "${MMS_GIT_REV:-}" "${MMS_COMMIT:-}"
 fi

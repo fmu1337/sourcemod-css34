@@ -11,6 +11,7 @@ import unittest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 CHECK_SCRIPT = os.path.join(ROOT, "testing", "scripts", "check-metamod-package.sh")
 VERIFY_SCRIPT = os.path.join(ROOT, "testing", "scripts", "verify-line-metamod-packages.sh")
+RESOLVE_SCRIPT = os.path.join(ROOT, "builder", "resolve-metamod-pins.py")
 
 
 class TestCheckMetamodPackage(unittest.TestCase):
@@ -82,6 +83,83 @@ class TestCheckMetamodPackage(unittest.TestCase):
         )
         self.assertNotEqual(res.returncode, 0)
         self.assertIn("FAIL: manifest mm_version", res.stderr)
+
+    def test_check_metamod_package_revision_prefix_is_not_a_match(self):
+        pkg_path = self._create_mock_pkg(version="1.10.7-git9760")
+        env = os.environ.copy()
+        env.update(MM_PACKAGE=pkg_path, EXPECTED_MM_REV="976")
+        res = subprocess.run([CHECK_SCRIPT], env=env, capture_output=True, text=True)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("does not have exact revision git976", res.stderr)
+
+    def test_verify_unknown_line_rejected_before_checking_packages(self):
+        self._create_mock_pkg()
+        env = os.environ.copy()
+        env["CHECK_METAMOD_SCRIPT"] = "/bin/true"
+        res = subprocess.run([VERIFY_SCRIPT, "sm11-oldstabl", self.tmp_dir],
+                             env=env, cwd=ROOT, capture_output=True, text=True)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("unknown build line", res.stderr)
+        self.assertNotIn("Checking primary", res.stdout)
+
+    def test_secondary_reference_drives_checkout_builds_and_verifier(self):
+        # Change to a different valid pin: consumers must stop selecting frozen.
+        builder = os.path.join(self.tmp_dir, "builder")
+        os.makedirs(builder)
+        for name in ("py.sh", "lines.py", "resolve-metamod-pins.py"):
+            shutil.copy(os.path.join(ROOT, "builder", name), builder)
+        with open(os.path.join(ROOT, "builder", "lines.json")) as fh:
+            data = json.load(fh)
+        data["lines"]["sm11-oldstable"]["secondary_metamod"] = "MM_112"
+        selected = data["pins"]["MM_112"]
+        with open(os.path.join(builder, "lines.json"), "w") as fh:
+            json.dump(data, fh)
+
+        # Execute the production orchestration blocks with only the expensive
+        # fetch/build functions stubbed; the actual resolver reads the fixture.
+        for path, function, commit_arg in (
+            ("builder/checkout-deps.sh", "fetch_and_patch_mms", 4),
+            ("builder/run/linux.sh", "build_and_package_mm", 5),
+            ("builder/run/windows.sh", "build_and_package_mm_win", 5),
+        ):
+            with self.subTest(path=path):
+                with open(os.path.join(ROOT, path)) as fh:
+                    source = fh.read()
+                start = source.index('if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11')
+                block = source[start:source.index("\nelse\n", start)] + "\nfi\n"
+                stub = function + '() { printf "%s\\n" "${' + str(commit_arg) + '}"; }\n'
+                env = os.environ.copy()
+                env.update(BUILDER_DIR=builder, DEPS_DIR=self.tmp_dir,
+                           SOURCEMOD_MAJOR="11", CSS34_LINE="sm11-oldstable")
+                res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block],
+                                     env=env, capture_output=True, text=True)
+                self.assertEqual(res.returncode, 0, res.stderr)
+                self.assertEqual(res.stdout.splitlines(),
+                                 [data["pins"]["MM_110"]["commit"], selected["commit"]])
+
+        self._create_mock_pkg()
+        self._create_mock_pkg(commit=selected["commit"],
+                              version="1.12.0-git" + str(selected["rev"]))
+        env = os.environ.copy()
+        env["CHECK_METAMOD_SCRIPT"] = "/bin/true"
+        res = subprocess.run([VERIFY_SCRIPT, "sm11-oldstable", self.tmp_dir, builder],
+                             env=env, cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn("git1228-css34-linux.tar.gz", res.stdout)
+        self.assertNotIn("git1227", res.stdout)
+
+    def test_invalid_secondary_pin_is_rejected(self):
+        with open(os.path.join(ROOT, "builder", "lines.json")) as fh:
+            data = json.load(fh)
+        data["lines"]["sm11-oldstable"]["secondary_metamod"] = "MM_MISSING"
+        manifest = os.path.join(self.tmp_dir, "lines.json")
+        with open(manifest, "w") as fh:
+            json.dump(data, fh)
+        res = subprocess.run(["python3", RESOLVE_SCRIPT, "sm11-oldstable",
+                              "--manifest", manifest], capture_output=True, text=True)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("invalid secondary_metamod", res.stderr)
+        self.assertEqual(res.stdout, "")
 
     def test_verify_line_metamod_packages_missing_secondary_fails(self):
         # Create valid tar.gz for primary MM 1.10 package, omitting secondary

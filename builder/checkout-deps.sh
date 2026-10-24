@@ -255,8 +255,10 @@ fetch_and_patch_mms() {
 }
 
 if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
-  fetch_and_patch_mms "${MM_110_DIRNAME:-mmsource-1.10}" "1.10" "${MM_110_BRANCH:-1.10-dev}" "${MM_110_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
-  fetch_and_patch_mms "${MM_112_FROZEN_DIRNAME:-mmsource-1.12-frozen}" "1.12" "${MM_112_FROZEN_BRANCH:-1.12-dev}" "${MM_112_FROZEN_COMMIT:-75dd7b26fe92e535a11f0318ead73c3e05130d0b}"
+  mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm11-oldstable}")"
+  while IFS=$'\t' read -r role dirname mode branch commit rev version; do
+    fetch_and_patch_mms "$dirname" "$mode" "$branch" "$commit"
+  done <<< "$mm_inputs"
 else
   fetch_and_patch_mms "$MMS_DIRNAME" "$MMS_MODE" "$MMS_BRANCH" "$MMS_COMMIT"
 fi
