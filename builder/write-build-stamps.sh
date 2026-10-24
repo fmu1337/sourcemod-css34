@@ -53,6 +53,35 @@ EOF
 if [[ -d "$SOURCEMOD_DIR/public" ]]; then
   write_stamp "$SOURCEMOD_DIR/public/css34_build_stamp.h"
 fi
-if [[ -d "$MMS_DIR/public" ]]; then
-  write_stamp "$MMS_DIR/public/css34_build_stamp.h"
+
+DEPS_DIR="${DEPS_DIR:-$WDIR/deps}"
+written_mms=()
+
+write_mm_stamp() {
+  local target_dir="$1"
+  local abs_target
+  abs_target="$(cd "$target_dir" 2>/dev/null && pwd || true)"
+  [[ -z "$abs_target" ]] && return 0
+  for item in "${written_mms[@]+"${written_mms[@]}"}"; do
+    [[ "$item" == "$abs_target" ]] && return 0
+  done
+  written_mms+=("$abs_target")
+
+  local mm_commit="$MMS_COMMIT"
+  if [[ -d "$abs_target/.git" ]]; then
+    mm_commit="$(git -C "$abs_target" rev-parse HEAD 2>/dev/null || echo "$mm_commit")"
+  fi
+  if [[ -d "$abs_target/public" ]]; then
+    MMS_COMMIT="$mm_commit" write_stamp "$abs_target/public/css34_build_stamp.h"
+  fi
+}
+
+if [[ -n "${MMS_DIR:-}" ]]; then
+  write_mm_stamp "$MMS_DIR"
 fi
+
+for cand in "$DEPS_DIR"/mmsource-*; do
+  if [[ -d "$cand" ]]; then
+    write_mm_stamp "$cand"
+  fi
+done

@@ -242,6 +242,23 @@ case "$MMS_MODE" in
     ;;
 esac
 
+if [[ "${CSS34_LINE:-}" == "sm11-oldstable" || "${SOURCEMOD_MAJOR:-}" == "11" ]]; then
+  if [[ -f "$BUILDER_DIR/versions.env" ]]; then
+    # shellcheck source=versions.env
+    source "$BUILDER_DIR/versions.env"
+  fi
+  sec_dirname="${MM_112_DIRNAME:-mmsource-1.12}"
+  sec_branch="${MM_112_BRANCH:-1.12-dev}"
+  sec_commit="${MM_112_COMMIT:-cb47755826fad1483291e5dc00222aa64303d12f}"
+  if [[ "$MMS_DIRNAME" != "$sec_dirname" ]]; then
+    echo "==> Fetching Secondary Metamod:Source (1.12)"
+    clone_repo "$sec_dirname" "https://github.com/alliedmodders/metamod-source" "$sec_branch" "$sec_commit"
+    echo "==> Secondary Metamod:Source (1.12) at $(git -C "$DEPS/$sec_dirname" rev-parse HEAD)"
+    git -C "$DEPS/$sec_dirname" submodule update --init --recursive
+    bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/$sec_dirname"
+  fi
+fi
+
 # Pinned 2026-10-20 (episode1 / ep1c tips). Override only to reproduce another tree.
 HL2SDK_EPISODE1_COMMIT="${HL2SDK_EPISODE1_COMMIT:-4b0cde271be6806b95842e78348009712a8b3fbe}"
 HL2SDK_EP1C_COMMIT="${HL2SDK_EP1C_COMMIT:-fd7c497104abcc3537c6732465ad8c623e2c40aa}"

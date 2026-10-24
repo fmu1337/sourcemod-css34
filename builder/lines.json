@@ -63,6 +63,7 @@
     "sm11-oldstable": {
       "sourcemod": "SM_OLDSTABLE",
       "metamod": "MM_110",
+      "secondary_metamod": "MM_112",
       "status": "active",
       "pointer": false,
       "releasable": true,
