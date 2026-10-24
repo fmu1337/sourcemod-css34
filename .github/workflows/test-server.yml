@@ -169,10 +169,7 @@ jobs:
           testing/scripts/check-package.sh
 
           primary_commit="${{ matrix.mm_commit }}"
-          primary_rev="${MM_REV_PRIMARY:-}"
-          if [[ -z "$primary_rev" && "${{ matrix.mm_expect }}" =~ \.([0-9]+)$ ]]; then
-            primary_rev="${BASH_REMATCH[1]}"
-          fi
+          primary_rev="${{ matrix.mm_rev }}"
           if [[ -f "$MM_PACKAGE" ]]; then
             echo "Checking primary Metamod package $MM_PACKAGE"
             EXPECTED_MM_COMMIT="$primary_commit" EXPECTED_MM_REV="$primary_rev" MM_PACKAGE="$MM_PACKAGE" testing/scripts/check-metamod-package.sh

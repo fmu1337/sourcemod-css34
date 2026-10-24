@@ -218,6 +218,7 @@ def row_expect(row, with_commits):
     if with_commits:
         item["sm_commit"] = row["sm_commit"]
         item["mm_commit"] = row["mm_commit"]
+        item["mm_rev"] = row["mm_rev"]
         if "secondary_mm_commit" in row:
             item["secondary_mm_commit"] = row["secondary_mm_commit"]
             item["secondary_mm_rev"] = row["secondary_mm_rev"]
