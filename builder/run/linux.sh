@@ -100,6 +100,35 @@ MM_ARTIFACT="$(
 )"
 echo "==> Metamod package: $MM_ARTIFACT"
 
+if [[ "${CSS34_LINE:-}" == "sm11-oldstable" || "${SOURCEMOD_MAJOR:-}" == "11" ]]; then
+  if [[ -f "$BUILDER_DIR/versions.env" ]]; then
+    # shellcheck source=versions.env
+    source "$BUILDER_DIR/versions.env"
+  fi
+  SEC_MMS_DIRNAME="${MM_112_DIRNAME:-mmsource-1.12}"
+  SEC_MMS_DIR="$DEPS_DIR/$SEC_MMS_DIRNAME"
+  SEC_MMS_MODE="${MM_112_MODE:-1.12}"
+  SEC_MMS_GIT_REV="${MM_112_REV:-1228}"
+  if [[ "$MMS_DIR" != "$SEC_MMS_DIR" && -d "$SEC_MMS_DIR" ]]; then
+    echo "==> Building Secondary Metamod:Source (css34 episode1, ${SEC_MMS_MODE})"
+    WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" BUILDER_DIR="$BUILDER_DIR" \
+      CC="$CC" CXX="$CXX" \
+      SOURCEMOD_MAJOR="$SOURCEMOD_MAJOR" MMS_DIR="$SEC_MMS_DIR" \
+      MMS_MODE="$SEC_MMS_MODE" MMS_DIRNAME="$SEC_MMS_DIRNAME" \
+      MMS_GIT_REV="$SEC_MMS_GIT_REV" \
+      bash "$BUILDER_DIR/build-metamod.sh"
+
+    SEC_MM_ARTIFACT="$(
+      MMS_GIT_REV="$SEC_MMS_GIT_REV" \
+        bash "$BUILDER_DIR/package-metamod.sh" \
+        "$SEC_MMS_DIR/build/package" \
+        "$PACKAGES_DIR" \
+        "$SEC_MMS_DIR"
+    )"
+    echo "==> Secondary Metamod package: $SEC_MM_ARTIFACT"
+  fi
+fi
+
 echo "==> Applying CS:S v34 compatibility patches"
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
 

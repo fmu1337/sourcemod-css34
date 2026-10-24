@@ -17,7 +17,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 
 LINE_FIELDS = {
-    "sourcemod", "metamod", "status", "pointer", "releasable", "role",
+    "sourcemod", "metamod", "secondary_metamod", "status", "pointer", "releasable", "role",
     "install_role", "extra_tags", "smoke", "host_smoke",
     "windows", "botplay_extra_images", "sm_note", "mm_note",
 }
