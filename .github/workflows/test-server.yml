@@ -167,21 +167,32 @@ jobs:
           export SM_PACKAGE MM_PACKAGE
           echo "Checking ${SM_PACKAGE}"
           testing/scripts/check-package.sh
-          source builder/versions.env
-          for mm_pkg in packages/mmsource-*.tar.gz; do
-            if [[ -f "$mm_pkg" ]]; then
-              echo "Checking Metamod package $mm_pkg"
-              if [[ "$mm_pkg" == *"-git976-"* ]]; then
-                EXPECTED_MM_COMMIT="$MM_110_COMMIT" EXPECTED_MM_REV="$MM_110_REV" MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
-              elif [[ "$mm_pkg" == *"-git1227-"* ]]; then
-                EXPECTED_MM_COMMIT="$MM_112_FROZEN_COMMIT" EXPECTED_MM_REV="$MM_112_FROZEN_REV" MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
-              elif [[ "$mm_pkg" == *"-git1228-"* ]]; then
-                EXPECTED_MM_COMMIT="$MM_112_COMMIT" EXPECTED_MM_REV="$MM_112_REV" MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
-              else
-                MM_PACKAGE="$mm_pkg" testing/scripts/check-metamod-package.sh
-              fi
+
+          primary_commit="${{ matrix.mm_commit }}"
+          primary_rev="${MM_REV_PRIMARY:-}"
+          if [[ -z "$primary_rev" && "${{ matrix.mm_expect }}" =~ \.([0-9]+)$ ]]; then
+            primary_rev="${BASH_REMATCH[1]}"
+          fi
+          if [[ -f "$MM_PACKAGE" ]]; then
+            echo "Checking primary Metamod package $MM_PACKAGE"
+            EXPECTED_MM_COMMIT="$primary_commit" EXPECTED_MM_REV="$primary_rev" MM_PACKAGE="$MM_PACKAGE" testing/scripts/check-metamod-package.sh
+          else
+            echo "FAIL: expected primary Metamod package $MM_PACKAGE not found" >&2
+            exit 1
+          fi
+
+          sec_commit="${{ matrix.secondary_mm_commit }}"
+          sec_rev="${{ matrix.secondary_mm_rev }}"
+          if [[ -n "$sec_commit" && -n "$sec_rev" ]]; then
+            sec_pkg="packages/mmsource-1.12.0-git${sec_rev}-css34-linux.tar.gz"
+            if [[ -f "$sec_pkg" ]]; then
+              echo "Checking secondary Metamod package $sec_pkg"
+              EXPECTED_MM_COMMIT="$sec_commit" EXPECTED_MM_REV="$sec_rev" MM_PACKAGE="$sec_pkg" testing/scripts/check-metamod-package.sh
+            else
+              echo "FAIL: expected secondary Metamod package $sec_pkg not found" >&2
+              exit 1
             fi
-          done
+          fi
 
       # Job-to-job handoff via Actions cache (does not count against the 0.5 GB artifact quota).
       - name: Cache packages for later jobs

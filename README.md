@@ -24,7 +24,7 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 | `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Retired outside CI |
 <!-- lines-install:end -->
 
-`sm11-oldstable` (SM 1.11.0.6970 + MM 1.10.7 / MM 1.12 dual-core) has **no pointer** — see [Known-bad releases](#known-bad-releases).
+`sm11-oldstable` (SM 1.11.0.6970 + MM 1.10.7 / frozen MM 1.12 artifacts) has **no pointer** — see [Known-bad releases](#known-bad-releases).
 What each pointer serves right now (tag, commits, smoke result) is in
 [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json).
 

@@ -180,7 +180,7 @@ def line_parts(data, name):
     mm = data["pins"][line["metamod"]]
     sm_version = "1.{}.0.{}".format(sm["major"], sm["rev"])
     sm_commit = sm.get("build_commit", sm["commit"])
-    return {
+    res = {
         "line": name,
         "status": line["status"],
         "pointer": bool(line.get("pointer", False)),
@@ -201,6 +201,11 @@ def line_parts(data, name):
         "extra_tags": list(line.get("extra_tags", [])),
         "default": name == data["default_line"],
     }
+    if "secondary_metamod" in line:
+        s_mm = data["pins"][line["secondary_metamod"]]
+        res["secondary_mm_commit"] = s_mm["commit"]
+        res["secondary_mm_rev"] = s_mm["rev"]
+    return res
 
 
 def active_rows(data):
@@ -213,6 +218,9 @@ def row_expect(row, with_commits):
     if with_commits:
         item["sm_commit"] = row["sm_commit"]
         item["mm_commit"] = row["mm_commit"]
+        if "secondary_mm_commit" in row:
+            item["secondary_mm_commit"] = row["secondary_mm_commit"]
+            item["secondary_mm_rev"] = row["secondary_mm_rev"]
     return item
 
 
