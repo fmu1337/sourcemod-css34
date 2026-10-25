@@ -2,6 +2,7 @@
 """Exercise pin generation and drift failures in an isolated repository copy."""
 
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -154,12 +155,14 @@ class RepointResolverTest(unittest.TestCase):
             raise RuntimeError("Failed to extract decision python script from update-line-pointer.sh")
         cls.pointer_decision_code = match_decision.group(1)
 
-        # Dynamically extract release resolver code from .github/workflows/release.yml
+        # Dynamically extract smoke-pointer verification code from .github/workflows/release.yml
         workflow_content = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        matches_resolver = re.findall(r"res_json=.*?<<'PY'\n(.*?)\nPY", workflow_content, re.DOTALL)
-        if not matches_resolver:
-            raise RuntimeError("Failed to extract release resolver python script from release.yml")
-        cls.release_resolver_code = matches_resolver[0]
+        match_smoke = re.search(r"curl -fsSL \"\$\{BASE_URL\}/lines\.json\" \| .*? python3 -c '(.*?)'\n", workflow_content, re.DOTALL)
+        if not match_smoke:
+            raise RuntimeError("Failed to extract smoke-pointer python validation code from release.yml")
+        raw_code = match_smoke.group(1)
+        import textwrap
+        cls.smoke_pointer_code = textwrap.dedent(raw_code)
 
     def run_pointer_decision(self, path, line, tag, smoke, sm_json, mm_json, ptr, repo, src_time, force_repoint, decision_path):
         cmd = [sys.executable, "-c", self.pointer_decision_code, str(path), line, tag, smoke,
@@ -168,10 +171,16 @@ class RepointResolverTest(unittest.TestCase):
                ptr, repo, str(src_time), str(force_repoint), str(decision_path)]
         return subprocess.run(cmd, capture_output=True, text=True)
 
-    def run_release_resolver_multi(self, check_dir, sm_files, mm_files, base_tag, tag_map_line, lines_json_path):
-        cmd = [sys.executable, "-c", self.release_resolver_code,
+    def run_release_resolver_script(self, check_dir, sm_files, mm_files, base_tag, tag_map_line, lines_json_path):
+        script_path = ROOT / "builder/scripts/resolve-repoint-pair.py"
+        cmd = [sys.executable, str(script_path),
                base_tag, tag_map_line, str(lines_json_path), str(check_dir)] + list(sm_files) + ["---MM---"] + list(mm_files)
         return subprocess.run(cmd, capture_output=True, text=True)
+
+    def run_smoke_pointer_check(self, line_json_dict, env_dict):
+        cmd = [sys.executable, "-c", self.smoke_pointer_code]
+        input_data = json.dumps(line_json_dict)
+        return subprocess.run(cmd, input=input_data, capture_output=True, text=True, env=dict(os.environ, **env_dict))
 
     def test_repoint_decision_switch_and_stale_and_force(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -335,7 +344,7 @@ class RepointResolverTest(unittest.TestCase):
                 run1_path = Path(run1_dir)
                 for f in sm_files + mm_files:
                     shutil.copyfile(check_dir / f, run1_path / f)
-                res = self.run_release_resolver_multi(run1_path, sm_files, mm_files, "1.12.0.7253-mm1.12.0", "sm12-latest", lines_json)
+                res = self.run_release_resolver_script(run1_path, sm_files, mm_files, "1.12.0.7253-mm1.12.0", "sm12-latest", lines_json)
                 self.assertEqual(res.returncode, 0, res.stderr)
                 out = json.loads(res.stdout.strip())
                 self.assertEqual(out["line"], "sm12-latest")
@@ -347,7 +356,7 @@ class RepointResolverTest(unittest.TestCase):
                 run2_path = Path(run2_dir)
                 shutil.copyfile(check_dir / "sourcemod-1.12.0-css34-linux.tar.gz", run2_path / "sourcemod-1.12.0-css34-linux.tar.gz")
                 shutil.copyfile(check_dir / "mmsource-1.12.0-css34-linux.tar.gz", run2_path / "mmsource-1.12.0-css34-linux.tar.gz")
-                res = self.run_release_resolver_multi(run2_path, ["sourcemod-1.12.0-css34-linux.tar.gz"], ["mmsource-1.12.0-css34-linux.tar.gz"], "historical-tag", "", lines_json)
+                res = self.run_release_resolver_script(run2_path, ["sourcemod-1.12.0-css34-linux.tar.gz"], ["mmsource-1.12.0-css34-linux.tar.gz"], "historical-tag", "", lines_json)
                 self.assertEqual(res.returncode, 0, res.stderr)
                 out = json.loads(res.stdout.strip())
                 self.assertEqual(out["line"], "sm12-latest")
@@ -357,15 +366,17 @@ class RepointResolverTest(unittest.TestCase):
                 run3_path = Path(run3_dir)
                 for f in sm_files + mm_files:
                     shutil.copyfile(check_dir / f, run3_path / f)
-                res_ambig = self.run_release_resolver_multi(run3_path, sm_files, mm_files, "custom-tag", "", lines_json)
+                res_ambig = self.run_release_resolver_script(run3_path, sm_files, mm_files, "custom-tag", "", lines_json)
                 self.assertNotEqual(res_ambig.returncode, 0)
                 self.assertIn("Ambiguous SM/MM package pairs", res_ambig.stderr)
 
     def test_known_bad_and_archived_and_no_pointer_line_rules(self):
         tag_map_script = (ROOT / "builder/generated/tag-map.sh").read_text(encoding="utf-8")
-        # Check known_bad helper function definition exists and works
-        self.assertIn("css34_tag_is_known_bad", tag_map_script)
-        self.assertIn("1.12.0.7245-mm1.12.0", tag_map_script)
+        # Execute actual bash helper functions from tag-map.sh to verify function definitions
+        bash_cmd = f"source '{ROOT}/builder/generated/tag-map.sh' && css34_tag_is_known_bad 1.12.0.7245-mm1.12.0 && css34_line_for_tag 1.12.0.7257-mm1.12.0"
+        res = subprocess.run(["bash", "-c", bash_cmd], capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(res.stdout.strip(), "sm12-latest")
 
         # Validate line pointer rules in lines.json
         lines_data = json.loads((ROOT / "builder/lines.json").read_text(encoding="utf-8"))
@@ -375,15 +386,55 @@ class RepointResolverTest(unittest.TestCase):
         self.assertFalse(lines_data["lines"]["sm13-mm20-khook"]["releasable"])
 
     def test_annotated_tag_commit_time_and_deref_resolution(self):
-        # Verify git rev-parse ${tag}^{commit} and git show -s --format=%ct resolves timestamps for HEAD commit/tags
-        res = subprocess.run(["git", "log", "-n1", "--format=%H %ct"], cwd=ROOT, capture_output=True, text=True, check=True)
-        commit_sha, timestamp_str = res.stdout.strip().split()
-        timestamp = int(timestamp_str)
-        self.assertGreater(timestamp, 1600000000)
+        # Create a temporary git repo to create an actual annotated tag
+        with tempfile.TemporaryDirectory() as tmp_repo:
+            repo_path = Path(tmp_repo)
+            subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_path, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_path, check=True)
+            (repo_path / "file.txt").write_text("hello")
+            subprocess.run(["git", "add", "file.txt"], cwd=repo_path, check=True)
+            subprocess.run(["git", "commit", "-m", "initial commit"], cwd=repo_path, check=True)
 
-        # Verify git rev-parse HEAD^{commit} returns expected commit SHA
-        deref = subprocess.run(["git", "rev-parse", "HEAD^{commit}"], cwd=ROOT, capture_output=True, text=True, check=True)
-        self.assertEqual(deref.stdout.strip(), commit_sha)
+            commit_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_path, capture_output=True, text=True, check=True).stdout.strip()
+
+            # Create annotated tag
+            subprocess.run(["git", "tag", "-a", "v1.0.0-annotated", "-m", "annotated tag message"], cwd=repo_path, check=True)
+
+            # Dereference tag to target commit SHA
+            tag_target = subprocess.run(["git", "rev-parse", "v1.0.0-annotated^{commit}"], cwd=repo_path, capture_output=True, text=True, check=True).stdout.strip()
+            self.assertEqual(tag_target, commit_sha)
+
+            # Get commit time of target commit
+            commit_time = subprocess.run(["git", "show", "-s", "--format=%ct", "v1.0.0-annotated^{commit}"], cwd=repo_path, capture_output=True, text=True, check=True).stdout.strip()
+            self.assertGreater(int(commit_time), 1600000000)
+
+    def test_smoke_pointer_verification_code_path(self):
+        # Case 1: Valid served build matching target tag and time
+        line_data = {"sm12-latest": {"smoke": "pass", "tag": "1.12.0.7253-mm1.12.0", "source_commit_time": 1600000000}}
+        env = {"LINE": "sm12-latest", "TAG": "1.12.0.7253-mm1.12.0", "TARGET_TIME": "1600000000", "FORCE_REPOINT": "0"}
+        res = self.run_smoke_pointer_check(line_data, env)
+        self.assertEqual(res.returncode, 0, res.stderr)
+
+        # Case 2: FORCE_REPOINT=1 with mismatched served tag -> failure
+        line_data_mismatch = {"sm12-latest": {"smoke": "pass", "tag": "1.12.0.7200-mm1.12.0", "source_commit_time": 1500000000}}
+        env_force_mismatch = {"LINE": "sm12-latest", "TAG": "1.12.0.7253-mm1.12.0", "TARGET_TIME": "1600000000", "FORCE_REPOINT": "1"}
+        res_force_fail = self.run_smoke_pointer_check(line_data_mismatch, env_force_mismatch)
+        self.assertNotEqual(res_force_fail.returncode, 0)
+        self.assertIn("FORCE_REPOINT expected pointer to serve", res_force_fail.stderr)
+
+        # Case 3: FORCE_REPOINT=1 with matching served tag and time -> success
+        line_data_repointed = {"sm12-latest": {"smoke": "pass", "tag": "1.12.0.7200-mm1.12.0", "source_commit_time": 1500000000}}
+        env_force_ok = {"LINE": "sm12-latest", "TAG": "1.12.0.7200-mm1.12.0", "TARGET_TIME": "1500000000", "FORCE_REPOINT": "1"}
+        res_force_pass = self.run_smoke_pointer_check(line_data_repointed, env_force_ok)
+        self.assertEqual(res_force_pass.returncode, 0, res_force_pass.stderr)
+
+        # Case 4: Non-forced update where served build is newer than target -> notice logged, success
+        line_data_newer = {"sm12-latest": {"smoke": "pass", "tag": "1.12.0.7255-mm1.12.0", "source_commit_time": 1610000000}}
+        env_older_target = {"LINE": "sm12-latest", "TAG": "1.12.0.7253-mm1.12.0", "TARGET_TIME": "1600000000", "FORCE_REPOINT": "0"}
+        res_notice = self.run_smoke_pointer_check(line_data_newer, env_older_target)
+        self.assertEqual(res_notice.returncode, 0, res_notice.stderr)
+        self.assertIn("line pointer serves newer tag", res_notice.stdout)
 
     def test_workflow_job_conditions_and_skipped_dependencies(self):
         workflow_content = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

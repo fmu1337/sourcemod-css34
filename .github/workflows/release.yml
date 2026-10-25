@@ -193,99 +193,8 @@ jobs:
               fi
             done
 
-            res_json="$(python3 - "$base" "$line_from_tag" "builder/lines.json" /tmp/repoint_check "${sm_matches[@]}" "---MM---" "${mm_matches[@]}" <<'PY'
-import json, os, re, subprocess, sys
-
-base_tag, tag_map_line, lines_json_path, check_dir = sys.argv[1:5]
-args = sys.argv[5:]
-
-sep_idx = args.index("---MM---")
-sm_candidates = args[:sep_idx]
-mm_candidates = args[sep_idx + 1:]
-
-sha_re = re.compile(r'^[0-9a-fA-F]{7,40}$')
-lines_data = json.load(open(lines_json_path, "r", encoding="utf-8"))
-
-def get_manifest(filename, subpath):
-    filepath = os.path.join(check_dir, filename)
-    try:
-        out = subprocess.check_output(["tar", "-xzOf", filepath, subpath], stderr=subprocess.DEVNULL)
-        return json.loads(out.decode("utf-8"))
-    except Exception:
-        return None
-
-sm_manifests = {}
-for sm_file in sm_candidates:
-    m = get_manifest(sm_file, "addons/sourcemod/css34-package.json")
-    if m:
-        sm_manifests[sm_file] = m
-
-mm_manifests = {}
-for mm_file in mm_candidates:
-    m = get_manifest(mm_file, "addons/metamod/css34-package.json")
-    if m:
-        mm_manifests[mm_file] = m
-
-valid_pairs = []
-
-for sm_file, sm in sm_manifests.items():
-    for mm_file, mm in mm_manifests.items():
-        req_fields = ["line", "sm_version", "sm_commit", "mm_version", "mm_commit", "metamod_binary"]
-        err = False
-        for f in req_fields:
-            v_sm, v_mm = sm.get(f), mm.get(f)
-            if not v_sm or not isinstance(v_sm, str) or v_sm in ("null", "custom", "unknown"):
-                err = True; break
-            if not v_mm or not isinstance(v_mm, str) or v_mm in ("null", "custom", "unknown"):
-                err = True; break
-            if v_sm != v_mm:
-                err = True; break
-        if err:
-            continue
-
-        if not sha_re.match(sm["sm_commit"]) or not sha_re.match(sm["mm_commit"]):
-            continue
-
-        line = sm["line"]
-        if tag_map_line and line != tag_map_line:
-            continue
-
-        if line not in lines_data.get("lines", {}):
-            continue
-
-        line_cfg = lines_data["lines"][line]
-        mm_pin_name = line_cfg.get("metamod")
-        if not mm_pin_name or mm_pin_name not in lines_data.get("pins", {}):
-            continue
-
-        mm_pin = lines_data["pins"][mm_pin_name]
-        mode = mm_pin.get("mode")
-
-        expected_mm_bin = "metamod.1.ep1" if mode == "1.10" else "metamod.2.ep1"
-        if sm["metamod_binary"] != expected_mm_bin:
-            continue
-
-        if not sm["mm_version"].startswith(f"{mode}."):
-            continue
-
-        expected_sm_prefix = "1.11." if line == "sm11-oldstable" else ("1.12." if line == "sm12-latest" else "1.13.")
-        if not sm["sm_version"].startswith(expected_sm_prefix):
-            continue
-
-        valid_pairs.append((line, sm_file, mm_file))
-
-subprocess.run(["rm", "-rf", check_dir])
-
-if len(valid_pairs) == 0:
-    sys.exit(f"No valid compatible SM+MM package pair found in release tag '{base_tag}'")
-elif len(valid_pairs) > 1:
-    pairs_str = ", ".join(f"({l}: {s}, {m})" for l, s, m in valid_pairs)
-    sys.exit(f"Ambiguous SM/MM package pairs found in release tag '{base_tag}': {pairs_str}")
-
-res = valid_pairs[0]
-print(json.dumps({"line": res[0], "sm_asset": res[1], "mm_asset": res[2]}))
-PY
-)
+            res_json="$(python3 builder/scripts/resolve-repoint-pair.py "$base" "$line_from_tag" "builder/lines.json" /tmp/repoint_check "${sm_matches[@]}" "---MM---" "${mm_matches[@]}")"
+            rm -rf /tmp/repoint_check
 
             line="$(jq -r '.line' <<<"$res_json")"
             sm_asset="$(jq -r '.sm_asset' <<<"$res_json")"
@@ -411,9 +320,11 @@ PY
           if ! gh release view "${tag}" >/dev/null 2>&1; then
             gh release create "${tag}" --title "${tag}" --notes "${notes}" --latest=false
           fi
+          (cd packages && sha256sum -- *.tar.gz | sort -k2 > ../SHA256SUMS.linux)
           gh release upload "${tag}" \
             packages/sourcemod-*-css34-linux.tar.gz \
             packages/mmsource-*-css34-linux.tar.gz \
+            SHA256SUMS.linux \
             --clobber
           # Never leave (or turn) a release as draft: its asset URLs would 404.
           if [[ "$(gh release view "${tag}" --json isDraft -q .isDraft)" == "true" ]]; then
@@ -812,6 +723,8 @@ PY
           BASE_URL: https://github.com/${{ github.repository }}/releases/download/line-${{ needs.resolve-line.outputs.css34_line }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
           TAG: ${{ needs.resolve-line.outputs.tag }}
+          TARGET_TIME: ${{ needs.resolve-line.outputs.target_time }}
+          FORCE_REPOINT: ${{ needs.resolve-line.outputs.repoint }}
           SM_ASSET: sourcemod-css34-linux.tar.gz
           MM_ASSET: mmsource-css34-linux.tar.gz
         run: |
@@ -829,9 +742,12 @@ PY
           force = os.environ.get("FORCE_REPOINT") == "1"
           target_time = int(os.environ.get("TARGET_TIME") or 0)
           served_time = int(d.get("source_commit_time") or 0)
-          if tag and served != tag:
-              if force:
+          if force:
+              if served != tag:
                   sys.exit(f"FORCE_REPOINT expected pointer to serve {tag}, but pointer serves {served}")
+              if target_time > 0 and served_time > 0 and served_time != target_time:
+                  sys.exit(f"FORCE_REPOINT expected served time {target_time}, but pointer serves time {served_time}")
+          elif tag and served != tag:
               if served_time < target_time:
                   sys.exit(f"Pointer serves older tag {served} (commit time {served_time}) than target {tag} (commit time {target_time})")
               print(f"::notice::line pointer serves newer tag {served} (target was {tag})")
