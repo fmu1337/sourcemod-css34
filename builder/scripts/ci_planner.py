@@ -25,6 +25,29 @@ def parse_bool(val):
     return bool(val)
 
 
+def filter_matrix_for_line(matrices, css34_line):
+    filtered = {}
+    for key, val in matrices.items():
+        if isinstance(val, list):
+            filtered[key] = [
+                item for item in val
+                if isinstance(item, dict) and item.get("line") == css34_line
+            ]
+        elif isinstance(val, dict):
+            sub = dict(val)
+            if "line" in sub and isinstance(sub["line"], list):
+                sub["line"] = [l for l in sub["line"] if l == css34_line]
+            if "include" in sub and isinstance(sub["include"], list):
+                sub["include"] = [
+                    item for item in sub["include"]
+                    if isinstance(item, dict) and (item.get("line") is None or item.get("line") == css34_line)
+                ]
+            filtered[key] = sub
+        else:
+            filtered[key] = val
+    return filtered
+
+
 def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
     if inputs is None:
         inputs = {}
@@ -33,6 +56,17 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
 
     lines_data = load_manifest(Path(lines_path))
     matrices = ci_matrix(lines_data)
+
+    # Validate css34_line input if provided
+    want_line = (inputs.get("css34_line") or "").strip()
+    if want_line:
+        active_lines = {
+            name for name, l in lines_data["lines"].items()
+            if l.get("status") == "active"
+        }
+        if want_line not in active_lines:
+            raise ValueError(f"Unknown or inactive CSS34_LINE: '{want_line}'")
+        matrices = filter_matrix_for_line(matrices, want_line)
 
     code_changed = parse_bool(code_changed)
 
@@ -48,6 +82,9 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
         run_code_jobs = code_changed
     else:
         run_code_jobs = True
+
+    # Windows job execution flag
+    run_windows = run_code_jobs and len(matrices.get("windows", [])) > 0
 
     # PR smoke vs Weekly smoke flags
     if run_code_jobs:
@@ -65,13 +102,13 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
     required_jobs = ["plan"]
 
     if run_code_jobs:
-        required_jobs.extend(["check-pins", "hygiene"])
+        required_jobs.extend(["check-pins", "hygiene", "build-linux"])
+
+        if run_windows:
+            required_jobs.extend(["build-windows", "wine-smoke"])
 
         if run_pr_smoke:
             required_jobs.extend([
-                "build-linux",
-                "build-windows",
-                "wine-smoke",
                 "prepare-server",
                 "test-built-debian",
                 "test-built-smoke",
@@ -81,9 +118,6 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
 
         if run_weekly_smoke:
             required_jobs.extend([
-                "build-linux",
-                "build-windows",
-                "wine-smoke",
                 "prepare-server",
                 "test-built-weekly",
                 "test-built-weekly-botplay",
@@ -104,9 +138,9 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
         "run_code_jobs": run_code_jobs,
         "run_pr_smoke": run_pr_smoke,
         "run_weekly_smoke": run_weekly_smoke,
-        "run_windows": run_code_jobs,
-        "required_jobs": required_jobs,
+        "run_windows": run_windows,
         "default_line": lines_data["default_line"],
+        "required_jobs": required_jobs,
         "matrices": matrices,
     }
     return plan_output
@@ -129,7 +163,11 @@ def main():
         print(f"FAIL: invalid inputs-json: {err}", file=sys.stderr)
         return 1
 
-    plan = plan_ci(args.event_name, args.code_changed, inputs, args.lines_json)
+    try:
+        plan = plan_ci(args.event_name, args.code_changed, inputs, args.lines_json)
+    except ValueError as err:
+        print(f"FAIL: {err}", file=sys.stderr)
+        return 1
 
     if args.json:
         print(json.dumps(plan, indent=2))

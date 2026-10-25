@@ -286,7 +286,7 @@ def ci_matrix(data):
             item["exts"] = WINDOWS_EXTS
             item["load_exts"] = WINDOWS_LOAD_EXTS
             windows.append(item)
-    require(host and windows, "host and windows matrices must be non-empty")
+    require(host, "host matrix must be non-empty")
     release = []
     for row in rows:
         if row["mm_mode"] != "1.12":

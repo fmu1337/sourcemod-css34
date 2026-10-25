@@ -96,7 +96,6 @@ jobs:
         with:
           filters: |
             code:
-              - '**'
               - '!docs/**'
               - '!**/*.md'
               - '!.github/workflows/cleanup-artifacts.yml'
@@ -139,8 +138,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install regression test tools
-        run: sudo apt-get update && sudo apt-get install -y gcc binutils expect
+      - name: Install regression test tools and actionlint
+        run: |
+          sudo apt-get update && sudo apt-get install -y gcc binutils expect
+          curl -sL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /tmp && sudo mv /tmp/actionlint /usr/local/bin/
+
+      - name: Lint GitHub Action workflows
+        run: actionlint
+
+      - name: Test CI planner and gate logic
+        run: python3 testing/scripts/test-ci-planner-gate.py
 
       - name: Check unversioned imports and PostgreSQL shim
         run: python3 testing/scripts/test-glibc-imports.py
@@ -239,7 +246,7 @@ jobs:
 
   build-windows:
     needs: plan
-    if: needs.plan.outputs.run_code_jobs == 'true'
+    if: needs.plan.outputs.run_windows == 'true'
     runs-on: windows-2022
     strategy:
       fail-fast: false
@@ -340,7 +347,7 @@ jobs:
 
   wine-smoke:
     needs: [plan, build-windows]
-    if: needs.plan.outputs.run_code_jobs == 'true' && !cancelled()
+    if: needs.plan.outputs.run_windows == 'true' && !cancelled()
     runs-on: ubuntu-22.04
     container: ubuntu:22.04
     strategy:

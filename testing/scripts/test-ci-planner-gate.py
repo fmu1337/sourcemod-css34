@@ -10,6 +10,7 @@ Verifies:
 - Doc-only PR -> planner outputs code_changed=False, run_code_jobs=False, required_jobs=['plan']
 - Empty applicable matrix / line matrix updates on temporary lines.json
 - Windows eligibility and weekly/event selection
+- css34_line single-line filtering and invalid line rejection
 """
 
 import importlib.util
@@ -37,7 +38,31 @@ ci_gate_mod = load_module_from_path("ci_gate", ROOT / "builder/scripts/ci_gate.p
 evaluate_gate = ci_gate_mod.evaluate_gate
 
 
+def simulate_paths_filter(changed_files):
+    """Simulates dorny/paths-filter rules configured in ci.yml:
+    code: ['!docs/**', '!**/*.md', '!.github/workflows/cleanup-artifacts.yml']
+    """
+    for path in changed_files:
+        p = Path(path)
+        parts = p.parts
+        if parts[0] == "docs":
+            continue
+        if p.suffix == ".md":
+            continue
+        if str(p) == ".github/workflows/cleanup-artifacts.yml":
+            continue
+        return True
+    return False
+
+
 class TestCIPlannerGate(unittest.TestCase):
+
+    def test_doc_only_path_filter_simulation(self):
+        """Simulates path filter behavior for doc-only, code-only, and mixed PRs."""
+        self.assertFalse(simulate_paths_filter(["docs/README.md", "README.md"]))
+        self.assertFalse(simulate_paths_filter(["docs/ROADMAP.md", ".github/workflows/cleanup-artifacts.yml"]))
+        self.assertTrue(simulate_paths_filter(["builder/lines.py"]))
+        self.assertTrue(simulate_paths_filter(["README.md", "builder/lines.py"]))
 
     def test_doc_only_pr_planner_and_gate(self):
         """Doc-only PR must set run_code_jobs=False, required_jobs=['plan'] and pass gate when code jobs are skipped."""
@@ -53,6 +78,8 @@ class TestCIPlannerGate(unittest.TestCase):
             "check-pins": {"result": "skipped"},
             "hygiene": {"result": "skipped"},
             "build-linux": {"result": "skipped"},
+            "build-windows": {"result": "skipped"},
+            "wine-smoke": {"result": "skipped"},
             "test-built-debian": {"result": "skipped"},
             "test-built-smoke": {"result": "skipped"},
         }
@@ -154,6 +181,78 @@ class TestCIPlannerGate(unittest.TestCase):
         win_lines = {entry["line"] for entry in win_matrix}
         self.assertEqual(win_lines, {"sm12-latest", "sm13-latest"})
         self.assertNotIn("sm11-oldstable", win_lines)
+
+    def test_empty_windows_matrix_support(self):
+        """When no lines are windows-eligible, windows matrix is [] and build-windows/wine-smoke are skipped."""
+        with open(ROOT / "builder/lines.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        for line in data["lines"].values():
+            line["windows"] = False
+
+        with tempfile.NamedTemporaryFile("w+", suffix=".json", delete=False) as tmp:
+            json.dump(data, tmp)
+            tmp_path = tmp.name
+
+        try:
+            plan = plan_ci(event_name="pull_request", code_changed="true", lines_path=tmp_path)
+            self.assertEqual(plan["matrices"]["windows"], [])
+            self.assertFalse(plan["run_windows"])
+            self.assertNotIn("build-windows", plan["required_jobs"])
+            self.assertNotIn("wine-smoke", plan["required_jobs"])
+
+            needs = {job: {"result": "success"} for job in plan["required_jobs"]}
+            needs["build-windows"] = {"result": "skipped"}
+            needs["wine-smoke"] = {"result": "skipped"}
+
+            ok, errors = evaluate_gate(needs, plan)
+            self.assertTrue(ok, f"Gate failed for empty windows matrix: {errors}")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def test_css34_line_filtering_sm11_no_windows(self):
+        """Single-line dispatch for sm11-oldstable must filter matrices and omit Windows jobs."""
+        plan = plan_ci(
+            event_name="workflow_dispatch",
+            code_changed="true",
+            inputs={"css34_line": "sm11-oldstable"},
+        )
+        self.assertEqual(len(plan["matrices"]["build"]), 1)
+        self.assertEqual(plan["matrices"]["build"][0]["line"], "sm11-oldstable")
+        self.assertEqual(plan["matrices"]["windows"], [])
+        self.assertFalse(plan["run_windows"])
+        self.assertNotIn("build-windows", plan["required_jobs"])
+        self.assertNotIn("wine-smoke", plan["required_jobs"])
+
+    def test_css34_line_filtering_sm12_with_windows(self):
+        """Single-line dispatch for sm12-latest must filter matrices and include Windows jobs."""
+        plan = plan_ci(
+            event_name="workflow_dispatch",
+            code_changed="true",
+            inputs={"css34_line": "sm12-latest"},
+        )
+        self.assertEqual(len(plan["matrices"]["build"]), 1)
+        self.assertEqual(plan["matrices"]["build"][0]["line"], "sm12-latest")
+        self.assertEqual(len(plan["matrices"]["windows"]), 1)
+        self.assertTrue(plan["run_windows"])
+        self.assertIn("build-windows", plan["required_jobs"])
+        self.assertIn("wine-smoke", plan["required_jobs"])
+
+    def test_css34_line_invalid_raises_error(self):
+        """Invalid or inactive css34_line input must raise ValueError."""
+        with self.assertRaises(ValueError):
+            plan_ci(
+                event_name="workflow_dispatch",
+                code_changed="true",
+                inputs={"css34_line": "invalid-line"},
+            )
+
+        with self.assertRaises(ValueError):
+            plan_ci(
+                event_name="workflow_dispatch",
+                code_changed="true",
+                inputs={"css34_line": "sm13-dev"},
+            )
 
     def test_lines_json_addition_reflected_in_matrices(self):
         """Adding a line in lines.json must immediately reflect in planner matrices."""
