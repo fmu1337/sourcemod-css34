@@ -1257,23 +1257,13 @@ for sdk_name in SM.sdks:
     continue # ep1 (MM 1.10 / SH v4) lacks IHookManagerAutoGen
   sdk = SM.sdks[sdk_name]
 
-  try:
-    platforms = sdk['platforms']
-    extension = sdk['extension']
-  except Exception:
-    platforms = getattr(sdk, 'platforms')
-    extension = getattr(sdk, 'extension')
-
   for cxx in builder.targets:
-    if not cxx.target.arch in platforms[cxx.target.platform]:
-      continue
     if cxx.target.platform == 'mac':
       continue
     if cxx.target.arch == 'x86_64' and cxx.target.platform != 'windows':
       continue
 
-    ext_name = 'dhooks.ext.' + extension
-    binary = SM.HL2ExtConfig(project, builder, cxx, ext_name, sdk)
+    binary = SM.HL2ExtConfig(project, builder, cxx, 'dhooks.ext.' + sdk['extension'], sdk)
 
     binary.compiler.defines += [
       'META_NO_HL2SDK',
