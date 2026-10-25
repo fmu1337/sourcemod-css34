@@ -1250,22 +1250,29 @@ if dhooks_builder.exists():
     dhooks_code = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os
 
+def get_sdk_prop(obj, key):
+    if isinstance(obj, dict):
+        return obj[key]
+    return getattr(obj, key)
+
 project = builder.LibraryProject('dhooks.ext')
 
 for sdk_name in SM.sdks:
   if sdk_name == 'ep1':
     continue # ep1 (MM 1.10 / SH v4) lacks IHookManagerAutoGen
   sdk = SM.sdks[sdk_name]
+  platforms = get_sdk_prop(sdk, 'platforms')
+  extension = get_sdk_prop(sdk, 'extension')
 
   for cxx in builder.targets:
-    if not cxx.target.arch in sdk['platforms'][cxx.target.platform]:
+    if not cxx.target.arch in platforms[cxx.target.platform]:
       continue
     if cxx.target.platform == 'mac':
       continue
     if cxx.target.arch == 'x86_64' and cxx.target.platform != 'windows':
       continue
 
-    ext_name = 'dhooks.ext.' + sdk['extension']
+    ext_name = 'dhooks.ext.' + extension
     binary = SM.HL2ExtConfig(project, builder, cxx, ext_name, sdk)
 
     binary.compiler.defines += [
