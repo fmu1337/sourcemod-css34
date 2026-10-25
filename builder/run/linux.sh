@@ -120,6 +120,9 @@ else
 fi
 
 echo "==> Applying CS:S v34 compatibility patches"
+if [[ -d "$DEPS_DIR/mmsource-1.10/core-css34legacy" ]]; then
+  export CSS34_MMS_LEGACY_CORE="$DEPS_DIR/mmsource-1.10/core-css34legacy"
+fi
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
 
 echo "==> Writing CSS34 build stamp headers (pre-SourceMod)"
@@ -147,11 +150,16 @@ CONFIGURE_ARGS=(
 if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
   CONFIGURE_ARGS+=(--targets=x86)
 elif [ "$SOURCEMOD_MAJOR" -lt 12 ]; then
-  # SM 1.11 css34 still builds dual 1.ep1 + 2.ep1 cores against MM 1.10.
+  # SM 1.11 css34 builds dual 1.ep1 (MM 1.10) + 2.ep1 (MM 1.12) cores with mms-path pointing to MM 1.12.
+  if [[ -d "$DEPS_DIR/mmsource-1.12-frozen" ]]; then
+    mms_112_path="$DEPS_DIR/mmsource-1.12-frozen"
+  else
+    mms_112_path="$MMS_DIR"
+  fi
   CONFIGURE_ARGS=(
     --enable-optimize
     --hl2sdk-root="$DEPS_DIR"
-    --mms-path="$MMS_DIR"
+    --mms-path="$mms_112_path"
     "${DB_PATH_ARGS[@]}"
     --sdks=ep1,episode1
   )

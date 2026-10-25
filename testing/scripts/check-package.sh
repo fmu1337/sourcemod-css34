@@ -141,6 +141,46 @@ then
   fail=1
 fi
 
+echo "==> Checking PLAPI version with plapi-probe"
+PROBE_BIN="${TMP}/plapi-probe"
+if gcc -m32 -O2 "${REPO_ROOT}/testing/tools/plapi-probe.c" -o "${PROBE_BIN}" -ldl 2>/dev/null; then
+  while IFS= read -r -d '' module; do
+    base="$(basename "${module}")"
+    plapi_out="$("${PROBE_BIN}" "${module}" 2>/dev/null || true)"
+    plapi_val="$(echo "${plapi_out}" | grep -oE '[0-9]+' || true)"
+    if [[ "${base}" == *.1.ep1.so ]]; then
+      if [[ "${plapi_val}" == "11" ]]; then
+        echo "OK: ${base} PLAPI=${plapi_val} (expected 11)"
+      else
+        echo "FAIL: ${base} PLAPI=${plapi_val} (expected 11)" >&2
+        fail=1
+      fi
+    elif [[ "${base}" == *.2.ep1.so ]]; then
+      if [[ -n "${plapi_val}" && "${plapi_val}" -ge 14 && "${plapi_val}" -le 16 ]]; then
+        echo "OK: ${base} PLAPI=${plapi_val} (expected 14..16)"
+      else
+        echo "FAIL: ${base} PLAPI=${plapi_val} (expected 14..16)" >&2
+        fail=1
+      fi
+    fi
+  done < <(find "${TMP}/addons/sourcemod" -type f \( -name '*.1.ep1.so' -o -name '*.2.ep1.so' \) -print0)
+else
+  echo "WARN: Failed to compile plapi-probe.c (skipped PLAPI probe)"
+fi
+
+if [[ -f "${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so" && -f "${TMP}/addons/sourcemod/bin/sourcemod.2.ep1.so" ]]; then
+  if [[ -f "${TMP}/addons/sourcemod/extensions/dhooks.ext.2.ep1.so" ]]; then
+    echo "OK: dhooks.ext.2.ep1.so present in dual package"
+  else
+    echo "FAIL: missing dhooks.ext.2.ep1.so in dual package" >&2
+    fail=1
+  fi
+  if [[ -f "${TMP}/addons/sourcemod/extensions/dhooks.ext.so" ]]; then
+    echo "FAIL: unexpected dhooks.ext.so in dual package (must be dhooks.ext.2.ep1.so)" >&2
+    fail=1
+  fi
+fi
+
 echo "==> Checking Metamod bridge exports"
 if nm -D "${MM_SO}" 2>/dev/null | grep -E ' T CreateInterface([[:space:]]|$)' >/dev/null; then
   echo "OK: CreateInterface export present (MM:S 1.10 V1 bridge)"

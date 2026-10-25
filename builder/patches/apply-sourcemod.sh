@@ -94,18 +94,19 @@ mms_inc_old = """    compiler.cxxincludes += [
       os.path.join(self.mms_root, 'core'),
       os.path.join(self.mms_root, 'core', 'sourcehook'),
     ]"""
-mms_inc_new = """    legacy_core = os.path.join(self.mms_root, 'core-css34legacy')
+mms_inc_new = """    legacy_core = os.environ.get('CSS34_MMS_LEGACY_CORE') or os.path.join(os.path.dirname(self.mms_root), 'mmsource-1.10', 'core-css34legacy')
+    if not os.path.isdir(legacy_core):
+      legacy_core = os.path.join(self.mms_root, 'core-css34legacy')
     sdk_name = sdk.get('name') if isinstance(sdk, dict) else getattr(sdk, 'name', None)
-    if sdk_name in ('ep1', 'episode1'):
+    if sdk_name == 'ep1':
       if os.path.isdir(legacy_core):
         mms_core = legacy_core
-        print('==> Using Metamod core-css34legacy include path for ' + str(sdk_name) + ': ' + mms_core)
-      elif os.path.isdir(os.path.join(self.mms_root, 'core-legacy')):
-        raise SystemExit('MM 1.10 detected (core-legacy exists) but core-css34legacy is missing in ' + self.mms_root + '! Run checkout-deps.sh / apply-mmsource-css34.sh first.')
+        print('==> Using Metamod core-css34legacy include path for ep1: ' + mms_core)
       else:
-        mms_core = os.path.join(self.mms_root, 'core')
+        raise SystemExit('MM 1.10 legacy core missing at ' + str(legacy_core))
     else:
       mms_core = os.path.join(self.mms_root, 'core')
+      print('==> Using Metamod core include path for ' + str(sdk_name) + ': ' + mms_core)
     compiler.cxxincludes += [
       mms_core,
       os.path.join(mms_core, 'sourcehook'),
@@ -240,7 +241,7 @@ if modular_sp:
                 patched_pl = True
                 break
     if not patched_pl:
-        print('==> WARN: sourcepawn linux pthread postlink not found (modular)')
+        raise SystemExit('FAIL: sourcepawn linux pthread postlink not found (modular)')
     sp_text = sp_script.read_text()
     dyn_marker = 'css34: libsourcepawn pthread/rt DT_NEEDED'
     if dyn_marker not in sp_text:
@@ -1226,9 +1227,8 @@ else:
     raise SystemExit('Failed to locate bintools AMBuilder entry')
 PY
 
-# Bundled DHooks (SM >=6970) needs SourceHook::IHookManagerAutoGen (SH v5 /
-# Metamod 1.11+). MM 1.10 css34 ships SH v4 only — skip the extension here.
-# sm12+/MM 1.12 keeps dhooks via apply-sourcemod-v112.sh (unpatched BuildScripts).
+# Bundled DHooks (SM >=6970) needs SourceHook::IHookManagerAutoGen (SH v5 / Metamod 1.12).
+# Build as dhooks.ext.2.ep1 for episode1 (MM 1.12) and skip ep1 (MM 1.10 / SH v4).
 SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
@@ -1240,13 +1240,104 @@ skipped = (
     "  # 'extensions/dhooks/AMBuilder',\n"
 )
 if skipped in text:
-    print('==> Bundled DHooks already skipped for MM 1.10 / SH v4')
+    path.write_text(text.replace(skipped, enabled, 1))
+    print('==> Re-enabled bundled DHooks AMBuilder in AMBuildScript')
 elif enabled in text:
-    path.write_text(text.replace(enabled, skipped, 1))
-    print('==> Skipped bundled DHooks (requires IHookManagerAutoGen; use standalone on MM 1.10)')
-else:
-    # Pre-6970 trees have no bundled dhooks — fine.
-    print('==> No bundled DHooks AMBuilder entry (pre-6970 SourceMod)')
+    print('==> Bundled DHooks AMBuilder entry already present')
+
+dhooks_builder = Path(os.environ['SOURCEMOD_DIR']) / 'extensions' / 'dhooks' / 'AMBuilder'
+if dhooks_builder.exists():
+    dhooks_code = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+project = builder.LibraryProject('dhooks.ext')
+
+for sdk_name in SM.sdks:
+  if sdk_name == 'ep1':
+    continue # ep1 (MM 1.10 / SH v4) lacks IHookManagerAutoGen
+  sdk = SM.sdks[sdk_name]
+
+  for cxx in builder.targets:
+    if not cxx.target.arch in sdk['platforms'][cxx.target.platform]:
+      continue
+    if cxx.target.platform == 'mac':
+      continue
+    if cxx.target.arch == 'x86_64' and cxx.target.platform != 'windows':
+      continue
+
+    ext_name = 'dhooks.ext.' + sdk['extension']
+    binary = SM.HL2ExtConfig(project, builder, cxx, ext_name, sdk)
+
+    binary.compiler.defines += [
+      'META_NO_HL2SDK',
+      'HAVE_STRING_H',
+    ]
+
+    if binary.compiler.like('gcc'):
+      binary.compiler.cflags += ['-Wno-invalid-offsetof']
+
+    binary.compiler.cxxincludes += [
+      os.path.join(builder.sourcePath, 'extensions', 'dhooks'),
+      os.path.join(builder.sourcePath, 'public', 'jit'),
+      os.path.join(builder.sourcePath, 'sourcepawn'),
+      os.path.join(builder.sourcePath, 'sourcepawn', 'include'),
+      os.path.join(builder.sourcePath, 'sourcepawn', 'vm'),
+      os.path.join(builder.sourcePath, 'extensions', 'dhooks', 'DynamicHooks'),
+    ]
+
+    binary.compiler.includes += [
+      os.path.join(builder.sourcePath, 'extensions', 'dhooks')
+    ]
+
+    binary.sources += [
+      'extension.cpp',
+      'listeners.cpp',
+      'natives.cpp',
+      'signatures.cpp',
+      'vhook.cpp',
+      'util.cpp',
+      'dynhooks_sourcepawn.cpp',
+      '../../public/smsdk_ext.cpp',
+      os.path.join('DynamicHooks', 'registers.cpp'),
+      os.path.join('DynamicHooks', 'hook.cpp'),
+      os.path.join('DynamicHooks', 'manager.cpp')
+    ]
+    SM.AddCDetour(binary)
+
+    if binary.compiler.target.arch == 'x86':
+      binary.compiler.cxxincludes += [
+        os.path.join(builder.sourcePath, 'public', 'jit', 'x86'),
+        os.path.join(builder.sourcePath, 'sourcepawn', 'vm', 'x86')
+      ]
+      binary.sources += [
+        os.path.join('DynamicHooks', 'conventions', 'x86MsCdecl.cpp'),
+        os.path.join('DynamicHooks', 'conventions', 'x86MsStdcall.cpp'),
+        os.path.join('DynamicHooks', 'conventions', 'x86MsFastcall.cpp'),
+      ]
+
+      if binary.compiler.target.platform == 'windows':
+        binary.sources += [os.path.join('DynamicHooks', 'conventions', 'x86MsThiscall.cpp')]
+      else:
+        binary.sources += [os.path.join('DynamicHooks', 'conventions', 'x86GccThiscall.cpp')]
+
+      binary.compiler.defines += ['DHOOKS_DYNAMIC_DETOUR']
+
+    elif binary.compiler.target.arch == 'x86_64':
+      binary.compiler.defines += ['DYNAMICHOOKS_x86_64', 'DHOOKS_DYNAMIC_DETOUR']
+
+      if binary.compiler.target.platform == 'windows':
+        binary.sources += [
+          os.path.join('DynamicHooks', 'conventions', 'x86_64MicrosoftDefault.cpp')
+        ]
+      elif binary.compiler.target.platform == 'linux':
+        binary.sources += [
+          os.path.join('DynamicHooks', 'conventions', 'x86_64SystemVDefault.cpp')
+        ]
+
+SM.extensions += builder.Add(project)
+"""
+    dhooks_builder.write_text(dhooks_code)
+    print('==> Patched extensions/dhooks/AMBuilder for dhooks.ext.2.ep1 (skipping ep1)')
 PY
 
 # css34: sourcemod.logic.so keeps a static libstdc++, pthread/rt NEEDED,
