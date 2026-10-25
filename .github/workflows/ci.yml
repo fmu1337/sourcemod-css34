@@ -140,7 +140,7 @@ jobs:
 
       - name: Install regression test tools and actionlint
         run: |
-          sudo apt-get update && sudo apt-get install -y gcc binutils expect
+          sudo apt-get update && sudo apt-get install -y gcc binutils expect shellcheck
           curl -sL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /tmp && sudo mv /tmp/actionlint /usr/local/bin/
 
       - name: Lint GitHub Action workflows
@@ -328,9 +328,10 @@ jobs:
           LOAD_EXTS: ${{ matrix.load_exts }}
           DHOOKS_PROBE_SECS: "150"
         run: |
-          export SM_WIN_PACKAGE="$(ls "$PWD"/win-art/sourcemod-*-css34-windows.zip)"
-          export MM_WIN_PACKAGE="$(ls "$PWD"/win-art/mmsource-*-css34-windows.zip)"
-          export PDB_DIR="$PWD/win-art/pdb"
+          SM_WIN_PACKAGE="$(ls "$PWD"/win-art/sourcemod-*-css34-windows.zip)"
+          MM_WIN_PACKAGE="$(ls "$PWD"/win-art/mmsource-*-css34-windows.zip)"
+          PDB_DIR="$PWD/win-art/pdb"
+          export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR
           bash testing/scripts/wine-smoke-test.sh
 
       - name: Upload Windows smoke logs and crash dumps
@@ -344,63 +345,6 @@ jobs:
             .ci-winserver/dumps/
           if-no-files-found: ignore
           retention-days: 7
-
-  wine-smoke:
-    needs: [plan, build-windows]
-    if: needs.plan.outputs.run_windows == 'true' && !cancelled()
-    runs-on: ubuntu-22.04
-    container: ubuntu:22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.windows) }}
-    steps:
-      - name: Install Wine
-        run: |
-          dpkg --add-architecture i386
-          apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-            wine32 wine xvfb unzip curl ca-certificates python3 binutils llvm-14 git zstd
-          ln -sf /usr/bin/llvm-symbolizer-14 /usr/local/bin/llvm-symbolizer
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Restore Windows packages
-        uses: actions/cache/restore@v4
-        with:
-          path: win-art
-          key: css34-win-${{ github.run_id }}-${{ matrix.line }}
-          fail-on-cache-miss: true
-          enableCrossOsArchive: true
-
-      - name: Restore server tree
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-
-      - name: Wine smoke test (${{ matrix.line }})
-        shell: bash
-        env:
-          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
-          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
-          MM_REV_EXPECT: ${{ matrix.mm_rev }}
-          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
-          EXPECT_EXTS: ${{ matrix.exts }}
-          LOAD_EXTS: ${{ matrix.load_exts }}
-          DHOOKS_PROBE_SECS: "150"
-        run: |
-          export SM_WIN_PACKAGE="$(ls win-art/sourcemod-*-css34-windows.zip)"
-          export MM_WIN_PACKAGE="$(ls win-art/mmsource-*-css34-windows.zip)"
-          export PDB_DIR="$PWD/win-art/pdb"
-          [[ -f server-art/css34-server.tar.gz ]] && export SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"
-          echo "==== unzip -l ${SM_WIN_PACKAGE} ===="
-          unzip -l "${SM_WIN_PACKAGE}"
-          echo "==== unzip -l ${MM_WIN_PACKAGE} ===="
-          unzip -l "${MM_WIN_PACKAGE}"
-          python3 builder/package_windows.py check "${SM_WIN_PACKAGE}" "${MM_WIN_PACKAGE}"
-          bash testing/scripts/wine-smoke-test.sh
 
   prepare-server:
     needs: plan
@@ -452,6 +396,65 @@ jobs:
         with:
           path: server-art/css34-server.tar.gz
           key: ${{ steps.server-cache.outputs.cache-primary-key }}
+
+  wine-smoke:
+    needs: [plan, build-windows, prepare-server]
+    if: needs.plan.outputs.run_windows == 'true' && !cancelled()
+    runs-on: ubuntu-22.04
+    container: ubuntu:22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.windows) }}
+    steps:
+      - name: Install Wine
+        run: |
+          dpkg --add-architecture i386
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            wine32 wine xvfb unzip curl ca-certificates python3 binutils llvm-14 git zstd
+          ln -sf /usr/bin/llvm-symbolizer-14 /usr/local/bin/llvm-symbolizer
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore Windows packages
+        uses: actions/cache/restore@v4
+        with:
+          path: win-art
+          key: css34-win-${{ github.run_id }}-${{ matrix.line }}
+          fail-on-cache-miss: true
+          enableCrossOsArchive: true
+
+      - name: Restore server tree
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
+
+      - name: Wine smoke test (${{ matrix.line }})
+        shell: bash
+        env:
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          MM_REV_EXPECT: ${{ matrix.mm_rev }}
+          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
+          EXPECT_EXTS: ${{ matrix.exts }}
+          LOAD_EXTS: ${{ matrix.load_exts }}
+          DHOOKS_PROBE_SECS: "150"
+        run: |
+          SM_WIN_PACKAGE="$(ls win-art/sourcemod-*-css34-windows.zip)"
+          MM_WIN_PACKAGE="$(ls win-art/mmsource-*-css34-windows.zip)"
+          PDB_DIR="$PWD/win-art/pdb"
+          export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR
+          [[ -f server-art/css34-server.tar.gz ]] && export SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"
+          echo "==== unzip -l ${SM_WIN_PACKAGE} ===="
+          unzip -l "${SM_WIN_PACKAGE}"
+          echo "==== unzip -l ${MM_WIN_PACKAGE} ===="
+          unzip -l "${MM_WIN_PACKAGE}"
+          python3 builder/package_windows.py check "${SM_WIN_PACKAGE}" "${MM_WIN_PACKAGE}"
+          bash testing/scripts/wine-smoke-test.sh
 
   test-built-debian:
     needs: [plan, build-linux, prepare-server]
