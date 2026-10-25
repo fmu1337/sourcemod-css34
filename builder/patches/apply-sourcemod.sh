@@ -1250,19 +1250,19 @@ if dhooks_builder.exists():
     dhooks_code = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os
 
-def get_sdk_prop(obj, key):
-    if isinstance(obj, dict):
-        return obj[key]
-    return getattr(obj, key)
-
 project = builder.LibraryProject('dhooks.ext')
 
 for sdk_name in SM.sdks:
   if sdk_name == 'ep1':
     continue # ep1 (MM 1.10 / SH v4) lacks IHookManagerAutoGen
   sdk = SM.sdks[sdk_name]
-  platforms = get_sdk_prop(sdk, 'platforms')
-  extension = get_sdk_prop(sdk, 'extension')
+
+  try:
+    platforms = sdk['platforms']
+    extension = sdk['extension']
+  except Exception:
+    platforms = getattr(sdk, 'platforms')
+    extension = getattr(sdk, 'extension')
 
   for cxx in builder.targets:
     if not cxx.target.arch in platforms[cxx.target.platform]:
