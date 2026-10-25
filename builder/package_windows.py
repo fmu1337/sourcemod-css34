@@ -347,7 +347,7 @@ def self_test():
     sdk = "WINDOWS_SDK_PIN=10.0.26100.0"
     if prefix not in pin or sdk not in pin:
         fail("windows-toolchain.env pin changed; update the workflows with it")
-    for relative in (".github/workflows/build.yml", ".github/workflows/release.yml"):
+    for relative in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
         text = (BUILDER.parent / relative).read_text(encoding="utf-8")
         if "runs-on: windows-2022" not in text:
             fail(relative + " must run on windows-2022")

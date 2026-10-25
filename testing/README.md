@@ -125,7 +125,7 @@ Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary;
 
 ## Windows packages (Wine and native Windows)
 
-`build.yml` `wine-smoke` boots the Windows packages on the Windows v34 server:
+`ci.yml` `wine-smoke` boots the Windows packages on the Windows v34 server:
 game content from the Linux server tree (or `srcds_css34_4044.zip`), Windows
 binaries from rom4s `srcds_css34_w_a.zip` (`srcds.exe`, `bin/*.dll`,
 `cstrike/bin/server.dll`), run with 32-bit Wine under Xvfb.
@@ -139,7 +139,7 @@ Wine log (`WINEDEBUG=+seh,+loaddll`) to module + RVA and symbolizes it with
 `llvm-symbolizer` when the `.pdb` from the Windows build sits next to the DLL.
 
 The same script runs natively under Git Bash on Windows (`uname -s` MINGW /
-MSYS): the `build.yml` `windows` job runs it on `windows-2022` right after
+MSYS): the `ci.yml` `build-windows` job runs it on `windows-2022` right after
 the build, with `spcomp.exe` run directly and `srcds.exe` started in its own
 console window (`Start-Process`; with a pipe as stdin `-console` spins on
 `GetNumberOfConsoleInputEvents` and never loads the map), game content
@@ -193,7 +193,7 @@ With GCC, binutils and Expect installed, run
 `python3 testing/scripts/test-glibc-imports.py` and
 `python3 testing/scripts/test-console-probe.py` for the unversioned-import gate,
 PostgreSQL shim and console recovery regressions. CI Hygiene runs both.
-`ci-hygiene.yml` deliberately runs smoke against an empty server directory, requires
+The `hygiene` job in `ci.yml` deliberately runs smoke against an empty server directory, requires
 the expected missing-server failure, and uploads `negative-smoke-logs` for seven days.
 After that workflow completes, verify the artifact is still downloadable. This
 negative test does not relax any real server smoke or botplay gate.
