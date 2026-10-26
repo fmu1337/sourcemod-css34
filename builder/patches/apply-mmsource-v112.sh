@@ -33,7 +33,7 @@ path = Path(os.environ['MMS_DIR']) / 'support/buildbot/Versioning'
 if not path.exists():
     raise SystemExit('FAIL: support/buildbot/Versioning missing in MM')
 text = path.read_text()
-if 'css34: detached HEAD' in text:
+if 'css34: detached HEAD' in text or 'head_contents = fp.read().strip()' in text:
     print('==> MM Versioning already handles detached HEAD')
 else:
     old = """with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
