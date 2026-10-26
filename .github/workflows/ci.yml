@@ -73,6 +73,7 @@ jobs:
       run_weekly_smoke: ${{ steps.planner.outputs.run_weekly_smoke }}
       run_windows: ${{ steps.planner.outputs.run_windows }}
       run_host: ${{ steps.planner.outputs.run_host }}
+      run_release_botplay: ${{ steps.planner.outputs.run_release_botplay }}
       default_line: ${{ steps.planner.outputs.default_line }}
       required_jobs: ${{ steps.planner.outputs.required_jobs }}
       build: ${{ steps.planner.outputs.build }}
@@ -987,7 +988,7 @@ jobs:
           retention-days: 7
 
   test-release-botplay:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_botplay == 'true'
+    if: needs.plan.outputs.run_release_botplay == 'true'
     needs: [plan, prepare-server]
     runs-on: ubuntu-22.04
     strategy:

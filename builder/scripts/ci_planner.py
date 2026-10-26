@@ -28,7 +28,7 @@ def parse_bool(val):
 def filter_matrix_for_line(matrices, css34_line):
     filtered = {}
     for key, val in matrices.items():
-        if key in ("images", "botplay_extra_images"):
+        if key in ("images", "botplay_extra_images", "release_botplay"):
             filtered[key] = val
             continue
 
@@ -109,6 +109,14 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
     # Host smoke execution flag
     run_host = run_pr_smoke and len(matrices.get("host", [])) > 0
 
+    # Release botplay execution flag
+    run_release_botplay = (
+        run_code_jobs
+        and event_name == "workflow_dispatch"
+        and run_ref_botplay
+        and len(matrices.get("release_botplay", [])) > 0
+    )
+
     # Required jobs determination
     required_jobs = ["plan"]
 
@@ -138,7 +146,9 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
         # Workflow dispatch optional jobs
         if event_name == "workflow_dispatch":
             if run_ref_botplay:
-                required_jobs.extend(["test-rom4s-botplay", "test-release-botplay"])
+                required_jobs.append("test-rom4s-botplay")
+            if run_release_botplay:
+                required_jobs.append("test-release-botplay")
             if botplay_extra:
                 required_jobs.extend(["test-rom4s-botplay-extra", "test-built-botplay-extra"])
             if run_bisect:
@@ -152,6 +162,7 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
         "run_weekly_smoke": run_weekly_smoke,
         "run_windows": run_windows,
         "run_host": run_host,
+        "run_release_botplay": run_release_botplay,
         "default_line": lines_data["default_line"],
         "required_jobs": required_jobs,
         "matrices": matrices,
@@ -197,6 +208,7 @@ def main():
         print(f"run_weekly_smoke={'true' if plan['run_weekly_smoke'] else 'false'}")
         print(f"run_windows={'true' if plan['run_windows'] else 'false'}")
         print(f"run_host={'true' if plan['run_host'] else 'false'}")
+        print(f"run_release_botplay={'true' if plan['run_release_botplay'] else 'false'}")
         print(f"default_line={plan['default_line']}")
         print(f"required_jobs<<EOF")
         print(json.dumps(plan["required_jobs"]))

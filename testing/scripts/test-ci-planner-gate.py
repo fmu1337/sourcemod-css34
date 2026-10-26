@@ -10,7 +10,8 @@ Verifies:
 - Doc-only PR -> planner outputs code_changed=False, run_code_jobs=False, required_jobs=['plan']
 - Empty applicable matrix / line matrix updates on temporary lines.json
 - Windows eligibility and weekly/event selection
-- css34_line single-line filtering and invalid line rejection
+- Single-line dispatch (sm11, sm12, sm13) matrix and required_jobs handling (host smoke, windows, release_botplay, botplay_extra)
+- Incompatible single-line + run_botplay_bisect rejection
 """
 
 import importlib.util
@@ -39,27 +40,29 @@ evaluate_gate = ci_gate_mod.evaluate_gate
 
 
 def simulate_paths_filter(changed_files):
-    """Simulates dorny/paths-filter rules configured in ci.yml:
+    """Simulates dorny/paths-filter with predicate-quantifier: every:
     code: ['!docs/**', '!**/*.md', '!.github/workflows/cleanup-artifacts.yml']
     """
     for path in changed_files:
         p = Path(path)
         parts = p.parts
-        if parts[0] == "docs":
-            continue
-        if p.suffix == ".md":
-            continue
-        if str(p) == ".github/workflows/cleanup-artifacts.yml":
-            continue
-        return True
+        # Check if EVERY negative rule passes for this file
+        is_doc = parts[0] == "docs"
+        is_md = p.suffix == ".md"
+        is_cleanup = str(p) == ".github/workflows/cleanup-artifacts.yml"
+
+        # If any file is NOT a doc/md/cleanup file, code_changed becomes True
+        if not (is_doc or is_md or is_cleanup):
+            return True
     return False
 
 
 class TestCIPlannerGate(unittest.TestCase):
 
     def test_doc_only_path_filter_simulation(self):
-        """Simulates path filter behavior for doc-only, code-only, and mixed PRs."""
+        """Simulates path filter with predicate-quantifier: every for doc-only, code-only, and mixed PRs."""
         self.assertFalse(simulate_paths_filter(["docs/README.md", "README.md"]))
+        self.assertFalse(simulate_paths_filter(["docs/guide.md"]))
         self.assertFalse(simulate_paths_filter(["docs/ROADMAP.md", ".github/workflows/cleanup-artifacts.yml"]))
         self.assertTrue(simulate_paths_filter(["builder/lines.py"]))
         self.assertTrue(simulate_paths_filter(["README.md", "builder/lines.py"]))
@@ -210,36 +213,54 @@ class TestCIPlannerGate(unittest.TestCase):
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
-    def test_css34_line_filtering_sm11_no_windows(self):
-        """Single-line dispatch for sm11-oldstable must filter matrices and omit Windows jobs."""
+    def test_css34_line_filtering_sm11_no_windows_and_run_reference_botplay(self):
+        """Single-line dispatch for sm11-oldstable with run_reference_botplay=true must omit host and windows, but run reference botplay."""
         plan = plan_ci(
             event_name="workflow_dispatch",
             code_changed="true",
-            inputs={"css34_line": "sm11-oldstable"},
+            inputs={"css34_line": "sm11-oldstable", "run_reference_botplay": "true"},
         )
         self.assertEqual(len(plan["matrices"]["build"]), 1)
         self.assertEqual(plan["matrices"]["build"][0]["line"], "sm11-oldstable")
         self.assertEqual(plan["matrices"]["windows"], [])
         self.assertFalse(plan["run_windows"])
+        self.assertFalse(plan["run_host"])
+        self.assertTrue(plan["run_release_botplay"])
         self.assertNotIn("build-windows", plan["required_jobs"])
         self.assertNotIn("wine-smoke", plan["required_jobs"])
+        self.assertNotIn("test-built-smoke", plan["required_jobs"])
+        self.assertIn("test-rom4s-botplay", plan["required_jobs"])
+        self.assertIn("test-release-botplay", plan["required_jobs"])
+        self.assertEqual(len(plan["matrices"]["release_botplay"]), 2)
 
-    def test_css34_line_filtering_sm12_with_windows(self):
-        """Single-line dispatch for sm12-latest must filter matrices and include Windows jobs."""
+        needs = {job: {"result": "success"} for job in plan["required_jobs"]}
+        needs["build-windows"] = {"result": "skipped"}
+        needs["wine-smoke"] = {"result": "skipped"}
+        needs["test-built-smoke"] = {"result": "skipped"}
+
+        ok, errors = evaluate_gate(needs, plan)
+        self.assertTrue(ok, f"Gate failed for sm11-oldstable dispatch: {errors}")
+
+    def test_css34_line_filtering_sm12_with_windows_and_extra_images(self):
+        """Single-line dispatch for sm12-latest with botplay_extra_distros=true must include windows and preserve extra image rows."""
         plan = plan_ci(
             event_name="workflow_dispatch",
             code_changed="true",
-            inputs={"css34_line": "sm12-latest"},
+            inputs={"css34_line": "sm12-latest", "botplay_extra_distros": "true"},
         )
         self.assertEqual(len(plan["matrices"]["build"]), 1)
         self.assertEqual(plan["matrices"]["build"][0]["line"], "sm12-latest")
         self.assertEqual(len(plan["matrices"]["windows"]), 1)
         self.assertTrue(plan["run_windows"])
+        self.assertFalse(plan["run_host"])
         self.assertIn("build-windows", plan["required_jobs"])
         self.assertIn("wine-smoke", plan["required_jobs"])
+        self.assertIn("test-rom4s-botplay-extra", plan["required_jobs"])
+        self.assertIn("test-built-botplay-extra", plan["required_jobs"])
+        self.assertEqual(len(plan["matrices"]["botplay_extra_images"]), 3)
 
     def test_css34_line_invalid_raises_error(self):
-        """Invalid or inactive css34_line input must raise ValueError."""
+        """Invalid or inactive css34_line input or incompatible bisect input must raise ValueError."""
         with self.assertRaises(ValueError):
             plan_ci(
                 event_name="workflow_dispatch",
@@ -252,6 +273,13 @@ class TestCIPlannerGate(unittest.TestCase):
                 event_name="workflow_dispatch",
                 code_changed="true",
                 inputs={"css34_line": "sm13-dev"},
+            )
+
+        with self.assertRaises(ValueError):
+            plan_ci(
+                event_name="workflow_dispatch",
+                code_changed="true",
+                inputs={"css34_line": "sm11-oldstable", "run_botplay_bisect": "true"},
             )
 
     def test_lines_json_addition_reflected_in_matrices(self):
