@@ -656,7 +656,7 @@ if logic_am.exists():
                     lt = lt.replace(sp_tail_after_mac, sp_tail_after_mac_new, 1)
                     print('==> logic AMBuilder: skip duplicate static SP on linux (7461 layout)')
 
-    if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt:
+    if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt and 'css34: static SP before libstdc++ for std::thread' not in lt:
         sp_libs_anchor = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   binary.compiler.linkflags += [
     SP.static_libsp[{sp_idx_var}],
