@@ -31,8 +31,7 @@ import os
 
 path = Path(os.environ['MMS_DIR']) / 'support/buildbot/Versioning'
 if not path.exists():
-    print('==> WARN: support/buildbot/Versioning missing')
-    raise SystemExit(0)
+    raise SystemExit('FAIL: support/buildbot/Versioning missing in MM')
 text = path.read_text()
 if 'css34: detached HEAD' in text:
     print('==> MM Versioning already handles detached HEAD')
@@ -57,8 +56,7 @@ else:
     git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
 """
     if old not in text:
-        # Best-effort: 1.12 Versioning may already be submodule-aware.
-        print('==> WARN: MM Versioning detached-HEAD pattern not found (continuing)')
+        raise SystemExit('FAIL: MM Versioning detached-HEAD pattern not found in support/buildbot/Versioning')
     else:
         path.write_text(text.replace(old, new, 1))
         print('==> Patched MM Versioning for detached MMS_COMMIT checkouts')
@@ -77,8 +75,7 @@ import os
 def patch_console(rel: str) -> None:
     path = Path(os.environ['MMS_DIR']) / rel
     if not path.exists():
-        print(f'==> WARN: {rel} missing')
-        return
+        raise SystemExit(f'FAIL: {rel} missing in MM')
     text = path.read_text()
     if 'CSS34 pack:' in text:
         print(f'==> {rel}: meta version already prints CSS34 pack commit')
@@ -105,8 +102,7 @@ def patch_console(rel: str) -> None:
             1,
         )
     else:
-        print(f'==> WARN: no version header include found in {rel}')
-        return
+        raise SystemExit(f'FAIL: no version header include found in {rel}')
 
     for old, new in (
         (
@@ -146,7 +142,7 @@ def patch_console(rel: str) -> None:
             path.write_text(text.replace(old, new, 1))
             print(f'==> Patched {rel} to print CSS34 pack commit')
             return
-    print(f'==> WARN: Built from block not found in {rel}')
+    raise SystemExit(f'FAIL: Built from block not found in {rel}')
 
 patch_console('core/metamod_console.cpp')
 PYCONS
@@ -157,8 +153,7 @@ from pathlib import Path
 import json, os
 man = Path(os.environ['MMS_DIR']) / 'hl2sdk-manifests/manifests/episode1.json'
 if not man.exists():
-    print('==> WARN: episode1.json missing in MM hl2sdk-manifests')
-    raise SystemExit(0)
+    raise SystemExit('FAIL: episode1.json missing in MM hl2sdk-manifests')
 data = json.loads(man.read_text())
 linux = data.setdefault('linux', {})
 defs = linux.setdefault('defines', [])
