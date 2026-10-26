@@ -72,6 +72,7 @@ jobs:
       run_pr_smoke: ${{ steps.planner.outputs.run_pr_smoke }}
       run_weekly_smoke: ${{ steps.planner.outputs.run_weekly_smoke }}
       run_windows: ${{ steps.planner.outputs.run_windows }}
+      run_host: ${{ steps.planner.outputs.run_host }}
       default_line: ${{ steps.planner.outputs.default_line }}
       required_jobs: ${{ steps.planner.outputs.required_jobs }}
       build: ${{ steps.planner.outputs.build }}
@@ -94,6 +95,7 @@ jobs:
         if: github.event_name == 'pull_request' || github.event_name == 'push'
         uses: dorny/paths-filter@v3
         with:
+          predicate-quantifier: every
           filters: |
             code:
               - '!docs/**'
@@ -668,7 +670,7 @@ jobs:
 
   test-built-smoke:
     needs: [plan, build-linux, prepare-server]
-    if: needs.plan.outputs.run_pr_smoke == 'true'
+    if: needs.plan.outputs.run_host == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false

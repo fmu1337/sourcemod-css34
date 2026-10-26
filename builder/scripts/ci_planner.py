@@ -28,6 +28,10 @@ def parse_bool(val):
 def filter_matrix_for_line(matrices, css34_line):
     filtered = {}
     for key, val in matrices.items():
+        if key in ("images", "botplay_extra_images"):
+            filtered[key] = val
+            continue
+
         if isinstance(val, list):
             filtered[key] = [
                 item for item in val
@@ -57,6 +61,15 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
     lines_data = load_manifest(Path(lines_path))
     matrices = ci_matrix(lines_data)
 
+    code_changed = parse_bool(code_changed)
+
+    # Dispatch options
+    suite = inputs.get("suite") or "pr"
+    run_full_botplay = parse_bool(inputs.get("run_full_botplay_matrix", True))
+    run_ref_botplay = parse_bool(inputs.get("run_reference_botplay", False))
+    botplay_extra = parse_bool(inputs.get("botplay_extra_distros", False))
+    run_bisect = parse_bool(inputs.get("run_botplay_bisect", False))
+
     # Validate css34_line input if provided
     want_line = (inputs.get("css34_line") or "").strip()
     if want_line:
@@ -66,16 +79,11 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
         }
         if want_line not in active_lines:
             raise ValueError(f"Unknown or inactive CSS34_LINE: '{want_line}'")
+
+        if run_bisect and want_line != "sm13-latest":
+            raise ValueError(f"run_botplay_bisect is only compatible with sm13-latest (got '{want_line}')")
+
         matrices = filter_matrix_for_line(matrices, want_line)
-
-    code_changed = parse_bool(code_changed)
-
-    # Dispatch options
-    suite = inputs.get("suite") or "pr"
-    run_full_botplay = parse_bool(inputs.get("run_full_botplay_matrix", True))
-    run_ref_botplay = parse_bool(inputs.get("run_reference_botplay", False))
-    botplay_extra = parse_bool(inputs.get("botplay_extra_distros", False))
-    run_bisect = parse_bool(inputs.get("run_botplay_bisect", False))
 
     # Code jobs execution flag
     if event_name == "pull_request":
@@ -98,6 +106,9 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
         run_pr_smoke = False
         run_weekly_smoke = False
 
+    # Host smoke execution flag
+    run_host = run_pr_smoke and len(matrices.get("host", [])) > 0
+
     # Required jobs determination
     required_jobs = ["plan"]
 
@@ -111,9 +122,10 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
             required_jobs.extend([
                 "prepare-server",
                 "test-built-debian",
-                "test-built-smoke",
             ])
-            if run_full_botplay:
+            if run_host:
+                required_jobs.append("test-built-smoke")
+            if run_full_botplay and len(matrices.get("botplay", [])) > 0:
                 required_jobs.append("test-built-botplay-matrix")
 
         if run_weekly_smoke:
@@ -139,6 +151,7 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
         "run_pr_smoke": run_pr_smoke,
         "run_weekly_smoke": run_weekly_smoke,
         "run_windows": run_windows,
+        "run_host": run_host,
         "default_line": lines_data["default_line"],
         "required_jobs": required_jobs,
         "matrices": matrices,
@@ -183,6 +196,7 @@ def main():
         print(f"run_pr_smoke={'true' if plan['run_pr_smoke'] else 'false'}")
         print(f"run_weekly_smoke={'true' if plan['run_weekly_smoke'] else 'false'}")
         print(f"run_windows={'true' if plan['run_windows'] else 'false'}")
+        print(f"run_host={'true' if plan['run_host'] else 'false'}")
         print(f"default_line={plan['default_line']}")
         print(f"required_jobs<<EOF")
         print(json.dumps(plan["required_jobs"]))
