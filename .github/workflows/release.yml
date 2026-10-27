@@ -285,16 +285,17 @@ jobs:
 
       - name: Static package checks
         id: check
+        env:
+          CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
         run: |
           set -euo pipefail
-          sm="$(ls packages/sourcemod-*-css34-linux.tar.gz)"
-          mm="$(ls packages/mmsource-*-css34-linux.tar.gz)"
-          [[ "$(wc -l <<<"${sm}")" == 1 && "$(wc -l <<<"${mm}")" == 1 ]] \
-            || { echo "expected one SM + one MM linux package" >&2; ls packages >&2; exit 1; }
-          SM_PACKAGE="${sm}" testing/scripts/check-package.sh
-          MM_PACKAGE="${mm}" testing/scripts/check-metamod-package.sh
-          echo "sm_asset=$(basename "${sm}")" >> "$GITHUB_OUTPUT"
-          echo "mm_asset=$(basename "${mm}")" >> "$GITHUB_OUTPUT"
+          source builder/package-paths.sh
+          testing/scripts/check-package.sh
+          testing/scripts/verify-line-metamod-packages.sh "$CSS34_LINE"
+          # Smoke and line pointers use the primary MM; publication includes
+          # both checked MM archives for sm11.
+          echo "sm_asset=$(basename "$SM_PACKAGE")" >> "$GITHUB_OUTPUT"
+          echo "mm_asset=$(basename "$MM_PACKAGE")" >> "$GITHUB_OUTPUT"
 
       - name: Attach Linux packages to GitHub Release
         if: github.ref_type == 'tag'
@@ -499,6 +500,7 @@ jobs:
 
       - name: Smoke public release URLs in ${{ matrix.image_name }}
         env:
+          SUMS_ASSET: ${{ needs.resolve-line.outputs.repoint == '1' && 'SHA256SUMS' || 'SHA256SUMS.linux' }}
           BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.resolve-line.outputs.tag }}
           SM_ASSET: ${{ needs.linux.outputs.sm_asset || needs.resolve-line.outputs.sm_asset }}
           MM_ASSET: ${{ needs.linux.outputs.mm_asset || needs.resolve-line.outputs.mm_asset }}

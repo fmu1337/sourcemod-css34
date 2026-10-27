@@ -6,6 +6,8 @@ on:
       - '.github/workflows/**'
       - 'builder/**'
       - 'testing/scripts/check-package-paths.sh'
+      - 'testing/scripts/check-metamod-package.sh'
+      - 'testing/scripts/verify-line-metamod-packages.sh'
       - 'testing/scripts/check-*imports.py'
       - 'testing/scripts/test-*.py'
       - 'testing/scripts/console-probe.exp'
@@ -29,6 +31,10 @@ jobs:
         run: python3 testing/scripts/test-console-probe.py
       - name: Check exact package selection
         run: bash testing/scripts/check-package-paths.sh
+      - name: Check Metamod metadata and required packages
+        run: python3 testing/scripts/test-check-metamod-package.py
+      - name: Check release selection and Docker debug opt-in
+        run: python3 testing/scripts/test-release-build-entrypoints.py
       # Negative test: an absent server must fail smoke and leave a downloadable
       # diagnostic after the workflow completes. Production smoke gates are unchanged.
       - name: Intentionally fail smoke with a missing server
