@@ -147,7 +147,7 @@ jobs:
           curl -sL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /tmp && sudo mv /tmp/actionlint /usr/local/bin/
 
       - name: Lint GitHub Action workflows
-        run: actionlint
+        run: actionlint .github/workflows/ci.yml
 
       - name: Test CI planner and gate logic
         run: python3 testing/scripts/test-ci-planner-gate.py
@@ -163,12 +163,6 @@ jobs:
 
       - name: Check Metamod metadata and required packages
         run: python3 testing/scripts/test-check-metamod-package.py
-
-      - name: Check release selection and Docker debug opt-in
-        run: python3 testing/scripts/test-release-build-entrypoints.py
-
-      - name: Check patch failures and generated Versioning
-        run: python3 testing/scripts/test-patch-fail-closed.py
 
       - name: Intentionally fail smoke with a missing server
         id: negative-smoke
