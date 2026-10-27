@@ -7,6 +7,8 @@ when run against empty or corrupted directories missing expected anchors.
 """
 
 import subprocess
+import os
+from types import SimpleNamespace
 import tempfile
 import unittest
 from pathlib import Path
@@ -26,6 +28,40 @@ SDKHELPERS_STUB = """import os
 
 
 class TestPatchFailClosed(unittest.TestCase):
+
+    def test_mm111_generated_versioning_executes_and_is_idempotent(self):
+        old = """with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
+  git_state = fp.read().strip().split(':')[1].strip()
+
+git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
+if not os.path.exists(git_head_path):
+  git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "core").mkdir()
+            (root / "core/ISmmAPI.h").touch()
+            (root / ".git/refs/heads").mkdir(parents=True)
+            (root / ".git/HEAD").write_text("a" * 40 + "\n")
+            path = root / "support/buildbot/Versioning"
+            path.parent.mkdir(parents=True)
+            path.write_text(old)
+            cmd = ["bash", str(REPO_ROOT / "builder/patches/apply-mmsource-v111.sh"), tmpdir]
+            first = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            patched = path.read_text()
+            for head, expected in (("a" * 40, ".git/HEAD"),
+                                   ("ref: refs/heads/master", ".git/refs/heads/master")):
+                with self.subTest(head=head):
+                    (root / ".git/HEAD").write_text(head + "\n")
+                    (root / ".git/refs/heads/master").write_text("b" * 40 + "\n")
+                    context = {"os": os, "builder": SimpleNamespace(sourcePath=tmpdir)}
+                    exec(compile(patched, str(path), "exec"), context)
+                    self.assertEqual(context["git_head_path"], str(root / expected))
+            second = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertEqual(path.read_text(), patched)
+
 
     def test_apply_sourcemod_v112_missing_manifests(self):
         with tempfile.TemporaryDirectory() as tmpdir:
