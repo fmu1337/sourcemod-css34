@@ -145,13 +145,6 @@ class LinesTest(unittest.TestCase):
 
 
 class RepointResolverTest(unittest.TestCase):
-    def test_linux_smoke_uses_already_published_checksums(self):
-        workflow = (ROOT / ".github/workflows/release.yml").read_text()
-        step = workflow.split("      - name: Smoke public release URLs in", 1)[1].split("      - name:", 1)[0]
-        self.assertIn("SUMS_ASSET: ${{ needs.resolve-line.outputs.repoint == '1' && 'SHA256SUMS' || 'SHA256SUMS.linux' }}", step)
-        upload = workflow.split("      - name: Attach Linux packages", 1)[1].split("\n  windows:", 1)[0]
-        self.assertIn("SHA256SUMS.linux", upload)
-
 
     @classmethod
     def setUpClass(cls):

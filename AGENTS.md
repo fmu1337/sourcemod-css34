@@ -47,10 +47,6 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   SM/MM archive paths (Linux tar.gz and Windows zip, both with `git<rev>`).
   Archived MM 2.0/KHook builds live in `archive/khook`;
   master rejects those build lines, while their published pointers stay intact.
-- sm11's primary and secondary Metamod inputs are resolved from `metamod` and
-  `secondary_metamod` in `builder/lines.json` by `builder/resolve-metamod-pins.py`.
-  Checkout, Linux/Windows dual-MM builds, and the package verifier share this
-  resolver; unknown lines and invalid pin references are errors.
 - Windows (`builder/run/windows.sh`) builds on `windows-2022` with MSVC toolset
   `14.44` (`-vcvars_ver=14.44`) and Windows SDK `10.0.26100.0`
   (`builder/windows-toolchain.env`). `builder/package_windows.py` writes the zips
