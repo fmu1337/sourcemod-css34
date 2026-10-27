@@ -347,47 +347,47 @@ if sp.exists():
 
     # SM 1.13.7461+ builds static libsourcepawn_static only (no shared jit .so).
     # SM 1.12–1.13.7404 may still use BuildDynamicCoreLib → sourcepawn.jit.x86.so.
-    dyn_marker = 'css34: libsourcepawn pthread/rt DT_NEEDED'
-    if dyn_marker not in sp_text:
-        pthread_block = (
-            "        # css34: libsourcepawn pthread/rt DT_NEEDED\n"
-            "        if binary.compiler.target.platform == 'linux':\n"
-            "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):\n"
-            "            if flag not in binary.compiler.linkflags:\n"
-            "              binary.compiler.linkflags += [flag]\n"
-        )
-        dyn_targets = [
-            (
-                'BuildDynamicCoreLib',
-                "    def BuildDynamicCoreLib(self, builder):\n"
-                "        cxx = builder.cxx\n"
-                "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
-                "        self.SetupBinForArch(binary, builder)\n",
-            ),
-            (
-                'BuildStaticCoreLib',
-                "    def BuildStaticCoreLib(self, builder):\n"
-                "        cxx = builder.cxx\n"
-                "        binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')\n\n"
-                "        self.SetupBinForArch(binary, builder)\n",
-            ),
-        ]
-        patched_dyn = False
-        for fn, dyn_old in dyn_targets:
-            if dyn_old not in sp_text:
-                continue
-            sp_text = sp_text.replace(dyn_old, dyn_old + pthread_block, 1)
+    pthread_block = (
+        "        # css34: libsourcepawn pthread/rt DT_NEEDED\n"
+        "        if binary.compiler.target.platform == 'linux':\n"
+        "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):\n"
+        "            if flag not in binary.compiler.linkflags:\n"
+        "              binary.compiler.linkflags += [flag]\n"
+    )
+    dyn_targets = [
+        (
+            'BuildDynamicCoreLib',
+            "    def BuildDynamicCoreLib(self, builder):\n"
+            "        cxx = builder.cxx\n"
+            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
+            "        self.SetupBinForArch(binary, builder)\n",
+        ),
+        (
+            'BuildStaticCoreLib',
+            "    def BuildStaticCoreLib(self, builder):\n"
+            "        cxx = builder.cxx\n"
+            "        binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')\n\n"
+            "        self.SetupBinForArch(binary, builder)\n",
+        ),
+    ]
+    for fn, dyn_old in dyn_targets:
+        # ALLOWLIST: SM 1.13.7461+ removed the dynamic core entirely. A
+        # present-but-changed method must still fail, even if the other matches.
+        if fn == 'BuildDynamicCoreLib' and 'def BuildDynamicCoreLib(' not in sp_text:
+            continue
+        dyn_new = dyn_old + pthread_block
+        if dyn_new in sp_text:
+            print(f'==> {fn} pthread/rt already patched')
+        elif sp_text.count(dyn_old) == 1:
+            # Do not accept a partial previous insertion below this anchor.
+            tail = sp_text.split(dyn_old, 1)[1].split('\n    def ', 1)[0]
+            if 'css34: libsourcepawn pthread/rt DT_NEEDED' in tail:
+                raise SystemExit(f'FAIL: incomplete {fn} pthread/rt patch')
+            sp_text = sp_text.replace(dyn_old, dyn_new, 1)
             sp.write_text(sp_text)
             print(f'==> Patched {fn} for pthread/rt DT_NEEDED')
-            patched_dyn = True
-            sp_text = sp.read_text()
-        if not patched_dyn:
-            raise SystemExit('FAIL: BuildDynamicCoreLib/BuildStaticCoreLib pattern not found in sourcepawn/AMBuildScript')
-    else:
-        if ("for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):" not in sp_text
-                or "binary.compiler.linkflags += [flag]" not in sp_text):
-            raise SystemExit('FAIL: incomplete libsourcepawn pthread/rt patch')
-        print('==> libsourcepawn pthread/rt already patched')
+        else:
+            raise SystemExit(f'FAIL: {fn} pattern not found in sourcepawn/AMBuildScript')
 
 # sourcemod.logic.so must match rom4s link profile (old libstdc++ ABI, pthread/rt
 # NEEDED, static embed). SM 1.12 uses `for cxx in builder.targets` - adapt the

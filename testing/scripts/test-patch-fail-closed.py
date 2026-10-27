@@ -289,6 +289,19 @@ class TestPatchAnchors(unittest.TestCase):
                     self.write("sourcepawn/AMBuildScript", original.replace(old, new))
                     self.run_patch(code, error)
 
+    def test_sourcepawn_one_valid_core_does_not_hide_the_other_drifting(self):
+        code = sm_section("# SourcePawn builds", "# sourcemod.logic.so")
+        original = self.fixture("sp12")
+        self.write("sourcepawn/AMBuildScript", original.replace(
+            "def BuildStaticCoreLib(self, builder):", "def BuildStaticCoreLib(self, context):"))
+        self.run_patch(code, "BuildStaticCoreLib pattern not found")
+        path = self.write("sourcepawn/AMBuildScript", original)
+        self.run_patch(code)
+        path.write_text(path.read_text().replace(
+            "for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):",
+            "for flag in ('-lpthread',):", 1))
+        self.run_patch(code, "incomplete BuildStaticCoreLib pthread/rt patch")
+
     def test_logic_pinned_layouts_and_static_sp_tail_drift(self):
         code = sm_section("# sourcemod.logic.so", "# cstrike: build")
         self.run_patch(code, "core/logic/AMBuilder missing")
