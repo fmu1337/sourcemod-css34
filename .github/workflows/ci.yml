@@ -164,6 +164,12 @@ jobs:
       - name: Check Metamod metadata and required packages
         run: python3 testing/scripts/test-check-metamod-package.py
 
+      - name: Check release selection and Docker debug opt-in
+        run: python3 testing/scripts/test-release-build-entrypoints.py
+
+      - name: Check patch failures and generated Versioning
+        run: python3 testing/scripts/test-patch-fail-closed.py
+
       - name: Intentionally fail smoke with a missing server
         id: negative-smoke
         continue-on-error: true
