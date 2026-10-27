@@ -364,7 +364,7 @@ if sp.exists():
             patched_dyn = True
             sp_text = sp.read_text()
         if not patched_dyn:
-            print('==> WARN: BuildDynamicCoreLib/BuildStaticCoreLib pattern not found')
+            raise SystemExit('FAIL: BuildDynamicCoreLib/BuildStaticCoreLib pattern not found in sourcepawn/AMBuildScript')
     else:
         print('==> libsourcepawn pthread/rt already patched')
 
@@ -656,7 +656,7 @@ if logic_am.exists():
                     lt = lt.replace(sp_tail_after_mac, sp_tail_after_mac_new, 1)
                     print('==> logic AMBuilder: skip duplicate static SP on linux (7461 layout)')
 
-    if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt:
+    if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt and 'css34: static SP before libstdc++ for std::thread' not in lt:
         sp_libs_anchor = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
   binary.compiler.linkflags += [
     SP.static_libsp[{sp_idx_var}],
@@ -704,7 +704,7 @@ if logic_am.exists():
                 )
                 print('==> Patched logic AMBuilder postlink pthread after static SP')
         elif sp_libs_anchor not in lt:
-            print('==> WARN: logic AMBuilder SP static libs anchor not found')
+            raise SystemExit('FAIL: logic AMBuilder SP static libs anchor not found in core/logic/AMBuilder')
         else:
             lt = lt.replace(sp_libs_anchor, sp_libs_new, 1)
             print('==> Patched logic AMBuilder postlink pthread after static SP')
@@ -762,7 +762,7 @@ if natives.exists():
     elif 'FindDataMapInfo(pMap, pszBaseVar' in text:
         print('==> cstrike natives FindDataMapInfo already patched')
     else:
-        print('==> WARN: cstrike natives FindInDataMap block not found')
+        raise SystemExit('FAIL: cstrike natives FindInDataMap block not found in extensions/cstrike/natives.cpp')
 
 # css34: CacheGameBinaryInfo dlopen(engine_i486.so)+dlclose leaves dangling
 # ConVars on vstdlib's s_pConCommandBases (srcds loads engine_i686.so). Prefer
@@ -810,7 +810,7 @@ if gc.exists():
 \t\t}
 #endif"""
         if old_cache not in gt:
-            print('==> WARN: CacheGameBinaryInfo dlopen block not found')
+            raise SystemExit('FAIL: CacheGameBinaryInfo dlopen block not found in core/logic/GameConfigs.cpp')
         else:
             gt = gt.replace(old_cache, new_cache, 1)
             # Symbol '@' lookups: also use NOLOAD on dli_fname (already mapped).
@@ -835,7 +835,7 @@ if gc.exists():
                 gt = gt.replace(old_sym, new_sym, 1)
                 print('==> Patched GameConfigs @-sig dlopen to RTLD_NOLOAD')
             else:
-                print('==> WARN: @-sig dlopen block not found (continuing)')
+                raise SystemExit('FAIL: @-sig dlopen block not found in core/logic/GameConfigs.cpp')
             gc.write_text(gt)
             print('==> Patched GameConfigs CacheGameBinaryInfo for css34 RTLD_NOLOAD')
 
@@ -1014,7 +1014,7 @@ if 'CSS34 pack:' in text:
     print('==> sm version already prints CSS34 pack commit')
 else:
     if '#include <sourcemod_version.h>' not in text:
-        print('==> WARN: sourcemod_version.h include missing')
+        raise SystemExit('FAIL: sourcemod_version.h include missing in core/logic/RootConsoleMenu.cpp')
     else:
         text = text.replace(
             '#include <sourcemod_version.h>',
@@ -1036,7 +1036,7 @@ else:
             path.write_text(text.replace(old, new, 1))
             print('==> Patched sm version CSS34 pack line')
         else:
-            print('==> WARN: Built from block not found for CSS34 pack')
+            raise SystemExit('FAIL: Built from block not found for CSS34 pack in core/logic/RootConsoleMenu.cpp')
 PYVER
 
 # Every Linux module links libstdc++ statically and hides it. --exclude-libs,ALL

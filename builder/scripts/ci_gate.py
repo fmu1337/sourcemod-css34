@@ -21,16 +21,13 @@ def evaluate_gate(needs_data, plan_data):
     elif plan_job.get("result") != "success":
         errors.append(f"plan job did not succeed (result={plan_job.get('result')})")
 
-    # Extract required_jobs list
-    if isinstance(plan_data, dict):
-        required_jobs = plan_data.get("required_jobs") or []
-    elif isinstance(plan_data, list):
-        required_jobs = plan_data
-    else:
-        try:
-            required_jobs = json.loads(plan_data)
-        except Exception:
-            required_jobs = []
+    # A missing or malformed plan must never turn required checks into no-ops.
+    required_jobs = plan_data.get("required_jobs") if isinstance(plan_data, dict) else plan_data
+    if (not isinstance(required_jobs, list) or not required_jobs
+            or any(not isinstance(job, str) or not job.strip() for job in required_jobs)
+            or "plan" not in required_jobs):
+        errors.append("required_jobs must be a non-empty list of job names including plan")
+        return False, errors
 
     # Check all required jobs
     for job_name in required_jobs:
