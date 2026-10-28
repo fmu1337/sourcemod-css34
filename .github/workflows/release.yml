@@ -35,13 +35,9 @@ on:
   workflow_dispatch:
     inputs:
       css34_line:
-        description: "CSS34_LINE for manual dispatch (ignored if repoint_tag is set)"
+        description: "CSS34_LINE for manual dispatch (ignored on tag pushes)"
         required: false
         default: "sm13-latest"
-      repoint_tag:
-        description: "Target release tag to repoint line pointer to (e.g. 1.12.0.7253-mm1.12.0 or 1.12.0.7253-mm1.12.0-r2)"
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -125,91 +121,20 @@ jobs:
     outputs:
       css34_line: ${{ steps.map.outputs.css34_line }}
       pointer: ${{ steps.map.outputs.pointer }}
-      repoint: ${{ steps.map.outputs.repoint }}
-      tag: ${{ steps.map.outputs.tag }}
-      sm_asset: ${{ steps.map.outputs.sm_asset }}
-      mm_asset: ${{ steps.map.outputs.mm_asset }}
-      target_commit: ${{ steps.map.outputs.target_commit }}
-      target_time: ${{ steps.map.outputs.target_time }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Map tag / input → CSS34_LINE
         id: map
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPOINT_TAG: ${{ inputs.repoint_tag || github.event.inputs.repoint_tag }}
-          CSS34_LINE_INPUT: ${{ inputs.css34_line || github.event.inputs.css34_line }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC1091
           source builder/generated/tag-map.sh
           known_bad=0
-          repoint=0
-          repoint_tag="${REPOINT_TAG:-}"
-          sm_asset=""
-          mm_asset=""
-          target_commit=""
-          target_time=""
-
-          if [[ -n "$repoint_tag" ]]; then
-            if [[ ! "$repoint_tag" =~ ^[0-9][0-9A-Za-z.+-]*$ ]]; then
-              echo "Invalid repoint_tag format: $repoint_tag" >&2
-              exit 1
-            fi
-            repoint=1
-            tag="$repoint_tag"
-            base="$tag"
-            if [[ "$tag" =~ ^(.+)-r[0-9]+$ ]]; then
-              base="${BASH_REMATCH[1]}"
-            fi
-            if css34_tag_is_known_bad "$base"; then
-              echo "repoint_tag $base is known-bad and cannot be published as a pointer" >&2
-              exit 1
-            fi
-            echo "Repointing line pointer to ${repoint_tag}"
-            rel_info="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${repoint_tag}")"
-            rel_assets="$(jq -r '.assets[].name' <<<"$rel_info")"
-            mapfile -t sm_matches < <(grep -E '^sourcemod-.*-css34-linux\.tar\.gz$' <<<"$rel_assets" || true)
-            mapfile -t mm_matches < <(grep -E '^mmsource-.*-css34-linux\.tar\.gz$' <<<"$rel_assets" || true)
-
-            if [[ "${#sm_matches[@]}" -eq 0 ]]; then
-              echo "Could not find SM linux tarball in release tag ${repoint_tag}" >&2
-              exit 1
-            fi
-            if [[ "${#mm_matches[@]}" -eq 0 ]]; then
-              echo "Could not find MM linux tarball in release tag ${repoint_tag}" >&2
-              exit 1
-            fi
-
-            line_from_tag="$(css34_line_for_tag "$base" || true)"
-
-            mkdir -p /tmp/repoint_check
-            for a in "${sm_matches[@]}" "${mm_matches[@]}"; do
-              if ! gh release download "$repoint_tag" --repo "${GITHUB_REPOSITORY}" -p "$a" -D /tmp/repoint_check; then
-                echo "Failed to download asset $a for repoint_tag $repoint_tag" >&2
-                exit 1
-              fi
-            done
-
-            res_json="$(python3 builder/scripts/resolve-repoint-pair.py "$base" "$line_from_tag" "builder/lines.json" /tmp/repoint_check "${sm_matches[@]}" "---MM---" "${mm_matches[@]}")"
-            rm -rf /tmp/repoint_check
-
-            line="$(jq -r '.line' <<<"$res_json")"
-            sm_asset="$(jq -r '.sm_asset' <<<"$res_json")"
-            mm_asset="$(jq -r '.mm_asset' <<<"$res_json")"
-
-            if ! css34_line_has_pointer "$line"; then
-              echo "Line '$line' does not publish a pointer — repoint rejected for $repoint_tag" >&2
-              exit 1
-            fi
-            pointer=1
-            commit_info="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${repoint_tag}")"
-            target_commit="$(jq -r '.sha' <<<"$commit_info")"
-            target_time="$(jq -r '.commit.committer.date | fromdateiso8601' <<<"$commit_info")"
-          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             tag="${GITHUB_REF_NAME}"
+            # -r<N>: packaging rebuild of the same pins (existing tags stay put).
             base="${tag}"
             if [[ "${tag}" =~ ^(.+)-r[0-9]+$ ]]; then
               base="${BASH_REMATCH[1]}"
@@ -221,47 +146,34 @@ jobs:
               echo "Unknown release tag '${tag}' — add the line in builder/lines.json and regenerate" >&2
               exit 1
             }
-            if css34_line_has_pointer "${line}"; then
-              pointer=1
-            else
-              pointer=0
-            fi
-            if [[ "$known_bad" == 1 ]]; then
-              if [[ "$pointer" == 1 ]]; then
-                echo "known-bad tag ${base} cannot be published as a line pointer" >&2
-                exit 1
-              fi
-              pointer=0
-            fi
           else
-            line="${CSS34_LINE_INPUT:-}"
+            line="${{ github.event.inputs.css34_line }}"
             if [[ -z "$line" ]]; then
               line="$(python3 -c 'import json; print(json.load(open("builder/lines.json"))["default_line"])')"
             fi
-            tag="manual-${line}"
-            pointer=0
           fi
-
           if ! css34_line_can_release "${line}"; then
             echo "Archived build line: use archive/khook; published pointers are unchanged" >&2
             exit 1
           fi
-
-          {
-            echo "css34_line=${line}"
-            echo "pointer=${pointer}"
-            echo "repoint=${repoint}"
-            echo "tag=${tag}"
-            echo "sm_asset=${sm_asset}"
-            echo "mm_asset=${mm_asset}"
-            echo "target_commit=${target_commit}"
-            echo "target_time=${target_time}"
-          } >> "$GITHUB_OUTPUT"
-          echo "Resolved CSS34_LINE=${line} tag=${tag} pointer=${pointer} repoint=${repoint}"
+          echo "css34_line=${line}" >> "$GITHUB_OUTPUT"
+          if css34_line_has_pointer "${line}"; then
+            pointer=1
+          else
+            pointer=0
+          fi
+          if [[ "$known_bad" == 1 ]]; then
+            if [[ "$pointer" == 1 ]]; then
+              echo "known-bad tag ${base} cannot be published as a line pointer" >&2
+              exit 1
+            fi
+            pointer=0
+          fi
+          echo "pointer=${pointer}" >> "$GITHUB_OUTPUT"
+          echo "Resolved CSS34_LINE=${line} (ref=${GITHUB_REF_NAME})"
 
   linux:
     needs: [resolve-line]
-    if: needs.resolve-line.outputs.repoint != '1'
     runs-on: ubuntu-22.04
     # Exact names of what this run built: a release can hold older assets
     # with other names (e.g. mmsource-…-dev-…), so later jobs never glob.
@@ -287,17 +199,16 @@ jobs:
 
       - name: Static package checks
         id: check
-        env:
-          CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}
         run: |
           set -euo pipefail
-          source builder/package-paths.sh
-          testing/scripts/check-package.sh
-          testing/scripts/verify-line-metamod-packages.sh "$CSS34_LINE"
-          # Smoke and line pointers use the primary MM; publication includes
-          # both checked MM archives for sm11.
-          echo "sm_asset=$(basename "$SM_PACKAGE")" >> "$GITHUB_OUTPUT"
-          echo "mm_asset=$(basename "$MM_PACKAGE")" >> "$GITHUB_OUTPUT"
+          sm="$(ls packages/sourcemod-*-css34-linux.tar.gz)"
+          mm="$(ls packages/mmsource-*-css34-linux.tar.gz)"
+          [[ "$(wc -l <<<"${sm}")" == 1 && "$(wc -l <<<"${mm}")" == 1 ]] \
+            || { echo "expected one SM + one MM linux package" >&2; ls packages >&2; exit 1; }
+          SM_PACKAGE="${sm}" testing/scripts/check-package.sh
+          MM_PACKAGE="${mm}" testing/scripts/check-metamod-package.sh
+          echo "sm_asset=$(basename "${sm}")" >> "$GITHUB_OUTPUT"
+          echo "mm_asset=$(basename "${mm}")" >> "$GITHUB_OUTPUT"
 
       - name: Attach Linux packages to GitHub Release
         if: github.ref_type == 'tag'
@@ -323,11 +234,9 @@ jobs:
           if ! gh release view "${tag}" >/dev/null 2>&1; then
             gh release create "${tag}" --title "${tag}" --notes "${notes}" --latest=false
           fi
-          (cd packages && sha256sum -- *.tar.gz | sort -k2 > ../SHA256SUMS.linux)
           gh release upload "${tag}" \
             packages/sourcemod-*-css34-linux.tar.gz \
             packages/mmsource-*-css34-linux.tar.gz \
-            SHA256SUMS.linux \
             --clobber
           # Never leave (or turn) a release as draft: its asset URLs would 404.
           if [[ "$(gh release view "${tag}" --json isDraft -q .isDraft)" == "true" ]]; then
@@ -336,7 +245,6 @@ jobs:
 
   windows:
     needs: [resolve-line]
-    if: needs.resolve-line.outputs.repoint != '1'
     # Same pin as build.yml (builder/windows-toolchain.env).
     runs-on: windows-2022
     steps:
@@ -403,8 +311,8 @@ jobs:
 
   # SHA256SUMS over every asset of the tag release (Linux + Windows).
   checksums:
-    needs: [resolve-line, linux, windows]
-    if: always() && github.ref_type == 'tag' && needs.resolve-line.outputs.repoint != '1' && needs.linux.result == 'success'
+    needs: [linux, windows]
+    if: always() && github.ref_type == 'tag' && needs.linux.result == 'success'
     runs-on: ubuntu-22.04
     steps:
       - name: Write SHA256SUMS
@@ -421,7 +329,7 @@ jobs:
 
   # Weekly OS list for this line, generated from lines.json (no hand-written rows).
   release-pins:
-    if: github.ref_type == 'tag' || needs.resolve-line.outputs.repoint == '1'
+    if: github.ref_type == 'tag'
     needs: [resolve-line]
     runs-on: ubuntu-22.04
     outputs:
@@ -461,11 +369,8 @@ jobs:
   # Installer contract on the *published* URLs: plain tar -x + srcds boot
   # on every weekly image (debian 8–11, ubuntu 14.04/16.04/18.04, rockylinux 9).
   smoke-release:
-    needs: [resolve-line, linux, release-pins]
-    if: >-
-      always() && needs.resolve-line.result == 'success' && needs.release-pins.result == 'success' &&
-      ((github.ref_type == 'tag' && needs.linux.result == 'success') ||
-       needs.resolve-line.outputs.repoint == '1')
+    needs: [resolve-line, linux, checksums, release-pins]
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -502,10 +407,9 @@ jobs:
 
       - name: Smoke public release URLs in ${{ matrix.image_name }}
         env:
-          SUMS_ASSET: ${{ needs.resolve-line.outputs.repoint == '1' && 'SHA256SUMS' || 'SHA256SUMS.linux' }}
-          BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.resolve-line.outputs.tag }}
-          SM_ASSET: ${{ needs.linux.outputs.sm_asset || needs.resolve-line.outputs.sm_asset }}
-          MM_ASSET: ${{ needs.linux.outputs.mm_asset || needs.resolve-line.outputs.mm_asset }}
+          BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
           IMAGE: ${{ matrix.image }}
         run: |
           chmod +x testing/scripts/*.sh
@@ -524,11 +428,8 @@ jobs:
 
   # Weekly botplay on centos:7 against the published URLs.
   botplay-release:
-    needs: [resolve-line, linux, release-pins]
-    if: >-
-      always() && needs.resolve-line.result == 'success' && needs.release-pins.result == 'success' &&
-      ((github.ref_type == 'tag' && needs.linux.result == 'success') ||
-       needs.resolve-line.outputs.repoint == '1')
+    needs: [resolve-line, linux, checksums, release-pins]
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     strategy:
@@ -567,12 +468,11 @@ jobs:
       - name: Botplay public release URLs on ${{ matrix.image_name }}
         env:
           IMAGE: ${{ matrix.image }}
-          BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.resolve-line.outputs.tag }}
-          SM_ASSET: ${{ needs.linux.outputs.sm_asset || needs.resolve-line.outputs.sm_asset }}
-          MM_ASSET: ${{ needs.linux.outputs.mm_asset || needs.resolve-line.outputs.mm_asset }}
+          BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
-          IS_REPOINT: ${{ needs.resolve-line.outputs.repoint }}
           RECORD_SECS: "300"
         run: |
           set -euo pipefail
@@ -580,21 +480,6 @@ jobs:
           mkdir -p packages
           curl -fL --retry 8 --retry-delay 5 -o "packages/${SM_ASSET}" "${BASE_URL}/${SM_ASSET}"
           curl -fL --retry 8 --retry-delay 5 -o "packages/${MM_ASSET}" "${BASE_URL}/${MM_ASSET}"
-          if [[ "${IS_REPOINT:-0}" == "1" ]]; then
-            manifest_text="$(tar -xzOf "packages/${SM_ASSET}" addons/sourcemod/css34-package.json 2>/dev/null || echo '')"
-            if [[ -z "$manifest_text" ]] || ! jq . <<<"$manifest_text" >/dev/null 2>&1; then
-              echo "Package packages/${SM_ASSET} has missing or corrupted css34-package.json" >&2
-              exit 1
-            fi
-            sm_ver="$(jq -r '.sm_version // empty' <<<"$manifest_text")"
-            mm_ver="$(jq -r '.mm_version // empty' <<<"$manifest_text")"
-            if [[ -z "$sm_ver" || -z "$mm_ver" ]]; then
-              echo "Package manifest in packages/${SM_ASSET} missing required sm_version or mm_version" >&2
-              exit 1
-            fi
-            export SM_VERSION_EXPECT="$sm_ver"
-            export MM_VERSION_EXPECT="${mm_ver%%-*}"
-          fi
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
@@ -640,11 +525,10 @@ jobs:
   line-pointer:
     needs: [resolve-line, linux, smoke-release, botplay-release]
     if: >-
-      always() &&
+      always() && github.ref_type == 'tag' &&
       needs.resolve-line.outputs.pointer == '1' &&
       (needs.smoke-release.result == 'success' || needs.smoke-release.result == 'failure') &&
-      (needs.botplay-release.result == 'success' || needs.botplay-release.result == 'failure') &&
-      ((github.ref_type == 'tag' && needs.linux.result == 'success') || needs.resolve-line.outputs.repoint == '1')
+      (needs.botplay-release.result == 'success' || needs.botplay-release.result == 'failure')
     runs-on: ubuntu-22.04
     # One writer per line-<line>. Per line, not global: a concurrency group holds
     # one running + one pending job and a newer pending one cancels it, so a
@@ -660,13 +544,12 @@ jobs:
       - name: Download tag assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.resolve-line.outputs.tag }}
-          SM_ASSET: ${{ needs.linux.outputs.sm_asset || needs.resolve-line.outputs.sm_asset }}
-          MM_ASSET: ${{ needs.linux.outputs.mm_asset || needs.resolve-line.outputs.mm_asset }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
         run: |
           set -euo pipefail
           mkdir -p ptr
-          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" -D ptr \
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" -D ptr \
             -p "${SM_ASSET}" -p "${MM_ASSET}"
 
       - name: Update line-${{ needs.resolve-line.outputs.css34_line }}
@@ -674,24 +557,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SMOKE: ${{ needs.smoke-release.result == 'success' && needs.botplay-release.result == 'success' && 'pass' || 'fail' }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
-          TAG: ${{ needs.resolve-line.outputs.tag }}
-          SM_ASSET: ${{ needs.linux.outputs.sm_asset || needs.resolve-line.outputs.sm_asset }}
-          MM_ASSET: ${{ needs.linux.outputs.mm_asset || needs.resolve-line.outputs.mm_asset }}
-          TARGET: ${{ needs.resolve-line.outputs.target_commit || github.sha }}
-          SRC_TIME: ${{ needs.resolve-line.outputs.target_time }}
-          FORCE_REPOINT: ${{ needs.resolve-line.outputs.repoint }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
         run: |
           set -euo pipefail
-          bash builder/scripts/update-line-pointer.sh "${LINE}" "${TAG}" \
+          bash builder/scripts/update-line-pointer.sh "${LINE}" "${GITHUB_REF_NAME}" \
             "ptr/${SM_ASSET}" "ptr/${MM_ASSET}"
           if [[ "${SMOKE}" != "pass" ]]; then
-            echo "::error::smoke failed for ${TAG}; line-${LINE} not switched"
+            echo "::error::smoke failed for ${GITHUB_REF_NAME}; line-${LINE} not switched"
             exit 1
           fi
 
   smoke-pointer:
     needs: [resolve-line, line-pointer]
-    if: always() && needs.resolve-line.outputs.pointer == '1' && needs.line-pointer.result == 'success'
+    if: github.ref_type == 'tag' && needs.resolve-line.outputs.pointer == '1'
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -726,9 +605,6 @@ jobs:
         env:
           BASE_URL: https://github.com/${{ github.repository }}/releases/download/line-${{ needs.resolve-line.outputs.css34_line }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
-          TAG: ${{ needs.resolve-line.outputs.tag }}
-          TARGET_TIME: ${{ needs.resolve-line.outputs.target_time }}
-          FORCE_REPOINT: ${{ needs.resolve-line.outputs.repoint }}
           SM_ASSET: sourcemod-css34-linux.tar.gz
           MM_ASSET: mmsource-css34-linux.tar.gz
         run: |
@@ -736,24 +612,13 @@ jobs:
           chmod +x testing/scripts/*.sh
           # A later tag of the same line may already have switched the pointer;
           # that is fine — whatever it serves must be a smoke-passed build.
-          curl -fsSL "${BASE_URL}/lines.json" | LINE="${LINE}" TAG="${TAG}" TARGET_TIME="${TARGET_TIME:-0}" FORCE_REPOINT="${FORCE_REPOINT:-0}" python3 -c '
+          curl -fsSL "${BASE_URL}/lines.json" | LINE="${LINE}" TAG="${GITHUB_REF_NAME}" python3 -c '
           import json, os, sys
           d = json.load(sys.stdin)[os.environ["LINE"]]
           print(json.dumps(d, indent=2))
           assert d["smoke"] == "pass" and d["tag"], "pointer does not serve a smoke-passed build"
-          served = d["tag"]
-          tag = os.environ.get("TAG", "")
-          force = os.environ.get("FORCE_REPOINT") == "1"
-          target_time = int(os.environ.get("TARGET_TIME") or 0)
-          served_time = int(d.get("source_commit_time") or 0)
-          if force:
-              if served != tag:
-                  sys.exit(f"FORCE_REPOINT expected pointer to serve {tag}, but pointer serves {served}")
-              if target_time > 0 and served_time > 0 and served_time != target_time:
-                  sys.exit(f"FORCE_REPOINT expected served time {target_time}, but pointer serves time {served_time}")
-          elif tag and served != tag:
-              if served_time < target_time:
-                  sys.exit(f"Pointer serves older tag {served} (commit time {served_time}) than target {tag} (commit time {target_time})")
-              print(f"::notice::line pointer serves newer tag {served} (target was {tag})")
+          served, tag = d["tag"], os.environ["TAG"]
+          if served != tag:
+              print(f"::notice::line pointer already serves {served} (newer than {tag})")
           '
           testing/scripts/release-smoke.sh

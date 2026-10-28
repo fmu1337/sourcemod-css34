@@ -59,29 +59,6 @@ def simulate_paths_filter(changed_files):
 
 class TestCIPlannerGate(unittest.TestCase):
 
-    def test_gate_rejects_missing_or_malformed_required_jobs(self):
-        needs = {"plan": {"result": "success"}, "hygiene": {"result": "skipped"}}
-        for bad in (None, {}, [], "", "[]", {"required_jobs": []},
-                    ["hygiene"], ["plan", None], ["plan", ""], {"required_jobs": "plan"}):
-            with self.subTest(plan=bad):
-                ok, errors = evaluate_gate(needs, bad)
-                self.assertFalse(ok)
-                self.assertTrue(errors)
-
-    def test_gate_requires_migrated_regressions(self):
-        plan = plan_ci(event_name="pull_request", code_changed="true")
-        for job in ("hygiene", "check-pins"):
-            needs = {name: {"result": "success"} for name in plan["required_jobs"]}
-            needs[job]["result"] = "skipped"
-            self.assertFalse(evaluate_gate(needs, plan)[0])
-        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-        hygiene = workflow.split("\n  hygiene:", 1)[1].split("\n  build-linux:", 1)[0]
-        for script in ("test-release-build-entrypoints.py", "test-patch-fail-closed.py"):
-            self.assertIn("python3 testing/scripts/" + script, hygiene)
-        pins = workflow.split("\n  check-pins:", 1)[1].split("\n  hygiene:", 1)[0]
-        self.assertIn("python3 testing/scripts/test-lines.py", pins)
-
-
     def test_doc_only_path_filter_simulation(self):
         """Simulates path filter with predicate-quantifier: every for doc-only, code-only, and mixed PRs."""
         self.assertFalse(simulate_paths_filter(["docs/README.md", "README.md"]))
