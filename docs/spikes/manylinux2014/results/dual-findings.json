@@ -1,0 +1,232 @@
+{
+ "summary": "I built and ran a single SourceMod 1.11.0.6970 package that contains both cores. It works on CS:S v34 with either Metamod: our MM 1.10.7 loads sourcemod.1.ep1, and our MM 1.12 loads sourcemod.2.ep1. The same SourceMod files stay on disk; only the Metamod package changes. rom4s does the same, and its Windows zip has the same layout.\n\n**How it works**\n- The game engine only loads the Metamod loader. The MM 1.10 loader starts metamod.1.ep1 (old plugin API 11, SourceHook v4). The MM 1.12 loader starts metamod.2.ep1 (plugin API 16, accepts 14 to 16, SourceHook v5).\n- SourceMod's own loader, sourcemod_mm, is shared and has two entry points. The old Metamod calls the old one, which opens sourcemod.1.ep1. MM 1.12 calls the new one, which opens sourcemod.2.ep1.\n- Each core then looks for extensions with its own suffix first (.1.ep1 or .2.ep1), then without a suffix.\n- So the game extensions (SDKTools, SDKHooks, CS Tools), which register with Metamod as plugins, must exist in both flavours.\n- The shared extensions (bintools, clientprefs, dbi.*, geoip, regex, topmenus, updater, webternet) and sourcemod.logic do not register with Metamod at all. They use only SourceHook's header-only containers, so one copy serves both cores.\n\n**Why our published sm11 package fails on MM 1.12**\n- Our builder overwrites MM 1.10's modern headers with the legacy ones and pins the plugin API to 11.\n- So both of our cores, and all game extensions, report API 11. I checked this by loading each file with a small probe tool, on Linux and in the Windows 6572 zip.\n- MM 1.12 therefore refuses our 2.ep1 core (\"11 < 14\").\n- rom4s's files report 11 for 1.ep1 and 15 for 2.ep1.\n\n**Upstream history**\n- SourceMod up to 1.8 built Episode One as 1.ep1 against MM's legacy headers, and every other game against the modern headers, in the same build.\n- Commit ad3588d0a (Jan 2017, the start of the 1.9 branch) switched Episode One to 2.ep1 with the modern headers and removed the legacy loader entry point.\n- Upstream never built 1.ep1 and 2.ep1 for the same game in one build. rom4s added a second build target for that, as our builder does with 'ep1'.\n\n**Which Metamod headers for 2.ep1**\nBuild the 2.ep1 half against MM 1.12's headers, not MM 1.10's modern ones.\n- Both header sets are binary-compatible with MM 1.12.\n- But with GCC 5 or newer, MM 1.10's ISmmPlugin.h hides the CreateInterface export (it checks for exactly `__GNUC__ == 4`; rom4s used clang).\n- My GCC 10 build of the 2.ep1 extensions against MM 1.10 headers exported no CreateInterface, so Metamod could not load them.\n\n**Experiments, all done in my own directory (repository untouched)**\n- **Compile check of the patched 6970 tree (130 compile units):** everything compiles against both pristine MM 1.10 and MM 1.12 headers. Only DHooks fails with today's transplanted headers.\n- **Partial rebuild:** in the old-OS GCC 10 environment, from the existing sm11 build tree, I recompiled against MM 1.12 headers: the 2.ep1 core, the three 2.ep1 game extensions, DHooks, sourcemod.logic, the loader and the shared extensions. The 1.ep1 files were kept as they were.\n- **Smoke tests:** the resulting package passes on CentOS 7, Debian 11 and Ubuntu 24.04 with both MM 1.12 (plugin API 16:14, SourceHook 5:5) and MM 1.10.7 (11:7, SourceHook 4:4).\n- **Botplay:** passes with both Metamods. On MM 1.12 the DHooks probe passes completely. On MM 1.10.7 DHooks is simply not visible (the probe is skipped).\n- **Switching Metamod:** unpacking one Metamod package over the other boots whichever was unpacked last; the leftover files are ignored.\n- **DHooks under the old Metamod:** shipped as dhooks.ext.2.ep1.so, the 1.ep1 core never sees it. Shipped unsuffixed, it fails cleanly (\"Plugin API 16 is newer than internal version (11)\") and does not crash.\n\n**Recommended design**\n- Build once, with both build targets (ep1 and episode1), with the MM 1.12 tree as the main Metamod path.\n- Only the ep1 target uses a separate copy of the legacy headers. Nothing else changes for 1.ep1, so the 1.ep1 files come out as today.\n- Turn DHooks back on and ship it as dhooks.ext.2.ep1.\n- Ship two alternative Metamod packages: MM 1.12 (suggested default) and MM 1.10.7 (legacy option).\n\n**Not yet covered**\n- Windows was not built or tested.\n- The real builder still has to reproduce the partial rebuild above.\n- The 1.ep1 half keeps the legacy workarounds.\n- The default Metamod for 1.11 is not decided yet.",
+ "verdict": "dual-package-works-with-caveats",
+ "facts": [
+  {
+   "fact": "Which core runs is decided by the Metamod loader, not by SourceMod. The MM 1.10 loader loads metamod.1.ep1 (core-legacy, PLAPI 11:7, SH 4:4). That core loads plugins only through CreateInterface('ISmmPlugin'), so SM's loader opens sourcemod.1.ep1. The MM 1.12 loader loads metamod.2.ep1 (PLAPI 16:14, SH 5:5). That core calls CreateInterface_MMS, so SM's loader opens sourcemod.2.ep1. metamod.vdf ('../cstrike/addons/metamod/bin/server') and sourcemod.vdf ('addons/sourcemod/bin/sourcemod_mm') are byte-identical in both MM packages, on Linux and Windows.",
+   "evidence": "mm.git 1.10-dev loader/loader.cpp:71 \"1.ep1\" vs 1.12-dev :71 \"2.ep1\"; core-legacy/CPlugin.cpp ~394-417 (dlsym CreateInterface, PLAPI_MIN 7..PLAPI_VERSION 11); 1.12-dev core/metamod_plugins.cpp:552-576 (14..16). SM loader at f53cb134 maps SOURCE_ENGINE_ORIGINAL/EPISODEONE to FILENAME_1_6_EP1 'sourcemod.2.ep1'; the css34 patch restores CreateInterface pointing at FILENAME_1_4_EP1 (apply-sourcemod.sh:487-626). Windows server.dll strings: '1.ep1' (MM 1.10.7 zip) vs '2.ep1' (MM 1.12 zip). Both vdf files diffed identical.",
+   "confidence": "high"
+  },
+  {
+   "fact": "Extension lookup per core: CLocalExtension looks for extensions/<name>.<gamesuffix>.so, then extensions/auto.<name>/<gamesuffix>.so, then extensions/<name>.so. bintools is special-cased to bintools.ext.so. Game extensions that attach to MM (SMEXT_CONF_METAMOD: sdktools, sdkhooks, cstrike, dhooks) are loaded as MM plugins through bridge->LoadMMSPlugin, and MM checks their PLAPI. So they must exist as .1.ep1 and .2.ep1.",
+   "evidence": "f53cb134:core/logic/ExtensionSys.cpp:69-130 (lookup order) and :192-205 (IsMetamodExtension -> LoadMMSPlugin; failure closes the lib and returns false). smsdk_config.h at f53cb134: SMEXT_CONF_METAMOD is defined only in cstrike, dhooks, sdkhooks, sdktools, structs, tf2.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The shared modules do not attach to Metamod and do not use SourceHook at runtime, so one copy serves both cores. This covers bintools, clientprefs, dbi.mysql/pgsql/sqlite, geoip, regex, topmenus, updater, webternet, sourcemod.logic and sourcepawn.jit. They export only GetSMExtAPI (or nothing). They contain no ISmmPlugin or ISourceHook strings. They include MM core/sourcehook only for header-only helpers: sh_list/sh_string/sh_vector/sh_stack, SetMemAccess, and the ProtoInfo/PassInfo structs bintools' internal CallMaker2 uses. No SourceHook type appears in SM public interfaces (public/*.h, public/extensions/*.h, core/logic/intercom.h). IBinTools.h at 6970 includes only IShareSys.h, and sdktools uses IBinTools v1 (SourceMod::PassInfo).",
+   "evidence": "scripts/apiscan.py over rel/rom4s/x and rel/sm11/x: shared exts 'exports=GetSMExtAPI', no ISmmPlugin/ISourceHook strings. git grep at f53cb134 for SourceHook::List|String|... in public headers: no hits. smsdk_config.h has '//#define SMEXT_CONF_METAMOD' for all shared exts. rom4s bintools contains SourceHook::CProtoInfoBuilder (v5-only header), so rom4s compiled its shared exts against MM 1.10 core/ (SH v5) and they run under its 1.ep1 core too.",
+   "confidence": "high"
+  },
+  {
+   "fact": "Our published sm11 package (6970) has both cores, but every MM-attached binary reports PLAPI 11. That includes sourcemod.2.ep1 and the *.ext.2.ep1 files, so MM 1.12 refuses them ('Older Metamod version required (11 < 14)'). The cause is apply-mmsource-css34.sh: it overwrites MM 1.10's core/ (core/sourcehook replaced by core-legacy SH v4, legacy-layout ISmmAPI/ISmmPlugin, METAMOD_PLAPI_VERSION pinned to 11). SM's ConfigureForHL2 uses mms_root/core for every SDK. The Windows 1.11.0.6572-mm1.10.7 zip has the same defect.",
+   "evidence": "probe/plapi-probe in i386/debian:11 on rel/sm11 files: all 8 report PLAPI=11. PE analysis (scripts/pe_plapi2.py, pe_plapi4.py) of our 6572 Windows zip: sourcemod.1.ep1.dll and sourcemod.2.ep1.dll and all game ext DLLs return 11. apply-mmsource-css34.sh:19,31,38,233,254-272; f53cb134:AMBuildScript:567-573.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The rom4s 1.11.0.6572 package (Linux and Windows) is a true dual package. sourcemod.1.ep1 and *.ext.1.ep1 report PLAPI 11, built against genuine core-legacy headers (global-namespace ::ISmmPlugin). sourcemod.2.ep1 and *.ext.2.ep1 report PLAPI 15, built against MM 1.10's modern core/ (SourceMM::ISmmPlugin). rom4s's sourcemod_mm exports CreateInterface and CreateInterface_MMS. The rom4s Windows zip has the same 1.ep1/2.ep1 layout and the same PLAPI pattern (11/15). Neither rom4s build ships DHooks.",
+   "evidence": "Linux: GetApiVersion disassembly 'mov $0xf,%eax' (2.ep1) vs 'mov $0xb,%eax' (1.ep1), symbols _ZN8SourceMM10ISmmPlugin13GetApiVersionEv vs _ZN10ISmmPlugin13GetApiVersionEv; plapi-probe gives 15/11 for all rom4s .2.ep1/.1.ep1 files. Windows (sourcemod-1.11.0-git6572-css34-windows.zip from github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/): sourcemod.2.ep1.dll InterfaceReg('ISmmPlugin') vtable slot0 returns 15, 1.ep1 returns 11, game ext DLLs 15/11.",
+   "confidence": "high"
+  },
+  {
+   "fact": "Upstream history: SM up to 1.8-dev (last commit 2018-08-12, rev 6051) built SDK 'episode1' as '1.ep1' against MM core-legacy and every other SDK against MM core, in one build. ConfigureForHL2 had `if sdk.name == 'episode1': mms_path = core-legacy else core`. The loader had CreateInterface -> sourcemod.1.ep1 and CreateInterface_MMS -> sourcemod.2.ep1. Commit ad3588d0a ('Use newer MM:S api for Ep1/Original engine. (#548)', 2017-01-11, rev 6033, first in 1.9-dev) changed episode1 to '2.ep1' + MM core. It removed the loader's CreateInterface/FILENAME_1_4_EP1/GetFileOfAddress, GAMEFIX '1.ep1', and the #ifndef METAMOD_PLAPI_VERSION branches in core/sdkhooks/sdktools. Upstream never built 1.ep1 and 2.ep1 for the same engine in one build; that needs an extra SDK entry, as rom4s and our 'ep1' SDK do.",
+   "evidence": "dual-analysis/sm.git: git show ad3588d0a (AMBuildScript, loader/loader.cpp, core/logic_bridge.cpp, sourcemm_api.*, sdkhooks/extension.h, sdktools/extension.cpp); git show ad3588d0a^:AMBuildScript:20 and :362-373; 1.8-dev:loader/loader.cpp:69-71, 227-229, 382-412; merge-base: ad3588d0a not in 1.8-dev. Remnants at 6970: public/smsdk_ext.cpp:313-366 still has the '#if !defined METAMOD_PLAPI_VERSION' paths; public/sample_ext/AMBuildScript:296-306 still has the per-SDK core-legacy branch.",
+   "confidence": "high"
+  },
+  {
+   "fact": "MM 1.10-dev (80e8ff0, rev 976) contains core-legacy (PLAPI 11, min 7, SH_IFACE 4) and core/ (METAMOD_PLAPI_VERSION 15, PLAPI_MIN 14, SH 5:5, provides IHookManagerAutoGen). MM 1.11/1.12 have PLAPI 16 (the 15->16 bump was 937b401, 'Nuke core-legacy', 2016-10-11). On x86, MM 1.10 core/ and MM 1.12 core/ headers are binary-compatible: ISourceHook only gains LogDebug appended at the end; CMyDelegateImpl gains a virtual dtor placed after the Call slot; FormatIface changes from unsigned int to size_t (same size on i386); IPluginManager/ISmmPlugin vtables are unchanged. MM 1.12 accepts both 15 and 16.",
+   "evidence": "git grep on mm.git 1.10-dev: core/ISmmPluginExt.h:64 =15, core/metamod_plugins.h:66 MIN 14, core/sourcehook/sourcehook.h:25 SH_IFACE 5, core-legacy/ISmmPlugin.h:23 =11, core-legacy/CPlugin.h:44 MIN 7. Diff 1.10-dev..1.12-dev of the non-macro part of sourcehook.h: only SH__MFP_ZERO_HIGH_WORD, DebugLogFunc typedef and LogDebug at the end of ISourceHook. MAKE_DELEG at sh112.h:1056-1078. Runtime proof: rom4s 2.ep1 (PLAPI 15) passes smoke on our MM 1.12 (prior research).",
+   "confidence": "high"
+  },
+  {
+   "fact": "Building the 2.ep1 half against MM 1.10's core/ with GCC (≥5) breaks the extensions: MM 1.10 core/ISmmPlugin.h:502-507 gives SMM_API default visibility only when __GNUC__ == 4. smsdk_ext's PL_EXPOSURE (CreateInterface) is then hidden by -fvisibility=hidden. In my GCC 10 rebuild against MM 1.10 core/ (P15), sdkhooks/sdktools/game.cstrike/dhooks .2.ep1 exported only GetSMExtAPI, so MM cannot load them. MM 1.12 core/ISmmPlugin.h:508-509 sets visibility unconditionally, and the same rebuild against MM 1.12 (P16) exports CreateInterface with PLAPI 16. rom4s avoided the problem only because clang defines __GNUC__ 4.",
+   "evidence": "scripts/apiscan.py on build-p15 vs build-p16: P15 'exports=GetSMExtAPI apiver 15'; P16 'exports=CreateInterface,GetSMExtAPI apiver 16'. sourcemod.2.ep1 exports CreateInterface in both variants, because the core uses EXPOSE_SINGLE_INTERFACE_GLOBALVAR from tier1.",
+   "confidence": "high"
+  },
+  {
+   "fact": "The css34-patched SM 6970 tree compiles (-fsyntax-only, with the real -Werror flags) for every 2.ep1 unit, every shared-extension unit, the loader and DHooks against pristine MM 1.10 core/ and pristine MM 1.12 core/ (130/130 OK each), plus all 57 logic.so units against MM 1.12. With today's transplanted core/, DHooks fails (IHookManagerAutoGen missing, ProtoInfo redefinition). Every Metamod API method and SH_* macro SM 6970 uses exists in MM 1.10 core.",
+   "evidence": "check-*/results.tsv from scripts/mkcmds.py + runcheck.sh in quay.io/pypa/manylinux2014_i686 against research/oldos/repo-full: 'ctl SM-only: FAIL=8 (dhooks)', 'mm110 OK=130', 'mm112 OK=130', 'logic112 TOTAL 57 OK 57'. ctl error: extension.h:131 'IHookManagerAutoGen in namespace SourceHook does not name a type'. Lists: sm6970_mmcalls.txt, sm6970_shmacros.txt.",
+   "confidence": "high"
+  },
+  {
+   "fact": "EXPERIMENT: a dual package with the 2.ep1 half and all shared modules built against MM 1.12 headers works with both Metamods. 1.ep1 binaries and sourcepawn/geoip/webternet were kept from the old-OS sm11 build. Smoke passes (26 OK) on CentOS 7 (glibc 2.17), Debian 11 and Ubuntu 24.04 with MM 1.12 (16:14 / SH 5:5, sourcemod.2.ep1) and with MM 1.10.7 (11:7 / SH 4:4, sourcemod.1.ep1). Botplay passes with both. Under MM 1.12 the full css34_dhooks_probe passes (setup=1, vhook 193, detour 72, EyePosition Vector return, PlayStepSound float param + recall, GetMaxSpeed float return, all *_bad=0). Under MM 1.10.7 DHooks is cleanly absent (available=0, SKIP).",
+   "evidence": "smoke-dualfull-mm{110,112}-{centos-7,debian-11,ubuntu-24-04}/run.log ('Smoke test PASSED OK-count: 26', 'Plugin interface version: 16:14' / '11:7'); research/dual-analysis/bp/botplay-mm112.log and botplay-mm110.log ('Botplay test PASSED', 'OK: DHooks ...' / 'SKIP: dhooks.ext not shipped'). Package: research/dual-analysis/pkg/full.tgz.",
+   "confidence": "high"
+  },
+  {
+   "fact": "DHooks needs IHookManagerAutoGen (MM ≥1.6 core) and attaches to MM, so it can only run on the 2.ep1/MM 1.12 side. If it is shipped unsuffixed (dhooks.ext.so) and loaded under MM 1.10.7, it fails cleanly: sm exts list shows '<FAILED> file \"dhooks.ext.so\": Plugin API 16 is newer than internal version (11)' and the server keeps running. Smoke counts this as a failed extension. If it is shipped as dhooks.ext.2.ep1.so, the suffix lookup makes it invisible to the 1.ep1 core. SM has no other conditional autoload, so the suffix acts as the condition. Plugins that require dhooks fail to load only on the 1.ep1 lane.",
+   "evidence": "smoke-dual-b-mm110-deb11/run.log (unsuffixed + dhooks.autoload); smoke-dual-a-mm112-deb11/run.log ('[01] DHooks (1.11.0.6970)' with dhooks.ext.2.ep1.so + autoload); smoke-dual-n-mm110-deb11 (no FAILED, 7 extensions).",
+   "confidence": "high"
+  },
+  {
+   "fact": "The two MM packages are alternatives over the same SM tree and switch cleanly. Both ship addons/metamod.vdf, bin/server.so, bin/server_i486.so (Windows: server.dll), metaplugins.ini and README.txt under the same names. The loader that was unpacked last decides the core, and the other metamod.X.ep1 file is ignored. Side effects: metaplugins.ini is overwritten, and addons/metamod/css34-package.json from MM 1.12 goes stale because the MM 1.10.7 package ships none.",
+   "evidence": "pkg/mm-110-then-112.tgz and mm-112-then-110.tgz: smoke-dual-n-mm110then112-deb11 shows 1.12.0 16:14; smoke-dual-n-mm112then110-deb11 shows 1.10.7 11:7; both PASS. tar listings of rel/sm11/mm.tgz vs rel/sm12-latest/mm.tgz.",
+   "confidence": "high"
+  },
+  {
+   "fact": "Existing Windows Metamod builds: mmsource-1.10.7-dev-css34-windows.zip in release 1.11.0.6572-mm1.10.7 (metamod.1.ep1.dll, server.dll with backend '1.ep1', metamod.vdf). mmsource-1.12.0-dev-css34-windows.zip in the 1.12/1.13 releases (metamod.2.ep1.dll reporting '1.12.0-dev+1', server.dll with '2.ep1'). Release 1.11.0.6970-mm1.10.7 has no Windows assets. rom4s's Windows MM 1.10.6 could not be fetched: Bitbucket downloads return 402/404. The consumer v34_server_base still uses the 6572 Windows MM zip.",
+   "evidence": "gh api releases listing; downloads under research/dual-analysis/dl; objdump -p exports (GetGameDllBridge, GetVspBridge / CreateInterface); curl to bitbucket.org/rom4s/mmsdrop-1.10 returned 404, and the API returned 402 'Free plan does not support downloading files'.",
+   "confidence": "high"
+  },
+  {
+   "fact": "There is a link-order dependency. With MM headers, SM 6970's smsdk_ext PL_EXPOSURE defines CreateInterface, and tier1_i486.a's interface.o defines one too. Today's css34 link uses -Wl,--allow-multiple-definition for ep1 and episode1, so the first (smsdk_ext) definition must win. It does in the experiment: CreateInterface('ISmmPlugin') returns the plugin with PLAPI 16. The sourcemod.2.ep1 core deliberately uses tier1's CreateInterface via EXPOSE_SINGLE_INTERFACE_GLOBALVAR.",
+   "evidence": "apply-sourcemod.sh:1155-1158; the oldos link line for *.2.ep1.so includes -Wl,--allow-multiple-definition; plapi-probe on pkg dual: all .2.ep1 files PLAPI=16, .1.ep1 = 11.",
+   "confidence": "medium"
+  }
+ ],
+ "design": "## 1. Runtime model: one SM package, two Metamods\n\n**Files**\n- Shared files:\n  - bin/sourcemod_mm_i486.so (sourcemod_mm.dll on Windows) — the SM loader, exporting CreateInterface and CreateInterface_MMS\n  - bin/sourcemod.logic, bin/sourcepawn.jit.x86\n  - extensions/{bintools, clientprefs, dbi.mysql, dbi.pgsql, dbi.sqlite, geoip, regex, topmenus, updater, webternet}.ext\n  - configs, gamedata, plugins, translations, scripting, addons/metamod/sourcemod.vdf\n- 1.ep1 lane (MM 1.10.7, metamod.1.ep1, PLAPI 11, SourceHook v4): bin/sourcemod.1.ep1 and extensions/{sdktools, sdkhooks, game.cstrike}.ext.1.ep1.\n- 2.ep1 lane (MM 1.12, metamod.2.ep1, PLAPI 16:14, SourceHook v5): bin/sourcemod.2.ep1, extensions/{sdktools, sdkhooks, game.cstrike}.ext.2.ep1, and extensions/dhooks.ext.2.ep1.\n\n**Load path**\n1. The engine loads addons/metamod/bin/server (via metamod.vdf).\n2. The loader picks metamod.1.ep1 (MM 1.10 loader) or metamod.2.ep1 (MM 1.12 loader).\n3. Metamod loads sourcemod_mm:\n   - Legacy core-legacy calls CreateInterface, which opens sourcemod.1.ep1.\n   - MM 1.12 calls CreateInterface_MMS, which opens sourcemod.2.ep1.\n4. The core advertises gamesuffix 1.ep1 or 2.ep1.\n5. ExtensionSys tries <ext>.<suffix>, then auto.<ext>/<suffix>, then <ext>. It loads MM-attached extensions through Metamod's plugin loader, which checks their PLAPI against that Metamod's range: legacy 7..11, MM 1.12 14..16.\n\n**Why the shared parts are safe**\n- The shared modules never attach to Metamod and never call SourceHook at runtime.\n- They use only header-only SourceHook helpers, and no SourceHook type crosses SM's public interfaces.\n- So they can be compiled against MM 1.12 SourceHook v5 headers and still serve the 1.ep1 core. The experiment proves this; rom4s did the same with MM 1.10 v5 headers.\n\n## 2. Build design (recommended D1): one SM build, per-SDK Metamod include roots\n\n**Inputs**\n- SM 6970 (f53cb134) with the existing css34 patches. The 'ep1' SDK entry stays as today: SE_EPISODEONE, GAMEFIX \"1.ep1\", rom4s/hl2sdk-ep1c — pin its commit.\n- MM 1.10-dev 80e8ff0: builds MM 1.10.7 (metamod.1.ep1, with the old-OS `__GNUC__` fix) and supplies the legacy compatibility headers.\n- MM 1.12-dev pin, the same as the 1.12/1.13 lines (git1227 75dd7b2): supplies pristine core headers for SM and the MM 1.12 package.\n\n**Changes**\n- **apply-mmsource-css34.sh:**\n  - Generate the legacy header set into `$MM110/core-css34legacy/` instead of overwriting `core/` (today: lines 19, 31, 38, 233, 254-272).\n  - Copy `core/*.h`, then replace `sourcehook/` with `core-legacy/sourcehook` plus the SH_DECL_EXTERN v4 generator.\n  - Add the legacy-order ISmmAPI/ISmmPlugin with modern names, ISmmPluginExt with PLAPI 11, and the `__GNUC__ >= 4` SMM_API fix.\n  - Leave `core/` pristine and drop the `$mms/sourcehook` symlink.\n  - Drop the ProtoInfo guard and pibuilder shim: bintools now compiles against v5.\n  - MM 1.10.7's own build is unaffected: core-legacy uses its own sourcehook, and the loader is built against v5 as upstream does.\n- **apply-sourcemod.sh, 1.11 path:** patch `ConfigureForHL2` (f53cb134:AMBuildScript:567-573):\n\n  ```\n  if sdk.name == 'ep1':\n      mms_core = os.environ['CSS34_MMS_LEGACY_CORE']   # $MM110/core-css34legacy\n  else:\n      mms_core = os.path.join(self.mms_root, 'core')   # MM 1.12\n  compiler.cxxincludes += [mms_core, os.path.join(mms_core, 'sourcehook')]\n  ```\n\n  - Every non-SDK target (loader, logic, shared extensions, DHooks) keeps using `SM.mms_root/core[/sourcehook]`, which is now MM 1.12.\n  - Re-enable `extensions/dhooks/AMBuilder` (today commented out at apply-sourcemod.sh:1194-1212) and emit or rename it as `dhooks.ext.2.ep1`.\n  - Keep, because they are harmless for 2.ep1 and needed for 1.ep1: loader CreateInterface + FILENAME_1_4_EP1, the Query non-NULL outs, SafeSprintf instead of `ismm->Format`, the metamod_wrappers rewrite, GAMEFIX 1.ep1, and `--allow-multiple-definition` for ep1/episode1.\n- **Configure:** `--sdks=ep1,episode1 --mms-path=$DEPS/mmsource-1.12` with `CSS34_MMS_LEGACY_CORE=$DEPS/mmsource-1.10/core-css34legacy`.\n- **Toolchain:** quay.io/pypa/manylinux2014_i686, GCC 10 (old-OS work): `-static-libstdc++` with `--exclude-libs` on every module, glibc floor 2.17. No clang-9 and no gcc-4.9 sysroot.\n- **Windows:** the same AMBuildScript logic in builder/run/windows.sh (already `--sdks=ep1,episode1` for SM < 12).\n\n**Fallback D2:** two builds of the same patched tree, merged.\n- Build A: `--sdks=ep1` with the legacy headers as mms-path; keep only `*.1.ep1.*`.\n- Build B: `--sdks=episode1`, MM 1.12, DHooks; keep everything else.\n- Costs about twice the build time and gives two version stamps. Use only if the per-SDK patch causes trouble.\n\n**Rejected P15** (2.ep1 against MM 1.10 core/, as rom4s did): it needs another `__GNUC__` crutch, because with GCC the extensions lose their CreateInterface export. It also targets a dead Metamod branch, while the runtime Metamod is 1.12. P15's only benefit is that 2.ep1 would also load on rom4s's MM 1.10.6 metamod.2.ep1 fallback, which nobody needs.\n\n## 3. Package and installer contract (additive)\n\n**SM package** (sourcemod-css34-linux.tar.gz / -windows.zip): one dual tree as above. It ships no dhooks.autoload and no unsuffixed dhooks.ext.\n\n**Metamod packages**\n- mmsource-css34-linux.tar.gz: MM 1.12 (metamod.2.ep1). Suggested default, the same build as the other lines.\n- New asset mmsource-legacy-css34-linux.tar.gz (and -windows.zip): MM 1.10.7 (metamod.1.ep1), for PLAPI-11 Metamod plugins or third-party *.ext.1.ep1-only extensions.\n- Both must carry addons/metamod/css34-package.json; MM 1.10.7 does not today.\n\n**Installer (switching Metamod)**\n1. Remove addons/metamod/bin/{server*, metamod.*} and addons/metamod/css34-package.json.\n2. Unpack the chosen MM package. SM needs no change.\n3. Preserve the user's metaplugins.ini.\n\n**SM css34-package.json** (keep existing scalars, add fields):\n- `\"metamod_binary\": \"metamod.2.ep1\"` (default lane)\n- `\"metamod_binaries\": [\"metamod.2.ep1\", \"metamod.1.ep1\"]`\n- `\"cores\"`:\n  - `\"2.ep1\"`: `{metamod_binary: \"metamod.2.ep1\", plapi: 16, sourcehook: 5, mm_version: \"1.12.0-git1227\", mm_commit: ..., dhooks: true}`\n  - `\"1.ep1\"`: `{metamod_binary: \"metamod.1.ep1\", plapi: 11, sourcehook: 4, mm_version: \"1.10.7-git976\", mm_commit: \"80e8ff0...\", dhooks: false}`\n\n**lines.json, sm11-oldstable:** `mm: \"mm112\"`, `mm_legacy: \"mm110\"`, `metamod_binary: \"metamod.2.ep1\"`, `metamod_binaries: [...]`, plus asset names for both Metamods. Line IDs and the `tag`/`smoke` fields stay unchanged.\n\n## 4. Gates\n\n**Static**\n- check-package.sh, dual rules: both cores present; game extensions in both suffixes; dhooks.ext.2.ep1 present and no dhooks.ext; loader exports CreateInterface and CreateInterface_MMS; glibc ≤ 2.17; drop the 'logic ≥ 100 exports' rule.\n- A new plapi-probe step (dlopen with LD_LIBRARY_PATH=srv/bin, then CreateInterface('ISmmPlugin') and vtable[0]):\n  - every *.1.ep1 file reports 11;\n  - every *.2.ep1 file (including dhooks) reports between 14 and 16;\n  - every MM-attached extension exports CreateInterface.\n  - For SM ≥ 1.12 extensions the probe needs a CreateInterface_MMS variant.\n\n**Dynamic**\n- Smoke: SM dual × {MM 1.12, MM 1.10.7} × {centos:7, debian:11, ubuntu:24.04, debian:13}. `meta version` must show 16:14 / 5:5 or 11:7 / 4:4.\n- Botplay on both lanes. The DHooks probe must report available=1 on MM 1.12 and SKIP on MM 1.10.7.\n- One Metamod-switch smoke.\n- Windows: native and Wine smoke on both lanes before any Windows asset is attached.",
+ "test_results": [
+  {
+   "case": "Syntax check: css34-patched SM 6970 2.ep1, shared extensions, loader and DHooks units against today's transplanted MM 1.10 core/",
+   "result": "FAIL (expected): 122 OK, 8 DHooks units fail",
+   "image": "quay.io/pypa/manylinux2014_i686 (GCC 10.2)",
+   "notes": "IHookManagerAutoGen missing and SourceHook::ProtoInfo redefinition. This is why DHooks is dropped from today's 1.11 package. Results in research/dual-analysis/check-ctl (log files removed)."
+  },
+  {
+   "case": "Syntax check: same 130 units against pristine MM 1.10 core/ (PLAPI 15)",
+   "result": "PASS 130/130",
+   "image": "quay.io/pypa/manylinux2014_i686",
+   "notes": "Compiles, but see the P15 link result: extensions lose their CreateInterface export under GCC."
+  },
+  {
+   "case": "Syntax check: same 130 units, plus 57 logic.so units, against pristine MM 1.12 core/ (PLAPI 16)",
+   "result": "PASS 130/130 and 57/57",
+   "image": "quay.io/pypa/manylinux2014_i686",
+   "notes": "research/dual-analysis/check-mm112/results.tsv, check-logic112/results.tsv"
+  },
+  {
+   "case": "Partial rebuild P15: 2.ep1 core, 2.ep1 game extensions and DHooks against MM 1.10 core/",
+   "result": "Builds, but extensions are unusable: game extensions and DHooks export only GetSMExtAPI (no CreateInterface)",
+   "image": "quay.io/pypa/manylinux2014_i686",
+   "notes": "MM 1.10 core/ISmmPlugin.h:502-507 SMM_API visibility gate. sourcemod.2.ep1 itself reports PLAPI 15. Build dir deleted after analysis."
+  },
+  {
+   "case": "Partial rebuild P16: 2.ep1 core, 2.ep1 game extensions, DHooks, logic, loader and shared extensions against MM 1.12 core/",
+   "result": "PASS: all MM-attached .2.ep1 files report PLAPI 16 and export CreateInterface; max GLIBC 2.17",
+   "image": "quay.io/pypa/manylinux2014_i686",
+   "notes": "research/dual-analysis/build-p16 (linked .so kept, objects removed); rebuild-p16*.sh / *.log"
+  },
+  {
+   "case": "plapi-probe on rom4s / our sm11 / the experimental dual package / sm13-latest",
+   "result": "rom4s 1.ep1=11 and 2.ep1=15; sm11 all 11 (the bug); dual 1.ep1=11 and 2.ep1 + dhooks=16; sm13 core=16 (its extensions use CreateInterface_MMS only)",
+   "image": "manylinux2014_i686 and i386/debian:11 with scratchpad/srv/bin",
+   "notes": "research/dual-analysis/probe/plapi-probe.c"
+  },
+  {
+   "case": "dual-a: dual package (2.ep1 from P16, dhooks.ext.2.ep1 + dhooks.autoload) + MM 1.12 (old-OS build git1226)",
+   "result": "PASS, 26 OK; 8 extensions including DHooks; 16:14 / SH 5:5",
+   "image": "debian:11",
+   "notes": "scratchpad/smoke-dual-a-mm112-deb11/run.log"
+  },
+  {
+   "case": "dual-n: the same dual package without autoload + MM 1.10.7 (old-OS build git976)",
+   "result": "PASS, 26 OK; 1.ep1 core, 11:7 / SH 4:4; DHooks not visible",
+   "image": "debian:11",
+   "notes": "scratchpad/smoke-dual-n-mm110-deb11/run.log"
+  },
+  {
+   "case": "dual-b: unsuffixed dhooks.ext.so + autoload under MM 1.10.7",
+   "result": "Clean failure: '<FAILED> file \"dhooks.ext.so\": Plugin API 16 is newer than internal version (11)'; no crash, map changes; smoke rc=1 only because of the FAILED-extension check",
+   "image": "debian:11",
+   "notes": "scratchpad/smoke-dual-b-mm110-deb11/run.log"
+  },
+  {
+   "case": "dual-n with MM 1.12 and with MM 1.10.7",
+   "result": "PASS both (26 OK)",
+   "image": "ubuntu:24.04",
+   "notes": "smoke-dual-n-mm112-u2404, smoke-dual-n-mm110-u2404"
+  },
+  {
+   "case": "Metamod switch: MM 1.10.7 unpacked then MM 1.12 over it, and the reverse",
+   "result": "PASS both; the Metamod unpacked last wins (16:14 or 11:7)",
+   "image": "debian:11",
+   "notes": "smoke-dual-n-mm110then112-deb11, smoke-dual-n-mm112then110-deb11"
+  },
+  {
+   "case": "Full dual package (2.ep1 + all shared modules from P16, 1.ep1 legacy) × {MM 1.12, MM 1.10.7}",
+   "result": "PASS 6/6 (26 OK each)",
+   "image": "centos:7 (glibc 2.17), debian:11, ubuntu:24.04",
+   "notes": "scratchpad/smoke-dualfull-*/run.log; package research/dual-analysis/pkg/full.tgz"
+  },
+  {
+   "case": "Botplay of the full dual package + MM 1.12 (240 s, de_dust2/de_inferno/de_nuke, SMAC, SDKHooks, cstrike probe, DHooks probe)",
+   "result": "PASS: DHooks probe complete (setup 1, vhook 193, detour 72, eye/step/speed hits, *_bad=0); SM API probe 96 OK / 0 fail; abi_probe clean",
+   "image": "debian:11",
+   "notes": "research/dual-analysis/bp/botplay-mm112.log, botplay-report-mm112.txt/json"
+  },
+  {
+   "case": "Botplay of the full dual package + MM 1.10.7",
+   "result": "PASS (1.ep1; DHooks probe available=0, SKIP; SM API probe 95 OK / 0 fail)",
+   "image": "debian:11",
+   "notes": "research/dual-analysis/bp/botplay-mm110.log"
+  },
+  {
+   "case": "Windows: layout and PLAPI of the rom4s 6572 zip and our 6572 zip (static PE analysis only)",
+   "result": "rom4s 1.ep1.dll=11, 2.ep1.dll=15 (core and game extension DLLs); ours 11/11. Both have the same dual layout. Not run on Windows.",
+   "notes": "scripts/pe_plapi2.py, pe_plapi3.py, pe_plapi4.py; zips in research/dual-analysis/dl"
+  }
+ ],
+ "caveats": [
+  "The proof used a partial rebuild, not the real builder. It reused the logged compile/link commands of the old-OS sm11 build tree (research/oldos/repo-full, read-only mount). The 2.ep1 half, DHooks, logic, the loader and the MM-including shared extensions were recompiled against pristine MM 1.12 headers. The 1.ep1 binaries, sourcepawn.jit, geoip and webternet were reused unchanged. The builder changes (tasks DUAL-1..3) must reproduce this byte-for-byte equivalent configuration and pass the same gates.",
+  "Windows was not built or run. The layout and PLAPI pattern come from static analysis of the rom4s and our 6572 zips. MSVC link behaviour for duplicate CreateInterface definitions (smsdk_ext PL_EXPOSURE vs tier1.lib interface.obj) on the 2.ep1 side is untested; the upstream SM 6970 Windows drop is evidence it links. rom4s's Windows MM 1.10.6 could not be downloaded (Bitbucket 402/404).",
+  "The 1.ep1 half keeps the legacy workarounds: SourceHook v4 macro generator, legacy-layout ISmmAPI/ISmmPlugin rename, loader CreateInterface restore, Query non-NULL outs, GAMEFIX 1.ep1, the second 'ep1' SDK (rom4s/hl2sdk-ep1c, cloned unpinned today), and the MM 1.10 `__GNUC__` fix. Freezing 1.11 freezes them as well; pin hl2sdk-ep1c and archive all inputs.",
+  "Third-party compatibility differs by lane:\n- MM-1.4-API (PLAPI ≤ 12) Metamod plugins and *.ext.1.ep1-only extensions work only with MM 1.10.7.\n- PLAPI 14-16 Metamod plugins, DHooks and *.ext.2.ep1 extensions work only with MM 1.12.\n- Unsuffixed third-party extensions that attach to Metamod work only on their matching Metamod generation; elsewhere they fail cleanly.\n- Third-party extensions that pass SourceHook v4 ProtoInfo/ISourceHook into bintools' IBinTools2 (CreateVirtualHook) could misbehave, because bintools is now compiled with v5 headers. No in-tree SM component does this.",
+  "The extension link relies on -Wl,--allow-multiple-definition and on link order: the smsdk_ext CreateInterface must come before tier1's. The plapi-probe gate should catch a regression (NULL ISmmPlugin or a wrong PLAPI).",
+  "Which Metamod is the 1.11 installer default is an owner decision. I suggest MM 1.12, which matches the other lines and brings DHooks, with MM 1.10.7 as an explicit legacy asset. The tag naming for a two-Metamod release is also undecided.",
+  "The MM 1.12 test packages report '1.12.0-dev+1' at runtime: the known build-number bug, also in the Windows DLL. Tests used MM git1226; git1227 is functionally identical for v34.",
+  "Unrelated finding: the old-OS dbi.mysql.ext.so exports 1347 dynamic symbols (static MariaDB/OpenSSL not hidden); consider --exclude-libs,ALL for extensions too.",
+  "plapi-probe needs an i386 runtime plus the server's tier0/vstdlib (srv/bin) and runs static constructors of the loaded modules. It handles SM ≤ 1.11 extensions (CreateInterface); SM ≥ 1.12 extensions export only CreateInterface_MMS and need an extended probe."
+ ],
+ "tasks": [
+  {
+   "title": "DUAL-1 Move the legacy Metamod headers into a separate directory",
+   "description": "Change builder/patches/apply-mmsource-css34.sh to generate the PLAPI-11 / SourceHook v4 compatibility headers into $MMS/core-css34legacy/ and leave $MMS/core pristine.\n- Copy core/*.h; copy core-legacy/sourcehook; run gen-sh-decl-extern-v4.py on the copy.\n- Apply the legacy-order ISmmAPI/ISmmPlugin with modern method names, META_NO_HL2SDK guards, ISmmPluginExt with PLAPI 11, and the SMM_API `__GNUC__ >= 4` fix.\n- Remove the `ln -sfn core/sourcehook $mms/sourcehook` symlink and the Windows copy.\n- Drop the ProtoInfo guard and the sourcehook_pibuilder shim; bintools will compile against MM 1.12 v5.\n- Keep the MM 1.10.7 build patches (version stamp, Versioning, tier1 order, old-OS `__GNUC__` fix).",
+   "acceptance": "$MMS/core is identical to upstream 80e8ff0 (git diff --stat core/ empty). $MMS/core-css34legacy/ISmmPluginExt.h defines METAMOD_PLAPI_VERSION 11 and its sourcehook.h has SH_IFACE_VERSION 4. The MM 1.10.7 package still builds (metamod.1.ep1 exports GetGameDllBridge/GetVspBridge) and passes smoke with the current sm11 SM package."
+  },
+  {
+   "title": "DUAL-2 Check out both Metamod trees for the 1.11 line",
+   "description": "In lines.json (or versions.env until it exists), set sm11-oldstable to mm=mm112 (the same 1.12-dev pin as the other lines at freeze time) and mm_legacy=mm110 (80e8ff0).\n- checkout-deps.sh / resolve-version.sh fetch both trees for this line.\n- Build MM 1.10.7 (metamod.1.ep1) from mm110.\n- Reuse the MM 1.12 package from the shared MM 1.12 build, or build it once.\n- Pin rom4s/hl2sdk-ep1c to a commit.",
+   "acceptance": "A sm11 build log shows both MM commits. Two MM packages are produced (mmsource-1.10.7-git976-..., mmsource-1.12.0-git12xx-...), each containing addons/metamod/css34-package.json with its own metamod_binary. check-version-pins passes."
+  },
+  {
+   "title": "DUAL-3 Per-SDK Metamod include roots and DHooks in the SM 6970 build",
+   "description": "In apply-sourcemod.sh (1.11 path), patch AMBuildScript ConfigureForHL2:\n- sdk 'ep1' includes $CSS34_MMS_LEGACY_CORE and its sourcehook.\n- Every other SDK and every non-SDK target uses SM.mms_root/core = MM 1.12.\n\nConfigure with `--sdks=ep1,episode1 --mms-path=<mmsource-1.12>` and `CSS34_MMS_LEGACY_CORE=<mmsource-1.10>/core-css34legacy` (Linux and Windows runners).\n\nRe-enable extensions/dhooks/AMBuilder and name the output dhooks.ext.2.ep1 (patch the ExtLibrary name, or rename in prepare-package).\n\nKeep the existing 1.ep1 patches: loader CreateInterface/FILENAME_1_4_EP1, Query non-NULL outs, SafeSprintf, metamod_wrappers, GAMEFIX 1.ep1, `--allow-multiple-definition`.",
+   "acceptance": "The build log shows ep1 compile lines with -I .../core-css34legacy and episode1/shared/loader lines with -I .../mmsource-1.12/core. The package contains sourcemod.{1,2}.ep1, {sdktools,sdkhooks,game.cstrike}.ext.{1,2}.ep1, dhooks.ext.2.ep1 and no dhooks.ext.so. plapi-probe reports 11 for every *.1.ep1 and 16 for every *.2.ep1 (including dhooks). nm -D sourcemod_mm_i486.so shows CreateInterface and CreateInterface_MMS."
+  },
+  {
+   "title": "DUAL-4 Old-OS toolchain for the frozen 1.11 build",
+   "description": "Build all 1.11 components (MM 1.10.7, MM 1.12 if built here, SM dual) in quay.io/pypa/manylinux2014_i686 (digest-pinned) with devtoolset-10 GCC.\n- Use -static-libstdc++ with --exclude-libs on every module, including logic.\n- Apply the MM 1.10 `__GNUC__` fixes.\n- Remove the clang-9 and gcc-4.9 sysroot paths for 1.11.\n- Relax check-package's 'logic ≥ 100 exports' rule.",
+   "acceptance": "Max GLIBC_2.17 across all .so files (dhooks 2.16). No MM binary has DT_NEEDED libstdc++.so.6. logic.so exports no std::locale symbols. check-package passes."
+  },
+  {
+   "title": "DUAL-5 Static gate: dual package rules and plapi-probe",
+   "description": "Add testing/scripts/plapi-probe.c, built in CI as i386; it dlopens with the server's bin/ on LD_LIBRARY_PATH and prints PLAPI or a CreateInterface error.\n\nExtend check-package.sh for dual packages:\n- both cores and both game-extension flavours present;\n- dhooks only as .2.ep1;\n- the loader has both exports;\n- *.1.ep1 report PLAPI 11 and *.2.ep1 report 14..16;\n- every MM-attached extension exports CreateInterface;\n- css34-package.json has metamod_binaries and cores.\n\nOptionally extend the probe to CreateInterface_MMS for SM ≥ 1.12 extensions.",
+   "acceptance": "The gate passes on the new dual package. It fails on the published 1.11.0.6970-mm1.10.7 package (2.ep1 = 11) and on a package whose 2.ep1 extensions lack CreateInterface (the P15 build)."
+  },
+  {
+   "title": "DUAL-6 Dynamic gates: smoke and botplay on both Metamod lanes",
+   "description": "For sm11-oldstable, run:\n- smoke for SM dual × {MM 1.12, MM 1.10.7} × {centos:7, debian:11, ubuntu:24.04, debian:13}, expecting 'Plugin interface version: 16:14 / SourceHook 5:5' or '11:7 / 4:4' in meta version and SourceMod 1.11.0.6970;\n- botplay on both lanes: css34_dhooks_probe must be available=1 with all counters on MM 1.12, and SKIP on MM 1.10.7;\n- one Metamod-switch smoke: MM 1.10.7 then MM 1.12 over the same tree, and the reverse.",
+   "acceptance": "All lanes green in CI. This reproduces the experiment results in research/dual-analysis (6/6 smoke, 2/2 botplay, 2/2 switch)."
+  },
+  {
+   "title": "DUAL-7 Windows dual build and Windows smoke",
+   "description": "Apply the same per-SDK include logic in builder/run/windows.sh. Package sourcemod.{1,2}.ep1.dll, game extension DLLs in both flavours, dhooks.ext.2.ep1.dll and the shared DLLs. Publish two MM zips: MM 1.12 (metamod.2.ep1.dll + server.dll) and MM 1.10.7 (metamod.1.ep1.dll + server.dll). Run native and Wine smoke on both lanes before attaching Windows assets.",
+   "acceptance": "The Windows PE PLAPI check (InterfaceReg/vptr analysis like scripts/pe_plapi*.py, or a Windows probe) shows 11 for 1.ep1 and 16 for 2.ep1. Windows smoke passes on both lanes. Assets are attached only after that."
+  },
+  {
+   "title": "DUAL-8 Package manifests, lines.json and pointer assets (additive)",
+   "description": "write-package-manifest.sh: for dual packages emit metamod_binary (default lane), metamod_binaries and cores{1.ep1, 2.ep1} with plapi, sourcehook, mm_version, mm_commit and dhooks. MM 1.10.7 gets an MM-side css34-package.json.\n\nlines.json for sm11-oldstable gains mm, mm_legacy, metamod_binaries and asset names:\n- mmsource-css34-linux.tar.gz = default MM (suggest 1.12);\n- new mmsource-legacy-css34-linux.tar.gz / -windows.zip = MM 1.10.7.\n\nrelease-smoke.sh reads cores{} to run both lanes.",
+   "acceptance": "The consumer's fields (tag, smoke) are unchanged. lines.py check passes. Pointer smoke via public URLs passes on both lanes."
+  },
+  {
+   "title": "DUAL-9 Installer and README guidance for choosing or switching Metamod",
+   "description": "Document the two lanes with a compatibility table:\n- MM 1.12: DHooks, PLAPI 14-16 Metamod plugins, *.ext.2.ep1.\n- MM 1.10.7: PLAPI ≤ 11 Metamod plugins, *.ext.1.ep1.\n\nDocument the switch procedure: remove addons/metamod/bin/{server*, metamod.*} and addons/metamod/css34-package.json, unpack the other MM package, keep metaplugins.ini.\n\nPropose the matching additive change to fmu1337/v34_server_base (optional --mm legacy).",
+   "acceptance": "README tables updated. The installer change, if made, is additive and tested by the consumer CI."
+  },
+  {
+   "title": "DUAL-10 Freeze and publish 1.11",
+   "description": "After DUAL-1..9: build 6970 once with all inputs pinned and archived (SM, both MM commits, hl2sdk-episode1, hl2sdk-ep1c, AMBuild, toolchain image digest). Record package sha256 in lines.json. Publish as a prerelease, then promote after smoke and botplay on both lanes. Mark 1.11.0.6970-mm1.10.7 as superseded / known-bad (keep it). After freezing, delete the 1.11-only build code from master as the process plan describes.",
+   "acceptance": "The release exists with SHA256SUMS and both Metamod assets; frozen-verify re-smokes the published files weekly; the line-sm11-oldstable pointer is created (if the owner agrees)."
+  }
+ ],
+ "artifacts": "All under /tmp/claude-0/-home-user-sourcemod-css34/ffbe8980-eece-56cf-8782-bc5e5af6297c/scratchpad/research/dual-analysis/ unless the path says otherwise.\n\n**Proven dual package and test inputs**\n- `pkg/full.tgz`: the proven dual SM package. 1.ep1 legacy; 2.ep1, DHooks and the shared modules built against MM 1.12.\n- `pkg/dualA.tgz`, `pkg/dualN.tgz`, `pkg/dualB.tgz`: test variants (2.ep1 + DHooks only).\n- `pkg/mm-110-then-112.tgz`, `pkg/mm-112-then-110.tgz`: Metamod switch tests.\n- The Metamod packages used are in /tmp/claude-0/-home-user-sourcemod-css34/ffbe8980-eece-56cf-8782-bc5e5af6297c/scratchpad/research/oldos/repo-full/: `packages-sm12/mmsource-1.12.0-git1226-css34-linux.tar.gz` and `packages-sm11/mmsource-1.10.7-git976-css34-linux.tar.gz`.\n\n**Rebuild scripts and logs**\n- `build-p16/`: rebuilt .so files, objects removed.\n- `rebuild-p16.sh`, `rebuild-p16-dh.sh`, `rebuild-p16-shared.sh` and their `.log` files.\n- `scripts/mkrebuild.py`, `scripts/mkrebuild2.py`: generate the partial rebuild from /tmp/claude-0/-home-user-sourcemod-css34/ffbe8980-eece-56cf-8782-bc5e5af6297c/scratchpad/research/oldos/sm11b-build.log.\n\n**Compile checks**\n- `scripts/mkcmds.py`, `scripts/runcheck.sh`, `cmds-*.tsv`.\n- Results: `check-mm112/results.tsv`, `check-logic112/results.tsv`.\n\n**Probes and analysis scripts**\n- `probe/plapi-probe.c` and `probe/plapi-probe`: the PLAPI gate prototype.\n- `scripts/apiscan.py`: ELF exports and PLAPI.\n- `scripts/pe_plapi.py`, `scripts/pe_plapi2.py`, `scripts/pe_plapi3.py`, `scripts/pe_plapi4.py`: Windows PE PLAPI decoding.\n\n**Smoke and botplay logs**\n- Smoke runs: /tmp/claude-0/-home-user-sourcemod-css34/ffbe8980-eece-56cf-8782-bc5e5af6297c/scratchpad/smoke-dual-* and /tmp/claude-0/-home-user-sourcemod-css34/ffbe8980-eece-56cf-8782-bc5e5af6297c/scratchpad/smoke-dualfull-* (each has `run.log`; server trees deleted).\n- Botplay: `bp/botplay-mm112.log`, `bp/botplay-mm110.log`, `bp/botplay-report-mm11{0,2}.{txt,json}`.\n\n**Downloaded Windows zips (unpacked under `x/`)**\n- rom4s SM: `dl/rom4s-win/sourcemod-1.11.0-git6572-css34-windows.zip`.\n- Ours: `dl/our6572-win/` (MM 1.10.7 + SM 6572) and `dl/mm112-win/` (MM 1.12).\n\n**Upstream clones and headers**\n- Full bare clones for history: `sm.git` (SourceMod), `mm.git` (Metamod).\n- Pristine headers: `mmsrc/mm110`, `mmsrc/mm112`.\n- `hdr/sh110.h`, `hdr/sh112.h`.\n\nThe repository /home/user/sourcemod-css34 was not modified."
+}
