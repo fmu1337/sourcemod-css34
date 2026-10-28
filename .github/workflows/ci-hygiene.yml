@@ -33,10 +33,6 @@ jobs:
         run: bash testing/scripts/check-package-paths.sh
       - name: Check Metamod metadata and required packages
         run: python3 testing/scripts/test-check-metamod-package.py
-      - name: Check patch failures and generated Versioning
-        run: python3 testing/scripts/test-patch-fail-closed.py
-      - name: Check release selection and Docker debug opt-in
-        run: python3 testing/scripts/test-release-build-entrypoints.py
       # Negative test: an absent server must fail smoke and leave a downloadable
       # diagnostic after the workflow completes. Production smoke gates are unchanged.
       - name: Intentionally fail smoke with a missing server

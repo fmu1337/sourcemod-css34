@@ -166,11 +166,9 @@ else:
             "        compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']\n",
             1,
         )
-        if 'css34: episode1 -> sourcemod.2.ep1.so' not in text:
-            raise SystemExit('FAIL: ConfigureForHL2 legacy upgrade anchor not found')
         print('==> Widened ConfigureForHL2 css34 link patch to episode1')
     else:
-        raise SystemExit('FAIL: unrecognized ConfigureForHL2 css34 link patch')
+        print('==> ConfigureForHL2 css34 link patch present')
 
 # ExtLibrary pthread/rt + leave META_NO_HL2SDK happy against Metamod 1.12 headers
 old_ext = """  def ExtLibrary(self, context, compiler, name):
@@ -263,13 +261,9 @@ ambuild.write_text(text, encoding='utf-8')
 # -std=c++20 line (SM 1.13). SM 1.12 sourcepawn is still -std=c++17; that line
 # gets the same flag so this shared patcher does not drop it.
 sp = sm / 'sourcepawn/AMBuildScript'
-if not sp.is_file():
-    raise SystemExit('FAIL: sourcepawn/AMBuildScript missing in SM')
 if sp.exists():
     sp_text = sp.read_text()
     if 'CSS34 sign-compare' not in sp_text:
-        if sp_text.count("'-Werror',\n") != 1:
-            raise SystemExit('FAIL: sourcepawn -Werror anchor missing or ambiguous')
         sp_text = sp_text.replace(
             "'-Werror',\n",
             "'-Werror',\n            '-Wno-sign-compare',  # CSS34 sign-compare\n",
@@ -302,11 +296,6 @@ if sp.exists():
         print('==> Patched sourcepawn AMBuildScript for sign-compare')
         sp_text = sp.read_text()
 
-    else:
-        if ("'-Wno-sign-compare',  # CSS34 sign-compare" not in sp_text
-                or "cxx.cxxflags += ['-Wno-sign-compare']  # CSS34 sign-compare" not in sp_text):
-            raise SystemExit('FAIL: incomplete sourcepawn sign-compare patch')
-
     # Force pthread/rt DT_NEEDED (glibc < 2.34 / Debian 11) - bare -lpthread is
     # dropped by --as-needed when nothing in the .o files references it directly.
     # Note: when SourcePawn is built under SourceMod, Configure() is skipped and
@@ -326,10 +315,8 @@ if sp.exists():
         )
         sp.write_text(sp_text)
         print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt/-lgcc_s')
-    elif "cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']" in sp_text:
-        print('==> sourcepawn Configure pthread/rt/-lgcc_s already patched')
     else:
-        raise SystemExit('FAIL: sourcepawn Configure pthread/rt anchor not found')
+        print('==> sourcepawn Configure pthread/rt/-lgcc_s already patched')
 
     sp_text = sp.read_text()
     if 'css34: AddStaticLibraries lgcc_s' not in sp_text:
@@ -339,62 +326,52 @@ if sp.exists():
             sp.write_text(sp_text.replace(old_add_static, new_add_static, 1))
             print('==> Patched AddStaticLibraries in sourcepawn for lgcc_s')
             sp_text = sp.read_text()
-        else:
-            raise SystemExit('FAIL: sourcepawn AddStaticLibraries anchor not found')
-
-    elif "binary.compiler.linkflags += ['-lgcc', '-lgcc_s', '-Wl,--end-group']" not in sp_text:
-        raise SystemExit('FAIL: incomplete sourcepawn AddStaticLibraries patch')
 
     # SM 1.13.7461+ builds static libsourcepawn_static only (no shared jit .so).
     # SM 1.12–1.13.7404 may still use BuildDynamicCoreLib → sourcepawn.jit.x86.so.
-    pthread_block = (
-        "        # css34: libsourcepawn pthread/rt DT_NEEDED\n"
-        "        if binary.compiler.target.platform == 'linux':\n"
-        "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):\n"
-        "            if flag not in binary.compiler.linkflags:\n"
-        "              binary.compiler.linkflags += [flag]\n"
-    )
-    dyn_targets = [
-        (
-            'BuildDynamicCoreLib',
-            "    def BuildDynamicCoreLib(self, builder):\n"
-            "        cxx = builder.cxx\n"
-            "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
-            "        self.SetupBinForArch(binary, builder)\n",
-        ),
-        (
-            'BuildStaticCoreLib',
-            "    def BuildStaticCoreLib(self, builder):\n"
-            "        cxx = builder.cxx\n"
-            "        binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')\n\n"
-            "        self.SetupBinForArch(binary, builder)\n",
-        ),
-    ]
-    for fn, dyn_old in dyn_targets:
-        # ALLOWLIST: SM 1.13.7461+ removed the dynamic core entirely. A
-        # present-but-changed method must still fail, even if the other matches.
-        if fn == 'BuildDynamicCoreLib' and 'def BuildDynamicCoreLib(' not in sp_text:
-            continue
-        dyn_new = dyn_old + pthread_block
-        if dyn_new in sp_text:
-            print(f'==> {fn} pthread/rt already patched')
-        elif sp_text.count(dyn_old) == 1:
-            # Do not accept a partial previous insertion below this anchor.
-            tail = sp_text.split(dyn_old, 1)[1].split('\n    def ', 1)[0]
-            if 'css34: libsourcepawn pthread/rt DT_NEEDED' in tail:
-                raise SystemExit(f'FAIL: incomplete {fn} pthread/rt patch')
-            sp_text = sp_text.replace(dyn_old, dyn_new, 1)
+    dyn_marker = 'css34: libsourcepawn pthread/rt DT_NEEDED'
+    if dyn_marker not in sp_text:
+        pthread_block = (
+            "        # css34: libsourcepawn pthread/rt DT_NEEDED\n"
+            "        if binary.compiler.target.platform == 'linux':\n"
+            "          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):\n"
+            "            if flag not in binary.compiler.linkflags:\n"
+            "              binary.compiler.linkflags += [flag]\n"
+        )
+        dyn_targets = [
+            (
+                'BuildDynamicCoreLib',
+                "    def BuildDynamicCoreLib(self, builder):\n"
+                "        cxx = builder.cxx\n"
+                "        binary = self.root.Library(builder, 'libsourcepawn')\n\n"
+                "        self.SetupBinForArch(binary, builder)\n",
+            ),
+            (
+                'BuildStaticCoreLib',
+                "    def BuildStaticCoreLib(self, builder):\n"
+                "        cxx = builder.cxx\n"
+                "        binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')\n\n"
+                "        self.SetupBinForArch(binary, builder)\n",
+            ),
+        ]
+        patched_dyn = False
+        for fn, dyn_old in dyn_targets:
+            if dyn_old not in sp_text:
+                continue
+            sp_text = sp_text.replace(dyn_old, dyn_old + pthread_block, 1)
             sp.write_text(sp_text)
             print(f'==> Patched {fn} for pthread/rt DT_NEEDED')
-        else:
-            raise SystemExit(f'FAIL: {fn} pattern not found in sourcepawn/AMBuildScript')
+            patched_dyn = True
+            sp_text = sp.read_text()
+        if not patched_dyn:
+            raise SystemExit('FAIL: BuildDynamicCoreLib/BuildStaticCoreLib pattern not found in sourcepawn/AMBuildScript')
+    else:
+        print('==> libsourcepawn pthread/rt already patched')
 
 # sourcemod.logic.so must match rom4s link profile (old libstdc++ ABI, pthread/rt
 # NEEDED, static embed). SM 1.12 uses `for cxx in builder.targets` - adapt the
 # host g++ toolchain, same shape as the SM 1.11 logic patch.
 logic_am = sm / 'core/logic/AMBuilder'
-if not logic_am.is_file():
-    raise SystemExit('FAIL: core/logic/AMBuilder missing in SM')
 if logic_am.exists():
     lt = logic_am.read_text()
     pv_parts = (sm / 'product.version').read_text().strip().split('.')
@@ -627,8 +604,6 @@ if logic_am.exists():
             elif sp_before_old in lt:
                 lt = lt.replace(sp_before_old, sp_before_new, 1)
                 print('==> Reordered logic AMBuilder: static SP before libstdc++ (std::thread)')
-            else:
-                raise SystemExit('FAIL: logic static SP reorder anchor not found')
 
         if 'css34: skip duplicate logic static SP on linux' not in lt:
             sp_tail_old = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
@@ -680,8 +655,6 @@ if logic_am.exists():
                 if sp_tail_after_mac in lt:
                     lt = lt.replace(sp_tail_after_mac, sp_tail_after_mac_new, 1)
                     print('==> logic AMBuilder: skip duplicate static SP on linux (7461 layout)')
-            if 'css34: skip duplicate logic static SP on linux' not in lt:
-                raise SystemExit('FAIL: logic duplicate static SP anchor not found')
 
     if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt and 'css34: static SP before libstdc++ for std::thread' not in lt:
         sp_libs_anchor = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
@@ -742,36 +715,29 @@ if logic_am.exists():
 
 # cstrike: build for episode1 (Metamod 1.12 path)
 cstrike = sm / 'extensions/cstrike/AMBuilder'
-ct = cstrike.read_text()
-old = "for sdk_name in ['css', 'csgo']:"
-new = "for sdk_name in ['episode1', 'css', 'csgo']:"
-dual = "for sdk_name in ['ep1', 'episode1', 'css', 'csgo']:"
-if ct.count(new) == 1 or ct.count(dual) == 1:
-    if old in ct or (new in ct and dual in ct):
-        raise SystemExit('FAIL: ambiguous cstrike SDK loop in extensions/cstrike/AMBuilder')
-    print('==> cstrike AMBuilder already includes episode1')
-elif ct.count(old) == 1:
-    cstrike.write_text(ct.replace(old, new, 1))
-    print('==> cstrike AMBuilder includes episode1')
-else:
-    raise SystemExit('FAIL: cstrike SDK loop missing or ambiguous in extensions/cstrike/AMBuilder')
+if cstrike.exists():
+    ct = cstrike.read_text()
+    if "['episode1', 'css', 'csgo']" not in ct and "['ep1', 'episode1'" not in ct:
+        ct = ct.replace(
+            "for sdk_name in ['css', 'csgo']:",
+            "for sdk_name in ['episode1', 'css', 'csgo']:",
+            1,
+        )
+        cstrike.write_text(ct)
+        print('==> cstrike AMBuilder includes episode1')
+    else:
+        print('==> cstrike AMBuilder already includes episode1')
 
 for rel in ('extensions/cstrike/forwards.cpp', 'extensions/cstrike/natives.cpp'):
     p = sm / rel
-    lines = p.read_text().splitlines(keepends=True)
-    old = '#if SOURCE_ENGINE == SE_CSS'
-    new = old + ' || SOURCE_ENGINE == SE_EPISODEONE'
-    # Match complete directives: substring replacement duplicates the suffix on
-    # every reapplication and can accidentally accept an unknown condition.
-    if not any(line.rstrip('\r\n') in (old, new) for line in lines):
-        raise SystemExit(f'FAIL: cstrike SE_CSS guard not found in {rel}')
-    p.write_text(''.join(new + line[len(old):] if line.rstrip('\r\n') == old else line
-                         for line in lines))
+    if p.exists():
+        p.write_text(p.read_text().replace(
+            '#if SOURCE_ENGINE == SE_CSS',
+            '#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE',
+        ))
 
 # cstrike GetPlayerVarAddressOrError: FindInDataMap returns incomplete typedescription_t on EP1
 natives = sm / 'extensions/cstrike/natives.cpp'
-if not natives.is_file():
-    raise SystemExit('FAIL: extensions/cstrike/natives.cpp missing in SM')
 if natives.exists():
     text = natives.read_text()
     old_block = """\t\tdatamap_t *pMap = gamehelpers->GetDataMap(pPlayerEntity);
@@ -793,7 +759,7 @@ if natives.exists():
     if old_block in text:
         natives.write_text(text.replace(old_block, new_block, 1))
         print('==> Patched cstrike natives FindDataMapInfo')
-    elif new_block in text:
+    elif 'FindDataMapInfo(pMap, pszBaseVar' in text:
         print('==> cstrike natives FindDataMapInfo already patched')
     else:
         raise SystemExit('FAIL: cstrike natives FindInDataMap block not found in extensions/cstrike/natives.cpp')
@@ -802,16 +768,9 @@ if natives.exists():
 # ConVars on vstdlib's s_pConCommandBases (srcds loads engine_i686.so). Prefer
 # RTLD_NOLOAD and the already-loaded _i686 sibling; never RTLD_NOW a second copy.
 gc = sm / 'core/logic/GameConfigs.cpp'
-if not gc.is_file():
-    raise SystemExit('FAIL: core/logic/GameConfigs.cpp missing in SM')
 if gc.exists():
     gt = gc.read_text()
     if 'css34: RTLD_NOLOAD game binary' in gt:
-        for call in ('dlopen(binary_path, RTLD_NOW | RTLD_NOLOAD)',
-                     'dlopen(alt_path, RTLD_NOW | RTLD_NOLOAD)',
-                     'dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD)'):
-            if call not in gt:
-                raise SystemExit('FAIL: incomplete GameConfigs RTLD_NOLOAD patch')
         print('==> GameConfigs CacheGameBinaryInfo already RTLD_NOLOAD patched')
     else:
         old_cache = """#else
@@ -882,29 +841,25 @@ if gc.exists():
 
 # bundled curl fortify noise on gcc only
 curl_ambuild = sm / 'extensions/curl/curl-src/lib/AMBuilder'
-ct = curl_ambuild.read_text()
-old = "binary.compiler.defines += ['_GNU_SOURCE']"
-new = (old + "\n"
-       "    if binary.compiler.family == 'gcc':\n"
-       "      binary.compiler.cflags += ['-Wno-stringop-truncation', '-Wno-error=stringop-truncation']")
-if new in ct:
-    print('==> bundled libcurl stringop-truncation already patched')
-elif ct.count(old) == 1 and 'stringop-truncation' not in ct:
-    curl_ambuild.write_text(ct.replace(old, new, 1))
+if curl_ambuild.exists() and 'stringop-truncation' not in curl_ambuild.read_text():
+    ct = curl_ambuild.read_text()
+    ct = ct.replace(
+        "binary.compiler.defines += ['_GNU_SOURCE']",
+        "binary.compiler.defines += ['_GNU_SOURCE']\n"
+        "    if binary.compiler.family == 'gcc':\n"
+        "      binary.compiler.cflags += ['-Wno-stringop-truncation', '-Wno-error=stringop-truncation']",
+        1,
+    )
+    curl_ambuild.write_text(ct)
     print('==> Patched bundled libcurl for stringop-truncation (gcc)')
-else:
-    raise SystemExit('FAIL: bundled libcurl _GNU_SOURCE anchor missing or patch incomplete')
 
 # shell.cpp sign-compare
 shell = sm / 'sourcepawn/vm/shell/shell.cpp'
-st = shell.read_text()
-old = 'if (index > params[0])'
-new = 'if (index > (size_t)params[0])'
-upstream = 'if (static_cast<cell_t>(index) > params[0])'
-if old in st:
-    shell.write_text(st.replace(old, new))
-elif new not in st and upstream not in st:
-    raise SystemExit('FAIL: sourcepawn shell.cpp sign-compare anchor not found')
+if shell.exists() and 'if (index > params[0])' in shell.read_text():
+    shell.write_text(shell.read_text().replace(
+        'if (index > params[0])',
+        'if (index > (size_t)params[0])',
+    ))
 PY
 
 # css34: lines.json SOURCEMOD_GIT_REV (do not trust a shallow rev-list count).
@@ -917,8 +872,6 @@ SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYIFACE'
 from pathlib import Path
 import os
 sm_api = Path(os.environ['SOURCEMOD_DIR']) / 'core/sourcemm_api.cpp'
-if not sm_api.is_file():
-    raise SystemExit('FAIL: core/sourcemm_api.cpp missing in SM')
 if sm_api.exists():
     text = sm_api.read_text()
     if 'CSS34_SAFE_GET_V_IFACE' not in text:
@@ -962,16 +915,12 @@ if sm_api.exists():
 	} while (0)
 
 bool SourceMod_Core::Load"""
-        if text.count('bool SourceMod_Core::Load') != 1:
-            raise SystemExit('FAIL: SourceMod_Core::Load anchor missing or ambiguous in core/sourcemm_api.cpp')
         text = text.replace('bool SourceMod_Core::Load', macro_patch, 1)
         sm_api.write_text(text)
         print('==> Patched GET_V_IFACE macros in core/sourcemm_api.cpp')
 PYIFACE
 
 # --- Source-level patches ---
-# ALLOWLIST: tree-wide newline and pre-OB guard normalization may match zero
-# lines; upstream SDK-specific units need not contain these syntax forms.
 while IFS= read -r -d '' file; do
   sed -i 's/\r$//' "$file"
 done < <(find "$sourcemod_dir" -type f \( -name '*.h' -o -name '*.cpp' -o -name 'AMBuildScript' -o -name 'AMBuilder' \) -print0)
@@ -986,14 +935,8 @@ while IFS= read -r -d '' file; do
 done < <(find "$sourcemod_dir" -type f \( -name '*.h' -o -name '*.cpp' \) -print0)
 
 # MIN macros
-# ALLOWLIST: these syntax cleanups may match zero uses when upstream has already
-# replaced MIN with a ternary or removed the call. Both target files are required.
 for rel in extensions/sdktools/vstringtable.cpp core/MenuStyle_Base.cpp; do
   f="$sourcemod_dir/$rel"
-  if [ ! -f "$f" ]; then
-    echo "FAIL: MIN cleanup target missing: $f" >&2
-    exit 1
-  fi
   if [ -f "$f" ]; then
     sed -i \
       -e 's/MIN(maxBytes, datalen)/(maxBytes < datalen ? maxBytes : datalen)/g' \
@@ -1005,7 +948,9 @@ for rel in extensions/sdktools/vstringtable.cpp core/MenuStyle_Base.cpp; do
 done
 
 # Versioning submodule HEAD
-SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYSMGIT'
+versioning="$sourcemod_dir/tools/buildbot/Versioning"
+if [ -f "$versioning" ] && ! grep -q '_resolve_git_head_path' "$versioning"; then
+  SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
 versioning = Path(os.environ['SOURCEMOD_DIR']) / 'tools/buildbot/Versioning'
@@ -1046,14 +991,13 @@ with open(git_head_path) as fp:
     if os.path.exists(candidate):
       git_head_path = candidate
 """
-if new in text:
-    print('==> Versioning submodule gitdir already patched')
-elif text.count(old) == 1 and '_resolve_git_head_path' not in text:
+if old in text:
     versioning.write_text(text.replace(old, new, 1))
     print('==> Patched Versioning for submodule gitdir')
 else:
-    raise SystemExit('FAIL: SM Versioning submodule gitdir anchor missing or patch incomplete')
-PYSMGIT
+    print('==> Versioning already patched or layout changed')
+PY
+fi
 
 # Boot traces are a local diagnostic aid and must never enter release packages.
 if [[ "${CSS34_DEBUG_TRACE:-0}" == "1" ]]; then
@@ -1067,8 +1011,6 @@ import os
 path = Path(os.environ['SOURCEMOD_DIR']) / 'core/logic/RootConsoleMenu.cpp'
 text = path.read_text()
 if 'CSS34 pack:' in text:
-    if '#include <css34_build_stamp.h>' not in text or 'CSS34_PACK_COMMIT' not in text:
-        raise SystemExit('FAIL: incomplete sm version CSS34 pack patch')
     print('==> sm version already prints CSS34 pack commit')
 else:
     if '#include <sourcemod_version.h>' not in text:

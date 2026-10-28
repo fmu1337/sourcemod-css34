@@ -36,7 +36,7 @@ if not os.path.exists(git_head_path):
 """
 new = """# css34: detached HEAD / MMS_COMMIT pin stores raw SHA in .git/HEAD
 import re
-with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
+with open(os.environ.get('MMS_DIR', builder.sourcePath), '.git', 'HEAD') as fp:
   head_contents = fp.read().strip()
 if re.search('^[a-fA-F0-9]{40}$', head_contents):
   git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
