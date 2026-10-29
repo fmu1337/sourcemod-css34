@@ -59,6 +59,20 @@ def simulate_paths_filter(changed_files):
 
 class TestCIPlannerGate(unittest.TestCase):
 
+    def test_plapi_runtime_is_required_for_code_and_selected_line(self):
+        for event, inputs in (("pull_request", {}),
+                              ("workflow_dispatch", {"css34_line": "sm11-oldstable"})):
+            plan = plan_ci(event, True, inputs)
+            self.assertIn("plapi-runtime", plan["required_jobs"])
+            for result in ("failure", "skipped", "cancelled"):
+                needs = {name: {"result": "success"} for name in plan["required_jobs"]}
+                needs["plapi-runtime"]["result"] = result
+                self.assertFalse(evaluate_gate(needs, plan)[0])
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn("bash testing/scripts/check-core-plapi.sh", workflow)
+        self.assertIn("      - plapi-runtime", workflow)
+
+
     def test_gate_rejects_missing_or_malformed_required_jobs(self):
         needs = {"plan": {"result": "success"}, "hygiene": {"result": "skipped"}}
         for bad in (None, {}, [], "", "[]", {"required_jobs": []},
@@ -76,7 +90,8 @@ class TestCIPlannerGate(unittest.TestCase):
             self.assertFalse(evaluate_gate(needs, plan)[0])
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         hygiene = workflow.split("\n  hygiene:", 1)[1].split("\n  build-linux:", 1)[0]
-        for script in ("test-release-build-entrypoints.py", "test-patch-fail-closed.py"):
+        for script in ("test-release-build-entrypoints.py", "test-patch-fail-closed.py",
+                       "test-sm11-dhooks-builder.py", "test-plapi-probe.py"):
             self.assertIn("python3 testing/scripts/" + script, hygiene)
         pins = workflow.split("\n  check-pins:", 1)[1].split("\n  hygiene:", 1)[0]
         self.assertIn("python3 testing/scripts/test-lines.py", pins)

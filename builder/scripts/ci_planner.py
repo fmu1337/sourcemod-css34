@@ -121,7 +121,7 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
     required_jobs = ["plan"]
 
     if run_code_jobs:
-        required_jobs.extend(["check-pins", "hygiene", "build-linux"])
+        required_jobs.extend(["check-pins", "hygiene", "build-linux", "plapi-runtime"])
 
         if run_windows:
             required_jobs.extend(["build-windows", "wine-smoke"])
