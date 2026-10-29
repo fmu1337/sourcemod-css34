@@ -1250,88 +1250,70 @@ if dhooks_builder.exists():
     dhooks_code = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os
 
-project = builder.LibraryProject('dhooks.ext')
+# SM 1.11 SDK is an object (ext/name/path), not a manifest dictionary.
+# Only episode1 has the MM 1.12 SourceHook interface needed by DHooks.
+sdk = SM.sdks.get('episode1')
+if sdk is None:
+  raise Exception('DHooks requires the episode1 SDK')
 
-for sdk_name in SM.sdks:
-  if sdk_name == 'ep1':
-    continue # ep1 (MM 1.10 / SH v4) lacks IHookManagerAutoGen
-  sdk = SM.sdks[sdk_name]
+for cxx in builder.targets:
+  # Keep the architecture support of the pinned SM 1.11 DHooks sources.
+  if cxx.target.platform not in ('linux', 'windows') or cxx.target.arch != 'x86':
+    continue
+  binary = SM.HL2Library(builder, cxx, 'dhooks.ext.' + sdk.ext, sdk)
 
-  for cxx in builder.targets:
-    if cxx.target.platform == 'mac':
-      continue
-    if cxx.target.arch == 'x86_64' and cxx.target.platform != 'windows':
-      continue
+  binary.compiler.defines += [
+    'META_NO_HL2SDK',
+    'HAVE_STRING_H',
+  ]
 
-    binary = SM.HL2ExtConfig(project, builder, cxx, 'dhooks.ext.' + sdk['extension'], sdk)
+  if binary.compiler.like('gcc'):
+    binary.compiler.cflags += ['-Wno-invalid-offsetof']
 
-    binary.compiler.defines += [
-      'META_NO_HL2SDK',
-      'HAVE_STRING_H',
-    ]
+  binary.compiler.cxxincludes += [
+    os.path.join(builder.sourcePath, 'public', 'jit'),
+    os.path.join(builder.sourcePath, 'public', 'jit', 'x86'),
+    os.path.join(builder.sourcePath, 'sourcepawn', 'include'),
+    os.path.join(builder.sourcePath, 'sourcepawn', 'vm'),
+    os.path.join(builder.sourcePath, 'sourcepawn', 'vm', 'x86'),
+    os.path.join(builder.sourcePath, 'extensions', 'dhooks', 'DynamicHooks'),
+  ]
 
-    if binary.compiler.like('gcc'):
-      binary.compiler.cflags += ['-Wno-invalid-offsetof']
+  binary.sources += [
+    'extension.cpp',
+    'listeners.cpp',
+    'natives.cpp',
+    'signatures.cpp',
+    'vhook.cpp',
+    'util.cpp',
+    'dynhooks_sourcepawn.cpp',
+    '../../public/smsdk_ext.cpp',
+    '../../public/asm/asm.c',
+    '../../public/libudis86/decode.c',
+    '../../public/libudis86/itab.c',
+    '../../public/libudis86/syn-att.c',
+    '../../public/libudis86/syn-intel.c',
+    '../../public/libudis86/syn.c',
+    '../../public/libudis86/udis86.c',
+    '../../sourcepawn/vm/x86/assembler-x86.cpp',
+  ]
 
-    binary.compiler.cxxincludes += [
-      os.path.join(builder.sourcePath, 'extensions', 'dhooks'),
-      os.path.join(builder.sourcePath, 'public', 'jit'),
-      os.path.join(builder.sourcePath, 'sourcepawn'),
-      os.path.join(builder.sourcePath, 'sourcepawn', 'include'),
-      os.path.join(builder.sourcePath, 'sourcepawn', 'vm'),
-      os.path.join(builder.sourcePath, 'extensions', 'dhooks', 'DynamicHooks'),
-    ]
+  # DynamicHooks
+  binary.sources += [
+    os.path.join('DynamicHooks', 'hook.cpp'),
+    os.path.join('DynamicHooks', 'manager.cpp'),
+    os.path.join('DynamicHooks', 'registers.cpp'),
+    os.path.join('DynamicHooks', 'conventions', 'x86MsCdecl.cpp'),
+    os.path.join('DynamicHooks', 'conventions', 'x86MsStdcall.cpp'),
+    os.path.join('DynamicHooks', 'conventions', 'x86MsFastcall.cpp'),
+  ]
 
-    binary.compiler.includes += [
-      os.path.join(builder.sourcePath, 'extensions', 'dhooks')
-    ]
-
-    binary.sources += [
-      'extension.cpp',
-      'listeners.cpp',
-      'natives.cpp',
-      'signatures.cpp',
-      'vhook.cpp',
-      'util.cpp',
-      'dynhooks_sourcepawn.cpp',
-      '../../public/smsdk_ext.cpp',
-      os.path.join('DynamicHooks', 'registers.cpp'),
-      os.path.join('DynamicHooks', 'hook.cpp'),
-      os.path.join('DynamicHooks', 'manager.cpp')
-    ]
-    SM.AddCDetour(binary)
-
-    if binary.compiler.target.arch == 'x86':
-      binary.compiler.cxxincludes += [
-        os.path.join(builder.sourcePath, 'public', 'jit', 'x86'),
-        os.path.join(builder.sourcePath, 'sourcepawn', 'vm', 'x86')
-      ]
-      binary.sources += [
-        os.path.join('DynamicHooks', 'conventions', 'x86MsCdecl.cpp'),
-        os.path.join('DynamicHooks', 'conventions', 'x86MsStdcall.cpp'),
-        os.path.join('DynamicHooks', 'conventions', 'x86MsFastcall.cpp'),
-      ]
-
-      if binary.compiler.target.platform == 'windows':
-        binary.sources += [os.path.join('DynamicHooks', 'conventions', 'x86MsThiscall.cpp')]
-      else:
-        binary.sources += [os.path.join('DynamicHooks', 'conventions', 'x86GccThiscall.cpp')]
-
-      binary.compiler.defines += ['DHOOKS_DYNAMIC_DETOUR']
-
-    elif binary.compiler.target.arch == 'x86_64':
-      binary.compiler.defines += ['DYNAMICHOOKS_x86_64', 'DHOOKS_DYNAMIC_DETOUR']
-
-      if binary.compiler.target.platform == 'windows':
-        binary.sources += [
-          os.path.join('DynamicHooks', 'conventions', 'x86_64MicrosoftDefault.cpp')
-        ]
-      elif binary.compiler.target.platform == 'linux':
-        binary.sources += [
-          os.path.join('DynamicHooks', 'conventions', 'x86_64SystemVDefault.cpp')
-        ]
-
-SM.extensions += builder.Add(project)
+  if binary.compiler.target.platform == 'windows':
+    binary.sources += [os.path.join('DynamicHooks', 'conventions', 'x86MsThiscall.cpp')]
+  else:
+    binary.sources += [os.path.join('DynamicHooks', 'conventions', 'x86GccThiscall.cpp')]
+  
+  SM.extensions += [builder.Add(binary)]
 """
     dhooks_builder.write_text(dhooks_code)
     print('==> Patched extensions/dhooks/AMBuilder for dhooks.ext.2.ep1 (skipping ep1)')
