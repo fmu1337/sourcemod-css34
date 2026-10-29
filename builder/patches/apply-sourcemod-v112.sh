@@ -680,13 +680,13 @@ if logic_am.exists():
         binary.compiler.postlink += [flag]
 """
         sp_libs_anchor_linux = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
+  # css34: skip duplicate logic static SP on linux (linked inside linux block above)
   if binary.compiler.target.platform != 'linux':
     binary.compiler.linkflags += [
       SP.static_libsp[{sp_idx_var}],
       SP.libamtl[{sp_idx_var}],
       SP.zlib[{sp_idx_var}],
-{mimalloc_nested_link}    ]
-  if binary.compiler.target.platform == 'linux':"""
+{mimalloc_nested_link}    ]"""
         if sp_libs_anchor_linux in lt:
             if 'binary.compiler.postlink += [flag]' not in lt:
                 lt = lt.replace(
