@@ -1160,19 +1160,33 @@ jobs:
         include: ${{ fromJSON(needs.pins.outputs.build) }}
     steps:
       - uses: actions/checkout@v4
+      - name: Select requested line
+        id: select
+        env:
+          WANT: ${{ github.event.inputs.css34_line }}
+          LINE: ${{ matrix.line }}
+        run: |
+          if [[ -n "$WANT" && "$WANT" != "$LINE" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
       - name: Restore packages
+        if: steps.select.outputs.skip != '1'
         uses: actions/cache/restore@v4
         with:
           path: packages
           key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
           fail-on-cache-miss: true
       - name: Restore server providers
+        if: steps.select.outputs.skip != '1'
         uses: actions/cache/restore@v4
         with:
           path: server-art/css34-server.tar.gz
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
       - name: Check actual core PLAPI
+        if: steps.select.outputs.skip != '1'
         env:
           CSS34_LINE: ${{ matrix.line }}
           SERVER_DIR: ${{ github.workspace }}/.ci-plapi-server
