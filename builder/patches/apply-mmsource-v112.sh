@@ -33,33 +33,18 @@ path = Path(os.environ['MMS_DIR']) / 'support/buildbot/Versioning'
 if not path.exists():
     raise SystemExit('FAIL: support/buildbot/Versioning missing in MM')
 text = path.read_text()
-if 'css34: detached HEAD' in text or 'head_contents = fp.read().strip()' in text:
+old = "with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:\n git_state = fp.read().strip().split(':')[1].strip()\n\ngit_head_path = os.path.join(builder.sourcePath, '.git', git_state)\nif not os.path.exists(git_head_path):\n  git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')\n"
+new = "# css34: detached HEAD / MMS_COMMIT pin stores raw SHA in .git/HEAD\nimport re\nwith open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:\n  head_contents = fp.read().strip()\nif re.search('^[a-fA-F0-9]{40}$', head_contents):\n  git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')\nelse:\n  git_state = head_contents.split(':')[1].strip()\n  git_head_path = os.path.join(builder.sourcePath, '.git', git_state)\n  if not os.path.exists(git_head_path):\n    git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')\n"
+# Complete upstream implementation at MM 1.12 cb477558; a marker alone
+# cannot prove the detached-HEAD fix is present.
+upstream = "with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:\n  head_contents = fp.read().strip()\n  if re.search('^[a-fA-F0-9]{40}$', head_contents):\n    git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')\n  else:\n    git_state = head_contents.split(':')[1].strip()\n    git_head_path = os.path.join(builder.sourcePath, '.git', git_state)\n    if not os.path.exists(git_head_path):\n      git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')\n"
+if new in text or upstream in text:
     print('==> MM Versioning already handles detached HEAD')
+elif text.count(old) == 1 and 'css34: detached HEAD' not in text:
+    path.write_text(text.replace(old, new, 1))
+    print('==> Patched MM Versioning for detached MMS_COMMIT checkouts')
 else:
-    old = """with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
- git_state = fp.read().strip().split(':')[1].strip()
-
-git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
-if not os.path.exists(git_head_path):
-  git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
-"""
-    new = """# css34: detached HEAD / MMS_COMMIT pin stores raw SHA in .git/HEAD
-import re
-with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
-  head_contents = fp.read().strip()
-if re.search('^[a-fA-F0-9]{40}$', head_contents):
-  git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
-else:
-  git_state = head_contents.split(':')[1].strip()
-  git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
-  if not os.path.exists(git_head_path):
-    git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
-"""
-    if old not in text:
-        raise SystemExit('FAIL: MM Versioning detached-HEAD pattern not found in support/buildbot/Versioning')
-    else:
-        path.write_text(text.replace(old, new, 1))
-        print('==> Patched MM Versioning for detached MMS_COMMIT checkouts')
+    raise SystemExit('FAIL: MM Versioning detached-HEAD pattern not found in support/buildbot/Versioning')
 PYVER
 
 # css34: lines.json MMS_GIT_REV (shallow clone cannot count commits).
@@ -78,6 +63,8 @@ def patch_console(rel: str) -> None:
         raise SystemExit(f'FAIL: {rel} missing in MM')
     text = path.read_text()
     if 'CSS34 pack:' in text:
+        if '#include <css34_build_stamp.h>' not in text or 'CSS34_PACK_COMMIT' not in text:
+            raise SystemExit(f'FAIL: incomplete CSS34 pack patch in {rel}')
         print(f'==> {rel}: meta version already prints CSS34 pack commit')
         return
 
