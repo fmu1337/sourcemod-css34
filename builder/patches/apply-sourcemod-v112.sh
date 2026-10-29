@@ -74,7 +74,19 @@ std_list = 'std::list<omg_hooks *>'
 # alone, a missing function, or an unknown type must never count as success.
 sh_storage = text.count('\t' + sh_list + ' *pList = NULL;\n')
 std_storage = text.count('\t' + std_list + ' *pList = NULL;\n')
-if marker in text:
+# ALLOWLIST: the acceptance baselines predate upstream OnMapEnd (#2589).
+# Accept only the complete, unmodified historical files; a removed function
+# in another revision remains an error. Git blob IDs include original CRLF.
+import hashlib
+raw = path.read_bytes()
+blob = hashlib.sha1(b'blob %d\0' % len(raw) + raw).hexdigest()
+historical = {
+    '4e4db005a95d74939412b512e3115522eb3a202d',  # SM 1.12 r7253 baseline
+    'cbc7edde32d6446a52cb721ebd746be73ade0085',  # SM 1.13 r7472 baseline
+}
+if blob in historical:
+    print('==> Known pre-OnMapEnd upstream baseline; no cherry-pick fix needed')
+elif marker in text:
     if text.count(new) != 1 or std_list in text or sh_storage != 3:
         raise SystemExit('FAIL: malformed OnMapEnd SourceHook::List patch')
     print('==> OnMapEnd SourceHook::List patch already present')
