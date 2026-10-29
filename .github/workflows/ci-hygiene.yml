@@ -35,6 +35,9 @@ jobs:
         run: python3 testing/scripts/test-check-metamod-package.py
       - name: Check release selection and Docker debug opt-in
         run: python3 testing/scripts/test-release-build-entrypoints.py
+      - name: Check patch drift acceptance ranges and failures
+        timeout-minutes: 30
+        run: python3 testing/scripts/test-check-patch-drift.py
       # Negative test: an absent server must fail smoke and leave a downloadable
       # diagnostic after the workflow completes. Production smoke gates are unchanged.
       - name: Intentionally fail smoke with a missing server
