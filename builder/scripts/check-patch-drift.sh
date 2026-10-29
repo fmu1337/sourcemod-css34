@@ -216,7 +216,7 @@ test_sm_commit() (
 
   echo "==> Fetching SourceMod ${commit_or_rev} (${sha:0:8}) for drift testing..."
   local sm_dir="${work_dir}/sourcemod"
-  git clone --quiet --no-checkout "https://github.com/alliedmodders/sourcemod.git" "$sm_dir"
+  git clone --quiet --filter=blob:none --no-checkout "https://github.com/alliedmodders/sourcemod.git" "$sm_dir"
   git -C "$sm_dir" checkout --quiet "$sha"
   git -C "$sm_dir" submodule update --quiet --init --recursive
 
@@ -268,7 +268,7 @@ test_mm_commit() (
 
   echo "==> Fetching Metamod ${commit_or_rev} for drift testing..."
   local mm_dir="${work_dir}/metamod"
-  git clone --quiet --no-checkout "https://github.com/alliedmodders/metamod-source.git" "$mm_dir"
+  git clone --quiet --filter=blob:none --no-checkout "https://github.com/alliedmodders/metamod-source.git" "$mm_dir"
   git -C "$mm_dir" checkout --quiet "$commit_or_rev"
   git -C "$mm_dir" submodule update --quiet --init --recursive
 
@@ -287,24 +287,35 @@ fi
 if [[ $CHECK_PINS -eq 1 ]]; then
   echo "==> Running patch drift check on current active line pins..."
 
-  if [[ -f "$ROOT_DIR/builder/versions.env" ]]; then
-    # shellcheck source=/dev/null
-    source "$ROOT_DIR/builder/versions.env"
-  fi
-
+  tasks="$(python3 - "$ROOT_DIR/builder/lines.json" <<'PYPINS'
+import json, sys
+data = json.load(open(sys.argv[1]))
+seen = set()
+for line in data["lines"].values():
+    if line.get("status") != "active":
+        continue
+    sm = data["pins"][line["sourcemod"]]
+    task = ("sm" + str(sm["major"]), sm["commit"])
+    if task not in seen:
+        print(*task); seen.add(task)
+    for key in ("metamod", "secondary_metamod"):
+        if key not in line:
+            continue
+        mm = data["pins"][line[key]]
+        task = ("mm" + mm["mode"].replace(".", ""), mm["commit"])
+        if task not in seen:
+            print(*task); seen.add(task)
+PYPINS
+)"
+  [[ -n "$tasks" ]] || { echo "FAIL: no active pins" >&2; exit 1; }
   errors=0
-
-  if [[ -n "${SM_LATEST_13_COMMIT:-}" ]]; then
-    test_sm_commit "${SM_LATEST_13_COMMIT}" "sm13" || errors=$((errors + 1))
-  fi
-
-  if [[ -n "${SM_LATEST_COMMIT:-}" ]]; then
-    test_sm_commit "${SM_LATEST_COMMIT}" "sm12" || errors=$((errors + 1))
-  fi
-
-  if [[ -n "${MM_112_COMMIT:-}" ]]; then
-    test_mm_commit "${MM_112_COMMIT}" "mm112" || errors=$((errors + 1))
-  fi
+  while read -r mode commit; do
+    case "$mode" in
+      sm*) test_sm_commit "$commit" "$mode" || errors=$((errors + 1)) ;;
+      mm*) test_mm_commit "$commit" "$mode" || errors=$((errors + 1)) ;;
+      *) echo "FAIL: unsupported active pin mode $mode" >&2; errors=$((errors + 1)) ;;
+    esac
+  done <<< "$tasks"
 
   if [[ $errors -eq 0 ]]; then
     echo "==> [OK] All pin drift checks passed."
