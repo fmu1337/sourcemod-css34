@@ -141,32 +141,8 @@ then
   fail=1
 fi
 
-echo "==> Checking PLAPI version with plapi-probe"
-PROBE_BIN="${TMP}/plapi-probe"
-if gcc -m32 -O2 "${REPO_ROOT}/testing/tools/plapi-probe.c" -o "${PROBE_BIN}" -ldl 2>/dev/null; then
-  while IFS= read -r -d '' module; do
-    base="$(basename "${module}")"
-    plapi_out="$("${PROBE_BIN}" "${module}" 2>/dev/null || true)"
-    plapi_val="$(echo "${plapi_out}" | grep -oE '[0-9]+' || true)"
-    if [[ "${base}" == *.1.ep1.so ]]; then
-      if [[ "${plapi_val}" == "11" ]]; then
-        echo "OK: ${base} PLAPI=${plapi_val} (expected 11)"
-      else
-        echo "FAIL: ${base} PLAPI=${plapi_val} (expected 11)" >&2
-        fail=1
-      fi
-    elif [[ "${base}" == *.2.ep1.so ]]; then
-      if [[ -n "${plapi_val}" && "${plapi_val}" -ge 14 && "${plapi_val}" -le 16 ]]; then
-        echo "OK: ${base} PLAPI=${plapi_val} (expected 14..16)"
-      else
-        echo "FAIL: ${base} PLAPI=${plapi_val} (expected 14..16)" >&2
-        fail=1
-      fi
-    fi
-  done < <(find "${TMP}/addons/sourcemod" -type f \( -name '*.1.ep1.so' -o -name '*.2.ep1.so' \) -print0)
-else
-  echo "WARN: Failed to compile plapi-probe.c (skipped PLAPI probe)"
-fi
+# Runtime PLAPI validation runs in the required plapi-runtime CI job,
+# with the pinned game server providers and a working 32-bit compiler.
 
 if [[ -f "${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so" && -f "${TMP}/addons/sourcemod/bin/sourcemod.2.ep1.so" ]]; then
   if [[ -f "${TMP}/addons/sourcemod/extensions/dhooks.ext.2.ep1.so" ]]; then

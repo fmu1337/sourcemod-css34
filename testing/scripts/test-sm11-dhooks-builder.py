@@ -29,7 +29,7 @@ class TestDHooksBuilder(unittest.TestCase):
             extensions = []
             def HL2Library(self, builder, cxx, name, actual_sdk):
                 self_test.assertIs(actual_sdk, sdk)
-                compiler = SimpleNamespace(target=cxx.target, defines=[], cflags=[],
+                compiler = SimpleNamespace(target=cxx.target, defines=[], cflags=[], cxxflags=[],
                     cxxincludes=[], includes=[], like=lambda family: family == "gcc")
                 binary = SimpleNamespace(compiler=compiler, sources=[], name=name)
                 built.append(binary)

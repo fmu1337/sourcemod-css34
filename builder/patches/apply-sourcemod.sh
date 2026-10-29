@@ -1268,7 +1268,7 @@ for cxx in builder.targets:
   ]
 
   if binary.compiler.like('gcc'):
-    binary.compiler.cflags += ['-Wno-invalid-offsetof']
+    binary.compiler.cxxflags += ['-Wno-invalid-offsetof']
 
   binary.compiler.cxxincludes += [
     os.path.join(builder.sourcePath, 'public', 'jit'),
