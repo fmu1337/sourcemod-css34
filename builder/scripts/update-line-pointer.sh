@@ -246,9 +246,19 @@ fi
 if [[ "$SMOKE" == "pass" ]]; then
   cp -f "$SM_PKG" "${work}/sourcemod-css34-linux.tar.gz"
   cp -f "$MM_PKG" "${work}/mmsource-css34-linux.tar.gz"
-  (cd "$work" && sha256sum sourcemod-css34-linux.tar.gz mmsource-css34-linux.tar.gz > SHA256SUMS)
+  sums_files=(sourcemod-css34-linux.tar.gz mmsource-css34-linux.tar.gz)
+
+  if [[ "$LINE" == "sm11-oldstable" && -n "${LEGACY_MM_PKG:-}" && -f "${LEGACY_MM_PKG:-}" ]]; then
+    cp -f "$LEGACY_MM_PKG" "${work}/mmsource-legacy-css34-linux.tar.gz"
+    sums_files+=(mmsource-legacy-css34-linux.tar.gz)
+  fi
+
+  (cd "$work" && sha256sum "${sums_files[@]}" > SHA256SUMS)
   swap_asset "$PTR_TAG" "${work}/sourcemod-css34-linux.tar.gz" sourcemod-css34-linux.tar.gz
   swap_asset "$PTR_TAG" "${work}/mmsource-css34-linux.tar.gz" mmsource-css34-linux.tar.gz
+  if [[ "$LINE" == "sm11-oldstable" && -n "${LEGACY_MM_PKG:-}" && -f "${LEGACY_MM_PKG:-}" ]]; then
+    swap_asset "$PTR_TAG" "${work}/mmsource-legacy-css34-linux.tar.gz" mmsource-legacy-css34-linux.tar.gz
+  fi
   swap_asset "$PTR_TAG" "${work}/SHA256SUMS" SHA256SUMS
   gh release edit "$PTR_TAG" --repo "$REPO" \
     --notes "Stable pointer for line \`${LINE}\` → [\`${SRC_TAG}\`](https://github.com/${REPO}/releases/tag/${SRC_TAG}) (smoke: pass)."

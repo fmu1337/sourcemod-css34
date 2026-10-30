@@ -324,10 +324,13 @@ jobs:
             gh release create "${tag}" --title "${tag}" --notes "${notes}" --latest=false
           fi
           (cd packages && sha256sum -- *.tar.gz | sort -k2 > ../SHA256SUMS.linux)
+          upload_files=(packages/sourcemod-*-css34-linux.tar.gz packages/mmsource-*-css34-linux.tar.gz SHA256SUMS.linux)
+          if [[ "${LINE}" == "sm11-oldstable" && -f "packages/mmsource-1.10.7-legacy-css34-linux.tar.gz" ]]; then
+            cp -f packages/mmsource-1.10.7-legacy-css34-linux.tar.gz packages/mmsource-legacy-css34-linux.tar.gz
+            upload_files+=(packages/mmsource-legacy-css34-linux.tar.gz)
+          fi
           gh release upload "${tag}" \
-            packages/sourcemod-*-css34-linux.tar.gz \
-            packages/mmsource-*-css34-linux.tar.gz \
-            SHA256SUMS.linux \
+            "${upload_files[@]}" \
             --clobber
           # Never leave (or turn) a release as draft: its asset URLs would 404.
           if [[ "$(gh release view "${tag}" --json isDraft -q .isDraft)" == "true" ]]; then
@@ -667,7 +670,7 @@ jobs:
           set -euo pipefail
           mkdir -p ptr
           gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" -D ptr \
-            -p "${SM_ASSET}" -p "${MM_ASSET}"
+            -p "${SM_ASSET}" -p "${MM_ASSET}" -p 'mmsource-legacy-css34-linux.tar.gz' || true
 
       - name: Update line-${{ needs.resolve-line.outputs.css34_line }}
         env:
@@ -677,6 +680,7 @@ jobs:
           TAG: ${{ needs.resolve-line.outputs.tag }}
           SM_ASSET: ${{ needs.linux.outputs.sm_asset || needs.resolve-line.outputs.sm_asset }}
           MM_ASSET: ${{ needs.linux.outputs.mm_asset || needs.resolve-line.outputs.mm_asset }}
+          LEGACY_MM_PKG: ptr/mmsource-legacy-css34-linux.tar.gz
           TARGET: ${{ needs.resolve-line.outputs.target_commit || github.sha }}
           SRC_TIME: ${{ needs.resolve-line.outputs.target_time }}
           FORCE_REPOINT: ${{ needs.resolve-line.outputs.repoint }}

@@ -336,12 +336,22 @@ class RepointResolverTest(unittest.TestCase):
                 "mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
                 "metamod_binary": "metamod.2.ep1"
             }
+            # SM11 valid manifest
+            sm11_manifest = {
+                "line": "sm11-oldstable", "sm_version": "1.11.0.6970", "sm_commit": "88713a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f",
+                "mm_version": "1.12.0-dev+1226", "mm_commit": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                "metamod_binary": "metamod.2.ep1",
+                "cores": ["1.ep1", "2.ep1"],
+                "metamod_binaries": {"1.ep1": "metamod.1.ep1", "2.ep1": "metamod.2.ep1"}
+            }
 
             create_tarball("sourcemod-1.12.0-css34-linux.tar.gz", sm12_manifest, "addons/sourcemod/css34-package.json")
             create_tarball("sourcemod-1.13.0-css34-linux.tar.gz", sm13_manifest, "addons/sourcemod/css34-package.json")
+            create_tarball("sourcemod-1.11.0-css34-linux.tar.gz", sm11_manifest, "addons/sourcemod/css34-package.json")
 
             create_tarball("mmsource-1.12.0-css34-linux.tar.gz", sm12_manifest, "addons/metamod/css34-package.json")
             create_tarball("mmsource-1.13.0-css34-linux.tar.gz", sm13_manifest, "addons/metamod/css34-package.json")
+            create_tarball("mmsource-1.11.0-css34-linux.tar.gz", sm11_manifest, "addons/metamod/css34-package.json")
 
             sm_files = ["sourcemod-1.12.0-css34-linux.tar.gz", "sourcemod-1.13.0-css34-linux.tar.gz"]
             mm_files = ["mmsource-1.12.0-css34-linux.tar.gz", "mmsource-1.13.0-css34-linux.tar.gz"]

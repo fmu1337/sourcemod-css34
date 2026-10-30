@@ -168,8 +168,9 @@ def write_manifest(out_path, metamod_binary):
     if not VERSION_RE.fullmatch(msvc_toolset) or not VERSION_RE.fullmatch(windows_sdk):
         fail("MSVC_TOOLSET/WINDOWS_SDK must be dotted versions, got {} {}".format(
             msvc_toolset, windows_sdk))
+    line = os.environ.get("CSS34_LINE") or "custom"
     payload = {
-        "line": os.environ.get("CSS34_LINE") or "custom",
+        "line": line,
         "sm_version": "{}.{}".format(sm_product.split("-", 1)[0], sm_rev),
         "sm_product_version": sm_product,
         "sm_commit": sm_commit,
@@ -179,11 +180,19 @@ def write_manifest(out_path, metamod_binary):
         "extension_api": int(api_match.group(1)),
         "extension_api_min": ext_api_min,
         "metamod_binary": metamod_binary,
+    }
+    if line == "sm11-oldstable" or (metamod_binary == "metamod.2.ep1" and (sm_dir / "core" / "sourcemod.1.ep1.dll").is_file()):
+        payload["cores"] = ["1.ep1", "2.ep1"]
+        payload["metamod_binaries"] = {
+            "1.ep1": "metamod.1.ep1",
+            "2.ep1": "metamod.2.ep1",
+        }
+    payload.update({
         "msvc_toolset": msvc_toolset,
         "windows_sdk": windows_sdk,
         "css34_pack_commit": pack_commit,
         "build_date": os.environ.get("BUILD_DATE") or "",
-    }
+    })
     if not payload["build_date"]:
         fail("BUILD_DATE required")
     out_path = Path(out_path)

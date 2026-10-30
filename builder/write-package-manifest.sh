@@ -58,6 +58,12 @@ else
   toolchain_fields=$(printf '  "min_glibc": "%s",\n' "$glibc_floor")
 fi
 
+# Dual-core fields for SM 1.11 / sm11-oldstable
+dual_core_fields=""
+if [[ "${CSS34_LINE:-}" == "sm11-oldstable" || "${METAMOD_BINARY}" == "metamod.2.ep1" && -f "${SOURCEMOD_DIR}/core/sourcemod.1.ep1.so" ]]; then
+  dual_core_fields=$(printf '  "cores": [\n    "1.ep1",\n    "2.ep1"\n  ],\n  "metamod_binaries": {\n    "1.ep1": "metamod.1.ep1",\n    "2.ep1": "metamod.2.ep1"\n  },\n')
+fi
+
 mkdir -p "$(dirname "$OUT")"
 cat >"$OUT" <<EOF
 {
@@ -71,7 +77,7 @@ cat >"$OUT" <<EOF
   "extension_api": ${ext_api},
   "extension_api_min": ${ext_api_min},
   "metamod_binary": "${METAMOD_BINARY}",
-${toolchain_fields}  "css34_pack_commit": "${pack_commit}",
+${dual_core_fields}${toolchain_fields}  "css34_pack_commit": "${pack_commit}",
   "build_date": "${build_date}"
 }
 EOF

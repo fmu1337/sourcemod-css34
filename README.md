@@ -24,10 +24,10 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 | `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Retired outside CI |
 <!-- lines-install:end -->
 
-`sm11-oldstable` (SM 1.11.0.6970 + MM 1.10.7 / frozen MM 1.12 artifacts) has **no pointer** — see [Known-bad releases](#known-bad-releases).
+`sm11-oldstable` (SM 1.11.0.6970 + MM 1.10.7 / frozen MM 1.12 artifacts) serves both default Metamod 1.12 (`mmsource-css34-linux.tar.gz`) and legacy Metamod 1.10.7 (`mmsource-legacy-css34-linux.tar.gz`).
 Its two Metamod inputs come from the line's `metamod` and `secondary_metamod`
 references in `builder/lines.json`; dependency checkout, builds, and package
-verification use the same resolver. Dual-SM runtime support is tracked in #90.
+verification use the same resolver.
 What each pointer serves right now (tag, commits, smoke result) is in
 [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json).
 
@@ -72,11 +72,24 @@ A daily bump edits `lines.json` and regenerates — see [docs/JULES_DAILY_VERSIO
 
 | | SM 1.11 (PLAPI 11, `1.ep1`) | SM 1.12 / 1.13 (`2.ep1`) |
 |--|--|--|
-| **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable`) | no |
+| **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable` legacy mode) | no |
 | **MM 1.11** (`metamod.2.ep1`) | no (myarena bundle; `11 < 14`) | not a release path |
-| **MM 1.12** git1228 | no | **matched** (`sm12-latest`, `sm13-latest`) |
+| **MM 1.12** git1228 | **matched** (`sm11-oldstable` default mode) | **matched** (`sm12-latest`, `sm13-latest`) |
 | **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
 | **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
+
+### Metamod selection and switching for SourceMod 1.11 (`sm11-oldstable`)
+
+SourceMod 1.11 package is dual-core: it ships both `sourcemod.1.ep1` (PLAPI 11) and `sourcemod.2.ep1` (PLAPI 16) binaries, along with `dhooks.ext.2.ep1`.
+
+- **Default Mode (Metamod 1.12)**:
+  Uses `metamod.2.ep1` and `sourcemod.2.ep1`. Supports dynamic hooks (`dhooks.ext.2.ep1`) and modern extension features.
+- **Legacy Mode (Metamod 1.10.7)**:
+  Uses `metamod.1.ep1` and `sourcemod.1.ep1`. Suitable for legacy plugins requiring strict Metamod PLAPI 11 compatibility.
+
+**How to switch Metamod version on an installed server:**
+1. To switch to **Metamod 1.10.7 (Legacy)**: remove `cstrike/addons/metamod/bin/` and extract `mmsource-legacy-css34-linux.tar.gz` (or `mmsource-legacy-css34-windows.zip`) into `cstrike/`. Keep `metaplugins.ini`.
+2. To switch to **Metamod 1.12 (Default)**: remove `cstrike/addons/metamod/bin/` and extract `mmsource-css34-linux.tar.gz` (or `mmsource-css34-windows.zip`) into `cstrike/`. Keep `metaplugins.ini`.
 
 ## Releases
 
