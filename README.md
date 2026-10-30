@@ -146,6 +146,25 @@ Several lines may be tagged at once: pointer updates are serialized per line, an
 cannot drop each other's entries. Two tags of the *same* line finishing out of order never move the pointer
 back: an update whose tagged commit is older than the one served is skipped.
 
+### Runbook: Pointer Repoint / Rollback
+
+Line pointers (`line-<line>`) serve fixed URLs consumed by installers (such as `fmu1337/v34_server_base`).
+Each line pointer serves the latest smoke-passed release tag for that build line.
+
+If a published pointer needs to be repointed or rolled back to a specific tag (e.g. `1.12.0.7253-mm1.12.0` or `-r2`), perform a manual repoint dispatch:
+
+1. Open **GitHub Actions** → **Release** workflow (`release.yml`).
+2. Click **Run workflow** (`workflow_dispatch`).
+3. Select the target branch (`master`).
+4. In **Target release tag to repoint line pointer to**, enter the target release tag (e.g. `1.12.0.7253-mm1.12.0-r2` or `1.13.0.7472-mm1.12.0-r2`).
+5. Run the workflow.
+
+**What happens during a repoint dispatch:**
+- `resolve-line` validates `repoint_tag` against `^[0-9][0-9A-Za-z.+-]*$`, resolves its line (from `tag-map.sh` or the release package's `css34-package.json`), verifies that the line publishes a pointer (`css34_line_has_pointer`) and is not `known_bad`, retrieves its target commit SHA and timestamp, and verifies the release assets exist on GitHub Releases for that tag.
+- `release-pins`, `smoke-release`, and `botplay-release` execute public-URL smoke tests and centos:7 botplay tests across the line's OS matrix against `repoint_tag` with `SHA256SUMS` verification enabled.
+- `line-pointer` updates the line pointer release (`line-<line>`) using `FORCE_REPOINT=1` (with the tag's commit SHA and timestamp) and rebuilds `lines-index/lines.json`.
+- `smoke-pointer` verifies that the pointer URL serves a working, smoke-passed build.
+
 **Releases never go back to draft.** `release.yml` only uploads into an existing release
 (`--clobber`) and re-publishes it if it is a draft. Drafts that already exist can be re-published with
 the *Release Maintenance* workflow (Actions → Release Maintenance → Run).

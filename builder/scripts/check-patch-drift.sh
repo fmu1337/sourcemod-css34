@@ -192,7 +192,14 @@ resolve_sm_rev_commit() {
       echo "FAIL: revision $target_rev exceeds $branch tip count $total" >&2
       return 1
     fi
-    git -C "$cache_dir" rev-list -n 1 --skip="$offset" "origin/$branch"
+    local sha
+    sha="$(git -C "$cache_dir" rev-list -n 1 --skip="$offset" "origin/$branch")"
+    # Revision numbers are ancestor counts; refuse a commit that does not carry it.
+    if [[ -z "$sha" || "$(git -C "$cache_dir" rev-list --count "$sha")" != "$target_rev" ]]; then
+      echo "FAIL: cannot map revision $target_rev on $branch to a commit" >&2
+      return 1
+    fi
+    echo "$sha"
   else
     git -C "$cache_dir" rev-parse "$target_rev"
   fi
