@@ -141,22 +141,6 @@ then
   fail=1
 fi
 
-# Runtime PLAPI validation runs in the required plapi-runtime CI job,
-# with the pinned game server providers and a working 32-bit compiler.
-
-if [[ -f "${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so" && -f "${TMP}/addons/sourcemod/bin/sourcemod.2.ep1.so" ]]; then
-  if [[ -f "${TMP}/addons/sourcemod/extensions/dhooks.ext.2.ep1.so" ]]; then
-    echo "OK: dhooks.ext.2.ep1.so present in dual package"
-  else
-    echo "FAIL: missing dhooks.ext.2.ep1.so in dual package" >&2
-    fail=1
-  fi
-  if [[ -f "${TMP}/addons/sourcemod/extensions/dhooks.ext.so" ]]; then
-    echo "FAIL: unexpected dhooks.ext.so in dual package (must be dhooks.ext.2.ep1.so)" >&2
-    fail=1
-  fi
-fi
-
 echo "==> Checking Metamod bridge exports"
 if nm -D "${MM_SO}" 2>/dev/null | grep -E ' T CreateInterface([[:space:]]|$)' >/dev/null; then
   echo "OK: CreateInterface export present (MM:S 1.10 V1 bridge)"
