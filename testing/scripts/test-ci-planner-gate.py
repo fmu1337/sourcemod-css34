@@ -91,8 +91,12 @@ class TestCIPlannerGate(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         hygiene = workflow.split("\n  hygiene:", 1)[1].split("\n  build-linux:", 1)[0]
         for script in ("test-release-build-entrypoints.py", "test-patch-fail-closed.py",
-                       "test-sm11-dhooks-builder.py", "test-plapi-probe.py"):
+                       "test-sm11-dhooks-builder.py"):
             self.assertIn("python3 testing/scripts/" + script, hygiene)
+        # Every regression script must run somewhere in ci.yml: a step lost while
+        # moving jobs between workflows must fail here, not pass silently.
+        for script in sorted((ROOT / "testing/scripts").glob("test-*.py")):
+            self.assertIn("testing/scripts/" + script.name, workflow, script.name)
         pins = workflow.split("\n  check-pins:", 1)[1].split("\n  hygiene:", 1)[0]
         self.assertIn("python3 testing/scripts/test-lines.py", pins)
 
@@ -294,8 +298,35 @@ class TestCIPlannerGate(unittest.TestCase):
         self.assertIn("build-windows", plan["required_jobs"])
         self.assertIn("wine-smoke", plan["required_jobs"])
         self.assertIn("test-rom4s-botplay-extra", plan["required_jobs"])
-        self.assertIn("test-built-botplay-extra", plan["required_jobs"])
+        # sm12 has no built botplay_extra rows: an empty `line` vector must not run.
+        self.assertEqual(plan["matrices"]["botplay_extra"]["line"], [])
+        self.assertFalse(plan["run_built_botplay_extra"])
+        self.assertNotIn("test-built-botplay-extra", plan["required_jobs"])
         self.assertEqual(len(plan["matrices"]["botplay_extra_images"]), 3)
+
+    def test_botplay_extra_runs_built_matrix_only_with_lines(self):
+        for line, expected in (("sm13-latest", True), ("sm11-oldstable", False), ("", True)):
+            with self.subTest(line=line):
+                inputs = {"botplay_extra_distros": "true"}
+                if line:
+                    inputs["css34_line"] = line
+                plan = plan_ci(event_name="workflow_dispatch", code_changed="true", inputs=inputs)
+                self.assertEqual(plan["run_built_botplay_extra"], expected)
+                self.assertEqual("test-built-botplay-extra" in plan["required_jobs"], expected)
+                self.assertEqual(bool(plan["matrices"]["botplay_extra"].get("line")), expected)
+
+    def test_readme_only_pr_still_checks_generated_pin_tables(self):
+        plan = plan_ci(event_name="pull_request", code_changed="false", pins_changed="true")
+        self.assertFalse(plan["run_code_jobs"])
+        self.assertTrue(plan["run_check_pins"])
+        self.assertEqual(plan["required_jobs"], ["plan", "check-pins"])
+        needs = {"plan": {"result": "success"}, "check-pins": {"result": "failure"},
+                 "hygiene": {"result": "skipped"}, "build-linux": {"result": "skipped"}}
+        ok, _ = evaluate_gate(needs, plan)
+        self.assertFalse(ok)
+        needs["check-pins"] = {"result": "success"}
+        ok, errors = evaluate_gate(needs, plan)
+        self.assertTrue(ok, errors)
 
     def test_css34_line_invalid_raises_error(self):
         """Invalid or inactive css34_line input or incompatible bisect input must raise ValueError."""
