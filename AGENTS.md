@@ -25,8 +25,8 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 ```
 
 ### Building the packages (the "app")
-- **Shipping / smoke-test-compatible package** (what `test-server.yml`,
-  `release.yml` and `build.yml` build): `CSS34_LINE=<line> builder/docker/build.sh`.
+- **Shipping / smoke-test-compatible package** (what `ci.yml` and
+  `release.yml` build): `CSS34_LINE=<line> builder/docker/build.sh`.
   Image `quay.io/pypa/manylinux2014_i686@sha256:30305867f278896ee117b0d162a8e4f9b7b16819e6590f6139e14c5ed5b23fdd`
   (CentOS 7.9 i686, glibc 2.17, devtoolset-10 GCC 10.2.1). Python for AMBuild is
   `/opt/python/cp311-cp311/bin/python`. The script runs under `linux32` so
@@ -59,7 +59,7 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 
 ### Verifying / testing
 - **Static ABI check** (the "ABI / export checks" step of `build-linux` in
-  `test-server.yml`, "Static package checks" in `release.yml`): `SM_PACKAGE=<pkg>
+  `ci.yml`, "Static package checks" in `release.yml`): `SM_PACKAGE=<pkg>
   testing/scripts/check-package.sh` and `MM_PACKAGE=<pkg>
   testing/scripts/check-metamod-package.sh`. Uses host `binutils` (reads 32-bit
   ELF fine). The **manylinux2014** package must PASS with `GLIBC_FLOOR=2.17`
@@ -97,7 +97,11 @@ check (`check-package.sh`) is the closest static verification of build output.
 Daily SM/MM tip bumps: follow `docs/JULES_DAILY_VERSION_BUMP.md`. After editing
 pins in `builder/lines.json`, run `python3 builder/lines.py gen` then
 `python3 builder/lines.py check` (also enforced by
-`.github/workflows/version-pins.yml` on PRs). `gen` rewrites `builder/versions.env`,
+`.github/workflows/ci.yml` on PRs). `gen` rewrites `builder/versions.env`,
 `builder/generated/ci-matrix.json`, `builder/generated/tag-map.sh`, and the README pin
-tables. Workflows load the matrices from `python3 builder/lines.py gha`. Upstream tip probe:
+tables. `ci.yml` builds its matrices in the `plan` job
+(`builder/scripts/ci_planner.py`, which also lists the jobs the run requires) and
+ends in one `gate` job (`builder/scripts/ci_gate.py`); `release.yml` still loads its
+matrices from `python3 builder/lines.py gha`. Planner and gate are covered by
+`python3 testing/scripts/test-ci-planner-gate.py`. Upstream tip probe:
 `builder/scripts/resolve-upstream-tips.sh`.

@@ -24,7 +24,7 @@ class LinesTest(unittest.TestCase):
                      "README.md",
                      "builder/checkout-deps.sh", "builder/write-build-stamps.sh",
                      "testing/scripts/check-version-copies.sh",
-                     ".github/workflows/build.yml", ".github/workflows/test-server.yml",
+                     ".github/workflows/ci.yml",
                      ".github/workflows/release.yml"):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -95,7 +95,7 @@ class LinesTest(unittest.TestCase):
         self.assertTrue(all("@sha256:" in row["image"] for row in matrix["weekly"] + matrix["botplay"]))
         self.assertEqual([row["line"] for row in matrix["host"]], ["sm13-latest"])
         self.assertNotIn("rhel", matrix)
-        for name in (".github/workflows/test-server.yml", ".github/workflows/release.yml"):
+        for name in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
             self.assertNotIn("sha256:", (self.root / name).read_text(), name)
 
     def test_duplicate_image_is_rejected(self):

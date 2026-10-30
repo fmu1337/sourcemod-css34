@@ -1,7 +1,4 @@
-name: Test Server
-
-# Packages are handed between jobs via Actions cache (10 GB quota, not the 0.5 GB
-# Actions artifact storage). Failure logs are retained for seven days.
+name: CI
 
 permissions:
   contents: read
@@ -15,7 +12,6 @@ on:
       - 'cursor/**'
   pull_request:
   schedule:
-    # Weekly old-OS matrix. Per-PR smoke stays on the floor and current distros.
     - cron: '17 6 * * 1'
   workflow_dispatch:
     inputs:
@@ -61,19 +57,38 @@ on:
         default: false
 
 concurrency:
-  group: test-server-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   PURE_SOURCE_BUILD: "1"
 
 jobs:
-  # Doc-only PRs skip the server jobs. `gate` still runs, and its name does not
-  # depend on matrix cells, so it can become the required check.
-  changes:
+  plan:
     runs-on: ubuntu-22.04
     outputs:
-      code: ${{ steps.decide.outputs.code }}
+      code_changed: ${{ steps.planner.outputs.code_changed }}
+      run_code_jobs: ${{ steps.planner.outputs.run_code_jobs }}
+      run_pr_smoke: ${{ steps.planner.outputs.run_pr_smoke }}
+      run_weekly_smoke: ${{ steps.planner.outputs.run_weekly_smoke }}
+      run_windows: ${{ steps.planner.outputs.run_windows }}
+      run_host: ${{ steps.planner.outputs.run_host }}
+      run_release_botplay: ${{ steps.planner.outputs.run_release_botplay }}
+      run_check_pins: ${{ steps.planner.outputs.run_check_pins }}
+      run_built_botplay_extra: ${{ steps.planner.outputs.run_built_botplay_extra }}
+      default_line: ${{ steps.planner.outputs.default_line }}
+      required_jobs: ${{ steps.planner.outputs.required_jobs }}
+      build: ${{ steps.planner.outputs.build }}
+      debian: ${{ steps.planner.outputs.debian }}
+      botplay: ${{ steps.planner.outputs.botplay }}
+      weekly: ${{ steps.planner.outputs.weekly }}
+      weekly_botplay: ${{ steps.planner.outputs.weekly_botplay }}
+      host: ${{ steps.planner.outputs.host }}
+      windows: ${{ steps.planner.outputs.windows }}
+      release_botplay: ${{ steps.planner.outputs.release_botplay }}
+      botplay_extra: ${{ steps.planner.outputs.botplay_extra }}
+      botplay_extra_images: ${{ steps.planner.outputs.botplay_extra_images }}
+      images: ${{ steps.planner.outputs.images }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,51 +98,125 @@ jobs:
         if: github.event_name == 'pull_request' || github.event_name == 'push'
         uses: dorny/paths-filter@v3
         with:
+          predicate-quantifier: every
           filters: |
             code:
-              - '**'
               - '!docs/**'
               - '!**/*.md'
               - '!.github/workflows/cleanup-artifacts.yml'
+            pins:
+              - 'README.md'
 
-      - name: Decide whether server jobs run
-        id: decide
+      - name: Calculate execution plan and matrices
+        id: planner
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CODE_CHANGED: ${{ steps.filter.outputs.code || 'true' }}
+          PINS_CHANGED: ${{ steps.filter.outputs.pins || 'false' }}
+          INPUTS_JSON: ${{ toJSON(github.event.inputs) }}
         run: |
-          set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "push" ]]; then
-            echo "code=${{ steps.filter.outputs.code }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "code=true" >> "$GITHUB_OUTPUT"
-          fi
+          python3 builder/scripts/ci_planner.py \
+            --event-name "${EVENT_NAME}" \
+            --code-changed "${CODE_CHANGED}" \
+            --pins-changed "${PINS_CHANGED}" \
+            --inputs-json "${INPUTS_JSON}" \
+            --gha >> "$GITHUB_OUTPUT"
 
-  pins:
+  check-pins:
+    needs: plan
+    if: needs.plan.outputs.run_check_pins == 'true'
     runs-on: ubuntu-22.04
-    outputs:
-      build: ${{ steps.m.outputs.build }}
-      debian: ${{ steps.m.outputs.debian }}
-      botplay: ${{ steps.m.outputs.botplay }}
-      weekly: ${{ steps.m.outputs.weekly }}
-      weekly_botplay: ${{ steps.m.outputs.weekly_botplay }}
-      host: ${{ steps.m.outputs.host }}
-      release_botplay: ${{ steps.m.outputs.release_botplay }}
-      botplay_extra: ${{ steps.m.outputs.botplay_extra }}
-      botplay_extra_images: ${{ steps.m.outputs.botplay_extra_images }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Emit CI matrices from lines.json
-        id: m
-        run: python3 builder/lines.py gha >> "$GITHUB_OUTPUT"
+      - name: Verify version pin consistency
+        run: python3 builder/lines.py check
+
+      - name: Test pin generation
+        run: python3 testing/scripts/test-lines.py
+
+      - name: Windows zip layout self-test
+        run: python3 builder/package_windows.py self-test
+
+  hygiene:
+    needs: plan
+    if: needs.plan.outputs.run_code_jobs == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install regression test tools and actionlint
+        run: |
+          sudo apt-get update && sudo apt-get install -y gcc binutils expect shellcheck
+          curl -sL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /tmp && sudo mv /tmp/actionlint /usr/local/bin/
+
+      - name: Lint GitHub Action workflows
+        run: actionlint
+
+      - name: Test CI planner and gate logic
+        run: python3 testing/scripts/test-ci-planner-gate.py
+
+      - name: Check unversioned imports and PostgreSQL shim
+        run: python3 testing/scripts/test-glibc-imports.py
+
+      - name: Check console probe recovery
+        run: python3 testing/scripts/test-console-probe.py
+
+      - name: Check exact package selection
+        run: bash testing/scripts/check-package-paths.sh
+
+      - name: Check Metamod metadata and required packages
+        run: python3 testing/scripts/test-check-metamod-package.py
+
+      - name: Check release selection and Docker debug opt-in
+        run: python3 testing/scripts/test-release-build-entrypoints.py
+
+      - name: Check SM 1.11 DHooks generation
+        run: python3 testing/scripts/test-sm11-dhooks-builder.py
+
+      - name: Check patch drift acceptance ranges and failures
+        timeout-minutes: 30
+        run: python3 testing/scripts/test-check-patch-drift.py
+
+      - name: Check patch failures and generated Versioning
+        run: python3 testing/scripts/test-patch-fail-closed.py
+
+      - name: Intentionally fail smoke with a missing server
+        id: negative-smoke
+        continue-on-error: true
+        shell: bash
+        env:
+          SERVER_DIR: ${{ runner.temp }}/absent-css34-server
+        run: |
+          mkdir -p "$SERVER_DIR"
+          bash testing/scripts/smoke-test.sh 2>&1 | tee negative-smoke.log
+
+      - name: Require the expected failure
+        env:
+          OUTCOME: ${{ steps.negative-smoke.outcome }}
+        run: |
+          test "$OUTCOME" = failure
+          grep -q 'No srcds_i686/i486 binary found' negative-smoke.log
+
+      - name: Preserve negative smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: negative-smoke-logs
+          path: negative-smoke.log
+          if-no-files-found: error
+          retention-days: 7
 
   build-linux:
-    needs: [changes, pins]
-    if: success() && needs.changes.outputs.code == 'true'
+    needs: plan
+    if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.build) }}
+        include: ${{ fromJSON(needs.plan.outputs.build) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -170,7 +259,6 @@ jobs:
 
           testing/scripts/verify-line-metamod-packages.sh "${{ matrix.line }}"
 
-      # Job-to-job handoff via Actions cache (does not count against the 0.5 GB artifact quota).
       - name: Cache packages for later jobs
         if: steps.select.outputs.skip != '1'
         uses: actions/cache/save@v4
@@ -178,9 +266,111 @@ jobs:
           path: packages
           key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
 
+  build-windows:
+    needs: plan
+    if: needs.plan.outputs.run_windows == 'true'
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.windows) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up MSVC (x86, toolset 14.44, SDK 10.0.26100.0)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+          toolset: "14.44"
+          sdk: 10.0.26100.0
+
+      - name: Build SourceMod + Metamod for CS:S v34 (${{ matrix.line }})
+        shell: bash
+        env:
+          CSS34_LINE: ${{ matrix.line }}
+          PURE_SOURCE_BUILD: "1"
+        run: |
+          export WDIR="$PWD"
+          chmod +x builder/run/windows.sh builder/checkout-deps.sh builder/prepare-package.sh \
+            builder/build-metamod.sh builder/write-build-stamps.sh builder/resolve-version.sh \
+            builder/py.sh builder/patches/*.sh
+          builder/run/windows.sh
+
+      - name: Confirm Windows packages exist
+        shell: bash
+        run: |
+          ls -lh packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip
+          python builder/package_windows.py check \
+            packages/sourcemod-*-css34-windows.zip \
+            packages/mmsource-*-css34-windows.zip
+          if command -v unzip >/dev/null 2>&1; then
+            unzip -l packages/sourcemod-*-css34-windows.zip
+            unzip -l packages/mmsource-*-css34-windows.zip
+          fi
+
+      - name: Collect packages and PDBs
+        shell: bash
+        run: |
+          mkdir -p win-art/pdb
+          cp packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip win-art/
+          find sourcemod/build deps -name '*.pdb' -path '*build*' -exec cp -f {} win-art/pdb/ \;
+          ls -la win-art win-art/pdb
+
+      - name: Cache packages for wine-smoke
+        uses: actions/cache/save@v4
+        with:
+          path: win-art
+          key: css34-win-${{ github.run_id }}-${{ matrix.line }}
+          enableCrossOsArchive: true
+
+      - name: Cache CS:S v34 server zips (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-cache/srcds_css34_4044.zip
+            .ci-cache/srcds_css34_w_a.zip
+          key: css34-win-server-zips-v1
+
+      - name: Windows smoke test (${{ matrix.line }})
+        shell: bash
+        env:
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          MM_REV_EXPECT: ${{ matrix.mm_rev }}
+          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
+          EXPECT_EXTS: ${{ matrix.exts }}
+          LOAD_EXTS: ${{ matrix.load_exts }}
+          DHOOKS_PROBE_SECS: "150"
+        run: |
+          SM_WIN_PACKAGE="$(ls "$PWD"/win-art/sourcemod-*-css34-windows.zip)"
+          MM_WIN_PACKAGE="$(ls "$PWD"/win-art/mmsource-*-css34-windows.zip)"
+          PDB_DIR="$PWD/win-art/pdb"
+          export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR
+          bash testing/scripts/wine-smoke-test.sh
+
+      - name: Upload Windows smoke logs and crash dumps
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-smoke-${{ matrix.line }}
+          path: |
+            .ci-winserver/cstrike/console.log
+            .ci-winserver/cstrike/addons/sourcemod/logs/
+            .ci-winserver/dumps/
+          if-no-files-found: ignore
+          retention-days: 7
+
   prepare-server:
-    needs: [changes]
-    if: success() && needs.changes.outputs.code == 'true'
+    needs: plan
+    if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -229,20 +419,73 @@ jobs:
           path: server-art/css34-server.tar.gz
           key: ${{ steps.server-cache.outputs.cache-primary-key }}
 
-  # Primary gate: pure-source matched SM×MM lines.
-  # Packages are produced in manylinux2014_i686 (builder/docker/build.sh, glibc 2.17).
+  wine-smoke:
+    needs: [plan, build-windows, prepare-server]
+    if: needs.plan.outputs.run_windows == 'true' && !cancelled()
+    runs-on: ubuntu-22.04
+    container: ubuntu:22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.windows) }}
+    steps:
+      - name: Install Wine
+        run: |
+          dpkg --add-architecture i386
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            wine32 wine xvfb unzip curl ca-certificates python3 binutils llvm-14 git zstd
+          ln -sf /usr/bin/llvm-symbolizer-14 /usr/local/bin/llvm-symbolizer
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore Windows packages
+        uses: actions/cache/restore@v4
+        with:
+          path: win-art
+          key: css34-win-${{ github.run_id }}-${{ matrix.line }}
+          fail-on-cache-miss: true
+          enableCrossOsArchive: true
+
+      - name: Restore server tree
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
+
+      - name: Wine smoke test (${{ matrix.line }})
+        shell: bash
+        env:
+          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          MM_REV_EXPECT: ${{ matrix.mm_rev }}
+          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
+          EXPECT_EXTS: ${{ matrix.exts }}
+          LOAD_EXTS: ${{ matrix.load_exts }}
+          DHOOKS_PROBE_SECS: "150"
+        run: |
+          SM_WIN_PACKAGE="$(ls win-art/sourcemod-*-css34-windows.zip)"
+          MM_WIN_PACKAGE="$(ls win-art/mmsource-*-css34-windows.zip)"
+          PDB_DIR="$PWD/win-art/pdb"
+          export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR
+          [[ -f server-art/css34-server.tar.gz ]] && export SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"
+          echo "==== unzip -l ${SM_WIN_PACKAGE} ===="
+          unzip -l "${SM_WIN_PACKAGE}"
+          echo "==== unzip -l ${MM_WIN_PACKAGE} ===="
+          unzip -l "${MM_WIN_PACKAGE}"
+          python3 builder/package_windows.py check "${SM_WIN_PACKAGE}" "${MM_WIN_PACKAGE}"
+          bash testing/scripts/wine-smoke-test.sh
+
   test-built-debian:
-    needs: [changes, pins, build-linux, prepare-server]
-    if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'pull_request' || github.event_name == 'push' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'pr'))
+    needs: [plan, build-linux, prepare-server]
+    if: needs.plan.outputs.run_pr_smoke == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.debian) }}
+        include: ${{ fromJSON(needs.plan.outputs.debian) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -331,21 +574,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Primary comprehensive gate: botplay-stress (SMAC + sdkhooks OnTakeDamage ABI probe)
-  # for every built CSS34_LINE. Uses Actions cache for packages (not artifact storage).
   test-built-botplay-matrix:
-    if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'pull_request' || github.event_name == 'push' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'pr' && github.event.inputs.run_full_botplay_matrix == 'true'))
-    needs: [changes, pins, build-linux, prepare-server]
+    needs: [plan, build-linux, prepare-server]
+    if: needs.plan.outputs.run_pr_smoke == 'true' && (github.event_name != 'workflow_dispatch' || github.event.inputs.run_full_botplay_matrix == 'true')
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.botplay) }}
+        include: ${{ fromJSON(needs.plan.outputs.botplay) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -451,19 +688,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Boots freshly built Metamod + SourceMod on the GitHub Actions host runner.
   test-built-smoke:
-    needs: [changes, pins, build-linux, prepare-server]
-    if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'pull_request' || github.event_name == 'push' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'pr'))
+    needs: [plan, build-linux, prepare-server]
+    if: needs.plan.outputs.run_host == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.host) }}
+        include: ${{ fromJSON(needs.plan.outputs.host) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -542,11 +774,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Baseline capture: rom4s MM 1.10.6 + SM 6572 + SMAC + 4 bots for ~10 minutes.
-  # Parses round_start / round_end / player_death from engine console.log.
   test-rom4s-botplay:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_botplay == 'true'
-    needs: [prepare-server]
+    needs: [plan, prepare-server]
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -567,10 +797,10 @@ jobs:
           BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
           MM_VERSION_EXPECT: "1.10.6"
           SM_VERSION_EXPECT: "1.11.0.6572"
+          IMAGE: ${{ fromJSON(needs.plan.outputs.images)['debian:latest'] }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
-          IMAGE="$(python3 -c 'import json; print(json.load(open("builder/generated/ci-matrix.json"))["images"]["debian:latest"])')"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
@@ -611,12 +841,12 @@ jobs:
 
   test-rom4s-botplay-extra:
     if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
-    needs: [pins, prepare-server]
+    needs: [plan, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.botplay_extra_images) }}
+        include: ${{ fromJSON(needs.plan.outputs.botplay_extra_images) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -679,12 +909,12 @@ jobs:
           retention-days: 7
 
   test-built-botplay-extra:
-    if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
-    needs: [pins, build-linux, prepare-server]
+    if: needs.plan.outputs.run_built_botplay_extra == 'true'
+    needs: [plan, build-linux, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.pins.outputs.botplay_extra) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.botplay_extra) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -776,15 +1006,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Botplay against published GitHub Release packages (SM 1.12 + SM 1.13 lines).
   test-release-botplay:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_botplay == 'true'
-    needs: [pins, prepare-server]
+    if: needs.plan.outputs.run_release_botplay == 'true'
+    needs: [plan, prepare-server]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.release_botplay) }}
+        include: ${{ fromJSON(needs.plan.outputs.release_botplay) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -820,12 +1049,12 @@ jobs:
           SM_ASSET: ${{ matrix.sm_asset }}
           MM_ASSET: ${{ matrix.mm_asset }}
           LINE: ${{ matrix.line }}
+          IMAGE: ${{ fromJSON(needs.plan.outputs.images)['debian:latest'] }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
           SM_PACKAGE="packages/${SM_ASSET}"
           MM_PACKAGE="packages/${MM_ASSET}"
-          IMAGE="$(python3 -c 'import json; print(json.load(open("builder/generated/ci-matrix.json"))["images"]["debian:latest"])')"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
@@ -885,10 +1114,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Optional diagnostics: short botplay cases (slow; workflow_dispatch only).
   test-botplay-bisect:
     if: github.event_name == 'workflow_dispatch' && inputs.run_botplay_bisect == true
-    needs: [build-linux, prepare-server]
+    needs: [plan, build-linux, prepare-server]
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     steps:
@@ -913,12 +1141,12 @@ jobs:
         env:
           RECORD_SECS: "90"
           BISECT_SET: quick
+          IMAGE: ${{ fromJSON(needs.plan.outputs.images)['debian:latest'] }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
           CSS34_LINE="sm13-latest" source builder/package-paths.sh
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          IMAGE="$(python3 -c 'import json; print(json.load(open("builder/generated/ci-matrix.json"))["images"]["debian:latest"])')"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e RECORD_SECS \
@@ -949,19 +1177,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Old OS matrix: schedule, workflow_dispatch suite=weekly, and release.yml.
   test-built-weekly:
-    needs: [changes, pins, build-linux, prepare-server]
-    if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'schedule' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'weekly'))
+    needs: [plan, build-linux, prepare-server]
+    if: needs.plan.outputs.run_weekly_smoke == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.weekly) }}
+        include: ${{ fromJSON(needs.plan.outputs.weekly) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1051,18 +1274,14 @@ jobs:
           retention-days: 7
 
   test-built-weekly-botplay:
-    needs: [changes, pins, build-linux, prepare-server]
-    if: >-
-      success() &&
-      needs.changes.outputs.code == 'true' &&
-      (github.event_name == 'schedule' ||
-       (github.event_name == 'workflow_dispatch' && inputs.suite == 'weekly'))
+    needs: [plan, build-linux, prepare-server]
+    if: needs.plan.outputs.run_weekly_smoke == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.weekly_botplay) }}
+        include: ${{ fromJSON(needs.plan.outputs.weekly_botplay) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1151,13 +1370,13 @@ jobs:
           retention-days: 7
 
   plapi-runtime:
-    needs: [changes, pins, build-linux, prepare-server]
-    if: success() && needs.changes.outputs.code == 'true'
+    needs: [plan, build-linux, prepare-server]
+    if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.pins.outputs.build) }}
+        include: ${{ fromJSON(needs.plan.outputs.build) }}
     steps:
       - uses: actions/checkout@v4
       - name: Select requested line
@@ -1205,9 +1424,12 @@ jobs:
     name: gate
     if: always()
     needs:
-      - changes
-      - pins
+      - plan
+      - check-pins
+      - hygiene
       - build-linux
+      - build-windows
+      - wine-smoke
       - prepare-server
       - test-built-debian
       - plapi-runtime
@@ -1222,49 +1444,14 @@ jobs:
       - test-botplay-bisect
     runs-on: ubuntu-22.04
     steps:
-      - name: Report the overall result
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Evaluate Unified Gate
         env:
-          EVENT: ${{ github.event_name }}
-          SUITE: ${{ github.event.inputs.suite || 'pr' }}
-          BOTPLAY: ${{ github.event.inputs.run_full_botplay_matrix || 'true' }}
-          RESULTS: ${{ toJSON(needs) }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          REQUIRED_JOBS: ${{ needs.plan.outputs.required_jobs }}
         run: |
-          python3 - <<'PY'
-          import json, os, sys
-          needs = json.loads(os.environ["RESULTS"])
-          event = os.environ["EVENT"]
-          suite = os.environ["SUITE"]
-          botplay = os.environ["BOTPLAY"] == "true"
-          code = (needs.get("changes", {}).get("outputs") or {}).get("code")
-
-          def result(name):
-              return needs[name]["result"]
-
-          bad = ["{0}={1}".format(name, result(name))
-                 for name in needs if result(name) not in ("success", "skipped")]
-          weekly = event == "schedule" or (event == "workflow_dispatch" and suite == "weekly")
-          if code == "true" and result("build-linux") != "success":
-              bad.append("build-linux did not succeed")
-          if code == "true" and result("plapi-runtime") != "success":
-              bad.append("plapi-runtime did not succeed")
-          if code == "true" and result("prepare-server") != "success":
-              bad.append("prepare-server did not succeed")
-          if code == "true" and not weekly and event in ("pull_request", "push", "workflow_dispatch"):
-              required = ["test-built-debian", "test-built-smoke"]
-              if botplay:
-                  required.append("test-built-botplay-matrix")
-              for name in required:
-                  if result(name) != "success":
-                      bad.append(name + " did not succeed")
-          if code == "true" and weekly:
-              for name in ("test-built-weekly", "test-built-weekly-botplay"):
-                  if result(name) != "success":
-                      bad.append(name + " did not succeed")
-          print("event={0} suite={1} code={2}".format(event, suite, code))
-          for name in needs:
-              print("{0}={1}".format(name, result(name)))
-          if bad:
-              print("FAIL: " + ", ".join(bad))
-              sys.exit(1)
-          print("OK")
-          PY
+          python3 builder/scripts/ci_gate.py \
+            --needs-json "${NEEDS_JSON}" \
+            --plan-json "${REQUIRED_JOBS}"
