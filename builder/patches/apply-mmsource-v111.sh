@@ -22,8 +22,7 @@ import re
 
 path = Path(os.environ['MMS_DIR']) / 'support/buildbot/Versioning'
 if not path.exists():
-    print('==> WARN: support/buildbot/Versioning missing')
-    raise SystemExit(0)
+    raise SystemExit('FAIL: support/buildbot/Versioning missing in MM 1.11')
 text = path.read_text()
 if 'css34: detached HEAD' in text:
     print('==> MM 1.11 Versioning already handles detached HEAD')
@@ -48,7 +47,7 @@ else:
     git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
 """
 if old not in text:
-    print('==> WARN: MM 1.11 Versioning detached-HEAD pattern not found (continuing)')
+    raise SystemExit('FAIL: MM 1.11 Versioning detached-HEAD pattern not found in support/buildbot/Versioning')
 else:
     path.write_text(text.replace(old, new, 1))
     print('==> Patched MM 1.11 Versioning for detached MMS_COMMIT checkouts')

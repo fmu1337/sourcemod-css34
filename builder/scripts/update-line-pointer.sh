@@ -32,12 +32,13 @@ SMOKE="${SMOKE:-pass}"
 REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY required}"
 PTR_TAG="line-${LINE}"
 INDEX_TAG="lines-index"
-TARGET="${GITHUB_SHA:-$(git rev-parse HEAD)}"
+TARGET="${TARGET:-${GITHUB_SHA:-$(git rev-parse HEAD)}}"
 # Unique per run: parallel runs must never touch each other's temp assets.
 RUN_KEY="${GITHUB_RUN_ID:-$$}-${GITHUB_RUN_ATTEMPT:-0}"
 # Commit time of the tagged commit: when two tags of one line finish out of
 # order, the older one must not switch the pointer back.
 SRC_TIME="${SRC_TIME:-$(git show -s --format=%ct "$TARGET" 2>/dev/null || echo 0)}"
+FORCE_REPOINT="${FORCE_REPOINT:-0}"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -164,15 +165,45 @@ else
 fi
 
 decision="${work}/decision"
-python3 - "$line_json" "$LINE" "$SRC_TAG" "$SMOKE" "$manifest" "$mm_manifest" "$PTR_TAG" "$REPO" "$SRC_TIME" "$decision" <<'PY'
-import json, sys, datetime
-path, line, tag, smoke, sm, mm, ptr, repo, src_time, decision = sys.argv[1:11]
-sm, mm = json.loads(sm), json.loads(mm)
+python3 - "$line_json" "$LINE" "$SRC_TAG" "$SMOKE" "$manifest" "$mm_manifest" "$PTR_TAG" "$REPO" "$SRC_TIME" "$FORCE_REPOINT" "$decision" <<'PY'
+import json, re, sys, datetime
+
+path, line, tag, smoke, sm_raw, mm_raw, ptr, repo, src_time, force_repoint, decision = sys.argv[1:12]
+
+try:
+    sm = json.loads(sm_raw)
+except Exception as e:
+    sys.exit(f"Invalid SM package manifest JSON: {e}")
+
+try:
+    mm = json.loads(mm_raw)
+except Exception as e:
+    sys.exit(f"Invalid MM package manifest JSON: {e}")
+
+req_fields = ["sm_version", "sm_commit", "mm_version", "mm_commit", "extension_api", "extension_api_min", "metamod_binary"]
+for f in req_fields:
+    if f not in sm or sm[f] is None or sm[f] == "":
+        sys.exit(f"SM manifest missing required field '{f}'")
+    if f in ("sm_version", "sm_commit", "mm_version", "mm_commit", "metamod_binary") and sm[f] in ("null", "custom", "unknown"):
+        sys.exit(f"SM manifest field '{f}' has placeholder value {sm[f]!r}")
+
+for f in ("mm_version", "mm_commit", "metamod_binary"):
+    if f not in mm or mm[f] is None or mm[f] == "":
+        sys.exit(f"MM manifest missing required field '{f}'")
+    if mm[f] != sm[f]:
+        sys.exit(f"MM and SM manifest mismatch for '{f}': MM={mm[f]!r}, SM={sm[f]!r}")
+
+sha_re = re.compile(r'^[0-9a-fA-F]{7,40}$')
+if not sha_re.match(str(sm["sm_commit"])):
+    sys.exit(f"Invalid sm_commit format: {sm['sm_commit']!r}")
+if not sha_re.match(str(sm["mm_commit"])):
+    sys.exit(f"Invalid mm_commit format: {sm['mm_commit']!r}")
 src_time = int(src_time or 0)
+force = force_repoint == "1"
 current = json.load(open(path)).get(line)
 now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 served_time = int((current or {}).get("source_commit_time") or 0)
-if smoke == "pass" and current and current.get("smoke") == "pass" and served_time > src_time:
+if not force and smoke == "pass" and current and current.get("smoke") == "pass" and served_time > src_time:
     # A newer tag of this line already switched the pointer: leave it.
     open(decision, "w").write("stale")
     print(f"pointer already serves {current['tag']} (commit time {served_time} > {src_time}); not switching",
