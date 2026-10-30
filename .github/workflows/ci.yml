@@ -147,7 +147,7 @@ jobs:
           curl -sL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /tmp && sudo mv /tmp/actionlint /usr/local/bin/
 
       - name: Lint GitHub Action workflows
-        run: actionlint .github/workflows/ci.yml
+        run: actionlint
 
       - name: Test CI planner and gate logic
         run: python3 testing/scripts/test-ci-planner-gate.py
@@ -163,6 +163,18 @@ jobs:
 
       - name: Check Metamod metadata and required packages
         run: python3 testing/scripts/test-check-metamod-package.py
+
+      - name: Check release selection and Docker debug opt-in
+        run: python3 testing/scripts/test-release-build-entrypoints.py
+
+      - name: Check SM 1.11 DHooks generation
+        run: python3 testing/scripts/test-sm11-dhooks-builder.py
+
+      - name: Check PLAPI factory contract
+        run: python3 testing/scripts/test-plapi-probe.py
+
+      - name: Check patch failures and generated Versioning
+        run: python3 testing/scripts/test-patch-fail-closed.py
 
       - name: Intentionally fail smoke with a missing server
         id: negative-smoke
@@ -1350,6 +1362,57 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  plapi-runtime:
+    needs: [plan, build-linux, prepare-server]
+    if: needs.plan.outputs.run_code_jobs == 'true'
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.build) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select requested line
+        id: select
+        env:
+          WANT: ${{ github.event.inputs.css34_line }}
+          LINE: ${{ matrix.line }}
+        run: |
+          if [[ -n "$WANT" && "$WANT" != "$LINE" ]]; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Restore packages
+        if: steps.select.outputs.skip != '1'
+        uses: actions/cache/restore@v4
+        with:
+          path: packages
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
+          fail-on-cache-miss: true
+      - name: Restore server providers
+        if: steps.select.outputs.skip != '1'
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          fail-on-cache-miss: true
+      - name: Check actual core PLAPI
+        if: steps.select.outputs.skip != '1'
+        env:
+          CSS34_LINE: ${{ matrix.line }}
+          SERVER_DIR: ${{ github.workspace }}/.ci-plapi-server
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib lib32stdc++6 lib32z1
+          source builder/package-paths.sh
+          export SM_PACKAGE MM_PACKAGE
+          mkdir -p "$SERVER_DIR"
+          tar -xzf server-art/css34-server.tar.gz -C "$SERVER_DIR"
+          bash testing/scripts/install-addons.sh
+          bash testing/scripts/check-core-plapi.sh
+
   gate:
     name: gate
     if: always()
@@ -1362,6 +1425,7 @@ jobs:
       - wine-smoke
       - prepare-server
       - test-built-debian
+      - plapi-runtime
       - test-built-botplay-matrix
       - test-built-smoke
       - test-built-weekly
