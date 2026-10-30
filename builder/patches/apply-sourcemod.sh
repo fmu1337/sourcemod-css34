@@ -241,7 +241,7 @@ if modular_sp:
                 patched_pl = True
                 break
     if not patched_pl:
-        raise SystemExit('FAIL: sourcepawn linux pthread postlink not found (modular)')
+        raise SystemExit('FAIL: sourcepawn linux pthread postlink not found in modular sourcepawn')
     sp_text = sp_script.read_text()
     dyn_marker = 'css34: libsourcepawn pthread/rt DT_NEEDED'
     if dyn_marker not in sp_text:
@@ -308,7 +308,7 @@ if builder.target.platform == 'linux':
         sp_script.write_text(sp_text.replace(sp_old_pthread, sp_new_pthread, 1))
         print('==> Patched sourcepawn AMBuildScript Configure for pthread/rt DT_NEEDED')
     else:
-        raise SystemExit('Failed to locate sourcepawn linux pthread postlink block')
+        raise SystemExit('FAIL: sourcepawn linux pthread postlink not found in sourcepawn.jit vm/AMBuilder')
 else:
     raise SystemExit('sourcepawn AMBuildScript / vm/AMBuilder missing')
 

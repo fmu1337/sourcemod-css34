@@ -59,6 +59,8 @@ int main(int argc, char **argv) {
     int api_ver = get_api_ver(iface);
 
     printf("PLAPI:%d\n", api_ver);
+    /* Flush before dlclose: module destructors may abort and stdout is a pipe. */
+    fflush(stdout);
 
     dlclose(handle);
     return 0;

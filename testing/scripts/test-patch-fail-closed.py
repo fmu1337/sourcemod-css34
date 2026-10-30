@@ -315,6 +315,11 @@ class TestPatchAnchors(unittest.TestCase):
                 self.assertIn("--exclude-libs,ALL", patched)
                 if minor == 13:
                     self.assertIn("skip duplicate logic static SP on linux", patched)
+                    # pthread/rt come from the static SP link block itself; no
+                    # separate postlink step is generated on 1.13.
+                    self.assertIn("css34: static SP before libstdc++ for std::thread", patched)
+                    self.assertIn("'-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',", patched)
+                    self.assertNotIn("css34: logic postlink pthread after static SP", patched)
                     path.write_text(original.replace("SP.zlib[target],", "SP.other[target],"))
                     self.run_patch(code, "logic duplicate static SP anchor")
 
