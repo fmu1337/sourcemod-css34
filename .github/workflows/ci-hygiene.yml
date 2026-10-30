@@ -33,6 +33,8 @@ jobs:
         run: bash testing/scripts/check-package-paths.sh
       - name: Check Metamod metadata and required packages
         run: python3 testing/scripts/test-check-metamod-package.py
+      - name: Check release resolver and version pins
+        run: python3 testing/scripts/test-lines.py
       - name: Check release selection and Docker debug opt-in
         run: python3 testing/scripts/test-release-build-entrypoints.py
       # Negative test: an absent server must fail smoke and leave a downloadable
