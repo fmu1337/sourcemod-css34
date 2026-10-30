@@ -39,6 +39,8 @@ jobs:
         run: python3 testing/scripts/test-lines.py
       - name: Check release selection and Docker debug opt-in
         run: python3 testing/scripts/test-release-build-entrypoints.py
+      - name: Check generated SM 1.11 DHooks builder
+        run: python3 testing/scripts/test-sm11-dhooks-builder.py
       # Negative test: an absent server must fail smoke and leave a downloadable
       # diagnostic after the workflow completes. Production smoke gates are unchanged.
       - name: Intentionally fail smoke with a missing server

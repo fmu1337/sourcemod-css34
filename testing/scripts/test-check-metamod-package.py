@@ -115,6 +115,10 @@ class TestCheckMetamodPackage(unittest.TestCase):
         with open(os.path.join(builder, "lines.json"), "w") as fh:
             json.dump(data, fh)
 
+        # The SM 1.11 build fails closed unless both resolved checkouts exist.
+        os.makedirs(os.path.join(self.tmp_dir, data["pins"]["MM_110"]["dirname"], "core-css34legacy"))
+        os.makedirs(os.path.join(self.tmp_dir, selected["dirname"], "core"), exist_ok=True)
+
         # Execute the production orchestration blocks with only the expensive
         # fetch/build functions stubbed; the actual resolver reads the fixture.
         for path, function, commit_arg in (
@@ -136,6 +140,28 @@ class TestCheckMetamodPackage(unittest.TestCase):
                 self.assertEqual(res.returncode, 0, res.stderr)
                 self.assertEqual(res.stdout.splitlines(),
                                  [data["pins"]["MM_110"]["commit"], selected["commit"]])
+
+        # linux.sh must hand the resolved MM 1.12 checkout to configure, never MM 1.10.
+        with open(os.path.join(ROOT, "builder/run/linux.sh")) as fh:
+            source = fh.read()
+        start = source.index('if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11')
+        block = source[start:source.index("\nelse\n", start)] + "\nfi\n"
+        stub = "build_and_package_mm() { :; }\n"
+        report = 'printf "%s|%s\\n" "$MM_MODERN_DIR" "$CSS34_MMS_LEGACY_CORE"\n'
+        env = os.environ.copy()
+        env.update(BUILDER_DIR=builder, DEPS_DIR=self.tmp_dir,
+                   SOURCEMOD_MAJOR="11", CSS34_LINE="sm11-oldstable")
+        res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block + report],
+                             env=env, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(res.stdout.strip(), "|".join([
+            os.path.join(self.tmp_dir, selected["dirname"]),
+            os.path.join(self.tmp_dir, data["pins"]["MM_110"]["dirname"], "core-css34legacy")]))
+        shutil.rmtree(os.path.join(self.tmp_dir, selected["dirname"]))
+        res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block + report],
+                             env=env, capture_output=True, text=True)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("FAIL: missing", res.stderr)
 
         self._create_mock_pkg()
         self._create_mock_pkg(commit=selected["commit"],
