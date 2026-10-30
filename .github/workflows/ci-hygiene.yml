@@ -42,6 +42,8 @@ jobs:
       - name: Check patch drift acceptance ranges and failures
         timeout-minutes: 30
         run: python3 testing/scripts/test-check-patch-drift.py
+      - name: Check generated SM 1.11 DHooks builder
+        run: python3 testing/scripts/test-sm11-dhooks-builder.py
       # Negative test: an absent server must fail smoke and leave a downloadable
       # diagnostic after the workflow completes. Production smoke gates are unchanged.
       - name: Intentionally fail smoke with a missing server
