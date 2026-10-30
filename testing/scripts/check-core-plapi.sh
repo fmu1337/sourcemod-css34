@@ -13,11 +13,7 @@ for suffix in 1.ep1 2.ep1; do
   if [[ "$suffix" == 1.ep1 && "${CSS34_LINE:?}" != sm11-oldstable ]]; then continue; fi
   test -f "$module"
   expected=16
-  if [[ "$suffix" == 1.ep1 ]]; then
-    expected=11
-  elif [[ "${CSS34_LINE:?}" == sm11-oldstable ]]; then
-    expected=15
-  fi
+  [[ "$suffix" != 1.ep1 ]] || expected=11
   output="$("$probe" "$module")"
   [[ "$output" == "PLAPI:$expected" ]] || {
     echo "FAIL: $module returned $output, expected PLAPI:$expected" >&2

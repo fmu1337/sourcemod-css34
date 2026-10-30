@@ -337,7 +337,7 @@ jobs:
   windows:
     needs: [resolve-line]
     if: needs.resolve-line.outputs.repoint != '1'
-    # Same pin as build.yml (builder/windows-toolchain.env).
+    # Same pin as ci.yml build-windows (builder/windows-toolchain.env).
     runs-on: windows-2022
     steps:
       - name: Checkout
