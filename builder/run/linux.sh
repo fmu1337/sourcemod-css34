@@ -112,17 +112,32 @@ build_and_package_mm() {
 
 if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
   mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm11-oldstable}")"
+  MM_LEGACY_DIR=""
+  MM_MODERN_DIR=""
   while IFS=$'\t' read -r role dirname mode branch commit rev version; do
     build_and_package_mm "$DEPS_DIR/$dirname" "$mode" "$dirname" "$rev" "$commit"
+    case "$mode" in
+      1.10) [[ -z "$MM_LEGACY_DIR" ]] || { echo "FAIL: two MM 1.10 inputs for ${CSS34_LINE:-sm11}" >&2; exit 1; }
+            MM_LEGACY_DIR="$DEPS_DIR/$dirname" ;;
+      1.12) [[ -z "$MM_MODERN_DIR" ]] || { echo "FAIL: two MM 1.12 inputs for ${CSS34_LINE:-sm11}" >&2; exit 1; }
+            MM_MODERN_DIR="$DEPS_DIR/$dirname" ;;
+    esac
   done <<< "$mm_inputs"
+  # Dual-core SM 1.11: 1.ep1 builds against MM 1.10 legacy headers, 2.ep1 against MM 1.12.
+  if [[ -z "$MM_LEGACY_DIR" || -z "$MM_MODERN_DIR" ]]; then
+    echo "FAIL: SM 1.11 needs one MM 1.10 and one MM 1.12 input (got legacy='${MM_LEGACY_DIR}' modern='${MM_MODERN_DIR}')" >&2
+    exit 1
+  fi
+  if [[ ! -d "$MM_LEGACY_DIR/core-css34legacy" || ! -d "$MM_MODERN_DIR/core" ]]; then
+    echo "FAIL: missing $MM_LEGACY_DIR/core-css34legacy or $MM_MODERN_DIR/core" >&2
+    exit 1
+  fi
+  export CSS34_MMS_LEGACY_CORE="$MM_LEGACY_DIR/core-css34legacy"
 else
   build_and_package_mm "$MMS_DIR" "$MMS_MODE" "$MMS_DIRNAME" "${MMS_GIT_REV:-}" "${MMS_COMMIT:-}"
 fi
 
 echo "==> Applying CS:S v34 compatibility patches"
-if [[ -d "$DEPS_DIR/mmsource-1.10/core-css34legacy" ]]; then
-  export CSS34_MMS_LEGACY_CORE="$DEPS_DIR/mmsource-1.10/core-css34legacy"
-fi
 "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
 
 echo "==> Writing CSS34 build stamp headers (pre-SourceMod)"
@@ -150,16 +165,12 @@ CONFIGURE_ARGS=(
 if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
   CONFIGURE_ARGS+=(--targets=x86)
 elif [ "$SOURCEMOD_MAJOR" -lt 12 ]; then
-  # SM 1.11 css34 builds dual 1.ep1 (MM 1.10) + 2.ep1 (MM 1.12) cores with mms-path pointing to MM 1.12.
-  if [[ -d "$DEPS_DIR/mmsource-1.12-frozen" ]]; then
-    mms_112_path="$DEPS_DIR/mmsource-1.12-frozen"
-  else
-    mms_112_path="$MMS_DIR"
-  fi
+  # SM 1.11 css34 builds dual 1.ep1 (MM 1.10) + 2.ep1 (MM 1.12) cores; --mms-path is the
+  # MM 1.12 input resolved from lines.json above, never a silent fallback to MM 1.10.
   CONFIGURE_ARGS=(
     --enable-optimize
     --hl2sdk-root="$DEPS_DIR"
-    --mms-path="$mms_112_path"
+    --mms-path="$MM_MODERN_DIR"
     "${DB_PATH_ARGS[@]}"
     --sdks=ep1,episode1
   )
