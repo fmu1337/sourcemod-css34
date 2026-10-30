@@ -89,7 +89,7 @@ if [[ $# -eq 0 && -z "$TARGET_DIR" && -z "$SM_COMMIT" && -z "$MM_COMMIT" && -z "
   CHECK_PINS=1
 fi
 
-dry_run_patch_dir() {
+dry_run_patch_dir() (
   local src_dir="$1"
   local mode="$2"
   local target_desc="${3:-$src_dir}"
@@ -99,12 +99,13 @@ dry_run_patch_dir() {
     return 1
   fi
 
-  local work_dir
+  local work_dir cleanup_path
   work_dir="$(mktemp -d)"
-  trap 'rm -rf "$work_dir"' EXIT
+  printf -v cleanup_path '%q' "$work_dir"
+  trap "rm -rf -- $cleanup_path" EXIT
 
   local temp_target="${work_dir}/repo"
-  cp -r "$src_dir" "$temp_target"
+  cp -rL "$src_dir" "$temp_target"
 
   local patch_script=""
   case "$mode" in
@@ -121,7 +122,13 @@ dry_run_patch_dir() {
       patch_script="$ROOT_DIR/builder/patches/apply-mmsource-css34.sh"
       ;;
     *)
-      if [[ -f "$temp_target/hl2sdk-manifests/manifests/episode1.json" ]]; then
+      if [[ -n "$mode" ]]; then
+        echo "FAIL: Unknown patch mode: $mode" >&2
+        return 1
+      elif [[ -f "$temp_target/core/ISmmAPI.h" ]]; then
+        patch_script="$ROOT_DIR/builder/patches/apply-mmsource-v112.sh"
+        mode="mm112"
+      elif [[ -f "$temp_target/hl2sdk-manifests/manifests/episode1.json" ]]; then
         patch_script="$ROOT_DIR/builder/patches/apply-sourcemod-v112.sh"
         mode="sm13"
       elif [[ -f "$temp_target/core/ISmmAPI.h" ]]; then
@@ -164,7 +171,7 @@ dry_run_patch_dir() {
   rm -rf "$work_dir"
   trap - EXIT
   return 0
-}
+)
 
 resolve_sm_rev_commit() {
   local target_rev="$1"
@@ -177,40 +184,21 @@ resolve_sm_rev_commit() {
   fi
   git -C "$cache_dir" fetch --quiet origin "$branch"
 
-  python3 - "$cache_dir" "$branch" "$target_rev" <<'PYREV'
-import sys, subprocess, os
-cache_dir, branch, target_rev = sys.argv[1:4]
-try:
-    target = int(target_rev)
-except ValueError:
-    res = subprocess.run(['git', '-C', cache_dir, 'rev-parse', target_rev], capture_output=True, text=True)
-    sys.stdout.write(res.stdout.strip())
-    sys.exit(0)
-
-commits = subprocess.run(['git', '-C', cache_dir, 'rev-list', f'origin/{branch}'], capture_output=True, text=True, check=True).stdout.strip().splitlines()
-low, high = 0, len(commits) - 1
-found = None
-while low <= high:
-    mid = (low + high) // 2
-    c = commits[mid]
-    cnt = int(subprocess.run(['git', '-C', cache_dir, 'rev-list', '--count', c], capture_output=True, text=True, check=True).stdout.strip())
-    if cnt == target:
-        found = c
-        break
-    elif cnt > target:
-        low = mid + 1
-    else:
-        high = mid - 1
-
-if found:
-    sys.stdout.write(found)
-else:
-    res = subprocess.run(['git', '-C', cache_dir, 'rev-parse', f'origin/{branch}'], capture_output=True, text=True, check=True)
-    sys.stdout.write(res.stdout.strip())
-PYREV
+  if [[ "$target_rev" =~ ^[0-9]+$ ]]; then
+    local total
+    total="$(git -C "$cache_dir" rev-list --count "origin/$branch")"
+    local offset=$((total - target_rev))
+    if [[ $offset -lt 0 ]]; then
+      echo "FAIL: revision $target_rev exceeds $branch tip count $total" >&2
+      return 1
+    fi
+    git -C "$cache_dir" rev-list -n 1 --skip="$offset" "origin/$branch"
+  else
+    git -C "$cache_dir" rev-parse "$target_rev"
+  fi
 }
 
-test_sm_commit() {
+test_sm_commit() (
   local commit_or_rev="$1"
   local mode="${2:-sm13}"
   local branch="master"
@@ -218,6 +206,7 @@ test_sm_commit() {
     branch="1.12-dev"
   fi
 
+  if [[ "$mode" == "sm11"* ]]; then branch="1.11-dev"; fi
   local sha
   sha="$(resolve_sm_rev_commit "$commit_or_rev" "$branch")"
 
@@ -227,7 +216,7 @@ test_sm_commit() {
 
   echo "==> Fetching SourceMod ${commit_or_rev} (${sha:0:8}) for drift testing..."
   local sm_dir="${work_dir}/sourcemod"
-  git clone --quiet --no-checkout "https://github.com/alliedmodders/sourcemod.git" "$sm_dir"
+  git clone --quiet --filter=blob:none --no-checkout "https://github.com/alliedmodders/sourcemod.git" "$sm_dir"
   git -C "$sm_dir" checkout --quiet "$sha"
   git -C "$sm_dir" submodule update --quiet --init --recursive
 
@@ -236,7 +225,7 @@ test_sm_commit() {
   rm -rf "$work_dir"
   trap - EXIT
   return $rc
-}
+)
 
 if [[ -n "$TARGET_DIR" ]]; then
   dry_run_patch_dir "$TARGET_DIR" "$MODE" "$TARGET_DIR"
@@ -258,14 +247,20 @@ if [[ -n "$RANGE" ]]; then
     mode="sm12"
   fi
 
+  if [[ "$RANGE" != *..* || -z "$old_rev" || -z "$new_rev" ]]; then
+    echo "FAIL: range must be OLD..NEW" >&2
+    exit 1
+  fi
+  test_sm_commit "$old_rev" "$mode"
   test_sm_commit "$new_rev" "$mode"
   exit $?
 fi
 
-test_mm_commit() {
+test_mm_commit() (
   local commit_or_rev="$1"
   local mode="${2:-mm112}"
   local branch="1.12-dev"
+  if [[ "$mode" == "mm110" ]]; then branch="1.10-dev"; fi
 
   local work_dir
   work_dir="$(mktemp -d)"
@@ -273,7 +268,7 @@ test_mm_commit() {
 
   echo "==> Fetching Metamod ${commit_or_rev} for drift testing..."
   local mm_dir="${work_dir}/metamod"
-  git clone --quiet --no-checkout "https://github.com/alliedmodders/metamod-source.git" "$mm_dir"
+  git clone --quiet --filter=blob:none --no-checkout "https://github.com/alliedmodders/metamod-source.git" "$mm_dir"
   git -C "$mm_dir" checkout --quiet "$commit_or_rev"
   git -C "$mm_dir" submodule update --quiet --init --recursive
 
@@ -282,7 +277,7 @@ test_mm_commit() {
   rm -rf "$work_dir"
   trap - EXIT
   return $rc
-}
+)
 
 if [[ -n "$MM_COMMIT" ]]; then
   test_mm_commit "$MM_COMMIT" "${MODE:-mm112}"
@@ -292,24 +287,35 @@ fi
 if [[ $CHECK_PINS -eq 1 ]]; then
   echo "==> Running patch drift check on current active line pins..."
 
-  if [[ -f "$ROOT_DIR/builder/versions.env" ]]; then
-    # shellcheck source=/dev/null
-    source "$ROOT_DIR/builder/versions.env"
-  fi
-
+  tasks="$(python3 - "$ROOT_DIR/builder/lines.json" <<'PYPINS'
+import json, sys
+data = json.load(open(sys.argv[1]))
+seen = set()
+for line in data["lines"].values():
+    if line.get("status") != "active":
+        continue
+    sm = data["pins"][line["sourcemod"]]
+    task = ("sm" + str(sm["major"]), sm["commit"])
+    if task not in seen:
+        print(*task); seen.add(task)
+    for key in ("metamod", "secondary_metamod"):
+        if key not in line:
+            continue
+        mm = data["pins"][line[key]]
+        task = ("mm" + mm["mode"].replace(".", ""), mm["commit"])
+        if task not in seen:
+            print(*task); seen.add(task)
+PYPINS
+)"
+  [[ -n "$tasks" ]] || { echo "FAIL: no active pins" >&2; exit 1; }
   errors=0
-
-  if [[ -n "${SM_LATEST_13_COMMIT:-}" ]]; then
-    test_sm_commit "${SM_LATEST_13_COMMIT}" "sm13" || errors=$((errors + 1))
-  fi
-
-  if [[ -n "${SM_LATEST_COMMIT:-}" ]]; then
-    test_sm_commit "${SM_LATEST_COMMIT}" "sm12" || errors=$((errors + 1))
-  fi
-
-  if [[ -n "${MM_112_COMMIT:-}" ]]; then
-    test_mm_commit "${MM_112_COMMIT}" "mm112" || errors=$((errors + 1))
-  fi
+  while read -r mode commit; do
+    case "$mode" in
+      sm*) test_sm_commit "$commit" "$mode" || errors=$((errors + 1)) ;;
+      mm*) test_mm_commit "$commit" "$mode" || errors=$((errors + 1)) ;;
+      *) echo "FAIL: unsupported active pin mode $mode" >&2; errors=$((errors + 1)) ;;
+    esac
+  done <<< "$tasks"
 
   if [[ $errors -eq 0 ]]; then
     echo "==> [OK] All pin drift checks passed."
