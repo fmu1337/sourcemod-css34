@@ -123,9 +123,10 @@ manifest="${SM_ROOT}/css34-package.json"
 if [[ ! -f "${manifest}" ]]; then
   echo "FAIL: missing addons/sourcemod/css34-package.json" >&2
   fail=1
-elif ! python3 - "${manifest}" <<'PY'
-import json, sys
+elif ! python3 - "${manifest}" "${TMP}" <<'PY'
+import json, sys, os
 d = json.load(open(sys.argv[1]))
+tmp_dir = sys.argv[2]
 need = ["line", "sm_version", "sm_commit", "mm_version", "mm_commit",
         "extension_api", "extension_api_min", "metamod_binary", "build_date"]
 missing = [k for k in need if k not in d or d[k] in ("", None)]
@@ -135,6 +136,19 @@ if d["metamod_binary"] not in ("metamod.1.ep1", "metamod.2.ep1"):
     sys.exit("FAIL: css34-package.json metamod_binary=" + d["metamod_binary"])
 if not (int(d["extension_api_min"]) <= int(d["extension_api"])):
     sys.exit("FAIL: css34-package.json extension_api_min > extension_api")
+
+# Dual-core checks
+is_dual = (os.path.exists(os.path.join(tmp_dir, "addons/sourcemod/bin/sourcemod.1.ep1.so")) and
+           os.path.exists(os.path.join(tmp_dir, "addons/sourcemod/bin/sourcemod.2.ep1.so"))) or d.get("line") == "sm11-oldstable"
+
+if is_dual:
+    if d.get("cores") != ["1.ep1", "2.ep1"]:
+        sys.exit("FAIL: css34-package.json missing cores=['1.ep1', '2.ep1'] in dual package")
+    if d.get("metamod_binaries") != {"1.ep1": "metamod.1.ep1", "2.ep1": "metamod.2.ep1"}:
+        sys.exit("FAIL: css34-package.json missing metamod_binaries mapping in dual package")
+    if d.get("metamod_binary") != "metamod.2.ep1":
+        sys.exit("FAIL: css34-package.json default metamod_binary must be metamod.2.ep1 in dual package")
+
 print("OK: css34-package.json", json.dumps(d, sort_keys=True))
 PY
 then
