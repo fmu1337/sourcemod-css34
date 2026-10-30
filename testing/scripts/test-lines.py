@@ -378,19 +378,32 @@ class RepointResolverTest(unittest.TestCase):
                 self.assertIn("Ambiguous SM/MM package pairs", res_ambig.stderr)
 
     def test_known_bad_and_archived_and_no_pointer_line_rules(self):
-        tag_map_script = (ROOT / "builder/generated/tag-map.sh").read_text(encoding="utf-8")
-        # Execute actual bash helper functions from tag-map.sh to verify function definitions
-        bash_cmd = f"source '{ROOT}/builder/generated/tag-map.sh' && css34_tag_is_known_bad 1.12.0.7245-mm1.12.0 && css34_line_for_tag 1.12.0.7257-mm1.12.0"
-        res = subprocess.run(["bash", "-c", bash_cmd], capture_output=True, text=True)
-        self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(res.stdout.strip(), "sm12-latest")
+        # Expectations come from lines.json, so a daily pin bump keeps this green.
+        sys.path.insert(0, str(ROOT / "builder"))
+        try:
+            import lines as lines_mod
+        finally:
+            sys.path.pop(0)
+        data = lines_mod.load_manifest(ROOT / "builder/lines.json")
+        tag_map = ROOT / "builder/generated/tag-map.sh"
 
-        # Validate line pointer rules in lines.json
-        lines_data = json.loads((ROOT / "builder/lines.json").read_text(encoding="utf-8"))
-        self.assertTrue(lines_data["lines"]["sm12-latest"]["pointer"])
-        self.assertTrue(lines_data["lines"]["sm13-latest"]["pointer"])
-        self.assertFalse(lines_data["lines"]["sm13-dev"]["pointer"])
-        self.assertFalse(lines_data["lines"]["sm13-mm20-khook"]["releasable"])
+        def helper(fn, arg):
+            return subprocess.run(["bash", "-c", f"source '{tag_map}' && {fn} \"$1\"", "_", arg],
+                                  capture_output=True, text=True)
+
+        for name, line in data["lines"].items():
+            tag = lines_mod.line_parts(data, name)["tag"]
+            res = helper("css34_line_for_tag", tag)
+            self.assertEqual(res.returncode, 0, f"{tag}: {res.stderr}")
+            self.assertEqual(res.stdout.strip(), name)
+            self.assertEqual(helper("css34_line_has_pointer", name).returncode == 0,
+                             bool(line.get("pointer", False)), name)
+            self.assertEqual(helper("css34_line_can_release", name).returncode == 0,
+                             bool(line.get("releasable", True)), name)
+        for tag in data["known_bad"]:
+            self.assertEqual(helper("css34_tag_is_known_bad", tag).returncode, 0, tag)
+        self.assertNotEqual(helper("css34_line_for_tag", "0.0.0.0-mm0.0.0").returncode, 0)
+        self.assertNotEqual(helper("css34_tag_is_known_bad", "0.0.0.0-mm0.0.0").returncode, 0)
 
     def test_annotated_tag_commit_time_and_deref_resolution(self):
         # Create a temporary git repo to create an actual annotated tag
