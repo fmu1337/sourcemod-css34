@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     }
 
     const char *so_path = argv[1];
-    const char *iface_name = (argc >= 3) ? argv[2] : "ISmmPlugin";
+    const char *iface_name = (argc >= 3) ? argv[2] : "PLAPI";
 
     void *handle = dlopen(so_path, RTLD_NOW | RTLD_LOCAL);
     if (!handle) {
@@ -40,6 +40,12 @@ int main(int argc, char **argv) {
 
     int ret_code = 0;
     void *iface = create_iface(iface_name, &ret_code);
+    if (!iface) {
+        /* If specific interface requested failed, try default interface name */
+        if (strcmp(iface_name, "PLAPI") != 0) {
+            iface = create_iface("PLAPI", &ret_code);
+        }
+    }
 
     if (!iface) {
         fprintf(stderr, "CreateInterface returned NULL for %s\n", so_path);
