@@ -683,59 +683,15 @@ if logic_am.exists():
             if 'css34: skip duplicate logic static SP on linux' not in lt:
                 raise SystemExit('FAIL: logic duplicate static SP anchor not found')
 
-    if sm_minor >= 13 and 'css34: logic postlink pthread after static SP' not in lt and 'css34: static SP before libstdc++ for std::thread' not in lt:
-        sp_libs_anchor = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
-  binary.compiler.linkflags += [
-    SP.static_libsp[{sp_idx_var}],
-    SP.libamtl[{sp_idx_var}],
-    SP.zlib[{sp_idx_var}],
-{mimalloc_tail_link}  ]"""
-        sp_libs_new = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
-  if binary.compiler.target.platform != 'linux':
-    binary.compiler.linkflags += [
-      SP.static_libsp[{sp_idx_var}],
-      SP.libamtl[{sp_idx_var}],
-      SP.zlib[{sp_idx_var}],
-{mimalloc_nested_link}    ]
-  if binary.compiler.target.platform == 'linux':
-    # css34: logic postlink pthread after static SP archives (DT_NEEDED on glibc < 2.34)
-    for flag in list(binary.compiler.linkflags):
-      if flag in ('-lpthread', '-lrt', '-Wl,--no-as-needed'):
-        binary.compiler.linkflags.remove(flag)
-    for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
-      if flag not in binary.compiler.postlink:
-        binary.compiler.postlink += [flag]
-"""
-        sp_libs_anchor_linux = f"""  {sp_idx_var} = binary.compiler.target{'.arch' if sp_idx_var == 'arch' else ''}
-  if binary.compiler.target.platform != 'linux':
-    binary.compiler.linkflags += [
-      SP.static_libsp[{sp_idx_var}],
-      SP.libamtl[{sp_idx_var}],
-      SP.zlib[{sp_idx_var}],
-{mimalloc_nested_link}    ]
-  if binary.compiler.target.platform == 'linux':"""
-        if sp_libs_anchor_linux in lt:
-            if 'binary.compiler.postlink += [flag]' not in lt:
-                lt = lt.replace(
-                    sp_libs_anchor_linux,
-                    sp_libs_anchor_linux + """
-    # css34: logic postlink pthread after static SP archives (DT_NEEDED on glibc < 2.34)
-    for flag in list(binary.compiler.linkflags):
-      if flag in ('-lpthread', '-lrt', '-Wl,--no-as-needed'):
-        binary.compiler.linkflags.remove(flag)
-    for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
-      if flag not in binary.compiler.postlink:
-        binary.compiler.postlink += [flag]
-""",
-                    1,
-                )
-                print('==> Patched logic AMBuilder postlink pthread after static SP')
-        elif sp_libs_anchor not in lt:
-            raise SystemExit('FAIL: logic AMBuilder SP static libs anchor not found in core/logic/AMBuilder')
-        else:
-            lt = lt.replace(sp_libs_anchor, sp_libs_new, 1)
-            print('==> Patched logic AMBuilder postlink pthread after static SP')
-    elif sm_minor < 13:
+    if sm_minor >= 13:
+        # The static SP link above (`css34: static SP before libstdc++ for
+        # std::thread`) is always present here, or the reorder step failed
+        # closed. It already adds -Wl,--no-as-needed -lpthread -lrt -lgcc_s
+        # after the SP archives, so 1.13 needs no separate postlink step.
+        if 'css34: static SP before libstdc++ for std::thread' not in lt:
+            raise SystemExit('FAIL: logic static SP link block missing on SM 1.13')
+        print('==> logic pthread/rt already linked after static SP (SM 1.13)')
+    else:
         print('==> SM < 1.13: skipping static SourcePawn logic link reorder')
 
     logic_am.write_text(lt)
