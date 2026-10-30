@@ -74,8 +74,6 @@ jobs:
       run_windows: ${{ steps.planner.outputs.run_windows }}
       run_host: ${{ steps.planner.outputs.run_host }}
       run_release_botplay: ${{ steps.planner.outputs.run_release_botplay }}
-      run_check_pins: ${{ steps.planner.outputs.run_check_pins }}
-      run_built_botplay_extra: ${{ steps.planner.outputs.run_built_botplay_extra }}
       default_line: ${{ steps.planner.outputs.default_line }}
       required_jobs: ${{ steps.planner.outputs.required_jobs }}
       build: ${{ steps.planner.outputs.build }}
@@ -104,27 +102,23 @@ jobs:
               - '!docs/**'
               - '!**/*.md'
               - '!.github/workflows/cleanup-artifacts.yml'
-            pins:
-              - 'README.md'
 
       - name: Calculate execution plan and matrices
         id: planner
         env:
           EVENT_NAME: ${{ github.event_name }}
           CODE_CHANGED: ${{ steps.filter.outputs.code || 'true' }}
-          PINS_CHANGED: ${{ steps.filter.outputs.pins || 'false' }}
           INPUTS_JSON: ${{ toJSON(github.event.inputs) }}
         run: |
           python3 builder/scripts/ci_planner.py \
             --event-name "${EVENT_NAME}" \
             --code-changed "${CODE_CHANGED}" \
-            --pins-changed "${PINS_CHANGED}" \
             --inputs-json "${INPUTS_JSON}" \
             --gha >> "$GITHUB_OUTPUT"
 
   check-pins:
     needs: plan
-    if: needs.plan.outputs.run_check_pins == 'true'
+    if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -175,6 +169,9 @@ jobs:
 
       - name: Check SM 1.11 DHooks generation
         run: python3 testing/scripts/test-sm11-dhooks-builder.py
+
+      - name: Check PLAPI factory contract
+        run: python3 testing/scripts/test-plapi-probe.py
 
       - name: Check patch failures and generated Versioning
         run: python3 testing/scripts/test-patch-fail-closed.py
@@ -905,7 +902,7 @@ jobs:
           retention-days: 7
 
   test-built-botplay-extra:
-    if: needs.plan.outputs.run_built_botplay_extra == 'true'
+    if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
     needs: [plan, build-linux, prepare-server]
     runs-on: ubuntu-22.04
     strategy:

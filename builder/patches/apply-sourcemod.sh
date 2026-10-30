@@ -1312,7 +1312,7 @@ for cxx in builder.targets:
     binary.sources += [os.path.join('DynamicHooks', 'conventions', 'x86MsThiscall.cpp')]
   else:
     binary.sources += [os.path.join('DynamicHooks', 'conventions', 'x86GccThiscall.cpp')]
-  
+
   SM.extensions += [builder.Add(binary)]
 """
     dhooks_builder.write_text(dhooks_code)

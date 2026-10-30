@@ -52,7 +52,7 @@ def filter_matrix_for_line(matrices, css34_line):
     return filtered
 
 
-def plan_ci(event_name, code_changed, inputs=None, lines_path=None, pins_changed=False):
+def plan_ci(event_name, code_changed, inputs=None, lines_path=None):
     if inputs is None:
         inputs = {}
     if lines_path is None:
@@ -117,27 +117,11 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None, pins_changed
         and len(matrices.get("release_botplay", [])) > 0
     )
 
-    # README.md pin tables are generated from lines.json: a README-only PR still
-    # needs `lines.py check`, even though it skips every build and smoke job.
-    run_check_pins = run_code_jobs or parse_bool(pins_changed)
-
-    # The built-package botplay matrix has a `line` vector; a single-line
-    # dispatch for a line without botplay_extra rows would leave it empty.
-    extra = matrices.get("botplay_extra") or {}
-    run_built_botplay_extra = (
-        run_code_jobs
-        and event_name == "workflow_dispatch"
-        and botplay_extra
-        and bool(extra.get("line"))
-    )
-
     # Required jobs determination
     required_jobs = ["plan"]
-    if run_check_pins:
-        required_jobs.append("check-pins")
 
     if run_code_jobs:
-        required_jobs.extend(["hygiene", "build-linux", "plapi-runtime"])
+        required_jobs.extend(["check-pins", "hygiene", "build-linux", "plapi-runtime"])
 
         if run_windows:
             required_jobs.extend(["build-windows", "wine-smoke"])
@@ -166,9 +150,7 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None, pins_changed
             if run_release_botplay:
                 required_jobs.append("test-release-botplay")
             if botplay_extra:
-                required_jobs.append("test-rom4s-botplay-extra")
-            if run_built_botplay_extra:
-                required_jobs.append("test-built-botplay-extra")
+                required_jobs.extend(["test-rom4s-botplay-extra", "test-built-botplay-extra"])
             if run_bisect:
                 required_jobs.append("test-botplay-bisect")
 
@@ -181,8 +163,6 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None, pins_changed
         "run_windows": run_windows,
         "run_host": run_host,
         "run_release_botplay": run_release_botplay,
-        "run_check_pins": run_check_pins,
-        "run_built_botplay_extra": run_built_botplay_extra,
         "default_line": lines_data["default_line"],
         "required_jobs": required_jobs,
         "matrices": matrices,
@@ -194,7 +174,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--event-name", required=True, help="GitHub event_name")
     parser.add_argument("--code-changed", required=True, help="true/false from dorny/paths-filter")
-    parser.add_argument("--pins-changed", default="false", help="true/false: README.md pin tables changed")
     parser.add_argument("--inputs-json", default="{}", help="JSON string of workflow inputs")
     parser.add_argument("--lines-json", default=None, help="Path to builder/lines.json")
     parser.add_argument("--gha", action="store_true", help="Emit GitHub Actions step outputs format")
@@ -209,7 +188,7 @@ def main():
         return 1
 
     try:
-        plan = plan_ci(args.event_name, args.code_changed, inputs, args.lines_json, args.pins_changed)
+        plan = plan_ci(args.event_name, args.code_changed, inputs, args.lines_json)
     except ValueError as err:
         print(f"FAIL: {err}", file=sys.stderr)
         return 1
@@ -230,8 +209,6 @@ def main():
         print(f"run_windows={'true' if plan['run_windows'] else 'false'}")
         print(f"run_host={'true' if plan['run_host'] else 'false'}")
         print(f"run_release_botplay={'true' if plan['run_release_botplay'] else 'false'}")
-        print(f"run_check_pins={'true' if plan['run_check_pins'] else 'false'}")
-        print(f"run_built_botplay_extra={'true' if plan['run_built_botplay_extra'] else 'false'}")
         print(f"default_line={plan['default_line']}")
         print(f"required_jobs<<EOF")
         print(json.dumps(plan["required_jobs"]))
