@@ -176,6 +176,10 @@ jobs:
       - name: Check SM 1.11 DHooks generation
         run: python3 testing/scripts/test-sm11-dhooks-builder.py
 
+      - name: Check patch drift acceptance ranges and failures
+        timeout-minutes: 30
+        run: python3 testing/scripts/test-check-patch-drift.py
+
       - name: Check patch failures and generated Versioning
         run: python3 testing/scripts/test-patch-fail-closed.py
 
