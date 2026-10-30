@@ -99,9 +99,5 @@ pins in `builder/lines.json`, run `python3 builder/lines.py gen` then
 `python3 builder/lines.py check` (also enforced by
 `.github/workflows/ci.yml` on PRs). `gen` rewrites `builder/versions.env`,
 `builder/generated/ci-matrix.json`, `builder/generated/tag-map.sh`, and the README pin
-tables. `ci.yml` builds its matrices in the `plan` job
-(`builder/scripts/ci_planner.py`, which also lists the jobs the run requires) and
-ends in one `gate` job (`builder/scripts/ci_gate.py`); `release.yml` still loads its
-matrices from `python3 builder/lines.py gha`. Planner and gate are covered by
-`python3 testing/scripts/test-ci-planner-gate.py`. Upstream tip probe:
+tables. Workflows load the matrices from `python3 builder/lines.py gha`. Upstream tip probe:
 `builder/scripts/resolve-upstream-tips.sh`.
