@@ -120,7 +120,10 @@ if ! grep -Fq '"game.cstrike.txt"' "$sdkhooks_master"; then
   exit 1
 fi
 
-if [[ -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" && "${MMS_MODE:-}" == "1.10" ]]; then
+if [[ -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" \
+   && -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.2.ep1.so" ]]; then
+  mm_binary=metamod.2.ep1
+elif [[ -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" && "${MMS_MODE:-}" == "1.10" ]]; then
   mm_binary=metamod.1.ep1
 else
   mm_binary=metamod.2.ep1
