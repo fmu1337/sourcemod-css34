@@ -155,6 +155,32 @@ if [[ -f "${TMP}/addons/sourcemod/bin/sourcemod.1.ep1.so" && -f "${TMP}/addons/s
     echo "FAIL: unexpected dhooks.ext.so in dual package (must be dhooks.ext.2.ep1.so)" >&2
     fail=1
   fi
+  if [[ -f "${TMP}/addons/sourcemod/extensions/dhooks.ext.1.ep1.so" ]]; then
+    echo "FAIL: unexpected dhooks.ext.1.ep1.so in dual package (DHooks needs SourceHook v5 / MM 1.12)" >&2
+    fail=1
+  fi
+  # Each core loads only its own suffix: a game extension missing on one side
+  # silently disappears on that Metamod.
+  for ext in sdktools sdkhooks game.cstrike; do
+    for suffix in 1.ep1 2.ep1; do
+      if [[ -f "${TMP}/addons/sourcemod/extensions/${ext}.ext.${suffix}.so" ]]; then
+        echo "OK: ${ext}.ext.${suffix}.so present in dual package"
+      else
+        echo "FAIL: missing ${ext}.ext.${suffix}.so in dual package" >&2
+        fail=1
+      fi
+    done
+  done
+  # MM 1.10 loads the loader through the V1 CreateInterface bridge, MM 1.12
+  # through CreateInterface_MMS: a dual package needs both.
+  for sym in CreateInterface CreateInterface_MMS; do
+    if nm -D --defined-only "${MM_SO}" 2>/dev/null | grep -Eq " T ${sym}\$"; then
+      echo "OK: dual-package loader exports ${sym}"
+    else
+      echo "FAIL: dual-package loader sourcemod_mm_i486.so does not export ${sym}" >&2
+      fail=1
+    fi
+  done
 fi
 
 echo "==> Checking Metamod bridge exports"

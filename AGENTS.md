@@ -88,6 +88,16 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `Build ID: <MM_REV>:<sha prefix>`; `sm version` must be `<major>.<SM_REV>`
   (the revs come from `builder/lines.json`). Image digests live only in
   `builder/lines.json`; `python3 builder/lines.py gen` writes the matrix.
+- **Dual-core SM 1.11 gates** (T2.4): each matrix row names the Metamod build it
+  installs (`mm_variant`, `mm_package`) and the core that must run
+  (`expect_core`). `sm11-oldstable` smokes every per-PR image on MM 1.10.7
+  (`1.ep1`) and MM 1.12 (`2.ep1`), switches between them on the first image with
+  `testing/scripts/switch-metamod.sh`, and runs botplay on both. `smoke-test.sh`
+  takes `SMOKE_EXPECT_CORE=1.ep1|2.ep1`: DHooks ships only as
+  `dhooks.ext.2.ep1`, so it must load exactly on the 2.ep1 core.
+  `check-sm11-build-log.sh` checks the include roots and 0 `WARN` lines in the
+  1.11 build log, and `plapi-runtime` requires the published
+  `1.11.0.6970-mm1.10.7` package to fail the PLAPI probe.
 
 ### Lint
 Run `actionlint` after workflow edits. The ABI export

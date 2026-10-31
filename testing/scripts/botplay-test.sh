@@ -405,6 +405,17 @@ dh_probe_field() {
   v="$(printf '%s\n' "${dh_probe_line}" | grep -Eo " $1=[0-9]+" | grep -Eo '[0-9]+' | tail -n1 || true)"
   echo "${v:-0}"
 }
+# BOTPLAY_EXPECT_DHOOKS=1/0: the line's core must (not) offer DHooks. Unset keeps
+# the old behaviour (probe whatever is available).
+case "${BOTPLAY_EXPECT_DHOOKS:-}" in
+  ""|0|1) ;;
+  *) echo "FAIL: BOTPLAY_EXPECT_DHOOKS must be 0 or 1, got ${BOTPLAY_EXPECT_DHOOKS}" >&2; record_failed=1 ;;
+esac
+if [[ -n "${dh_probe_line}" && -n "${BOTPLAY_EXPECT_DHOOKS:-}" \
+      && "$(dh_probe_field available)" != "${BOTPLAY_EXPECT_DHOOKS}" ]]; then
+  echo "FAIL: css34_dhooks_probe available=$(dh_probe_field available), expected ${BOTPLAY_EXPECT_DHOOKS}" >&2
+  record_failed=1
+fi
 if [[ -z "${dh_probe_line}" ]]; then
   echo "FAIL: no [css34_dhooks_probe] round= line in SM logs" >&2
   record_failed=1

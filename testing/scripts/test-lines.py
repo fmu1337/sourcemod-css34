@@ -89,14 +89,52 @@ class LinesTest(unittest.TestCase):
         for line in lines:
             for image in weekly:
                 self.assertIn((line, image), weekly_pairs)
-        self.assertEqual([row["image_name"] for row in matrix["botplay"]], ["debian:11"] * 3)
+        # Dual-Metamod sm11 runs botplay on both Metamod builds.
+        self.assertEqual([(row["line"], row["mm_variant"]) for row in matrix["botplay"]],
+                         [("sm11-oldstable", "primary"), ("sm11-oldstable", "secondary"),
+                          ("sm12-latest", "primary"), ("sm13-latest", "primary")])
+        self.assertEqual({row["image_name"] for row in matrix["botplay"]}, {"debian:11"})
         self.assertEqual([row["image_name"] for row in matrix["weekly_botplay"]], ["centos:7"] * 3)
-        self.assertEqual([row["line"] for row in matrix["botplay"]], list(lines))
         self.assertTrue(all("@sha256:" in row["image"] for row in matrix["weekly"] + matrix["botplay"]))
         self.assertEqual([row["line"] for row in matrix["host"]], ["sm13-latest"])
         self.assertNotIn("rhel", matrix)
         for name in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
             self.assertNotIn("sha256:", (self.root / name).read_text(), name)
+
+    def test_dual_metamod_rows_follow_lines_json(self):
+        data = json.loads((self.root / "builder/lines.json").read_text())
+        matrix = json.loads((self.root / "builder/generated/ci-matrix.json").read_text())
+        pins = data["pins"]
+        version = {"1.10": "1.10.7", "1.12": "1.12.0"}
+        for name, line in data["lines"].items():
+            if line["status"] != "active":
+                continue
+            roles = {"primary": pins[line["metamod"]]}
+            if "secondary_metamod" in line:
+                roles["secondary"] = pins[line["secondary_metamod"]]
+            rows = [row for row in matrix["debian"] if row["line"] == name]
+            for image in [entry["image"] for entry in line["smoke"]]:
+                got = {row["mm_variant"] for row in rows if row["image_name"] == image}
+                self.assertTrue(set(roles) <= got, (name, image, got))
+            for row in rows + [r for r in matrix["botplay"] if r["line"] == name]:
+                role = row["mm_variant"].replace("switch-to-", "")
+                pin = roles[role]
+                core = "1.ep1" if pin["mode"] == "1.10" else "2.ep1"
+                self.assertEqual(row["mm_package"], "mmsource-{}-git{}-css34-linux.tar.gz".format(
+                    version[pin["mode"]], pin["rev"]), row)
+                self.assertEqual((row["mm_commit"], row["mm_rev"], row["mm_expect"]),
+                                 (pin["commit"], pin["rev"], version[pin["mode"]]), row)
+                self.assertEqual((row["expect_core"], row["dhooks_expect"]),
+                                 (core, "0" if core == "1.ep1" else "1"), row)
+            switches = [row for row in rows if row["mm_variant"].startswith("switch-to-")]
+            if len(roles) > 1:
+                self.assertEqual(sorted(row["mm_variant"] for row in switches),
+                                 ["switch-to-primary", "switch-to-secondary"], name)
+                for row in switches:
+                    self.assertEqual(row["image_name"], line["smoke"][0]["image"])
+                    self.assertNotEqual(row["switch_from_package"], row["mm_package"])
+            else:
+                self.assertEqual(switches, [], name)
 
     def test_duplicate_image_is_rejected(self):
         target = self.root / "builder/lines.json"
