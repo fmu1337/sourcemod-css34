@@ -180,6 +180,12 @@ jobs:
         timeout-minutes: 30
         run: python3 testing/scripts/test-check-patch-drift.py
 
+      - name: Check the Metamod switch procedure
+        run: python3 testing/scripts/test-switch-metamod.py
+
+      - name: Check the SM 1.11 build log gate
+        run: python3 testing/scripts/test-sm11-build-log.py
+
       - name: Check patch failures and generated Versioning
         run: python3 testing/scripts/test-patch-fail-closed.py
 
@@ -243,7 +249,12 @@ jobs:
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
             builder/build-metamod.sh builder/prepare-package.sh builder/write-build-stamps.sh \
             builder/resolve-version.sh builder/py.sh builder/patches/*.sh
-          builder/docker/build.sh
+          set -o pipefail
+          builder/docker/build.sh 2>&1 | tee build.log
+
+      - name: Dual-core build log gates (include roots, 0 WARN)
+        if: steps.select.outputs.skip != '1' && matrix.secondary_mm_commit
+        run: bash testing/scripts/check-sm11-build-log.sh build.log "${{ matrix.line }}"
 
       - name: ABI / export checks
         if: steps.select.outputs.skip != '1'
@@ -516,30 +527,45 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
+      - name: Smoke test ${{ matrix.line }} (${{ matrix.mm_variant }} Metamod) in ${{ matrix.image_name }}
         if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          MM_REV_EXPECT: ${{ matrix.mm_rev }}
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
           MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
           SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
+          SMOKE_EXPECT_CORE: ${{ matrix.expect_core }}
+          MM_PACKAGE_NAME: ${{ matrix.mm_package }}
+          SWITCH_FROM_PACKAGE: ${{ matrix.switch_from_package }}
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
           CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
+          # The matrix row names the Metamod build this job runs (primary,
+          # secondary, or a switch from one to the other).
+          MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
+          switch_from=""
+          if [[ -n "${SWITCH_FROM_PACKAGE}" ]]; then
+            switch_from="/workspace/packages/${SWITCH_FROM_PACKAGE}"
+            test -f "packages/${SWITCH_FROM_PACKAGE}"
+          fi
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
             -e CACHE_DIR=/workspace/.ci-cache \
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e MM_SWITCH_FROM="${switch_from}" \
             -e MM_VERSION_EXPECT \
+            -e MM_REV_EXPECT \
             -e SM_VERSION_EXPECT \
             -e MM_COMMIT_EXPECT \
             -e SM_COMMIT_EXPECT \
+            -e SMOKE_EXPECT_CORE \
             -e CSS34_PACK_COMMIT_EXPECT \
             -e CSS34_LINE="${{ matrix.line }}" \
             -e TIMEOUT_SECS=120 \
@@ -553,7 +579,12 @@ jobs:
               mkdir -p /workspace/.ci-server /workspace/.ci-cache
               tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
               testing/scripts/install-deps.sh
-              testing/scripts/install-addons.sh
+              if [[ -n "${MM_SWITCH_FROM}" ]]; then
+                MM_PACKAGE="${MM_SWITCH_FROM}" testing/scripts/install-addons.sh
+                testing/scripts/switch-metamod.sh "${MM_PACKAGE}"
+              else
+                testing/scripts/install-addons.sh
+              fi
               testing/scripts/smoke-test.sh
             '
 
@@ -613,7 +644,7 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Botplay stress ${{ matrix.line }} (SDKTools + SDKHooks + OnTakeDamage)
+      - name: Botplay stress ${{ matrix.line }} (${{ matrix.mm_variant }} Metamod; SDKTools + SDKHooks + OnTakeDamage)
         if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
@@ -623,10 +654,13 @@ jobs:
           BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
+          BOTPLAY_EXPECT_DHOOKS: ${{ matrix.dhooks_expect }}
+          MM_PACKAGE_NAME: ${{ matrix.mm_package }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
           CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
+          MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
@@ -638,6 +672,7 @@ jobs:
             -e BOTPLAY_MAPS \
             -e MM_VERSION_EXPECT \
             -e SM_VERSION_EXPECT \
+            -e BOTPLAY_EXPECT_DHOOKS \
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
             -e REPORT_JSON=/workspace/.ci-server/botplay-report.json \
@@ -1215,30 +1250,45 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
+      - name: Smoke test ${{ matrix.line }} (${{ matrix.mm_variant }} Metamod) in ${{ matrix.image_name }}
         if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
+          MM_REV_EXPECT: ${{ matrix.mm_rev }}
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
           MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
           SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
+          SMOKE_EXPECT_CORE: ${{ matrix.expect_core }}
+          MM_PACKAGE_NAME: ${{ matrix.mm_package }}
+          SWITCH_FROM_PACKAGE: ${{ matrix.switch_from_package }}
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
           CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
+          # The matrix row names the Metamod build this job runs (primary,
+          # secondary, or a switch from one to the other).
+          MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
+          switch_from=""
+          if [[ -n "${SWITCH_FROM_PACKAGE}" ]]; then
+            switch_from="/workspace/packages/${SWITCH_FROM_PACKAGE}"
+            test -f "packages/${SWITCH_FROM_PACKAGE}"
+          fi
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
             -e CACHE_DIR=/workspace/.ci-cache \
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
+            -e MM_SWITCH_FROM="${switch_from}" \
             -e MM_VERSION_EXPECT \
+            -e MM_REV_EXPECT \
             -e SM_VERSION_EXPECT \
             -e MM_COMMIT_EXPECT \
             -e SM_COMMIT_EXPECT \
+            -e SMOKE_EXPECT_CORE \
             -e CSS34_PACK_COMMIT_EXPECT \
             -e CSS34_LINE="${{ matrix.line }}" \
             -e TIMEOUT_SECS=120 \
@@ -1252,7 +1302,12 @@ jobs:
               mkdir -p /workspace/.ci-server /workspace/.ci-cache
               tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
               testing/scripts/install-deps.sh
-              testing/scripts/install-addons.sh
+              if [[ -n "${MM_SWITCH_FROM}" ]]; then
+                MM_PACKAGE="${MM_SWITCH_FROM}" testing/scripts/install-addons.sh
+                testing/scripts/switch-metamod.sh "${MM_PACKAGE}"
+              else
+                testing/scripts/install-addons.sh
+              fi
               testing/scripts/smoke-test.sh
             '
 
@@ -1419,6 +1474,28 @@ jobs:
           tar -xzf server-art/css34-server.tar.gz -C "$SERVER_DIR"
           bash testing/scripts/install-addons.sh
           bash testing/scripts/check-core-plapi.sh
+
+      - name: Published pre-T2.3 dual package must fail the PLAPI probe
+        if: steps.select.outputs.skip != '1' && matrix.secondary_mm_commit
+        env:
+          CSS34_LINE: ${{ matrix.line }}
+          SERVER_DIR: ${{ github.workspace }}/.ci-plapi-old
+          OLD_SM_URL: https://github.com/${{ github.repository }}/releases/download/1.11.0.6970-mm1.10.7/sourcemod-1.11.0-git6970-css34-linux.tar.gz
+        run: |
+          set -euo pipefail
+          source builder/package-paths.sh
+          mkdir -p "$SERVER_DIR" old-release
+          curl -fsSL --retry 5 -o old-release/sourcemod-old.tar.gz "$OLD_SM_URL"
+          tar -xzf server-art/css34-server.tar.gz -C "$SERVER_DIR"
+          SM_PACKAGE="$PWD/old-release/sourcemod-old.tar.gz" MM_PACKAGE="$MM_PACKAGE" \
+            bash testing/scripts/install-addons.sh
+          if bash testing/scripts/check-core-plapi.sh > old-plapi.log 2>&1; then
+            cat old-plapi.log
+            echo "FAIL: the published 1.11.0.6970-mm1.10.7 package passed the PLAPI gate" >&2
+            exit 1
+          fi
+          cat old-plapi.log
+          grep -q 'sourcemod.2.ep1.so returned PLAPI:11, expected PLAPI:16' old-plapi.log
 
   gate:
     name: gate

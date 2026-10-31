@@ -278,6 +278,36 @@ for optional_ext in geoip.ext regex.ext; do
   fi
 done
 
+# Which SourceMod core runs: MM 1.10 loads sourcemod.1.ep1, newer Metamod
+# sourcemod.2.ep1. DHooks exists for 2.ep1 only, so `sm exts list` must show
+# it exactly on the 2.ep1 core (console-probe.exp loads it explicitly).
+SMOKE_EXPECT_CORE="${SMOKE_EXPECT_CORE:-}"
+dhooks_listed=0
+if sed -n '/sm exts list/,/sm plugins list/p' "${CONSOLE_PROBE_LOG}" 2>/dev/null \
+    | grep -Eq '^\[[0-9]+\] DHooks '; then
+  dhooks_listed=1
+fi
+case "${SMOKE_EXPECT_CORE}" in
+  "") echo "NOTE: SMOKE_EXPECT_CORE unset; core identity not checked (DHooks listed=${dhooks_listed})" ;;
+  2.ep1)
+    if [[ "${dhooks_listed}" == 1 ]]; then
+      echo "OK: 2.ep1 core runs (DHooks loaded)"
+    else
+      echo "FAIL: expected the 2.ep1 core, but DHooks is not in sm exts list" >&2
+      fail=1
+    fi
+    ;;
+  1.ep1)
+    if [[ "${dhooks_listed}" == 0 ]]; then
+      echo "OK: 1.ep1 core runs (DHooks not loadable)"
+    else
+      echo "FAIL: expected the 1.ep1 core, but DHooks loaded (2.ep1 core running)" >&2
+      fail=1
+    fi
+    ;;
+  *) echo "FAIL: unknown SMOKE_EXPECT_CORE=${SMOKE_EXPECT_CORE}" >&2; fail=1 ;;
+esac
+
 # css34 OnTakeDamage vtables must be the packaged overlay (windows 60 / linux 61).
 # Match the exact Offsets key (not OnTakeDamage_Alive). linux is 3 lines after the key
 # when windows is listed first — use enough context.
@@ -334,10 +364,17 @@ else
 fi
 
 # geoip/regex failures are optional and must not fail the run. DBI failures are not.
+# The DHooks probe is expected to fail on the 1.ep1 core (no dhooks.ext.1.ep1);
+# the core identity check above already judged it.
+dhooks_expected_failure='^$'
+if [[ "${SMOKE_EXPECT_CORE}" == 1.ep1 ]]; then
+  dhooks_expected_failure='Extension dhooks(\.ext)?(\.so)? failed to load'
+fi
 plugin_errors="$(
   grep -Ei 'Error loading|Failed to load|could not be loaded|Encountered error|Unable to load extension' \
     "${CONSOLE_PROBE_LOG}" 2>/dev/null \
-    | grep -Eiv 'geoip|regex' || true
+    | grep -Eiv 'geoip|regex' \
+    | grep -Ev "${dhooks_expected_failure}" || true
 )"
 if [[ -n "${plugin_errors}" ]]; then
   echo "FAIL: plugin load errors in console probe log" >&2

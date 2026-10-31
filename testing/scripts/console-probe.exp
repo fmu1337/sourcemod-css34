@@ -197,6 +197,9 @@ probe_ext_load dbi.mysql.ext
 probe_ext_load dbi.pgsql.ext
 probe_ext_load geoip.ext
 probe_ext_load regex.ext
+# DHooks ships only as dhooks.ext.2.ep1 in the dual-core SM 1.11 package, so it
+# loads exactly when the 2.ep1 core runs. smoke-test.sh decides via SMOKE_EXPECT_CORE.
+probe_ext_load dhooks
 
 # Force-load SDK Hooks so smoke can assert css34 OnTakeDamage gamedata path.
 send "sm exts load sdkhooks\r"

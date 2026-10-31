@@ -229,20 +229,78 @@ def row_expect(row, with_commits):
     return item
 
 
+def mm_package_name(mode, rev):
+    """Linux Metamod archive name; verify-line-metamod-packages.sh uses the same form."""
+    return "mmsource-{}-git{}-css34-linux.tar.gz".format(mm_version(mode), rev)
+
+
+def mm_variants(part):
+    """Metamod builds a line ships: dual-core SM 1.11 runs on both."""
+    return ["primary", "secondary"] if "secondary_mm_commit" in part else ["primary"]
+
+
+def mm_runtime(part, variant):
+    """What a smoke/botplay row installs and what the running server must report.
+
+    MM 1.10 loads the 1.ep1 core, every newer Metamod the 2.ep1 core. DHooks is
+    built for 2.ep1 only, so it must load exactly when the 2.ep1 core runs.
+    """
+    if variant == "secondary":
+        mode, rev, commit = (part["secondary_mm_mode"], part["secondary_mm_rev"],
+                             part["secondary_mm_commit"])
+    else:
+        mode, rev, commit = part["mm_mode"], part["mm_rev"], part["mm_commit"]
+    core = "1.ep1" if mode == "1.10" else "2.ep1"
+    return {
+        "mm_variant": variant,
+        "mm_expect": mm_version(mode),
+        "mm_rev": rev,
+        "mm_commit": commit,
+        "mm_package": mm_package_name(mode, rev),
+        "expect_core": core,
+        "dhooks_expect": "0" if core == "1.ep1" else "1",
+    }
+
+
+def runtime_row(part, variant, with_commits):
+    item = row_expect(part, with_commits)
+    item.update(mm_runtime(part, variant))
+    return item
+
+
+def switch_rows(part):
+    """Install one Metamod, then switch to the other over it (README procedure)."""
+    rows = []
+    for target, source in (("secondary", "primary"), ("primary", "secondary")):
+        item = runtime_row(part, target, True)
+        item["mm_variant"] = "switch-to-" + target
+        item["switch_from_package"] = mm_runtime(part, source)["mm_package"]
+        rows.append(item)
+    return rows
+
+
 def debian_rows(data):
-    """Per-PR smoke, image-major, in the order each line lists its images."""
+    """Per-PR smoke, image-major, in the order each line lists its images.
+
+    Dual-Metamod lines smoke every image on each Metamod, and the first image
+    also checks switching from one Metamod to the other.
+    """
     order = []
     by_image = {}
     for name, line in data["lines"].items():
         if line["status"] != "active":
             continue
         part = line_parts(data, name)
-        for entry in line["smoke"]:
+        for index, entry in enumerate(line["smoke"]):
             image = entry["image"]
             if image not in by_image:
                 order.append(image)
                 by_image[image] = []
-            by_image[image].append(attach_image(row_expect(part, True), data, image))
+            for variant in mm_variants(part):
+                by_image[image].append(attach_image(runtime_row(part, variant, True), data, image))
+            if index == 0 and len(mm_variants(part)) > 1:
+                for item in switch_rows(part):
+                    by_image[image].append(attach_image(item, data, image))
     rows = []
     for image in order:
         rows.extend(by_image[image])
@@ -256,15 +314,16 @@ def weekly_rows(data):
         for name, line in data["lines"].items():
             if line["status"] != "active":
                 continue
-            rows.append(attach_image(row_expect(line_parts(data, name), True), data, image))
+            rows.append(attach_image(runtime_row(line_parts(data, name), "primary", True), data, image))
     require(rows, "weekly smoke matrix is empty")
     return rows
 
 
-def image_rows(data, image_name, with_commits):
+def image_rows(data, image_name, with_commits, all_variants=False):
     rows = []
     for row in active_rows(data):
-        rows.append(attach_image(row_expect(row, with_commits), data, image_name))
+        for variant in (mm_variants(row) if all_variants else ["primary"]):
+            rows.append(attach_image(runtime_row(row, variant, with_commits), data, image_name))
     require(rows, "matrix for " + image_name + " is empty")
     return rows
 
@@ -305,7 +364,7 @@ def ci_matrix(data):
     return {
         "build": [row_expect(row, True) for row in rows],
         "debian": debian_rows(data),
-        "botplay": image_rows(data, data["botplay_image"], False),
+        "botplay": image_rows(data, data["botplay_image"], False, all_variants=True),
         "weekly": weekly_rows(data),
         "weekly_botplay": image_rows(data, data["weekly_botplay_image"], False),
         "host": host,
