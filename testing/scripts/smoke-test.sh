@@ -364,10 +364,17 @@ else
 fi
 
 # geoip/regex failures are optional and must not fail the run. DBI failures are not.
+# The DHooks probe is expected to fail on the 1.ep1 core (no dhooks.ext.1.ep1);
+# the core identity check above already judged it.
+dhooks_expected_failure='^$'
+if [[ "${SMOKE_EXPECT_CORE}" == 1.ep1 ]]; then
+  dhooks_expected_failure='Extension dhooks(\.ext)?(\.so)? failed to load'
+fi
 plugin_errors="$(
   grep -Ei 'Error loading|Failed to load|could not be loaded|Encountered error|Unable to load extension' \
     "${CONSOLE_PROBE_LOG}" 2>/dev/null \
-    | grep -Eiv 'geoip|regex' || true
+    | grep -Eiv 'geoip|regex' \
+    | grep -Ev "${dhooks_expected_failure}" || true
 )"
 if [[ -n "${plugin_errors}" ]]; then
   echo "FAIL: plugin load errors in console probe log" >&2
