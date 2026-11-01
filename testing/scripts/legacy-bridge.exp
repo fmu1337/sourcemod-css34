@@ -1,0 +1,58 @@
+#!/usr/bin/expect -f
+# T2.9 console session for legacy-bridge-test.sh: boot srcds, list Metamod
+# plugins, unload the PLAPI 11 probe, check SourceMod still answers, quit.
+# The whole session goes to LEGACY_BRIDGE_LOG; legacy-bridge-test.sh judges it.
+set timeout [expr {[info exists env(LEGACY_BRIDGE_TIMEOUT)] ? $env(LEGACY_BRIDGE_TIMEOUT) : 90}]
+log_file -noappend $env(LEGACY_BRIDGE_LOG)
+
+set server_dir $env(SERVER_DIR)
+set map [expr {[info exists env(MAP)] && $env(MAP) ne "" ? $env(MAP) : "de_dust2"}]
+set binary [expr {[info exists env(SRCDS_BINARY)] && $env(SRCDS_BINARY) ne "" ? $env(SRCDS_BINARY) : "./srcds_i686"}]
+
+cd $server_dir
+set env(LD_LIBRARY_PATH) ".:bin:[expr {[info exists env(LD_LIBRARY_PATH)] ? $env(LD_LIBRARY_PATH) : ""}]"
+spawn $binary -game cstrike -console -nohltv -nomaster -localcser -tickrate 66 \
+    -ip 127.0.0.1 -port 27016 +ip 127.0.0.1 +sv_lan 1 +maxplayers 4 +map $map
+
+expect {
+    -re "Mapchange to ${map}|Loading map \"${map}\"" {}
+    eof { puts stderr "srcds exited before map $map loaded"; exit 1 }
+    timeout { puts stderr "timeout waiting for map $map"; exit 1 }
+}
+sleep 3
+
+set probe_id ""
+send "meta list\r"
+expect {
+    -re {\[0*([0-9]+)\] CSS34 Legacy Probe} { set probe_id $expect_out(1,string) }
+    timeout { puts stderr "meta list does not show CSS34 Legacy Probe" }
+}
+sleep 1
+
+send "sm version\r"
+expect {
+    -re "SourceMod Version: \[0-9.]+" {}
+    timeout { puts stderr "sm version did not answer" }
+}
+
+if {$probe_id ne ""} {
+    send "meta unload $probe_id\r"
+    expect {
+        -re "Plugin $probe_id unloaded|unloaded successfully" {}
+        timeout { puts stderr "meta unload $probe_id did not confirm" }
+    }
+    sleep 1
+    send "meta list\r"
+    expect {
+        -re "Listing \[0-9]+ plugin" {}
+        timeout {}
+    }
+}
+sleep 1
+
+send "quit\r"
+expect {
+    eof {}
+    timeout {}
+}
+exit 0

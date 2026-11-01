@@ -70,6 +70,33 @@ else
   echo "OK: no __cxx11 ABI exports"
 fi
 
+echo "==> Checking the css34 legacy-plugin bridge (T2.9)"
+# Every MM 1.10 legacy core exports the nested-mode API; every MM 1.12 core
+# carries the loader for it (the PLAPI 7-12 path names css34_old_init).
+LEGACY_SO="${TMP}/addons/metamod/bin/metamod.1.ep1.so"
+MODERN_SO="${TMP}/addons/metamod/bin/metamod.2.ep1.so"
+if [[ -f "${LEGACY_SO}" ]]; then
+  legacy_syms="$(nm -D --defined-only "${LEGACY_SO}" 2>/dev/null || true)"
+  bridge_fail=0
+  for sym in css34_old_api css34_old_init css34_old_all_loaded css34_old_load \
+             css34_old_unload css34_old_pause css34_old_running css34_old_info; do
+    if ! grep -Eq " T ${sym}\$" <<<"${legacy_syms}"; then
+      echo "FAIL: metamod.1.ep1.so does not export ${sym}" >&2
+      bridge_fail=1
+      fail=1
+    fi
+  done
+  [[ "${bridge_fail}" -ne 0 ]] || echo "OK: metamod.1.ep1.so exports the css34_old_* bridge API"
+fi
+if [[ -f "${MODERN_SO}" ]]; then
+  if grep -aq 'css34_old_init' "${MODERN_SO}"; then
+    echo "OK: metamod.2.ep1.so hands PLAPI 7-12 plugins to metamod.1.ep1"
+  else
+    echo "FAIL: metamod.2.ep1.so has no css34 legacy-plugin bridge" >&2
+    fail=1
+  fi
+fi
+
 echo "==> Checking libstdc++ is not a DT_NEEDED and GLIBC floor"
 GLIBC_FLOOR="${GLIBC_FLOOR:-2.17}"
 version_gt() {

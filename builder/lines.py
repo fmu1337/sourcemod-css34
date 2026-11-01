@@ -277,6 +277,9 @@ def mm_runtime(part, variant):
         "mm_package": mm_package_name(mode, rev),
         "expect_core": core,
         "dhooks_expect": "0" if core == "1.ep1" else "1",
+        # T2.9: the dual line's MM 1.12 package also ships its MM 1.10 legacy core,
+        # so a PLAPI 11 plugin must run on metamod.2.ep1 through the bridge.
+        "legacy_bridge": "1" if ("secondary_mm_commit" in part and mode == "1.12") else "0",
     }
 
 

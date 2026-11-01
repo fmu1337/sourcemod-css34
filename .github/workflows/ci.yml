@@ -184,6 +184,9 @@ jobs:
       - name: Check the Metamod switch procedure
         run: python3 testing/scripts/test-switch-metamod.py
 
+      - name: Legacy-plugin bridge patch tests (T2.9)
+        run: python3 testing/scripts/test-mm-oldbridge-patch.py
+
       - name: Check the SM 1.11 build log gate
         run: python3 testing/scripts/test-sm11-build-log.py
 
@@ -554,6 +557,7 @@ jobs:
           SMOKE_EXPECT_CORE: ${{ matrix.expect_core }}
           MM_PACKAGE_NAME: ${{ matrix.mm_package }}
           SWITCH_FROM_PACKAGE: ${{ matrix.switch_from_package }}
+          LEGACY_BRIDGE: ${{ matrix.legacy_bridge }}
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -568,6 +572,13 @@ jobs:
             switch_from="/workspace/packages/${SWITCH_FROM_PACKAGE}"
             test -f "packages/${SWITCH_FROM_PACKAGE}"
           fi
+          # T2.9: on the dual line's MM 1.12 rows a PLAPI 11 plugin must run through
+          # the nested legacy core next to SourceMod.
+          legacy_probe=""
+          if [[ "${LEGACY_BRIDGE}" == 1 ]]; then
+            legacy_probe="/workspace/packages/test-plugins/css34_legacy_probe.so"
+            test -f "packages/test-plugins/css34_legacy_probe.so"
+          fi
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
@@ -575,6 +586,7 @@ jobs:
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
             -e MM_SWITCH_FROM="${switch_from}" \
+            -e LEGACY_PROBE="${legacy_probe}" \
             -e MM_VERSION_EXPECT \
             -e MM_REV_EXPECT \
             -e SM_VERSION_EXPECT \
@@ -601,6 +613,9 @@ jobs:
                 testing/scripts/install-addons.sh
               fi
               testing/scripts/smoke-test.sh
+              if [[ -n "${LEGACY_PROBE}" ]]; then
+                testing/scripts/legacy-bridge-test.sh
+              fi
             '
 
       - name: Upload smoke logs on failure
@@ -1277,6 +1292,7 @@ jobs:
           SMOKE_EXPECT_CORE: ${{ matrix.expect_core }}
           MM_PACKAGE_NAME: ${{ matrix.mm_package }}
           SWITCH_FROM_PACKAGE: ${{ matrix.switch_from_package }}
+          LEGACY_BRIDGE: ${{ matrix.legacy_bridge }}
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -1291,6 +1307,13 @@ jobs:
             switch_from="/workspace/packages/${SWITCH_FROM_PACKAGE}"
             test -f "packages/${SWITCH_FROM_PACKAGE}"
           fi
+          # T2.9: on the dual line's MM 1.12 rows a PLAPI 11 plugin must run through
+          # the nested legacy core next to SourceMod.
+          legacy_probe=""
+          if [[ "${LEGACY_BRIDGE}" == 1 ]]; then
+            legacy_probe="/workspace/packages/test-plugins/css34_legacy_probe.so"
+            test -f "packages/test-plugins/css34_legacy_probe.so"
+          fi
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
@@ -1298,6 +1321,7 @@ jobs:
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
             -e MM_SWITCH_FROM="${switch_from}" \
+            -e LEGACY_PROBE="${legacy_probe}" \
             -e MM_VERSION_EXPECT \
             -e MM_REV_EXPECT \
             -e SM_VERSION_EXPECT \
@@ -1324,6 +1348,9 @@ jobs:
                 testing/scripts/install-addons.sh
               fi
               testing/scripts/smoke-test.sh
+              if [[ -n "${LEGACY_PROBE}" ]]; then
+                testing/scripts/legacy-bridge-test.sh
+              fi
             '
 
       - name: Upload smoke logs on failure

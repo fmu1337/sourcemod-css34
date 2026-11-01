@@ -284,4 +284,10 @@ else:
     print('==> Patched MM HL2Library for episode1 tier1-before-vstdlib')
 PYTIER1
 
+# css34 legacy-plugin bridge (T2.9): MM 1.12 hands PLAPI 7-12 plugins to
+# metamod.1.ep1 (builder/patches/apply-mmsource-oldbridge.sh). MM 2.0 is not bridged.
+case "$(tr -d '\r\n' < "$mms_dir/product.version")" in
+  1.12.*) bash "$script_dir/apply-mmsource-oldbridge.sh" modern "$mms_dir" ;;
+esac
+
 echo "==> Metamod 1.12+ css34 light patches applied"

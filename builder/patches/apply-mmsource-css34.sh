@@ -396,3 +396,7 @@ else:
     path.write_text(text.replace(old, new, 1))
     print('==> Patched MM 1.10 link flags (static libstdc++, dynamic libgcc_s)')
 PYLINKSTD
+
+# css34 legacy-plugin bridge (T2.9): nested mode + css34_old_* API in
+# core-legacy, plus the PLAPI 11 test plugin (builder/patches/apply-mmsource-oldbridge.sh).
+bash "$script_dir/apply-mmsource-oldbridge.sh" legacy "$mms_dir"
