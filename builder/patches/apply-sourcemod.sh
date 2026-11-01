@@ -1205,6 +1205,30 @@ else:
     raise SystemExit('Failed to patch static-libstdc++ block for css34')
 PYLINK
 
+# MSVC counterpart of --allow-multiple-definition for the 1.ep1 core: MM 1.10
+# PLUGIN_EXPOSE (sourcemm_api.obj) and the ep1 SDK tier1.lib(interface.obj) both
+# define CreateInterface (LNK2005). /FORCE:MULTIPLE keeps the first definition,
+# the object file's; check-core-plapi.sh proves the export answers ISmmPlugin.
+SOURCEMOD_DIR="$sourcemod_dir" "${PY[@]}" - <<'PYMSVC'
+from pathlib import Path
+import os
+path = Path(os.environ['SOURCEMOD_DIR']) / 'AMBuildScript'
+text = path.read_text()
+marker = "    # css34: MSVC /FORCE:MULTIPLE for the 1.ep1 core\n"
+anchor = "    if compiler.target.platform == 'linux':\n      if sdk.name in ['csgo', 'blade']:\n"
+block = (marker +
+         "    if compiler.target.platform == 'windows' and sdk.name == 'ep1':\n"
+         "      if '/FORCE:MULTIPLE' not in compiler.linkflags:\n"
+         "        compiler.linkflags += ['/FORCE:MULTIPLE']\n")
+if marker in text:
+    print('==> MSVC /FORCE:MULTIPLE for 1.ep1 already in AMBuildScript')
+elif text.count(anchor) == 1:
+    path.write_text(text.replace(anchor, block + anchor, 1))
+    print('==> Patched AMBuildScript: MSVC /FORCE:MULTIPLE for the 1.ep1 core')
+else:
+    raise SystemExit('Failed to locate the ConfigureForHL2 platform block for the MSVC 1.ep1 link flag')
+PYMSVC
+
 # bintools uses SM.ExtLibrary and includes core/sourcehook directly, retaining
 # upstream SourceHook v5 ProtoInfo/CProtoInfoBuilder. Only ConfigureForHL2 uses
 # core-css34legacy; no ProtoInfo shim is needed for bintools.

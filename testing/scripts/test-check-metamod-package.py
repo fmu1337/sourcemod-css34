@@ -141,27 +141,34 @@ class TestCheckMetamodPackage(unittest.TestCase):
                 self.assertEqual(res.stdout.splitlines(),
                                  [data["pins"]["MM_110"]["commit"], selected["commit"]])
 
-        # linux.sh must hand the resolved MM 1.12 checkout to configure, never MM 1.10.
-        with open(os.path.join(ROOT, "builder/run/linux.sh")) as fh:
-            source = fh.read()
-        start = source.index('if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11')
-        block = source[start:source.index("\nelse\n", start)] + "\nfi\n"
-        stub = "build_and_package_mm() { :; }\n"
-        report = 'printf "%s|%s\\n" "$MM_MODERN_DIR" "$CSS34_MMS_LEGACY_CORE"\n'
-        env = os.environ.copy()
-        env.update(BUILDER_DIR=builder, DEPS_DIR=self.tmp_dir,
-                   SOURCEMOD_MAJOR="11", CSS34_LINE="sm11-oldstable")
-        res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block + report],
-                             env=env, capture_output=True, text=True)
-        self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(res.stdout.strip(), "|".join([
-            os.path.join(self.tmp_dir, selected["dirname"]),
-            os.path.join(self.tmp_dir, data["pins"]["MM_110"]["dirname"], "core-css34legacy")]))
-        shutil.rmtree(os.path.join(self.tmp_dir, selected["dirname"]))
-        res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block + report],
-                             env=env, capture_output=True, text=True)
-        self.assertNotEqual(res.returncode, 0)
-        self.assertIn("FAIL: missing", res.stderr)
+        # linux.sh and windows.sh must hand the resolved MM 1.12 checkout to configure,
+        # never MM 1.10, and the 1.ep1 include root must come from the MM 1.10 checkout.
+        modern = os.path.join(self.tmp_dir, selected["dirname"])
+        for path, function in (("builder/run/linux.sh", "build_and_package_mm"),
+                               ("builder/run/windows.sh", "build_and_package_mm_win")):
+            with self.subTest(path=path, check="include roots"):
+                with open(os.path.join(ROOT, path)) as fh:
+                    source = fh.read()
+                start = source.index('if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11')
+                block = source[start:source.index("\nelse\n", start)] + "\nfi\n"
+                self.assertIn('--mms-path="$MM_MODERN_DIR"', source)
+                stub = function + "() { :; }\n"
+                report = 'printf "%s|%s\\n" "$MM_MODERN_DIR" "$CSS34_MMS_LEGACY_CORE"\n'
+                env = os.environ.copy()
+                env.update(BUILDER_DIR=builder, DEPS_DIR=self.tmp_dir,
+                           SOURCEMOD_MAJOR="11", CSS34_LINE="sm11-oldstable")
+                os.makedirs(os.path.join(modern, "core"), exist_ok=True)
+                res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block + report],
+                                     env=env, capture_output=True, text=True)
+                self.assertEqual(res.returncode, 0, res.stderr)
+                self.assertEqual(res.stdout.strip(), "|".join([
+                    modern,
+                    os.path.join(self.tmp_dir, data["pins"]["MM_110"]["dirname"], "core-css34legacy")]))
+                shutil.rmtree(modern)
+                res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block + report],
+                                     env=env, capture_output=True, text=True)
+                self.assertNotEqual(res.returncode, 0)
+                self.assertIn("FAIL: missing", res.stderr)
 
         self._create_mock_pkg()
         self._create_mock_pkg(commit=selected["commit"],

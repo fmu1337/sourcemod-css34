@@ -85,6 +85,7 @@ jobs:
       weekly_botplay: ${{ steps.planner.outputs.weekly_botplay }}
       host: ${{ steps.planner.outputs.host }}
       windows: ${{ steps.planner.outputs.windows }}
+      windows_smoke: ${{ steps.planner.outputs.windows_smoke }}
       release_botplay: ${{ steps.planner.outputs.release_botplay }}
       botplay_extra: ${{ steps.planner.outputs.botplay_extra }}
       botplay_extra_images: ${{ steps.planner.outputs.botplay_extra_images }}
@@ -323,8 +324,10 @@ jobs:
             packages/sourcemod-*-css34-windows.zip \
             packages/mmsource-*-css34-windows.zip
           if command -v unzip >/dev/null 2>&1; then
-            unzip -l packages/sourcemod-*-css34-windows.zip
-            unzip -l packages/mmsource-*-css34-windows.zip
+            # One archive per call: unzip -l a.zip b.zip reads b.zip as a member name
+            for z in packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip; do
+              unzip -l "$z"
+            done
           fi
 
       - name: Collect packages and PDBs
@@ -359,13 +362,23 @@ jobs:
           MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
           EXPECT_EXTS: ${{ matrix.exts }}
           LOAD_EXTS: ${{ matrix.load_exts }}
+          DHOOKS_EXPECT: ${{ matrix.dhooks_expect }}
           DHOOKS_PROBE_SECS: "150"
         run: |
           SM_WIN_PACKAGE="$(ls "$PWD"/win-art/sourcemod-*-css34-windows.zip)"
-          MM_WIN_PACKAGE="$(ls "$PWD"/win-art/mmsource-*-css34-windows.zip)"
+          # Native smoke runs on the line's primary Metamod build
+          MM_WIN_PACKAGE="$PWD/win-art/${{ matrix.mm_package }}"
           PDB_DIR="$PWD/win-art/pdb"
           export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR
           bash testing/scripts/wine-smoke-test.sh
+
+      # PE check on the installed server: every sourcemod.<core>.dll reports its
+      # PLAPI (1.ep1 = 11, 2.ep1 = 16) with the server's tier0/vstdlib on PATH.
+      - name: PLAPI probe (Windows cores)
+        shell: bash
+        env:
+          CSS34_LINE: ${{ matrix.line }}
+        run: SERVER_DIR="$PWD/.ci-winserver" bash testing/scripts/check-core-plapi.sh
 
       - name: Upload Windows smoke logs and crash dumps
         if: failure()
@@ -438,7 +451,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.plan.outputs.windows) }}
+        # One row per Metamod build: dual-core SM 1.11 runs on MM 1.10.7 and MM 1.12
+        include: ${{ fromJSON(needs.plan.outputs.windows_smoke) }}
     steps:
       - name: Install Wine
         run: |
@@ -466,7 +480,7 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Wine smoke test (${{ matrix.line }})
+      - name: Wine smoke test (${{ matrix.line }}, MM ${{ matrix.mm_expect }})
         shell: bash
         env:
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
@@ -475,10 +489,11 @@ jobs:
           MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
           EXPECT_EXTS: ${{ matrix.exts }}
           LOAD_EXTS: ${{ matrix.load_exts }}
+          DHOOKS_EXPECT: ${{ matrix.dhooks_expect }}
           DHOOKS_PROBE_SECS: "150"
         run: |
           SM_WIN_PACKAGE="$(ls win-art/sourcemod-*-css34-windows.zip)"
-          MM_WIN_PACKAGE="$(ls win-art/mmsource-*-css34-windows.zip)"
+          MM_WIN_PACKAGE="win-art/${{ matrix.mm_package }}"
           PDB_DIR="$PWD/win-art/pdb"
           export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR
           [[ -f server-art/css34-server.tar.gz ]] && export SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"

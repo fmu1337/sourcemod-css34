@@ -738,11 +738,28 @@
   ],
   "windows": [
     {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7-dev+976",
+      "mm_variant": "primary",
+      "mm_rev": 976,
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "mm_package": "mmsource-1.10.7-git976-css34-windows.zip",
+      "expect_core": "1.ep1",
+      "dhooks_expect": "0",
+      "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
+      "load_exts": "sdkhooks"
+    },
+    {
       "line": "sm12-latest",
       "sm_expect": "1.12.0.7257",
       "mm_expect": "1.12.0-dev+1228",
+      "mm_variant": "primary",
       "mm_rev": 1228,
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
+      "mm_package": "mmsource-1.12.0-git1228-css34-windows.zip",
+      "expect_core": "2.ep1",
+      "dhooks_expect": "1",
       "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
       "load_exts": "sdkhooks"
     },
@@ -750,8 +767,66 @@
       "line": "sm13-latest",
       "sm_expect": "1.13.0.7478",
       "mm_expect": "1.12.0-dev+1228",
+      "mm_variant": "primary",
       "mm_rev": 1228,
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
+      "mm_package": "mmsource-1.12.0-git1228-css34-windows.zip",
+      "expect_core": "2.ep1",
+      "dhooks_expect": "1",
+      "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
+      "load_exts": "sdkhooks"
+    }
+  ],
+  "windows_smoke": [
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.10.7-dev+976",
+      "mm_variant": "primary",
+      "mm_rev": 976,
+      "mm_commit": "80e8ff0be3b62386bbd6f937e97b819ef8be6dd2",
+      "mm_package": "mmsource-1.10.7-git976-css34-windows.zip",
+      "expect_core": "1.ep1",
+      "dhooks_expect": "0",
+      "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
+      "load_exts": "sdkhooks"
+    },
+    {
+      "line": "sm11-oldstable",
+      "sm_expect": "1.11.0.6970",
+      "mm_expect": "1.12.0-dev+1227",
+      "mm_variant": "secondary",
+      "mm_rev": 1227,
+      "mm_commit": "75dd7b26fe92e535a11f0318ead73c3e05130d0b",
+      "mm_package": "mmsource-1.12.0-git1227-css34-windows.zip",
+      "expect_core": "2.ep1",
+      "dhooks_expect": "1",
+      "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
+      "load_exts": "sdkhooks"
+    },
+    {
+      "line": "sm12-latest",
+      "sm_expect": "1.12.0.7257",
+      "mm_expect": "1.12.0-dev+1228",
+      "mm_variant": "primary",
+      "mm_rev": 1228,
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
+      "mm_package": "mmsource-1.12.0-git1228-css34-windows.zip",
+      "expect_core": "2.ep1",
+      "dhooks_expect": "1",
+      "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
+      "load_exts": "sdkhooks"
+    },
+    {
+      "line": "sm13-latest",
+      "sm_expect": "1.13.0.7478",
+      "mm_expect": "1.12.0-dev+1228",
+      "mm_variant": "primary",
+      "mm_rev": 1228,
+      "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
+      "mm_package": "mmsource-1.12.0-git1228-css34-windows.zip",
+      "expect_core": "2.ep1",
+      "dhooks_expect": "1",
       "exts": "CS Tools,SDK Tools,BinTools,SDK Hooks",
       "load_exts": "sdkhooks"
     }

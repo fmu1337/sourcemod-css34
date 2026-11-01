@@ -222,10 +222,25 @@ class TestCIPlannerGate(unittest.TestCase):
     def test_windows_eligibility_and_matrices(self):
         """Windows matrix in planner must only contain lines with windows: true."""
         plan = plan_ci(event_name="pull_request", code_changed="true")
+        with open(ROOT / "builder/lines.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        want = {name for name, line in data["lines"].items() if line.get("windows")}
         win_matrix = plan["matrices"]["windows"]
-        win_lines = {entry["line"] for entry in win_matrix}
-        self.assertEqual(win_lines, {"sm12-latest", "sm13-latest"})
-        self.assertNotIn("sm11-oldstable", win_lines)
+        win_lines = [entry["line"] for entry in win_matrix]
+        # One Windows build per line, on its primary Metamod
+        self.assertEqual(sorted(win_lines), sorted(want))
+        self.assertEqual({entry["mm_variant"] for entry in win_matrix}, {"primary"})
+        # Wine smoke runs every Metamod build: dual-core sm11 on MM 1.10.7 and MM 1.12
+        smoke = {(e["line"], e["mm_variant"]): e for e in plan["matrices"]["windows_smoke"]}
+        for name in want:
+            variants = ["primary"] + (["secondary"] if data["lines"][name].get("secondary_metamod") else [])
+            self.assertEqual(sorted(v for (l, v) in smoke if l == name), sorted(variants))
+        if ("sm11-oldstable", "secondary") in smoke:
+            self.assertEqual(smoke[("sm11-oldstable", "primary")]["expect_core"], "1.ep1")
+            self.assertEqual(smoke[("sm11-oldstable", "primary")]["dhooks_expect"], "0")
+            self.assertEqual(smoke[("sm11-oldstable", "secondary")]["expect_core"], "2.ep1")
+            self.assertEqual(smoke[("sm11-oldstable", "secondary")]["dhooks_expect"], "1")
+            self.assertTrue(smoke[("sm11-oldstable", "secondary")]["mm_package"].endswith("-css34-windows.zip"))
 
     def test_empty_windows_matrix_support(self):
         """When no lines are windows-eligible, windows matrix is [] and build-windows/wine-smoke are skipped."""
@@ -255,8 +270,8 @@ class TestCIPlannerGate(unittest.TestCase):
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
-    def test_css34_line_filtering_sm11_no_windows_and_run_reference_botplay(self):
-        """Single-line dispatch for sm11-oldstable with run_reference_botplay=true must omit host and windows, but run reference botplay."""
+    def test_css34_line_filtering_sm11_windows_and_run_reference_botplay(self):
+        """Single-line dispatch for sm11-oldstable with run_reference_botplay=true omits host, keeps its Windows rows and runs reference botplay."""
         plan = plan_ci(
             event_name="workflow_dispatch",
             code_changed="true",
@@ -264,20 +279,19 @@ class TestCIPlannerGate(unittest.TestCase):
         )
         self.assertEqual(len(plan["matrices"]["build"]), 1)
         self.assertEqual(plan["matrices"]["build"][0]["line"], "sm11-oldstable")
-        self.assertEqual(plan["matrices"]["windows"], [])
-        self.assertFalse(plan["run_windows"])
+        self.assertEqual([e["line"] for e in plan["matrices"]["windows"]], ["sm11-oldstable"])
+        self.assertEqual(len(plan["matrices"]["windows_smoke"]), 2)
+        self.assertTrue(plan["run_windows"])
         self.assertFalse(plan["run_host"])
         self.assertTrue(plan["run_release_botplay"])
-        self.assertNotIn("build-windows", plan["required_jobs"])
-        self.assertNotIn("wine-smoke", plan["required_jobs"])
+        self.assertIn("build-windows", plan["required_jobs"])
+        self.assertIn("wine-smoke", plan["required_jobs"])
         self.assertNotIn("test-built-smoke", plan["required_jobs"])
         self.assertIn("test-rom4s-botplay", plan["required_jobs"])
         self.assertIn("test-release-botplay", plan["required_jobs"])
         self.assertEqual(len(plan["matrices"]["release_botplay"]), 2)
 
         needs = {job: {"result": "success"} for job in plan["required_jobs"]}
-        needs["build-windows"] = {"result": "skipped"}
-        needs["wine-smoke"] = {"result": "skipped"}
         needs["test-built-smoke"] = {"result": "skipped"}
 
         ok, errors = evaluate_gate(needs, plan)

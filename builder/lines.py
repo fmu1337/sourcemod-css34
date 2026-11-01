@@ -234,6 +234,24 @@ def mm_package_name(mode, rev):
     return "mmsource-{}-git{}-css34-linux.tar.gz".format(mm_version(mode), rev)
 
 
+def mm_win_package_name(mode, rev):
+    """Windows Metamod archive name (package_windows.py mm_filename)."""
+    return "mmsource-{}-git{}-css34-windows.zip".format(mm_version(mode), rev)
+
+
+def windows_row(part, variant):
+    """A Windows build/smoke row: the Metamod zip to install and what it must report."""
+    item = row_expect(part, False)
+    item.update(mm_runtime(part, variant))
+    mode = part["secondary_mm_mode"] if variant == "secondary" else part["mm_mode"]
+    # Runtime meta version is 1.12.0-dev+<rev> (1.10.7-dev+<rev> on MM 1.10).
+    item["mm_expect"] = "{}-dev+{}".format(item["mm_expect"], item["mm_rev"])
+    item["mm_package"] = mm_win_package_name(mode, item["mm_rev"])
+    item["exts"] = WINDOWS_EXTS
+    item["load_exts"] = WINDOWS_LOAD_EXTS
+    return item
+
+
 def mm_variants(part):
     """Metamod builds a line ships: dual-core SM 1.11 runs on both."""
     return ["primary", "secondary"] if "secondary_mm_commit" in part else ["primary"]
@@ -332,19 +350,16 @@ def ci_matrix(data):
     rows = active_rows(data)
     host = []
     windows = []
+    windows_smoke = []
     for name, line in data["lines"].items():
         part = line_parts(data, name)
         if line.get("host_smoke"):
             host.append(row_expect(part, True))
         if line.get("windows"):
-            item = row_expect(part, False)
-            # Runtime meta version is 1.12.0-dev+<rev> (1.10.7-dev+<rev> on MM 1.10).
-            item["mm_expect"] = "{}-dev+{}".format(part["mm_expect"], part["mm_rev"])
-            item["mm_rev"] = part["mm_rev"]
-            item["mm_commit"] = part["mm_commit"]
-            item["exts"] = WINDOWS_EXTS
-            item["load_exts"] = WINDOWS_LOAD_EXTS
-            windows.append(item)
+            # One build per line (native smoke on the primary Metamod); Wine smoke
+            # runs on every Metamod build the line ships.
+            windows.append(windows_row(part, "primary"))
+            windows_smoke.extend(windows_row(part, variant) for variant in mm_variants(part))
     require(host, "host matrix must be non-empty")
     release = []
     for row in rows:
@@ -369,6 +384,7 @@ def ci_matrix(data):
         "weekly_botplay": image_rows(data, data["weekly_botplay_image"], False),
         "host": host,
         "windows": windows,
+        "windows_smoke": windows_smoke,
         "release_botplay": release,
         "botplay_extra": extra,
         "botplay_extra_images": extra["include"][:len(extra["image"])],
@@ -542,7 +558,7 @@ def generated_text(data, kind, current=""):
 
 def emit_gha(data):
     matrix = ci_matrix(data)
-    for key in ("build", "debian", "botplay", "weekly", "weekly_botplay", "host", "windows",
+    for key in ("build", "debian", "botplay", "weekly", "weekly_botplay", "host", "windows", "windows_smoke",
                 "release_botplay", "botplay_extra", "botplay_extra_images", "images"):
         print("{}<<EOF".format(key))
         print(json.dumps(matrix[key], separators=(",", ":")))

@@ -1,14 +1,34 @@
+#ifndef _WIN32
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+/* Windows (MSVC x86): the same probe for sourcemod.<core>.dll */
+#include <windows.h>
+#define dlopen(path, flags) ((void *)LoadLibraryA(path))
+#define dlsym(handle, name) ((void *)GetProcAddress((HMODULE)(handle), (name)))
+#define dlclose(handle) FreeLibrary((HMODULE)(handle))
+static const char *dlerror(void) {
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "error %lu", (unsigned long)GetLastError());
+    return buf;
+}
+#else
 #include <dlfcn.h>
+#endif
 
 /*
  * ISmmPlugin vtable structure in Metamod:Source C++ interface:
  * vtable[0]: GetApiVersion
  */
+#ifdef _WIN32
+/* MSVC member functions use __thiscall: this in ECX */
+typedef int (__fastcall *GetApiVersionFn)(void *self, void *edx);
+#else
 typedef int (*GetApiVersionFn)(void *self);
+#endif
 
 typedef void *(*CreateInterfaceFn)(const char *name, int *code);
 
@@ -56,7 +76,11 @@ int main(int argc, char **argv) {
     }
 
     GetApiVersionFn get_api_ver = (GetApiVersionFn)vtable[0];
+#ifdef _WIN32
+    int api_ver = get_api_ver(iface, NULL);
+#else
     int api_ver = get_api_ver(iface);
+#endif
 
     printf("PLAPI:%d\n", api_ver);
     /* Flush before dlclose: module destructors may abort and stdout is a pipe. */

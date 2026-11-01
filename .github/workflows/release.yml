@@ -369,7 +369,9 @@ jobs:
             builder/py.sh builder/patches/*.sh
           builder/run/windows.sh
           source builder/package-paths.sh
-          python builder/package_windows.py check "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE"
+          # Dual-core sm11 ships two Metamod zips (MM 1.10.7 and MM 1.12), like Linux
+          python builder/package_windows.py check "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE" \
+            packages/mmsource-*-css34-windows.zip
 
       - name: Attach Windows packages to GitHub Release
         if: github.ref_type == 'tag'
@@ -395,8 +397,9 @@ jobs:
             gh release create "${tag}" --title "${tag}" --notes "${notes}" --latest=false
           fi
           source builder/package-paths.sh
+          [[ -f "$MM_WIN_PACKAGE" ]] || { echo "missing $MM_WIN_PACKAGE" >&2; exit 1; }
           gh release upload "${tag}" \
-            "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE" --clobber
+            "$SM_WIN_PACKAGE" packages/mmsource-*-css34-windows.zip --clobber
           if [[ "$(gh release view "${tag}" --json isDraft -q .isDraft)" == "true" ]]; then
             gh release edit "${tag}" --draft=false --latest=false
           fi
