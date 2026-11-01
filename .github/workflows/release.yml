@@ -518,7 +518,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: release-smoke-logs-${{ matrix.image_name }}
+          name: release-smoke-logs-${{ needs.resolve-line.outputs.css34_line }}-${{ strategy.job-index }}
           retention-days: 7
           path: |
             .ci-server/smoke.log
