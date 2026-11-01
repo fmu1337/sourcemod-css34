@@ -30,7 +30,7 @@ if [[ -z "$resolve_line" && -f "${ROOT}/builder/versions.env" ]]; then
   # shellcheck disable=SC1091
   eval "$(grep -E '^(SM_|MM_)[A-Z0-9_]+=' "${ROOT}/builder/versions.env")"
   case "${MM_COMMIT_EXPECT:-}" in
-    "${MM_110_COMMIT:-}") resolve_line=sm11-oldstable ;;
+    "${MM_110_COMMIT:-}"|"${MM_112_FROZEN_COMMIT:-}") resolve_line=sm11-oldstable ;;
     "${MM_112_COMMIT:-}")
       case "${SM_COMMIT_EXPECT:-}" in
         "${SM_LATEST_COMMIT:-}") resolve_line=sm12-latest ;;
@@ -74,6 +74,21 @@ MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
 SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6970}"
 MM_COMMIT_EXPECT="${MM_COMMIT_EXPECT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}"
 SM_COMMIT_EXPECT="${SM_COMMIT_EXPECT:-f53cb134ef83b580c83e1f4bf35f60d11c4571dd}"
+# The resolved line's Metamod rev only applies to its own commit: sm11 ships a
+# frozen MM 1.12 (git1227) and, as mmsource-legacy, MM 1.10.7 (git976), and
+# neither matches the line guessed from the commit alone. Look the rev up by
+# commit in versions.env instead.
+if [[ -z "${MM_REV_EXPECT:-}" && -n "${RESOLVED_MM_COMMIT:-}" && "${RESOLVED_MM_COMMIT}" != "${MM_COMMIT_EXPECT}" ]]; then
+  RESOLVED_MM_REV=""
+  if [[ -f "${ROOT}/builder/versions.env" ]]; then
+    while IFS='=' read -r key value; do
+      if [[ "${key}" == MM_*_COMMIT && "${value}" == "${MM_COMMIT_EXPECT}" ]]; then
+        RESOLVED_MM_REV="$(sed -nE "s/^${key%_COMMIT}_REV=([0-9]+)$/\1/p" "${ROOT}/builder/versions.env" | head -n1)"
+        [[ -n "${RESOLVED_MM_REV}" ]] && break
+      fi
+    done < <(grep -E '^MM_[A-Z0-9_]+_COMMIT=' "${ROOT}/builder/versions.env")
+  fi
+fi
 MM_REV_EXPECT="${MM_REV_EXPECT:-${RESOLVED_MM_REV}}"
 # Packaging repo commit (CSS34 pack line). Empty skips the check.
 CSS34_PACK_COMMIT_EXPECT="${CSS34_PACK_COMMIT_EXPECT:-}"

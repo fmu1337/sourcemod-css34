@@ -68,8 +68,11 @@ SM_COMMIT_EXPECT="$(jget "${manifest}" sm_commit)"
 MM_COMMIT_EXPECT="$(jget "${mm_manifest}" mm_commit)"
 mm_version="$(jget "${mm_manifest}" mm_version)"
 MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-${mm_version%%-*}}"
-export SM_VERSION_EXPECT SM_COMMIT_EXPECT MM_COMMIT_EXPECT MM_VERSION_EXPECT
-echo "==> Expect SM ${SM_VERSION_EXPECT} (${SM_COMMIT_EXPECT:0:9}) MM ${MM_VERSION_EXPECT} (${MM_COMMIT_EXPECT:0:9})"
+# mm_version is <product>-git<rev>; meta version must print +<rev> and Build ID <rev>:<sha>.
+MM_REV_EXPECT="${MM_REV_EXPECT:-${mm_version##*-git}}"
+[[ "${MM_REV_EXPECT}" =~ ^[0-9]+$ ]] || { echo "FAIL: no Metamod git rev in mm_version ${mm_version}" >&2; exit 1; }
+export SM_VERSION_EXPECT SM_COMMIT_EXPECT MM_COMMIT_EXPECT MM_VERSION_EXPECT MM_REV_EXPECT
+echo "==> Expect SM ${SM_VERSION_EXPECT} (${SM_COMMIT_EXPECT:0:9}) MM ${MM_VERSION_EXPECT}+${MM_REV_EXPECT} (${MM_COMMIT_EXPECT:0:9})"
 
 docker run --rm --platform linux/amd64 \
   -v "${ROOT}:/workspace" \
@@ -78,7 +81,7 @@ docker run --rm --platform linux/amd64 \
   -e SM_PACKAGE="/workspace/${OUT_DIR}/${SM_ASSET}" \
   -e MM_PACKAGE="/workspace/${OUT_DIR}/${MM_ASSET}" \
   -e PLAIN_TAR_INSTALL=1 \
-  -e MM_VERSION_EXPECT -e SM_VERSION_EXPECT -e MM_COMMIT_EXPECT -e SM_COMMIT_EXPECT \
+  -e MM_VERSION_EXPECT -e SM_VERSION_EXPECT -e MM_COMMIT_EXPECT -e SM_COMMIT_EXPECT -e MM_REV_EXPECT \
   -e SMOKE_EXPECT_CORE="${SMOKE_EXPECT_CORE:-}" \
   -e TIMEOUT_SECS=120 \
   -e SMOKE_CONDEBUG=1 \
