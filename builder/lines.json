@@ -69,12 +69,12 @@
   "lines": {
     "sm11-oldstable": {
       "sourcemod": "SM_OLDSTABLE",
-      "metamod": "MM_110",
-      "secondary_metamod": "MM_112_FROZEN",
+      "metamod": "MM_112_FROZEN",
+      "secondary_metamod": "MM_110",
       "status": "active",
-      "pointer": false,
+      "pointer": true,
       "releasable": true,
-      "role": "OldStable, withheld from pointers",
+      "role": "OldStable, dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy",
       "windows": true,
       "smoke": [
         {

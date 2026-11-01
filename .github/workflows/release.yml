@@ -671,6 +671,12 @@ jobs:
           mkdir -p ptr
           gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" -D ptr \
             -p "${SM_ASSET}" -p "${MM_ASSET}"
+          # T2.6: a dual-core line's pointer also serves its MM 1.10.7 package.
+          legacy="$(python3 builder/lines.py legacy-mm-asset "${{ needs.resolve-line.outputs.css34_line }}")"
+          if [[ -n "${legacy}" ]]; then
+            gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" -D ptr -p "${legacy}"
+            echo "${legacy}" > ptr/LEGACY_MM_ASSET
+          fi
 
       - name: Update line-${{ needs.resolve-line.outputs.css34_line }}
         env:
@@ -685,8 +691,12 @@ jobs:
           FORCE_REPOINT: ${{ needs.resolve-line.outputs.repoint }}
         run: |
           set -euo pipefail
+          legacy_pkg=""
+          if [[ -f ptr/LEGACY_MM_ASSET ]]; then
+            legacy_pkg="ptr/$(cat ptr/LEGACY_MM_ASSET)"
+          fi
           bash builder/scripts/update-line-pointer.sh "${LINE}" "${TAG}" \
-            "ptr/${SM_ASSET}" "ptr/${MM_ASSET}"
+            "ptr/${SM_ASSET}" "ptr/${MM_ASSET}" ${legacy_pkg:+"${legacy_pkg}"}
           if [[ "${SMOKE}" != "pass" ]]; then
             echo "::error::smoke failed for ${TAG}; line-${LINE} not switched"
             exit 1
@@ -760,3 +770,8 @@ jobs:
               print(f"::notice::line pointer serves newer tag {served} (target was {tag})")
           '
           testing/scripts/release-smoke.sh
+          # T2.6: a dual-core line also serves MM 1.10.7 (1.ep1 core) as mmsource-legacy.
+          if [[ -n "$(python3 builder/lines.py legacy-mm-asset "${LINE}")" ]]; then
+            MM_ASSET=mmsource-legacy-css34-linux.tar.gz SMOKE_EXPECT_CORE=1.ep1 \
+              testing/scripts/release-smoke.sh
+          fi

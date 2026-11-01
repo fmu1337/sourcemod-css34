@@ -47,6 +47,10 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   SM/MM archive paths (Linux tar.gz and Windows zip, both with `git<rev>`).
   Archived MM 2.0/KHook builds live in `archive/khook`;
   master rejects those build lines, while their published pointers stay intact.
+- sm11 (D7): primary Metamod is the frozen MM 1.12 (git1227), secondary MM 1.10.7;
+  its tag is `1.11.0.6970-mm1.12.0-dual` and `line-sm11-oldstable` also serves MM 1.10.7 as
+  `mmsource-legacy-css34-linux.tar.gz` (`lines.py legacy-mm-asset <line>`, `update-line-pointer.sh`
+  5th argument, a second `release-smoke.sh` in `smoke-pointer`).
 - sm11's primary and secondary Metamod inputs are resolved from `metamod` and
   `secondary_metamod` in `builder/lines.json` by `builder/resolve-metamod-pins.py`.
   Checkout, Linux/Windows dual-MM builds, and the package verifier share this

@@ -129,7 +129,10 @@ build_and_package_mm() {
 
 if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
   SM11_DUAL_MM=1
-  mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm11-oldstable}")"
+  # MM 1.10 first, whichever role it has: the MM 1.12 package takes its legacy
+  # core (legacy-plugin bridge, T2.9).
+  mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm11-oldstable}" \
+    | sort -t$'\t' -k3,3)"
   MM_LEGACY_DIR=""
   MM_MODERN_DIR=""
   while IFS=$'\t' read -r role dirname mode branch commit rev version; do

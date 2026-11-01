@@ -2,7 +2,7 @@
 # Regenerate with: python3 builder/lines.py gen
 css34_line_for_tag() {
   case "$1" in
-    1.11.0.6970-mm1.10.7) printf '%s\n' sm11-oldstable ;;
+    1.11.0.6970-mm1.12.0-dual) printf '%s\n' sm11-oldstable ;;
     1.12.0.7257-mm1.12.0) printf '%s\n' sm12-latest ;;
     1.13.0.7478-mm1.12.0) printf '%s\n' sm13-latest ;;
     1.13.0.7404-mm1.12.0) printf '%s\n' sm13-dev ;;
@@ -14,7 +14,7 @@ css34_line_for_tag() {
 
 css34_line_has_pointer() {
   case "$1" in
-    sm12-latest|sm13-latest|sm13-mm20|sm13-mm20-khook) return 0 ;;
+    sm11-oldstable|sm12-latest|sm13-latest|sm13-mm20|sm13-mm20-khook) return 0 ;;
     *) return 1 ;;
   esac
 }

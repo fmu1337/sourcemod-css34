@@ -57,14 +57,16 @@ fi
 SM_PACKAGE="${OUT_DIR}/${SM_ASSET}" bash testing/scripts/check-package.sh
 MM_PACKAGE="${OUT_DIR}/${MM_ASSET}" bash testing/scripts/check-metamod-package.sh
 
-# Expected versions come from the package's own manifest (what `sm version` /
-# `meta version` must report).
+# Expected versions come from the packages' own manifests (what `sm version` /
+# `meta version` must report). Metamod's from the Metamod package: a dual-core
+# line's pointer also serves its MM 1.10.7 package (mmsource-legacy, T2.6).
 manifest="$(tar -xzOf "${OUT_DIR}/${SM_ASSET}" addons/sourcemod/css34-package.json)"
-jget() { python3 -c 'import json,sys; print(json.loads(sys.argv[1])[sys.argv[2]])' "${manifest}" "$1"; }
-SM_VERSION_EXPECT="$(jget sm_version)"
-SM_COMMIT_EXPECT="$(jget sm_commit)"
-MM_COMMIT_EXPECT="$(jget mm_commit)"
-mm_version="$(jget mm_version)"
+mm_manifest="$(tar -xzOf "${OUT_DIR}/${MM_ASSET}" addons/metamod/css34-package.json)"
+jget() { python3 -c 'import json,sys; print(json.loads(sys.argv[1])[sys.argv[2]])' "$1" "$2"; }
+SM_VERSION_EXPECT="$(jget "${manifest}" sm_version)"
+SM_COMMIT_EXPECT="$(jget "${manifest}" sm_commit)"
+MM_COMMIT_EXPECT="$(jget "${mm_manifest}" mm_commit)"
+mm_version="$(jget "${mm_manifest}" mm_version)"
 MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-${mm_version%%-*}}"
 export SM_VERSION_EXPECT SM_COMMIT_EXPECT MM_COMMIT_EXPECT MM_VERSION_EXPECT
 echo "==> Expect SM ${SM_VERSION_EXPECT} (${SM_COMMIT_EXPECT:0:9}) MM ${MM_VERSION_EXPECT} (${MM_COMMIT_EXPECT:0:9})"
@@ -77,6 +79,7 @@ docker run --rm --platform linux/amd64 \
   -e MM_PACKAGE="/workspace/${OUT_DIR}/${MM_ASSET}" \
   -e PLAIN_TAR_INSTALL=1 \
   -e MM_VERSION_EXPECT -e SM_VERSION_EXPECT -e MM_COMMIT_EXPECT -e SM_COMMIT_EXPECT \
+  -e SMOKE_EXPECT_CORE="${SMOKE_EXPECT_CORE:-}" \
   -e TIMEOUT_SECS=120 \
   -e SMOKE_CONDEBUG=1 \
   -e SMOKE_VERBOSE=1 \

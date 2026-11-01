@@ -197,7 +197,9 @@ def line_parts(data, name):
         "mm_short": mm["commit"][:8],
         "mm_rev": mm["rev"],
         "mm_mode": mm["mode"],
-        "tag": "{}-{}".format(sm_version, mm_tag_part(name, mm["mode"])),
+        # D7: a dual-core line (two Metamod builds) is tagged <sm>-<primary mm>-dual.
+        "tag": "{}-{}{}".format(sm_version, mm_tag_part(name, mm["mode"]),
+                                "-dual" if "secondary_metamod" in line else ""),
         "extra_tags": list(line.get("extra_tags", [])),
         "default": name == data["default_line"],
     }
@@ -571,10 +573,19 @@ def emit_gha(data):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("gen", "check", "gha"))
+    parser.add_argument("command", choices=("gen", "check", "gha", "legacy-mm-asset"))
+    parser.add_argument("line", nargs="?", help="line name (legacy-mm-asset)")
     args = parser.parse_args()
     try:
         data = load_manifest(ROOT / "builder/lines.json")
+        if args.command == "legacy-mm-asset":
+            # T2.6: the dual line's MM 1.10.7 Linux package, served by its pointer
+            # as mmsource-legacy-css34-linux.tar.gz; prints nothing for other lines.
+            require(args.line in data["lines"], "unknown line " + repr(args.line))
+            part = line_parts(data, args.line)
+            if part.get("secondary_mm_mode") == "1.10":
+                print(mm_package_name("1.10", part["secondary_mm_rev"]))
+            return 0
         if args.command == "gha":
             emit_gha(data)
             return 0
