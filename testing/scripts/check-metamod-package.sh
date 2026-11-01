@@ -153,6 +153,16 @@ revision = re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+-git([0-9]+)", version) if isins
 if exp_rev and (revision is None or revision.group(1) != str(exp_rev)):
     print("FAIL: manifest mm_version " + str(version) + " does not have exact revision git" + str(exp_rev), file=sys.stderr)
     sys.exit(1)
+# T2.6: metamod_binaries / legacy_bridge must match the cores in bin/.
+import os
+bindir = os.path.join(os.path.dirname(sys.argv[1]), "bin")
+present = ["metamod." + c for c in ("1.ep1", "2.ep1") if os.path.exists(os.path.join(bindir, "metamod." + c + ".so"))]
+if "metamod_binaries" in d and d["metamod_binaries"] != present:
+    print("FAIL: manifest metamod_binaries " + str(d["metamod_binaries"]) + " != bin/ " + str(present), file=sys.stderr)
+    sys.exit(1)
+if "legacy_bridge" in d and d["legacy_bridge"] != (len(present) == 2):
+    print("FAIL: manifest legacy_bridge " + str(d["legacy_bridge"]) + " does not match bin/ " + str(present), file=sys.stderr)
+    sys.exit(1)
 ' "${manifest}"; then
   echo "OK: addons/metamod/css34-package.json"
 else

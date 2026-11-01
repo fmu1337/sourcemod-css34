@@ -24,10 +24,11 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 | `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Retired outside CI |
 <!-- lines-install:end -->
 
-`sm11-oldstable` (SM 1.11.0.6970 + MM 1.10.7 / frozen MM 1.12 artifacts) has **no pointer** — see [Known-bad releases](#known-bad-releases).
+`sm11-oldstable` (SM 1.11.0.6970, dual-core, with MM 1.10.7 or frozen MM 1.12) has **no pointer** yet — see
+[SourceMod 1.11: choosing Metamod](#sourcemod-111-choosing-metamod) and [Known-bad releases](#known-bad-releases).
 Its two Metamod inputs come from the line's `metamod` and `secondary_metamod`
 references in `builder/lines.json`; dependency checkout, builds, and package
-verification use the same resolver. Dual-SM runtime support is tracked in #90.
+verification use the same resolver.
 What each pointer serves right now (tag, commits, smoke result) is in
 [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json).
 
@@ -70,11 +71,11 @@ A daily bump edits `lines.json` and regenerates — see [docs/JULES_DAILY_VERSIO
 
 ### What pairs with what
 
-| | SM 1.11 (PLAPI 11, `1.ep1`) | SM 1.12 / 1.13 (`2.ep1`) |
+| | SM 1.11 dual-core (`1.ep1` + `2.ep1`) | SM 1.12 / 1.13 (`2.ep1`) |
 |--|--|--|
-| **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable`) | no |
+| **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable`, runs `sourcemod.1.ep1`) | no |
 | **MM 1.11** (`metamod.2.ep1`) | no (myarena bundle; `11 < 14`) | not a release path |
-| **MM 1.12** git1228 | no | **matched** (`sm12-latest`, `sm13-latest`) |
+| **MM 1.12** git1227 / git1228 | **matched** (`sm11-oldstable` git1227, runs `sourcemod.2.ep1`) | **matched** (`sm12-latest`, `sm13-latest`) |
 | **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
 | **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
 
@@ -114,6 +115,37 @@ Older Linux tags before `-r2` keep `mmsource-<ver>-dev-css34-linux.tar.gz`;
 tags published before the Windows rename keep `mmsource-<ver>-dev-css34-windows.zip`.
 Historical URLs in `testing/versions/matrix.json` intentionally retain those names.
 The rename consumer audit and installer migration are in [docs/WINDOWS_ASSETS.md](docs/WINDOWS_ASSETS.md).
+
+### SourceMod 1.11: choosing Metamod
+
+`sm11-oldstable` builds **one** SourceMod package with both cores (`sourcemod.1.ep1` / `sourcemod.2.ep1`,
+`sdktools` / `sdkhooks` / `game.cstrike` for each) and **two** Metamod packages. Metamod picks the core:
+
+| Metamod package | Runs | DHooks | Old Metamod plugins (PLAPI 7–12, built for MM 1.4–1.10) | SourceMod extensions that exist only as `*.ext.1.ep1` |
+|--|--|--|--|--|
+| `mmsource-1.12.0-git1227-css34-*` (default, D7) | `metamod.2.ep1` → `sourcemod.2.ep1` | **yes** (`dhooks.ext.2.ep1`) | **yes**, through the bundled `metamod.1.ep1` legacy core (legacy-plugin bridge, #144) | no |
+| `mmsource-1.10.7-git976-css34-*` | `metamod.1.ep1` → `sourcemod.1.ep1` | no | yes, natively | yes |
+
+The MM 1.12 package of this line ships `metamod.2.ep1` **and** `metamod.1.ep1`: MM 1.12 loads the legacy core
+only when `metaplugins.ini` names an old plugin, and lists that plugin in `meta list` like any other
+(`meta unload` / `meta pause` work). Nothing has to be deleted to run old plugins.
+
+Switch Metamod without touching SourceMod (what `testing/scripts/switch-metamod.sh` does in CI):
+
+```bash
+cd /path/to/cstrike
+cp addons/metamod/metaplugins.ini /tmp/metaplugins.ini
+rm -f addons/metamod/bin/server* addons/metamod/bin/metamod.*
+tar -xzf mmsource-<other>-css34-linux.tar.gz
+cp /tmp/metaplugins.ini addons/metamod/metaplugins.ini
+```
+
+Windows: the same with the `-windows.zip` packages (`bin\server.dll`, `bin\metamod.*.dll`).
+
+`css34-package.json` describes what a package carries: SourceMod lists its `cores`
+(`["1.ep1", "2.ep1"]` on this line); Metamod lists `metamod_binaries` and sets `legacy_bridge: true` when it
+ships both cores. `metamod_binary` keeps its meaning (the Metamod build of the line's primary pin, MM 1.10.7
+for `sm11-oldstable`) until the installer adopts the line (T2.8).
 
 ### Installer contract (fmu1337/v34_server_base)
 
