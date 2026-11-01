@@ -187,9 +187,24 @@ def write_manifest(out_path, metamod_binary):
     if not payload["build_date"]:
         fail("BUILD_DATE required")
     out_path = Path(out_path)
+    payload.update(core_fields(out_path.parent))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
     print("==> Wrote " + out_path.as_posix(), file=sys.stderr)
+
+
+def core_fields(addon_dir):
+    """T2.6 manifest fields, as write-package-manifest.sh writes them."""
+    def present(prefix):
+        return [core for core in ("1.ep1", "2.ep1")
+                if (addon_dir / "bin" / "{}.{}.dll".format(prefix, core)).is_file()]
+    if addon_dir.name == "sourcemod":
+        return {"cores": present("sourcemod")}
+    if addon_dir.name == "metamod":
+        cores = present("metamod")
+        return {"metamod_binaries": ["metamod." + core for core in cores],
+                "legacy_bridge": cores == ["1.ep1", "2.ep1"]}
+    return {}
 
 
 def core_name(package_dir, folder, candidates):
@@ -376,6 +391,8 @@ def dual_test(tmp, sm_src):
     data = json.loads(manifest_bytes(archive, "addons/sourcemod/css34-package.json"))
     if data["metamod_binary"] != "metamod.1.ep1":
         fail("dual-core manifest on MM 1.10 must name metamod.1.ep1, got " + data["metamod_binary"])
+    if data.get("cores") != ["1.ep1", "2.ep1"]:
+        fail("dual-core manifest must list cores 1.ep1 and 2.ep1, got " + repr(data.get("cores")))
     for bad, missing in (("dhooks.ext.dll", None), (None, "sdkhooks.ext.1.ep1.dll")):
         ext = pkg / "addons/sourcemod/extensions"
         if bad:
@@ -474,6 +491,9 @@ def self_test():
             mm_zip = package_metamod(mm_pkg, out, mm_src)
             check_archive(sm_zip)
             check_archive(mm_zip)
+            mm_data = json.loads(manifest_bytes(mm_zip, "addons/metamod/css34-package.json"))
+            if mm_data.get("metamod_binaries") != ["metamod.2.ep1"] or mm_data.get("legacy_bridge") is not False:
+                fail("Metamod manifest core fields: " + repr(mm_data))
             with zipfile.ZipFile(mm_zip) as zf:
                 vdf = zf.read("addons/metamod.vdf").decode("utf-8")
             if "../cstrike/addons/metamod/bin/server" not in vdf:

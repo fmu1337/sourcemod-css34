@@ -58,6 +58,46 @@ else
   toolchain_fields=$(printf '  "min_glibc": "%s",\n' "$glibc_floor")
 fi
 
+# T2.6: which cores the package carries. SourceMod lists sourcemod.<core> under
+# "cores"; Metamod lists metamod.<core> under "metamod_binaries" and sets
+# "legacy_bridge" when it ships metamod.2.ep1 with the metamod.1.ep1 legacy core
+# (T2.9: PLAPI 7-12 plugins run on MM 1.12). "metamod_binary" keeps its meaning.
+addon_dir="$(dirname "$OUT")"
+json_list() {
+  local first=1 item
+  printf '['
+  for item in "$@"; do
+    [[ "$first" -eq 1 ]] || printf ', '
+    printf '"%s"' "$item"
+    first=0
+  done
+  printf ']'
+}
+present_cores() { # <prefix>: sourcemod | metamod
+  local core
+  for core in 1.ep1 2.ep1; do
+    if [[ -e "$addon_dir/bin/$1.$core.so" || -e "$addon_dir/bin/$1.$core.dll" ]]; then
+      echo "$core"
+    fi
+  done
+}
+core_fields=""
+case "$(basename "$addon_dir")" in
+  sourcemod)
+    mapfile -t sm_cores < <(present_cores sourcemod)
+    core_fields="$(printf '  "cores": %s,' "$(json_list ${sm_cores[@]+"${sm_cores[@]}"})")"
+    ;;
+  metamod)
+    mapfile -t mm_cores < <(present_cores metamod)
+    mm_bins=()
+    for core in ${mm_cores[@]+"${mm_cores[@]}"}; do mm_bins+=("metamod.$core"); done
+    bridge=false
+    if [[ " ${mm_cores[*]:-} " == *" 1.ep1 "* && " ${mm_cores[*]:-} " == *" 2.ep1 "* ]]; then bridge=true; fi
+    core_fields="$(printf '  "metamod_binaries": %s,\n  "legacy_bridge": %s,' "$(json_list ${mm_bins[@]+"${mm_bins[@]}"})" "$bridge")"
+    ;;
+esac
+[[ -z "$core_fields" ]] || core_fields="${core_fields}"$'\n'
+
 mkdir -p "$(dirname "$OUT")"
 cat >"$OUT" <<EOF
 {
@@ -71,7 +111,7 @@ cat >"$OUT" <<EOF
   "extension_api": ${ext_api},
   "extension_api_min": ${ext_api_min},
   "metamod_binary": "${METAMOD_BINARY}",
-${toolchain_fields}  "css34_pack_commit": "${pack_commit}",
+${core_fields}${toolchain_fields}  "css34_pack_commit": "${pack_commit}",
   "build_date": "${build_date}"
 }
 EOF

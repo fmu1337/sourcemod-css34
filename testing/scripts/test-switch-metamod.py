@@ -79,22 +79,25 @@ class SwitchMetamodTest(unittest.TestCase):
         res = self.switch(Path(self.tmp.name) / "missing.tar.gz")
         self.assertNotEqual(res.returncode, 0)
 
-    def test_detects_a_stale_binary_left_behind(self):
-        # A package that also ships the other core's binary must not pass as a clean switch.
-        mixed = Path(self.tmp.name) / "mmsource-mixed.tar.gz"
-        make_package(mixed, "metamod.2.ep1.so")
-        with tarfile.open(mixed) as tar:
+    def test_bridge_package_with_both_cores_and_switching_back(self):
+        # sm11's MM 1.12 package ships metamod.1.ep1 for the legacy-plugin bridge.
+        dual = Path(self.tmp.name) / "mmsource-1.12.0-git1227-dual-css34-linux.tar.gz"
+        make_package(dual, "metamod.2.ep1.so")
+        with tarfile.open(dual) as tar:
             members = {m.name: tar.extractfile(m).read() for m in tar.getmembers() if m.isfile()}
-        members["addons/metamod/bin/metamod.1.ep1.so"] = b"\x7fELF stale"
-        with tarfile.open(mixed, "w:gz") as tar:
+        members["addons/metamod/bin/metamod.1.ep1.so"] = b"\x7fELF legacy core"
+        with tarfile.open(dual, "w:gz") as tar:
             for name, data in members.items():
                 info = tarfile.TarInfo(name)
                 info.size = len(data)
                 tar.addfile(info, io.BytesIO(data))
-        res = self.switch(mixed)
-        self.assertNotEqual(res.returncode, 0)
-        self.assertIn("expected only", res.stderr)
-
+        res = self.switch(dual)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(self.binaries(), ["metamod.1.ep1.so", "metamod.2.ep1.so"])
+        # Back to MM 1.10.7: the 2.ep1 core must not stay behind.
+        res = self.switch(self.legacy)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(self.binaries(), ["metamod.1.ep1.so"])
 
 if __name__ == "__main__":
     unittest.main()

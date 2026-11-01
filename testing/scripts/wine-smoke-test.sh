@@ -16,6 +16,8 @@
 #   DHOOKS_EXPECT 1: DHooks (dhooks.ext.dll, or dhooks.ext.2.ep1.dll in the dual-core SM 1.11
 #                 package) must load; 0: it must not (SM 1.11 on MM 1.10.7 runs the 1.ep1
 #                 core, which has no DHooks); unset: required exactly when the zip has it
+#   LEGACY_PROBE  optional css34_legacy_probe.dll (T2.9): installed in metaplugins.ini; it must
+#                 run on metamod.2.ep1 through the nested metamod.1.ep1 legacy core
 # Needs: wine32 (i386), xvfb, unzip, python3 (Linux); unzip or 7z, python, curl (Windows).
 set -euo pipefail
 
@@ -121,6 +123,19 @@ echo "==> DHooks expected: ${DHOOKS_EXPECT} (package: ${dhooks_dll:-none})"
 if [[ "${DHOOKS_PROBE_SECS}" -gt 0 && "${DHOOKS_EXPECT}" != 1 ]]; then
   echo "==> DHooks not expected on this core, skipping the DHooks probe"
   DHOOKS_PROBE_SECS=0
+fi
+
+MM_ADDON_DIR="${SERVER_DIR}/cstrike/addons/metamod"
+PROBE_LOG="${MM_ADDON_DIR}/css34_legacy_probe.log"
+if [[ -n "${LEGACY_PROBE:-}" ]]; then
+  [[ -f "${LEGACY_PROBE}" ]] || fail "LEGACY_PROBE not found: ${LEGACY_PROBE}"
+  for core in metamod.2.ep1.dll metamod.1.ep1.dll; do
+    [[ -f "${MM_ADDON_DIR}/bin/${core}" ]] || fail "${core} missing: the legacy-plugin bridge needs both cores"
+  done
+  cp -f "${LEGACY_PROBE}" "${MM_ADDON_DIR}/css34_legacy_probe.dll"
+  rm -f "${PROBE_LOG}"
+  printf 'addons/metamod/css34_legacy_probe.dll\r\n' >>"${MM_ADDON_DIR}/metaplugins.ini"
+  echo "==> PLAPI 11 probe added to metaplugins.ini (legacy-plugin bridge)"
 fi
 
 if [[ -n "${PDB_DIR:-}" && -d "${PDB_DIR}" ]]; then
@@ -239,6 +254,14 @@ require_exts() {
   return 0
 }
 require_exts "$out"
+
+if [[ -n "${LEGACY_PROBE:-}" ]]; then
+  grep -q "CSS34 Legacy Probe" <<<"$out" || fail "meta list does not show the PLAPI 11 probe (legacy-plugin bridge)"
+  echo "==== css34_legacy_probe.log ===="; cat "${PROBE_LOG}" 2>/dev/null || true
+  grep -qx 'load api=11 late=0' <(tr -d '\r' <"${PROBE_LOG}" 2>/dev/null) || fail "the PLAPI 11 probe did not load through metamod.1.ep1"
+  grep -q '^level_init map=' <(tr -d '\r' <"${PROBE_LOG}" 2>/dev/null) || fail "the probe's SourceHook v4 LevelInit hook did not fire"
+  echo "==> Legacy-plugin bridge OK on Windows"
+fi
 
 if [[ "${DHOOKS_PROBE_SECS}" -gt 0 ]]; then
   echo "==> Playing ${DHOOKS_PROBE_SECS}s with bots (DHooks probe)"

@@ -7,6 +7,8 @@
 #   releases/download/line-<line>/sourcemod-css34-linux.tar.gz
 #   releases/download/line-<line>/mmsource-css34-linux.tar.gz
 #   releases/download/line-<line>/SHA256SUMS
+#   releases/download/line-<line>/mmsource-legacy-css34-linux.tar.gz  (dual-core lines:
+#     the MM 1.10.7 package, optional 5th argument; T2.6)
 #   releases/download/line-<line>/lines.json      {"<line>": {...}} — this line only
 #   releases/download/lines-index/lines.json      {"<line>": {...}, ...} — all lines
 #
@@ -28,6 +30,7 @@ LINE="${1:?line required}"
 SRC_TAG="${2:?source tag required}"
 SM_PKG="${3:?sm package required}"
 MM_PKG="${4:?mm package required}"
+LEGACY_MM_PKG="${5:-}"
 SMOKE="${SMOKE:-pass}"
 REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY required}"
 PTR_TAG="line-${LINE}"
@@ -150,6 +153,12 @@ publish_index() {
 
 manifest="$(tar -xzOf "$SM_PKG" addons/sourcemod/css34-package.json)"
 mm_manifest="$(tar -xzOf "$MM_PKG" addons/metamod/css34-package.json)"
+if [[ -n "$LEGACY_MM_PKG" ]]; then
+  legacy_binary="$(tar -xzOf "$LEGACY_MM_PKG" addons/metamod/css34-package.json \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("metamod_binary",""))')"
+  [[ "$legacy_binary" == metamod.1.ep1 ]] \
+    || { echo "legacy MM package $LEGACY_MM_PKG is not a metamod.1.ep1 build ($legacy_binary)" >&2; exit 1; }
+fi
 
 ensure_release "$PTR_TAG" "${PTR_TAG} (stable pointer)" \
   "Stable pointer for line \`${LINE}\`: always the latest smoke-passed build. Asset names never change; see lines.json for the source tag."
@@ -165,8 +174,8 @@ else
 fi
 
 decision="${work}/decision"
-python3 - "$line_json" "$LINE" "$SRC_TAG" "$SMOKE" "$manifest" "$mm_manifest" "$PTR_TAG" "$REPO" "$SRC_TIME" "$FORCE_REPOINT" "$decision" <<'PY'
-import json, re, sys, datetime
+LEGACY_ASSET="${LEGACY_MM_PKG:+1}" python3 - "$line_json" "$LINE" "$SRC_TAG" "$SMOKE" "$manifest" "$mm_manifest" "$PTR_TAG" "$REPO" "$SRC_TIME" "$FORCE_REPOINT" "$decision" <<'PY'
+import json, os, re, sys, datetime
 
 path, line, tag, smoke, sm_raw, mm_raw, ptr, repo, src_time, force_repoint, decision = sys.argv[1:12]
 
@@ -227,6 +236,9 @@ if smoke == "pass":
         "sourcemod_url": f"https://github.com/{repo}/releases/download/{ptr}/sourcemod-css34-linux.tar.gz",
         "mmsource_url": f"https://github.com/{repo}/releases/download/{ptr}/mmsource-css34-linux.tar.gz",
     }
+    if os.environ.get("LEGACY_ASSET") == "1":
+        entry["mmsource_legacy_url"] = (
+            f"https://github.com/{repo}/releases/download/{ptr}/mmsource-legacy-css34-linux.tar.gz")
 else:
     # The pointer keeps serving the last passing build (if any); only note the
     # failed candidate. A line that never passed has tag=null, smoke=fail.
@@ -246,9 +258,17 @@ fi
 if [[ "$SMOKE" == "pass" ]]; then
   cp -f "$SM_PKG" "${work}/sourcemod-css34-linux.tar.gz"
   cp -f "$MM_PKG" "${work}/mmsource-css34-linux.tar.gz"
-  (cd "$work" && sha256sum sourcemod-css34-linux.tar.gz mmsource-css34-linux.tar.gz > SHA256SUMS)
+  sums=(sourcemod-css34-linux.tar.gz mmsource-css34-linux.tar.gz)
+  if [[ -n "$LEGACY_MM_PKG" ]]; then
+    cp -f "$LEGACY_MM_PKG" "${work}/mmsource-legacy-css34-linux.tar.gz"
+    sums+=(mmsource-legacy-css34-linux.tar.gz)
+  fi
+  (cd "$work" && sha256sum "${sums[@]}" > SHA256SUMS)
   swap_asset "$PTR_TAG" "${work}/sourcemod-css34-linux.tar.gz" sourcemod-css34-linux.tar.gz
   swap_asset "$PTR_TAG" "${work}/mmsource-css34-linux.tar.gz" mmsource-css34-linux.tar.gz
+  if [[ -n "$LEGACY_MM_PKG" ]]; then
+    swap_asset "$PTR_TAG" "${work}/mmsource-legacy-css34-linux.tar.gz" mmsource-legacy-css34-linux.tar.gz
+  fi
   swap_asset "$PTR_TAG" "${work}/SHA256SUMS" SHA256SUMS
   gh release edit "$PTR_TAG" --repo "$REPO" \
     --notes "Stable pointer for line \`${LINE}\` → [\`${SRC_TAG}\`](https://github.com/${REPO}/releases/tag/${SRC_TAG}) (smoke: pass)."

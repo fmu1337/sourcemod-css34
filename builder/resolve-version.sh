@@ -37,7 +37,11 @@ apply_sm_line() {
       SOURCEMOD_COMMIT="$SM_OLDSTABLE_COMMIT"
       SOURCEMOD_GIT_REV="$SM_OLDSTABLE_REV"
       SOURCEMOD_MAJOR="$SM_OLDSTABLE_MAJOR"
-      resolve_mm 1.10
+      # D7: the primary Metamod is the line's frozen MM 1.12 (lines.json "metamod");
+      # MM 1.10.7 is "secondary_metamod" (resolve-metamod-pins.py).
+      MMS_COMMIT="$MM_112_SM11_COMMIT"; MMS_BRANCH="$MM_112_SM11_BRANCH"
+      MMS_DIRNAME="$MM_112_SM11_DIRNAME"; MMS_MODE="$MM_112_SM11_MODE"
+      MMS_GIT_REV="$MM_112_SM11_REV"
       ;;
     sm12-latest|sm12|latest)
       SOURCEMOD_COMMIT="$SM_LATEST_COMMIT"

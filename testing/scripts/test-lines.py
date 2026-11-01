@@ -227,6 +227,36 @@ class RepointResolverTest(unittest.TestCase):
         input_data = json.dumps(line_json_dict)
         return subprocess.run(cmd, input=input_data, capture_output=True, text=True, env=dict(os.environ, **env_dict))
 
+    def test_pointer_entry_names_the_legacy_metamod_asset(self):
+        """T2.6: a dual-core line's pointer entry links mmsource-legacy only when it is served."""
+        manifest = {"sm_version": "1.11.0.6970", "sm_commit": "f53cb134ef83b580c83e1f4bf35f60d11c4571dd",
+                    "mm_version": "1.12.0-git1227", "mm_commit": "75dd7b26fe92e535a11f0318ead73c3e05130d0b",
+                    "extension_api": 8, "extension_api_min": 1, "metamod_binary": "metamod.2.ep1"}
+        mm = {k: manifest[k] for k in ("mm_version", "mm_commit", "metamod_binary")}
+        for legacy in ("1", ""):
+            with self.subTest(legacy=legacy), tempfile.TemporaryDirectory() as tmp:
+                line_json = Path(tmp) / "lines.json"
+                line_json.write_text("{}")
+                old = os.environ.get("LEGACY_ASSET")
+                os.environ["LEGACY_ASSET"] = legacy
+                try:
+                    res = self.run_pointer_decision(line_json, "sm11-oldstable", "1.11.0.6970-mm1.12.0-dual",
+                                                    "pass", manifest, mm, "line-sm11-oldstable",
+                                                    "fmu1337/sourcemod-css34", 1700000000, "0",
+                                                    Path(tmp) / "decision")
+                finally:
+                    if old is None:
+                        os.environ.pop("LEGACY_ASSET", None)
+                    else:
+                        os.environ["LEGACY_ASSET"] = old
+                self.assertEqual(res.returncode, 0, res.stderr)
+                entry = json.loads(line_json.read_text())["sm11-oldstable"]
+                if legacy:
+                    self.assertTrue(entry["mmsource_legacy_url"].endswith(
+                        "/line-sm11-oldstable/mmsource-legacy-css34-linux.tar.gz"))
+                else:
+                    self.assertNotIn("mmsource_legacy_url", entry)
+
     def test_repoint_decision_switch_and_stale_and_force(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

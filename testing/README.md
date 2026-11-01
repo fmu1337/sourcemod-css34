@@ -126,6 +126,28 @@ Artifacts: `botplay-report.json`, `built-botplay-report.json`, `botplay-compare.
 
 Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary; `rom4s` gamedata + built binaries also passes.
 
+## Legacy-plugin bridge (T2.9)
+
+sm11's MM 1.12 package ships `metamod.2.ep1` and the MM 1.10 legacy core
+`metamod.1.ep1`. MM 1.12 refuses PLAPI 7-12 plugins upstream ("Older Metamod
+version required"); with the bridge it loads `metamod.1.ep1` on first use and
+lets it host them, so old MM 1.4-1.10 plugins run next to SourceMod 2.ep1
+without deleting any Metamod file. Each old plugin shows in `meta list` and
+answers `meta unload` / `meta pause`.
+
+`testing/plugins/css34_legacy_probe` is a PLAPI 11 plugin built with the MM
+1.10 build. It writes `addons/metamod/css34_legacy_probe.log`
+(`load api=11 late=0`, `all_loaded`, `level_init map=…`, `unload`).
+`testing/scripts/legacy-bridge-test.sh` (Linux, after `smoke-test.sh` on the
+rows with `legacy_bridge=1`) and `wine-smoke-test.sh` with `LEGACY_PROBE`
+(Windows) require it to load through the bridge, hook `LevelInit` with
+SourceHook v4 and show in `meta list`; the Linux test also unloads it.
+
+```bash
+SERVER_DIR=.ci-server LEGACY_PROBE=packages/test-plugins/css34_legacy_probe.so \
+  testing/scripts/legacy-bridge-test.sh
+```
+
 ## Windows packages (Wine and native Windows)
 
 `ci.yml` `wine-smoke` boots the Windows packages on the Windows v34 server:

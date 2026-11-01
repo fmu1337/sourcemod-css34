@@ -235,12 +235,16 @@ class TestCIPlannerGate(unittest.TestCase):
         for name in want:
             variants = ["primary"] + (["secondary"] if data["lines"][name].get("secondary_metamod") else [])
             self.assertEqual(sorted(v for (l, v) in smoke if l == name), sorted(variants))
-        if ("sm11-oldstable", "secondary") in smoke:
-            self.assertEqual(smoke[("sm11-oldstable", "primary")]["expect_core"], "1.ep1")
-            self.assertEqual(smoke[("sm11-oldstable", "primary")]["dhooks_expect"], "0")
-            self.assertEqual(smoke[("sm11-oldstable", "secondary")]["expect_core"], "2.ep1")
-            self.assertEqual(smoke[("sm11-oldstable", "secondary")]["dhooks_expect"], "1")
-            self.assertTrue(smoke[("sm11-oldstable", "secondary")]["mm_package"].endswith("-css34-windows.zip"))
+        for row in smoke.values():
+            # MM 1.10.7 runs the 1.ep1 core (no DHooks), MM 1.12 the 2.ep1 core.
+            legacy = row["mm_expect"].startswith("1.10.")
+            self.assertEqual(row["expect_core"], "1.ep1" if legacy else "2.ep1")
+            self.assertEqual(row["dhooks_expect"], "0" if legacy else "1")
+            self.assertTrue(row["mm_package"].endswith("-css34-windows.zip"))
+        dual = [k for k in smoke if k[1] == "secondary"]
+        for line, _ in dual:
+            # The dual line's MM 1.12 row also checks the legacy-plugin bridge (T2.9).
+            self.assertEqual(sorted(smoke[(line, v)]["legacy_bridge"] for v in ("primary", "secondary")), ["0", "1"])
 
     def test_empty_windows_matrix_support(self):
         """When no lines are windows-eligible, windows matrix is [] and build-windows/wine-smoke are skipped."""
@@ -289,7 +293,11 @@ class TestCIPlannerGate(unittest.TestCase):
         self.assertNotIn("test-built-smoke", plan["required_jobs"])
         self.assertIn("test-rom4s-botplay", plan["required_jobs"])
         self.assertIn("test-release-botplay", plan["required_jobs"])
-        self.assertEqual(len(plan["matrices"]["release_botplay"]), 2)
+        with open(ROOT / "builder/lines.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        mm12 = [n for n, l in data["lines"].items() if l["status"] == "active"
+                and data["pins"][l["metamod"]]["mode"] == "1.12"]
+        self.assertEqual(len(plan["matrices"]["release_botplay"]), len(mm12))
 
         needs = {job: {"result": "success"} for job in plan["required_jobs"]}
         needs["test-built-smoke"] = {"result": "skipped"}

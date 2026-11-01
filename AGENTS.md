@@ -47,6 +47,10 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   SM/MM archive paths (Linux tar.gz and Windows zip, both with `git<rev>`).
   Archived MM 2.0/KHook builds live in `archive/khook`;
   master rejects those build lines, while their published pointers stay intact.
+- sm11 (D7): primary Metamod is the frozen MM 1.12 (git1227), secondary MM 1.10.7;
+  its tag is `1.11.0.6970-mm1.12.0-dual` and `line-sm11-oldstable` also serves MM 1.10.7 as
+  `mmsource-legacy-css34-linux.tar.gz` (`lines.py legacy-mm-asset <line>`, `update-line-pointer.sh`
+  5th argument, a second `release-smoke.sh` in `smoke-pointer`).
 - sm11's primary and secondary Metamod inputs are resolved from `metamod` and
   `secondary_metamod` in `builder/lines.json` by `builder/resolve-metamod-pins.py`.
   Checkout, Linux/Windows dual-MM builds, and the package verifier share this
@@ -99,6 +103,16 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `check-sm11-build-log.sh` checks the include roots and 0 `WARN` lines in the
   1.11 build log, and `plapi-runtime` requires the published
   `1.11.0.6970-mm1.10.7` package to fail the PLAPI probe.
+- **Legacy-plugin bridge** (T2.9, #144): MM 1.12 (`metamod.2.ep1`) hands
+  PLAPI 7-12 plugins to the MM 1.10 legacy core (`metamod.1.ep1`) from its own
+  `bin/` directory, as rom4s's MM 1.12 git1159 does. Code:
+  `builder/patches/mm-oldbridge/` applied by `apply-mmsource-oldbridge.sh`
+  (fail-closed, from `apply-mmsource-css34.sh` and, for MM 1.12 only,
+  `apply-mmsource-v112.sh`). sm11's MM 1.12 package ships both cores; the
+  PLAPI 11 test plugin `css34_legacy_probe` lands in `packages/test-plugins/`
+  (never released). Matrix rows with `legacy_bridge=1` run
+  `testing/scripts/legacy-bridge-test.sh` (Linux) and `LEGACY_PROBE` in
+  `wine-smoke-test.sh` (Windows).
 
 ### Lint
 Run `actionlint` after workflow edits. The ABI export

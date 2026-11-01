@@ -110,7 +110,10 @@ class TestCheckMetamodPackage(unittest.TestCase):
             shutil.copy(os.path.join(ROOT, "builder", name), builder)
         with open(os.path.join(ROOT, "builder", "lines.json")) as fh:
             data = json.load(fh)
-        data["lines"]["sm11-oldstable"]["secondary_metamod"] = "MM_112"
+        # The MM 1.12 input (primary since D7) moves from the frozen pin to MM_112.
+        line = data["lines"]["sm11-oldstable"]
+        role = "metamod" if data["pins"][line["metamod"]]["mode"] == "1.12" else "secondary_metamod"
+        line[role] = "MM_112"
         selected = data["pins"]["MM_112"]
         with open(os.path.join(builder, "lines.json"), "w") as fh:
             json.dump(data, fh)
@@ -138,8 +141,13 @@ class TestCheckMetamodPackage(unittest.TestCase):
                 res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block],
                                      env=env, capture_output=True, text=True)
                 self.assertEqual(res.returncode, 0, res.stderr)
-                self.assertEqual(res.stdout.splitlines(),
-                                 [data["pins"]["MM_110"]["commit"], selected["commit"]])
+                both = [data["pins"]["MM_110"]["commit"], selected["commit"]]
+                if path == "builder/checkout-deps.sh":
+                    self.assertEqual(sorted(res.stdout.splitlines()), sorted(both))
+                else:
+                    # Builders take MM 1.10 first: its legacy core goes into the
+                    # MM 1.12 package (legacy-plugin bridge, T2.9).
+                    self.assertEqual(res.stdout.splitlines(), both)
 
         # linux.sh and windows.sh must hand the resolved MM 1.12 checkout to configure,
         # never MM 1.10, and the 1.ep1 include root must come from the MM 1.10 checkout.
@@ -195,8 +203,12 @@ class TestCheckMetamodPackage(unittest.TestCase):
         self.assertEqual(res.stdout, "")
 
     def test_verify_line_metamod_packages_missing_secondary_fails(self):
-        # Create valid tar.gz for primary MM 1.10 package, omitting secondary
-        self._create_mock_pkg(commit="80e8ff0be3b62386bbd6f937e97b819ef8be6dd2", version="1.10.7-git976")
+        # Create the primary Metamod package of the line only, omitting the secondary
+        with open(os.path.join(ROOT, "builder", "lines.json")) as fh:
+            data = json.load(fh)
+        primary = data["pins"][data["lines"]["sm11-oldstable"]["metamod"]]
+        base = {"1.10": "1.10.7", "1.12": "1.12.0"}[primary["mode"]]
+        self._create_mock_pkg(commit=primary["commit"], version="{}-git{}".format(base, primary["rev"]))
 
         mock_check_path = os.path.join(self.tmp_dir, "mock-check.sh")
         with open(mock_check_path, "w") as f:

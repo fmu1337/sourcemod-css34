@@ -99,6 +99,23 @@ build_and_package_mm() {
     MMS_MODE="$mm_mode" MMS_DIRNAME="$mm_dirname" MMS_GIT_REV="$mm_rev" MMS_COMMIT="$mm_commit" \
     bash "$BUILDER_DIR/build-metamod.sh"
 
+  # css34 legacy-plugin bridge (T2.9): sm11's MM 1.12 package also ships the
+  # MM 1.10 legacy core; metamod.2.ep1 loads it for PLAPI 7-12 plugins. The
+  # PLAPI 11 test plugin goes to packages/test-plugins (never released).
+  local mm_bin="$mm_dir/build/package/addons/metamod/bin"
+  if [[ "${SM11_DUAL_MM:-0}" == 1 && "$mm_mode" == 1.10 ]]; then
+    local probe
+    probe="$(find "$mm_dir/build" -name 'css34_legacy_probe.so' -print -quit)"
+    [[ -n "$probe" ]] || { echo "FAIL: css34_legacy_probe.so was not built in $mm_dir/build" >&2; exit 1; }
+    mkdir -p "$PACKAGES_DIR/test-plugins"
+    cp -f "$probe" "$PACKAGES_DIR/test-plugins/"
+    SM11_LEGACY_CORE="$mm_bin/metamod.1.ep1.so"
+  elif [[ "${SM11_DUAL_MM:-0}" == 1 && "$mm_mode" == 1.12 ]]; then
+    [[ -f "${SM11_LEGACY_CORE:-}" ]] || { echo "FAIL: the MM 1.10 legacy core must be built before MM 1.12" >&2; exit 1; }
+    cp -f "$SM11_LEGACY_CORE" "$mm_bin/"
+    echo "==> Added $(basename "$SM11_LEGACY_CORE") to the MM 1.12 package (legacy-plugin bridge)"
+  fi
+
   local mm_art
   mm_art="$(
     MMS_DIR="$mm_dir" MMS_GIT_REV="$mm_rev" MMS_COMMIT="$mm_commit" \
@@ -111,7 +128,11 @@ build_and_package_mm() {
 }
 
 if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
-  mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm11-oldstable}")"
+  SM11_DUAL_MM=1
+  # MM 1.10 first, whichever role it has: the MM 1.12 package takes its legacy
+  # core (legacy-plugin bridge, T2.9).
+  mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm11-oldstable}" \
+    | sort -t$'\t' -k3,3)"
   MM_LEGACY_DIR=""
   MM_MODERN_DIR=""
   while IFS=$'\t' read -r role dirname mode branch commit rev version; do
