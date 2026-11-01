@@ -99,6 +99,16 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `check-sm11-build-log.sh` checks the include roots and 0 `WARN` lines in the
   1.11 build log, and `plapi-runtime` requires the published
   `1.11.0.6970-mm1.10.7` package to fail the PLAPI probe.
+- **Legacy-plugin bridge** (T2.9, #144): MM 1.12 (`metamod.2.ep1`) hands
+  PLAPI 7-12 plugins to the MM 1.10 legacy core (`metamod.1.ep1`) from its own
+  `bin/` directory, as rom4s's MM 1.12 git1159 does. Code:
+  `builder/patches/mm-oldbridge/` applied by `apply-mmsource-oldbridge.sh`
+  (fail-closed, from `apply-mmsource-css34.sh` and, for MM 1.12 only,
+  `apply-mmsource-v112.sh`). sm11's MM 1.12 package ships both cores; the
+  PLAPI 11 test plugin `css34_legacy_probe` lands in `packages/test-plugins/`
+  (never released). Matrix rows with `legacy_bridge=1` run
+  `testing/scripts/legacy-bridge-test.sh` (Linux) and `LEGACY_PROBE` in
+  `wine-smoke-test.sh` (Windows).
 
 ### Lint
 Run `actionlint` after workflow edits. The ABI export

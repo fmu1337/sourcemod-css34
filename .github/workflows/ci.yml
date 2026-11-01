@@ -338,6 +338,8 @@ jobs:
         run: |
           mkdir -p win-art/pdb
           cp packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip win-art/
+          # T2.9: the PLAPI 11 test plugin for the legacy-plugin bridge (sm11 only)
+          if [[ -d packages/test-plugins ]]; then cp -r packages/test-plugins win-art/; fi
           find sourcemod/build deps -name '*.pdb' -path '*build*' -exec cp -f {} win-art/pdb/ \;
           ls -la win-art win-art/pdb
 
@@ -497,6 +499,11 @@ jobs:
         run: |
           SM_WIN_PACKAGE="$(ls win-art/sourcemod-*-css34-windows.zip)"
           MM_WIN_PACKAGE="win-art/${{ matrix.mm_package }}"
+          LEGACY_PROBE=""
+          if [[ "${{ matrix.legacy_bridge }}" == 1 ]]; then
+            LEGACY_PROBE="$PWD/win-art/test-plugins/css34_legacy_probe.dll"
+          fi
+          export LEGACY_PROBE
           PDB_DIR="$PWD/win-art/pdb"
           export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR
           [[ -f server-art/css34-server.tar.gz ]] && export SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"
