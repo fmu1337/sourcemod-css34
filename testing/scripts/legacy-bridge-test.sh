@@ -40,8 +40,34 @@ trap 'mv -f "${mm}/metaplugins.ini.legacy-bridge" "${mm}/metaplugins.ini"; rm -f
 printf '%s\n' "addons/metamod/css34_legacy_probe.so" >>"${mm}/metaplugins.ini"
 
 echo "==> Booting srcds with the PLAPI 11 probe in metaplugins.ini"
-SERVER_DIR="${SERVER_DIR}" LEGACY_BRIDGE_LOG="${session}" /usr/bin/expect "${root}/testing/scripts/legacy-bridge.exp" \
-  || echo "WARN: expect session returned $? (judged from the logs below)"
+# Probe over RCON, not the console: the console output can stop after the
+# CSER line while the server runs normally (seen with this test's boot).
+rcon_pw="css34bridge"
+rcon() { python3 "${root}/testing/scripts/rcon.py" 127.0.0.1 "${rcon_pw}" "$@"; }
+(
+  cd "${SERVER_DIR}"
+  export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
+  exec "${SRCDS_BINARY:-./srcds_i686}" -game cstrike -console -nohltv -nomaster -localcser -tickrate 66 \
+    -ip 127.0.0.1 -port 27015 +ip 127.0.0.1 +sv_lan 1 +maxplayers 4 +rcon_password "${rcon_pw}" +map de_dust2
+) </dev/null >"${session}.console" 2>&1 &
+srcds_pid=$!
+trap 'kill "${srcds_pid}" 2>/dev/null || true; mv -f "${mm}/metaplugins.ini.legacy-bridge" "${mm}/metaplugins.ini"; rm -f "${mm}/css34_legacy_probe.so"' EXIT
+deadline=$((SECONDS + ${LEGACY_BRIDGE_TIMEOUT:-120}))
+until rcon "echo css34-bridge-up" 2>/dev/null | grep -q css34-bridge-up; do
+  kill -0 "${srcds_pid}" 2>/dev/null || { tail -n 30 "${session}.console"; die "srcds exited during boot"; }
+  (( SECONDS < deadline )) || { tail -n 30 "${session}.console"; die "srcds did not answer RCON"; }
+  sleep 3
+done
+{
+  rcon "status" "meta list" "sm version"
+  probe_id="$(rcon "meta list" | sed -nE 's/.*\[0*([0-9]+)\] CSS34 Legacy Probe.*/\1/p' | head -n1)"
+  if [[ -n "${probe_id}" ]]; then
+    rcon "meta unload ${probe_id}" "sleep 2" "meta list"
+  fi
+  rcon "quit" || true
+} >"${session}" 2>&1
+sleep 3
+cat "${session}.console" >>"${session}"
 
 echo "==== legacy-bridge session (Metamod lines) ===="
 grep -E 'META|CSS34|Legacy|Plugin|plugin|SourceMod Version' "${session}" | tail -n 40 || true
@@ -52,6 +78,7 @@ check 'Started metamod\.1\.ep1\.so for PLAPI 7-12 plugins' "${session}" "metamod
 check 'Old plugin ".*css34_legacy_probe\.so" \(PLAPI 11\) runs in metamod\.1\.ep1\.so' "${session}" "the probe runs as an old plugin"
 check '\] CSS34 Legacy Probe' "${session}" "meta list shows the probe"
 check 'SourceMod Version: ' "${session}" "SourceMod (2.ep1) still answers"
+check 'map +: +de_dust2' "${session}" "the map loaded"
 if [[ -f "${events}" ]]; then
   check '^load api=11 late=0$' "${events}" "the probe loaded with PLAPI 11 at startup"
   check '^all_loaded$' "${events}" "the probe got AllPluginsLoaded"
