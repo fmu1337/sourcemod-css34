@@ -324,8 +324,10 @@ jobs:
             packages/sourcemod-*-css34-windows.zip \
             packages/mmsource-*-css34-windows.zip
           if command -v unzip >/dev/null 2>&1; then
-            unzip -l packages/sourcemod-*-css34-windows.zip
-            unzip -l packages/mmsource-*-css34-windows.zip
+            # One archive per call: unzip -l a.zip b.zip reads b.zip as a member name
+            for z in packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip; do
+              unzip -l "$z"
+            done
           fi
 
       - name: Collect packages and PDBs
