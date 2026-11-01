@@ -55,7 +55,8 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `14.44` (`-vcvars_ver=14.44`) and Windows SDK `10.0.26100.0`
   (`builder/windows-toolchain.env`). `builder/package_windows.py` writes the zips
   (POSIX `/` paths, `css34-package.json` inside, full toolset and SDK versions
-  in the manifest). `sm12-latest` and `sm13-latest` have `"windows": true`.
+  in the manifest). `sm11-oldstable`, `sm12-latest` and `sm13-latest` have `"windows": true`;
+  sm11 Windows builds both cores and both Metamod zips, and `wine-smoke` runs on each.
 
 ### Verifying / testing
 - **Static ABI check** (the "ABI / export checks" step of `build-linux` in

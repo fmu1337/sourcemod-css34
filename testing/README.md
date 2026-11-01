@@ -136,7 +136,16 @@ binaries from rom4s `srcds_css34_w_a.zip` (`srcds.exe`, `bin/*.dll`,
 (`testing/scripts/rcon.py`): Metamod / SourceMod versions, the expected
 extensions (`LOAD_EXTS` are loaded first; the matrix loads `sdkhooks` and
 requires **SDK Hooks**). When the package contains `dhooks.ext.dll` the script
-also loads it and requires **DHooks**. Then a `changelevel`. On a failure
+also loads it and requires **DHooks**. `DHOOKS_EXPECT` (from the matrix
+`dhooks_expect`) overrides that: the dual-core SM 1.11 zip ships
+`dhooks.ext.2.ep1.dll`, so DHooks must load on MM 1.12 (2.ep1 core) and must not
+on MM 1.10.7 (1.ep1 core). Then a `changelevel`.
+
+`wine-smoke` runs one row per Metamod build (`windows_smoke` matrix): sm11 on
+`mmsource-1.10.7-git<rev>` and `mmsource-1.12.0-git<rev>`, sm12/sm13 on MM 1.12.
+`build-windows` smokes the primary Metamod natively and then runs
+`check-core-plapi.sh` on the installed server: the probe is built with `cl`
+and requires PLAPI 11 from `sourcemod.1.ep1.dll` and 16 from `sourcemod.2.ep1.dll`. On a failure
 `testing/scripts/wine-crash-report.py` maps every access violation in the
 Wine log (`WINEDEBUG=+seh,+loaddll`) to module + RVA and symbolizes it with
 `llvm-symbolizer` when the `.pdb` from the Windows build sits next to the DLL.

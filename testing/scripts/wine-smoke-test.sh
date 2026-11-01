@@ -12,7 +12,10 @@
 #   LOAD_EXTS     comma list of extensions to `sm exts load` first (no plugin requires them)
 #   DHOOKS_PROBE_SECS  > 0: compile css34_dhooks_probe.sp with the package's spcomp.exe, play
 #                 that long with bots and require the probe's hooks to fire with clean values
-#                 (skipped when the package has no dhooks.ext.dll)
+#                 (skipped when DHooks is not expected to load)
+#   DHOOKS_EXPECT 1: DHooks (dhooks.ext.dll, or dhooks.ext.2.ep1.dll in the dual-core SM 1.11
+#                 package) must load; 0: it must not (SM 1.11 on MM 1.10.7 runs the 1.ep1
+#                 core, which has no DHooks); unset: required exactly when the zip has it
 # Needs: wine32 (i386), xvfb, unzip, python3 (Linux); unzip or 7z, python, curl (Windows).
 set -euo pipefail
 
@@ -104,8 +107,19 @@ done
 
 DHOOKS_PROBE_SECS="${DHOOKS_PROBE_SECS:-0}"
 SM_DIR="${SERVER_DIR}/cstrike/addons/sourcemod"
-if [[ "${DHOOKS_PROBE_SECS}" -gt 0 && ! -f "${SM_DIR}/extensions/dhooks.ext.dll" ]]; then
-  echo "==> No dhooks.ext.dll in the package, skipping the DHooks probe"
+dhooks_dll=""
+for f in dhooks.ext.dll dhooks.ext.2.ep1.dll; do
+  if [[ -f "${SM_DIR}/extensions/${f}" ]]; then dhooks_dll="${f}"; fi
+done
+case "${DHOOKS_EXPECT:-}" in
+  "") if [[ -n "${dhooks_dll}" ]]; then DHOOKS_EXPECT=1; else DHOOKS_EXPECT=0; fi ;;
+  1) [[ -n "${dhooks_dll}" ]] || fail "DHOOKS_EXPECT=1 but the package has no dhooks.ext*.dll" ;;
+  0) ;;
+  *) fail "DHOOKS_EXPECT must be 0 or 1, got ${DHOOKS_EXPECT}" ;;
+esac
+echo "==> DHooks expected: ${DHOOKS_EXPECT} (package: ${dhooks_dll:-none})"
+if [[ "${DHOOKS_PROBE_SECS}" -gt 0 && "${DHOOKS_EXPECT}" != 1 ]]; then
+  echo "==> DHooks not expected on this core, skipping the DHooks probe"
   DHOOKS_PROBE_SECS=0
 fi
 
@@ -181,9 +195,9 @@ for e in "${load[@]}"; do
   [[ -n "$e" ]] || continue
   rcon "sm exts load ${e}"
 done
-# DHooks ships in sm12/sm13 packages (dhooks.ext.dll) and is absent on lines
-# that do not build it. Require it only when the zip actually contains it.
-if [[ -f "${SM_DIR}/extensions/dhooks.ext.dll" ]]; then
+# DHooks ships in sm12/sm13 packages (dhooks.ext.dll) and, for the 2.ep1 core
+# only, in the dual-core SM 1.11 package (dhooks.ext.2.ep1.dll).
+if [[ "${DHOOKS_EXPECT}" == 1 ]]; then
   case ",${LOAD_EXTS:-}," in
     *,dhooks,*) ;;
     *) rcon "sm exts load dhooks" ;;
@@ -212,10 +226,12 @@ require_exts() {
       fail "extension '${e}' not loaded"
     fi
   done
-  if [[ -f "${SM_DIR}/extensions/dhooks.ext.dll" ]]; then
+  if [[ "${DHOOKS_EXPECT}" == 1 ]]; then
     if ! grep -q "\] DHooks (" <<<"$list"; then
       fail "extension 'DHooks' not loaded"
     fi
+  elif grep -q "\] DHooks (" <<<"$list"; then
+    fail "DHooks loaded, but this Metamod runs a core without DHooks"
   fi
   if grep -qi "<FAILED>\|<ERROR>" <<<"$list"; then
     fail "an extension or plugin failed to load"

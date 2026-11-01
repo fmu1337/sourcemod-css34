@@ -75,6 +75,7 @@
       "pointer": false,
       "releasable": true,
       "role": "OldStable, withheld from pointers",
+      "windows": true,
       "smoke": [
         {
           "image": "centos:7"

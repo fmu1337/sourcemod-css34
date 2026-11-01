@@ -245,29 +245,38 @@ def package_sourcemod(package_dir, output_dir, sourcemod_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     has2 = (package_dir / "addons/sourcemod/bin/sourcemod.2.ep1.dll").is_file()
     has1 = (package_dir / "addons/sourcemod/bin/sourcemod.1.ep1.dll").is_file()
-    if has2:
-        core = "sourcemod.2.ep1.dll"
-        cstrike = "game.cstrike.ext.2.ep1.dll"
-        sdkhooks = "sdkhooks.ext.2.ep1.dll"
-        mm_binary = "metamod.2.ep1"
-    elif has1:
-        core = "sourcemod.1.ep1.dll"
-        cstrike = "game.cstrike.ext.1.ep1.dll"
-        sdkhooks = "sdkhooks.ext.1.ep1.dll"
-        mm_binary = "metamod.1.ep1"
-    else:
+    if not (has1 or has2):
         fail("missing sourcemod.1.ep1.dll / sourcemod.2.ep1.dll")
+    cores = [core for core, present in (("1.ep1", has1), ("2.ep1", has2)) if present]
     required = [
         "addons/metamod/sourcemod.vdf",
-        "addons/sourcemod/bin/" + core,
         "addons/sourcemod/extensions/dbi.mysql.ext.dll",
         "addons/sourcemod/extensions/dbi.sqlite.ext.dll",
-        "addons/sourcemod/extensions/" + cstrike,
-        "addons/sourcemod/extensions/" + sdkhooks,
         "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt",
         "addons/sourcemod/scripting/include/version_auto.inc",
         "cfg/sourcemod/sourcemod.cfg",
     ]
+    for core in cores:
+        required.append("addons/sourcemod/bin/sourcemod.{}.dll".format(core))
+        for ext in ("game.cstrike", "sdkhooks"):
+            required.append("addons/sourcemod/extensions/{}.ext.{}.dll".format(ext, core))
+    ext_dir = package_dir / "addons/sourcemod/extensions"
+    if len(cores) == 2:
+        # Dual-core SM 1.11 (as package.sh): SDK Tools for both cores, DHooks for
+        # 2.ep1 only, never a generic or 1.ep1 DHooks.
+        required += ["addons/sourcemod/extensions/sdktools.ext.1.ep1.dll",
+                     "addons/sourcemod/extensions/sdktools.ext.2.ep1.dll",
+                     "addons/sourcemod/extensions/dhooks.ext.2.ep1.dll"]
+        for bad in ("dhooks.ext.dll", "dhooks.ext.1.ep1.dll"):
+            if (ext_dir / bad).is_file():
+                fail("dual-core package must not ship " + bad)
+    # The 1.ep1 core runs only on MM 1.10 (same rule as package.sh).
+    if has1 and os.environ.get("MMS_MODE", "") == "1.10":
+        mm_binary = "metamod.1.ep1"
+    elif has2:
+        mm_binary = "metamod.2.ep1"
+    else:
+        mm_binary = "metamod.1.ep1"
     major = os.environ.get("SOURCEMOD_MAJOR", "")
     if major.isdigit() and int(major) >= 12:
         required.append("addons/sourcemod/extensions/dhooks.ext.dll")
@@ -339,6 +348,50 @@ def print_listing(path, names):
     for item in names:
         print(item)
     print("---- end {} ----".format(path.name))
+
+
+def dual_test(tmp, sm_src):
+    """Dual-core SM 1.11 zip: both cores, DHooks for 2.ep1 only, MM 1.10 manifest."""
+    pkg = tmp / "sm11-package"
+    out = tmp / "out11"
+    files = [
+        "addons/metamod/sourcemod.vdf",
+        "addons/sourcemod/extensions/dbi.mysql.ext.dll",
+        "addons/sourcemod/extensions/dbi.sqlite.ext.dll",
+        "addons/sourcemod/extensions/dhooks.ext.2.ep1.dll",
+        "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt",
+        "addons/sourcemod/scripting/include/version_auto.inc",
+        "cfg/sourcemod/sourcemod.cfg",
+    ]
+    for core in ("1.ep1", "2.ep1"):
+        files.append("addons/sourcemod/bin/sourcemod.{}.dll".format(core))
+        for ext in ("game.cstrike", "sdkhooks", "sdktools"):
+            files.append("addons/sourcemod/extensions/{}.ext.{}.dll".format(ext, core))
+    for rel in files:
+        path = pkg / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x", encoding="utf-8")
+    os.environ.update({"SOURCEMOD_MAJOR": "11", "MMS_MODE": "1.10", "CSS34_LINE": "sm11-oldstable"})
+    archive = package_sourcemod(pkg, out, sm_src)
+    data = json.loads(manifest_bytes(archive, "addons/sourcemod/css34-package.json"))
+    if data["metamod_binary"] != "metamod.1.ep1":
+        fail("dual-core manifest on MM 1.10 must name metamod.1.ep1, got " + data["metamod_binary"])
+    for bad, missing in (("dhooks.ext.dll", None), (None, "sdkhooks.ext.1.ep1.dll")):
+        ext = pkg / "addons/sourcemod/extensions"
+        if bad:
+            (ext / bad).write_text("x", encoding="utf-8")
+        if missing:
+            (ext / missing).unlink()
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            try:
+                package_sourcemod(pkg, out, sm_src)
+            except SystemExit:
+                pass
+            else:
+                fail("dual-core package accepted with {} {}".format(bad or "", missing or ""))
+        if bad:
+            (ext / bad).unlink()
 
 
 def self_test():
@@ -434,6 +487,7 @@ def self_test():
                         fail("unzip -l shows a backslash in " + archive.name)
                     if "css34-package.json" not in listing:
                         fail("unzip -l missing css34-package.json in " + archive.name)
+            dual_test(tmp, sm_src)
         finally:
             os.environ.clear()
             os.environ.update(old)
