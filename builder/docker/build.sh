@@ -5,17 +5,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${ML2014_IMAGE:-quay.io/pypa/manylinux2014_i686@sha256:30305867f278896ee117b0d162a8e4f9b7b16819e6590f6139e14c5ed5b23fdd}"
 PACKAGES_DIR="${PACKAGES_DIR:-$ROOT/packages}"
-PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-1}"
 
 # Resolve SM/MM pins on the host so the container gets concrete values.
 # shellcheck source=../resolve-version.sh
 source "$ROOT/builder/resolve-version.sh"
-
-if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
-  export SPLICE_REFERENCE_EXTRAS=0
-  export SPLICE_REFERENCE_LOGIC=0
-  echo "==> Pure-source mode: reference binary splicing is disabled" >&2
-fi
+css34_require_buildable
 
 mkdir -p "$PACKAGES_DIR"
 PACKAGES_DIR="$(cd "$PACKAGES_DIR" && pwd)"
@@ -66,10 +60,7 @@ docker_cmd run --rm -i --platform linux/386 \
   -e MMS_DIRNAME="${MMS_DIRNAME}" \
   -e MMS_MODE="${MMS_MODE}" \
   -e MMS_GIT_REV="${MMS_GIT_REV:-}" \
-  -e PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD}" \
   -e CSS34_DEBUG_TRACE="${CSS34_DEBUG_TRACE:-0}" \
-  -e SPLICE_REFERENCE_EXTRAS="${SPLICE_REFERENCE_EXTRAS:-0}" \
-  -e SPLICE_REFERENCE_LOGIC="${SPLICE_REFERENCE_LOGIC:-0}" \
   -e SKIP_APT_INSTALL=1 \
   -e CC=gcc \
   -e CXX=g++ \
@@ -136,7 +127,6 @@ register_git_safe_dirs
 chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
   builder/package-metamod.sh builder/build-metamod.sh \
   builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
-  builder/splice-reference-logic.sh builder/splice-reference-extras.sh \
   builder/download-geolite2.sh
 builder/run/linux.sh
 if [[ -n "${HOST_UID:-}" && -n "${HOST_GID:-}" ]]; then
@@ -152,18 +142,6 @@ ARTIFACT="$SM_PACKAGE"
 if [[ -z "${ARTIFACT}" || ! -f "${ARTIFACT}" ]]; then
   echo "manylinux build did not produce a package under ${PACKAGES_DIR}" >&2
   exit 1
-fi
-
-if [[ "${PURE_SOURCE_BUILD}" == "1" || "${SOURCEMOD_MAJOR:-11}" -ge 12 ]]; then
-  echo "==> Skipping rom4s logic/extras splice (PURE_SOURCE_BUILD=${PURE_SOURCE_BUILD} SOURCEMOD_MAJOR=${SOURCEMOD_MAJOR:-})" >&2
-else
-  chmod +x "$ROOT/builder/splice-reference-extras.sh" "$ROOT/builder/splice-reference-logic.sh"
-  "$ROOT/builder/splice-reference-extras.sh" "${ARTIFACT}"
-  "$ROOT/builder/splice-reference-logic.sh" "${ARTIFACT}"
-fi
-
-if [[ "${PURE_SOURCE_BUILD}" == "1" ]]; then
-  echo "==> Pure-source package contains only binaries produced by this build" >&2
 fi
 
 echo "==> Build complete: ${ARTIFACT}" >&2

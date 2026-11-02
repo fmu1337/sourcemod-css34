@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Resolve a line's Metamod inputs from the validated line manifest.
 
-Roles: primary (metamod), secondary (secondary_metamod, packaged on its own:
-dual-core sm11) and bridge (bridge_metamod: only its metamod.1.ep1 goes into the
-MM 1.12 package, for the legacy-plugin bridge).
+Roles: primary (metamod) and bridge (bridge_metamod: only its metamod.1.ep1
+goes into the MM 1.12 package, for the legacy-plugin bridge). The dual-core
+sm11-oldstable (secondary_metamod) is frozen and never built from master.
 Output: role, dirname, mode, branch, commit, revision, product version (TSV).
 Consumers must capture this command's exit status before reading its output.
 """
@@ -26,8 +26,10 @@ def resolve(data, name):
     if name not in data["lines"]:
         raise ValueError("unknown build line: " + name)
     line = data["lines"][name]
+    if "secondary_metamod" in line:
+        raise ValueError(name + " is a frozen dual-core line; rebuild it from its freeze tag (docs/FREEZE.md)")
     rows = []
-    for role, key in (("primary", "metamod"), ("secondary", "secondary_metamod"), ("bridge", "bridge_metamod")):
+    for role, key in (("primary", "metamod"), ("bridge", "bridge_metamod")):
         if key not in line:
             continue
         pin = data["pins"][line[key]]

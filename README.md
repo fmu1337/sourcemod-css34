@@ -2,7 +2,7 @@
 
 Patched [SourceMod](https://www.sourcemod.net/) + [Metamod:Source](https://www.sourcemm.net/) builds for **Counter-Strike: Source v34** (non-Steam / legacy).
 
-All packages are **pure-source** (`PURE_SOURCE_BUILD=1`): no rom4s/reference `.so` splicing. Smoke asserts SDK Hooks load and the css34 `OnTakeDamage` gamedata (linux **61**). Botplay hooks `SDKHook_OnTakeDamage` and logs hits.
+All packages are built from source: no rom4s/reference `.so` is spliced in. Smoke asserts SDK Hooks load and the css34 `OnTakeDamage` gamedata (linux **61**). Botplay hooks `SDKHook_OnTakeDamage` and logs hits.
 
 Docs: [docs/README.md](docs/README.md) (index — current reference vs. history). Known doc/project inconsistencies and simplification proposals: [docs/REVIEW_2026-10.md](docs/REVIEW_2026-10.md).
 
@@ -118,7 +118,7 @@ known-bad and are not needed by any line, pointer or installer.
 | [`1.13.0.7565-mm2.0.0-khook-dhooks`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks) | `sm13-mm20-khook` | 1.13.0-git7565, + `dhooks.ext` | 2.0.0-dev (git1472, `05c5c63`) | installer fallback |
 | [`1.13.0.7565-mm2.0.0-khook`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook) | `sm13-mm20-khook` | 1.13.0-git7565 | 2.0.0-dev (git1472, `05c5c63`) | base tag of the line; Windows assets untested (below) |
 | [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` (retired) | 1.13.0-git7404 | 1.12.0-dev (git1226) | historical; the `sm13-dev` alias exists only to rebuild it |
-| [`1.11.0.6970-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.10.7) | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | **known-bad** (below); the CI PLAPI negative test downloads it |
+| `1.11.0.6970-mm1.10.7` | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | **known-bad** (below); CI stopped downloading it with the 1.11 build code (T3.3) |
 | [`1.11.0.6572-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6572-mm1.10.7) | pre-matrix | 1.11.0-git6572 | 1.10.7-dev | **known-bad** SourceMod; its Windows MM 1.10.7 zip serves the installer's `--sm rom4s` on Windows |
 | `1.13.0.7472-mm1.12.0-r2`, `1.12.0.7253-mm1.12.0-r2` | `sm13-latest`, `sm12-latest` | 7472 / 7253 | 1.12.0 git1226 | superseded by 7478 / 7257 |
 | `1.11.0.6970-mm1.12.0-dual`, `-dual-r2` | `sm11-oldstable` | 1.11.0-git6970 | 1.12.0 git1227 | failed the release smoke (its expectations, fixed in [#147](https://github.com/fmu1337/sourcemod-css34/pull/147)); superseded by `-dual-r3` |
@@ -133,7 +133,7 @@ The rename consumer audit and installer migration are in [docs/WINDOWS_ASSETS.md
 
 ### SourceMod 1.11: choosing Metamod
 
-`sm11-oldstable` builds **one** SourceMod package with both cores (`sourcemod.1.ep1` / `sourcemod.2.ep1`,
+`sm11-oldstable` (frozen) ships **one** SourceMod package with both cores (`sourcemod.1.ep1` / `sourcemod.2.ep1`,
 `sdktools` / `sdkhooks` / `game.cstrike` for each) and **two** Metamod packages. Metamod picks the core:
 
 | Metamod package | Runs | DHooks | Old Metamod plugins (PLAPI 7–12, built for MM 1.4–1.10) | SourceMod extensions that exist only as `*.ext.1.ep1` |
@@ -144,7 +144,7 @@ The rename consumer audit and installer migration are in [docs/WINDOWS_ASSETS.md
 The MM 1.12 package of this line ships `metamod.2.ep1` **and** `metamod.1.ep1` for old Metamod plugins
 (see [What pairs with what](#what-pairs-with-what)).
 
-Switch Metamod without touching SourceMod (what `testing/scripts/switch-metamod.sh` does in CI):
+Switch Metamod without touching SourceMod:
 
 ```bash
 cd /path/to/cstrike
@@ -241,7 +241,7 @@ non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
   on that message.
 - **`1.11.0.6970-mm1.10.7` (`sm11-oldstable`): never on a line pointer.** Reported SIGABRT at startup
   without plugins on rom4s 4044 + bufferfix + `srcds_i686` on Ubuntu 24.04; its `sourcemod.2.ep1` was built
-  against MM 1.10 headers (PLAPI 11, so MM 1.12 refuses it — the `plapi-runtime` job proves that). The
+  against MM 1.10 headers (PLAPI 11, so MM 1.12 refuses it; `plapi-runtime` checked that until T3.3). The
   dual-core rebuild (`1.11.0.6970-mm1.12.0-dual`, manylinux2014, both cores gated on MM 1.10.7 and MM 1.12)
   replaces it; the old tag stays published (Linux assets only).
 - **Windows assets of `1.13.0.7565-mm2.0.0-khook*`.** The first uploads crashed `srcds.exe` on the first map
@@ -260,7 +260,7 @@ non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
   (`[CSTRIKE] Could not locate HandleCommand_Buy`); ours lives in `gamedata/sm-cstrike.games/`.
 - Historical community URLs (rom4s / myarena) for local compare: [`testing/versions/matrix.json`](testing/versions/matrix.json) (`reference` section).
 
-## Build (pure-source)
+## Build
 
 Needs Docker. The build runs in pinned `quay.io/pypa/manylinux2014_i686` (glibc 2.17, GCC 10.2.1). SDKs, AMBuild and static OpenSSL 1.1.1w are fetched into `deps/`.
 
@@ -285,7 +285,7 @@ release assets, line IDs and pointer URLs remain available.
 line and revisions. Stale packages cannot silently replace the expected build.
 No root package symlinks are created.
 
-`PURE_SOURCE_BUILD=1` is the default. Packages land in `packages/`. `build.sh` builds in
+Packages land in `packages/`. `build.sh` builds in
 manylinux2014 (glibc 2.17). `check-package.sh` fails the package if any ELF needs a
 GLIBC newer than `GLIBC_FLOOR` (default 2.17). Both SM and MM package checks also
 reject unversioned undefined dynamic imports outside the verified glibc 2.17,

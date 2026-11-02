@@ -13,19 +13,15 @@
 | Сборку 6970 «не довели до зелёного» | 6970 зелёный в CI, тег `1.11.0.6970-mm1.10.7` опубликован (но снят с line-pointer'ов, см. README) |
 | Тег `1.11.0.6572-mm1.10.7` — текущий релизный pin | Исторический тег; текущие сборки — `-r2` теги, которые раздают `line-<line>` |
 
-Фактическая раскладка патчей:
+Фактическая раскладка патчей (после T3.3, 2026-11: код SM 1.11, MM 1.11, splice и rom4s
+hl2sdk-ep1c удалены из `master`; `sm11-oldstable` пересобирается только из тега `sm11-freeze`):
 
 ```
-SourceMod:  apply-sourcemod.sh                    # SM 1.11 (AMBuild 2.0, dual 1.ep1 + 2.ep1, MM 1.10 / PLAPI 11)
-              ├─ rev ≥ 6800: apply-api-compat.sh, apply-toolchain.sh
-              ├─ apply-logger-mapchange-fix.sh, apply-sm-boot-trace.sh
-              └─ product.version ≥ 1.12 → exec apply-sourcemod-v112.sh   # AMBuild 2.2, hl2sdk-manifests, 2.ep1
-                    ├─ apply-sourcemod-khook.sh   # no-op на SourceHook-дереве; KHook-ветка: *.patch
-                    └─ apply-logger-mapchange-fix.sh, apply-sm-boot-trace.sh
-            sourcemod-khook-merge.sh              # только sm13-mm20-khook: merge master в KHook-ветку
-Metamod:    apply-mmsource-css34.sh (MM 1.10) | apply-mmsource-v112.sh (MM 1.12 / 2.0, + apply-khook-x86-recall.sh)
-            apply-mmsource-v111.sh                # MM 1.11 — ни одна линия его не использует
-SDK:        apply-hl2sdk-ep1c.sh                  # rom4s hl2sdk-ep1c для SM 1.11 (ep1)
+SourceMod:  apply-sourcemod.sh                    # роутер: SM < 1.12 → ошибка (sm11 заморожена)
+              └─ exec apply-sourcemod-v112.sh     # AMBuild 2.2, hl2sdk-manifests, 2.ep1
+                    └─ apply-sm-boot-trace.sh
+Metamod:    apply-mmsource-v112.sh (MM 1.12)      # + apply-mmsource-oldbridge.sh (мост старых плагинов)
+            apply-mmsource-css34.sh (MM 1.10)     # legacy-ядро metamod.1.ep1 для моста (bridge_metamod)
 ```
 
 Что из этого следует для апгрейда SM сегодня:

@@ -23,8 +23,8 @@ def mm_block(path):
         end = source.index('done <<< "$mm_inputs"', start) + len('done <<< "$mm_inputs"')
         return source[start:end] + "\n"
     start = source.index('mm_extra="$(')
-    sm11 = source.index('if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11', start)
-    return source[start:source.index("\nfi\n", sm11) + 4]
+    end = source.index('done <<< "$mm_inputs"', start) + len('done <<< "$mm_inputs"')
+    return source[start:end] + "\n"
 
 
 def mms_env(pin):
@@ -125,29 +125,25 @@ class TestCheckMetamodPackage(unittest.TestCase):
         self.assertIn("unknown build line", res.stderr)
         self.assertNotIn("Checking primary", res.stdout)
 
-    def test_secondary_reference_drives_checkout_builds_and_verifier(self):
-        # Change to a different valid pin: consumers must stop selecting frozen.
+    def test_bridge_reference_drives_checkout_and_builds(self):
+        # Point sm13-latest's bridge_metamod at another MM 1.10 pin: checkout and
+        # both builders must take it from lines.json, never a hard-coded MM 1.10.
         builder = os.path.join(self.tmp_dir, "builder")
         os.makedirs(builder)
         for name in ("py.sh", "lines.py", "resolve-metamod-pins.py"):
             shutil.copy(os.path.join(ROOT, "builder", name), builder)
         with open(os.path.join(ROOT, "builder", "lines.json")) as fh:
             data = json.load(fh)
-        # The MM 1.12 input (primary since D7) moves from the frozen pin to MM_112.
-        line = data["lines"]["sm11-oldstable"]
-        role = "metamod" if data["pins"][line["metamod"]]["mode"] == "1.12" else "secondary_metamod"
-        line[role] = "MM_112"
-        selected = data["pins"]["MM_112"]
+        bridge = dict(data["pins"]["MM_110"], commit="1" * 40, rev=977)
+        data["pins"]["MM_110_ALT"] = bridge
+        data["lines"]["sm13-latest"]["bridge_metamod"] = "MM_110_ALT"
+        primary = data["pins"][data["lines"]["sm13-latest"]["metamod"]]
         with open(os.path.join(builder, "lines.json"), "w") as fh:
             json.dump(data, fh)
 
-        # The SM 1.11 build fails closed unless both resolved checkouts exist.
-        os.makedirs(os.path.join(self.tmp_dir, data["pins"]["MM_110"]["dirname"], "core-css34legacy"))
-        os.makedirs(os.path.join(self.tmp_dir, selected["dirname"], "core"), exist_ok=True)
-
         # Execute the production orchestration blocks with only the expensive
         # fetch/build functions stubbed; the actual resolver reads the fixture.
-        # The primary Metamod comes from resolve-version.sh (MMS_*), the others
+        # The primary Metamod comes from resolve-version.sh (MMS_*), the bridge
         # from the resolver.
         for path, function, commit_arg in (
             ("builder/checkout-deps.sh", "fetch_and_patch_mms", 4),
@@ -155,124 +151,32 @@ class TestCheckMetamodPackage(unittest.TestCase):
             ("builder/run/windows.sh", "build_and_package_mm_win", 5),
         ):
             with self.subTest(path=path):
-                block = mm_block(path)
                 stub = function + '() { printf "%s\\n" "${' + str(commit_arg) + '}"; }\n'
                 env = os.environ.copy()
                 env.update(BUILDER_DIR=builder, DEPS_DIR=self.tmp_dir,
-                           SOURCEMOD_MAJOR="11", CSS34_LINE="sm11-oldstable", **mms_env(selected))
-                res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block],
+                           SOURCEMOD_MAJOR="13", CSS34_LINE="sm13-latest", **mms_env(primary))
+                res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + mm_block(path)],
                                      env=env, capture_output=True, text=True)
                 self.assertEqual(res.returncode, 0, res.stderr)
-                both = [data["pins"]["MM_110"]["commit"], selected["commit"]]
                 if path == "builder/checkout-deps.sh":
-                    self.assertEqual(sorted(res.stdout.splitlines()), sorted(both))
+                    self.assertEqual(res.stdout.splitlines(), [primary["commit"], bridge["commit"]])
                 else:
                     # Builders take MM 1.10 first: its legacy core goes into the
                     # MM 1.12 package (legacy-plugin bridge, T2.9).
-                    self.assertEqual(res.stdout.splitlines(), both)
+                    self.assertEqual(res.stdout.splitlines(), [bridge["commit"], primary["commit"]])
 
-        # linux.sh and windows.sh must hand the resolved MM 1.12 checkout to configure,
-        # never MM 1.10, and the 1.ep1 include root must come from the MM 1.10 checkout.
-        modern = os.path.join(self.tmp_dir, selected["dirname"])
-        for path, function in (("builder/run/linux.sh", "build_and_package_mm"),
-                               ("builder/run/windows.sh", "build_and_package_mm_win")):
-            with self.subTest(path=path, check="include roots"):
-                with open(os.path.join(ROOT, path)) as fh:
-                    source = fh.read()
-                block = mm_block(path)
-                self.assertIn('--mms-path="$MM_MODERN_DIR"', source)
-                stub = function + "() { :; }\n"
-                report = 'printf "%s|%s\\n" "$MM_MODERN_DIR" "$CSS34_MMS_LEGACY_CORE"\n'
-                env = os.environ.copy()
-                env.update(BUILDER_DIR=builder, DEPS_DIR=self.tmp_dir,
-                           SOURCEMOD_MAJOR="11", CSS34_LINE="sm11-oldstable", **mms_env(selected))
-                os.makedirs(os.path.join(modern, "core"), exist_ok=True)
-                res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block + report],
-                                     env=env, capture_output=True, text=True)
-                self.assertEqual(res.returncode, 0, res.stderr)
-                self.assertEqual(res.stdout.strip(), "|".join([
-                    modern,
-                    os.path.join(self.tmp_dir, data["pins"]["MM_110"]["dirname"], "core-css34legacy")]))
-                shutil.rmtree(modern)
-                res = subprocess.run(["bash", "-euo", "pipefail", "-c", stub + block + report],
-                                     env=env, capture_output=True, text=True)
-                self.assertNotEqual(res.returncode, 0)
-                self.assertIn("FAIL: missing", res.stderr)
-
-        self._create_mock_pkg()
-        self._create_mock_pkg(commit=selected["commit"],
-                              version="1.12.0-git" + str(selected["rev"]))
-        env = os.environ.copy()
-        env["CHECK_METAMOD_SCRIPT"] = "/bin/true"
-        res = subprocess.run([VERIFY_SCRIPT, "sm11-oldstable", self.tmp_dir, builder],
-                             env=env, cwd=ROOT, capture_output=True, text=True)
-        self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertIn("git1228-css34-linux.tar.gz", res.stdout)
-        self.assertNotIn("git1227", res.stdout)
-
-    def test_invalid_secondary_pin_is_rejected(self):
-        with open(os.path.join(ROOT, "builder", "lines.json")) as fh:
-            data = json.load(fh)
-        data["lines"]["sm11-oldstable"]["secondary_metamod"] = "MM_MISSING"
-        manifest = os.path.join(self.tmp_dir, "lines.json")
-        with open(manifest, "w") as fh:
-            json.dump(data, fh)
-        res = subprocess.run(["python3", RESOLVE_SCRIPT, "sm11-oldstable",
-                              "--manifest", manifest], capture_output=True, text=True)
+    def test_frozen_dual_core_line_is_not_resolved(self):
+        # T3.3: master builds one Metamod per line; sm11-oldstable is rebuilt only
+        # from its freeze tag, so neither the resolver nor the verifier takes it.
+        res = subprocess.run(["python3", RESOLVE_SCRIPT, "sm11-oldstable"], capture_output=True, text=True)
         self.assertNotEqual(res.returncode, 0)
-        self.assertIn("invalid secondary_metamod", res.stderr)
+        self.assertIn("frozen dual-core line", res.stderr)
         self.assertEqual(res.stdout, "")
-
-    def test_verify_line_metamod_packages_missing_secondary_fails(self):
-        # Create the primary Metamod package of the line only, omitting the secondary
-        with open(os.path.join(ROOT, "builder", "lines.json")) as fh:
-            data = json.load(fh)
-        primary = data["pins"][data["lines"]["sm11-oldstable"]["metamod"]]
-        base = {"1.10": "1.10.7", "1.12": "1.12.0"}[primary["mode"]]
-        self._create_mock_pkg(commit=primary["commit"], version="{}-git{}".format(base, primary["rev"]))
-
-        mock_check_path = os.path.join(self.tmp_dir, "mock-check.sh")
-        with open(mock_check_path, "w") as f:
-            f.write("#!/usr/bin/env bash\nexit 0\n")
-        os.chmod(mock_check_path, 0o755)
-
-        env = os.environ.copy()
-        env["CHECK_METAMOD_SCRIPT"] = mock_check_path
-
-        res = subprocess.run(
-            [VERIFY_SCRIPT, "sm11-oldstable", self.tmp_dir, os.path.join(ROOT, "builder")],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=ROOT,
-            env=env,
-        )
+        self._create_mock_pkg()
+        res = self._verify("sm11-oldstable")
         self.assertNotEqual(res.returncode, 0)
-        self.assertIn("FAIL: expected secondary Metamod package", res.stderr)
-
-    def test_verify_line_metamod_packages_both_present_passes(self):
-        # Create valid tar.gz for primary MM 1.10 and secondary MM 1.12 frozen
-        self._create_mock_pkg(commit="80e8ff0be3b62386bbd6f937e97b819ef8be6dd2", version="1.10.7-git976")
-        self._create_mock_pkg(commit="75dd7b26fe92e535a11f0318ead73c3e05130d0b", version="1.12.0-git1227")
-
-        mock_check_path = os.path.join(self.tmp_dir, "mock-check.sh")
-        with open(mock_check_path, "w") as f:
-            f.write("#!/usr/bin/env bash\nexit 0\n")
-        os.chmod(mock_check_path, 0o755)
-
-        env = os.environ.copy()
-        env["CHECK_METAMOD_SCRIPT"] = mock_check_path
-
-        res = subprocess.run(
-            [VERIFY_SCRIPT, "sm11-oldstable", self.tmp_dir, os.path.join(ROOT, "builder")],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=ROOT,
-            env=env,
-        )
-        self.assertEqual(res.returncode, 0, msg=f"Stderr: {res.stderr}\nStdout: {res.stdout}")
-        self.assertIn("OK: All expected Metamod packages for line sm11-oldstable verified successfully", res.stdout)
+        self.assertIn("frozen dual-core line", res.stderr)
+        self.assertNotIn("Checking", res.stdout)
 
     def bridge_lines(self):
         with open(os.path.join(ROOT, "builder", "lines.json")) as fh:

@@ -189,31 +189,12 @@ if [ "$need_mariadb" = 1 ]; then
   fi
 fi
 
-if [ -f "$BUILDER_DIR/versions.env" ]; then
-  # shellcheck source=versions.env
-  source "$BUILDER_DIR/versions.env"
-fi
-
 echo "==> Fetching Metamod:Source"
-# MMS_MODE / MMS_DIRNAME / MMS_COMMIT come from resolve-version.sh (or env).
-MMS_MODE="${MMS_MODE:-}"
-MMS_DIRNAME="${MMS_DIRNAME:-}"
-MMS_COMMIT="${MMS_COMMIT:-}"
+# MMS_MODE / MMS_DIRNAME / MMS_COMMIT / MMS_BRANCH: the line's primary Metamod
+# (resolve-version.sh, via builder/run/*.sh).
+: "${MMS_MODE:?MMS_MODE is required (source builder/resolve-version.sh)}"
+: "${MMS_DIRNAME:?MMS_DIRNAME is required}" "${MMS_COMMIT:?MMS_COMMIT is required}"
 MMS_BRANCH="${MMS_BRANCH:-}"
-
-if [[ -z "$MMS_MODE" || -z "$MMS_DIRNAME" || -z "$MMS_COMMIT" ]]; then
-  if [ "${SOURCEMOD_MAJOR:-11}" -ge 12 ]; then
-    MMS_COMMIT="${MMS_COMMIT:-${MM_112_COMMIT:-cb47755826fad1483291e5dc00222aa64303d12f}}"
-    MMS_BRANCH="${MMS_BRANCH:-${MM_112_BRANCH:-1.12-dev}}"
-    MMS_DIRNAME="${MMS_DIRNAME:-${MM_112_DIRNAME:-mmsource-1.12}}"
-    MMS_MODE="${MMS_MODE:-1.12}"
-  else
-    MMS_COMMIT="${MMS_COMMIT:-${MM_110_COMMIT:-80e8ff0be3b62386bbd6f937e97b819ef8be6dd2}}"
-    MMS_BRANCH="${MMS_BRANCH:-${MM_110_BRANCH:-1.10-dev}}"
-    MMS_DIRNAME="${MMS_DIRNAME:-${MM_110_DIRNAME:-mmsource-1.10}}"
-    MMS_MODE="${MMS_MODE:-1.10}"
-  fi
-fi
 
 fetch_and_patch_mms() {
   local dirname="$1"
@@ -228,10 +209,7 @@ fetch_and_patch_mms() {
     1.10)
       MMS_DIR="$DEPS/$dirname" bash "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/$dirname"
       ;;
-    1.11)
-      bash "$BUILDER_DIR/patches/apply-mmsource-v111.sh" "$DEPS/$dirname"
-      ;;
-    1.12|2.0)
+    1.12)
       git -C "$DEPS/$dirname" submodule update --init --recursive
       bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/$dirname"
       ;;
@@ -242,9 +220,9 @@ fetch_and_patch_mms() {
   esac
 }
 
-# The primary Metamod (MMS_*, resolve-version.sh), then the line's other inputs
-# from lines.json: secondary_metamod (dual-core sm11) and bridge_metamod (the
-# MM 1.10 legacy core of the MM 1.12 package, legacy-plugin bridge T2.9).
+# The primary Metamod (MMS_*, resolve-version.sh), then the line's
+# bridge_metamod from lines.json (the MM 1.10 legacy core of the MM 1.12
+# package, legacy-plugin bridge T2.9).
 fetch_and_patch_mms "$MMS_DIRNAME" "$MMS_MODE" "$MMS_BRANCH" "$MMS_COMMIT"
 mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm13-latest}")" ||
   { echo "FAIL: cannot resolve the Metamod inputs of ${CSS34_LINE:-sm13-latest}" >&2; exit 1; }
@@ -253,9 +231,8 @@ while IFS=$'\t' read -r role dirname mode branch commit rev version; do
   fetch_and_patch_mms "$dirname" "$mode" "$branch" "$commit"
 done <<< "$mm_inputs"
 
-# Pinned 2026-10-20 (episode1 / ep1c tips). Override only to reproduce another tree.
+# Pinned 2026-10-20 (episode1 tip). Override only to reproduce another tree.
 HL2SDK_EPISODE1_COMMIT="${HL2SDK_EPISODE1_COMMIT:-4b0cde271be6806b95842e78348009712a8b3fbe}"
-HL2SDK_EP1C_COMMIT="${HL2SDK_EP1C_COMMIT:-fd7c497104abcc3537c6732465ad8c623e2c40aa}"
 AMBUILD_COMMIT="${AMBUILD_COMMIT:-01212cb57c96561f664b6dfb2ee10e66de6f81e4}"
 
 echo "==> Fetching HL2SDK episode1 @ ${HL2SDK_EPISODE1_COMMIT}"
@@ -266,17 +243,6 @@ if [[ "$(git -C "$DEPS/hl2sdk-episode1" rev-parse HEAD)" != "$HL2SDK_EPISODE1_CO
   exit 1
 fi
 patch_episode1_sdk "$DEPS/hl2sdk-episode1"
-
-echo "==> Fetching rom4s/hl2sdk-ep1c @ ${HL2SDK_EP1C_COMMIT} as hl2sdk-ep1"
-rm -rf "$DEPS/hl2sdk-ep1"
-clone_repo "hl2sdk-ep1" "https://github.com/rom4s/hl2sdk-ep1c" "" "$HL2SDK_EP1C_COMMIT"
-if [[ "$(git -C "$DEPS/hl2sdk-ep1" rev-parse HEAD)" != "$HL2SDK_EP1C_COMMIT" ]]; then
-  echo "FAIL: hl2sdk-ep1c is not ${HL2SDK_EP1C_COMMIT}" >&2
-  exit 1
-fi
-# ep1c does not ship tier0/vstdlib; use episode1's real .so so the linker records DT_NEEDED.
-export HL2SDK_EPISODE1_LINUX_SDK="$DEPS/hl2sdk-episode1/linux_sdk"
-"$BUILDER_DIR/patches/apply-hl2sdk-ep1c.sh" "$DEPS/hl2sdk-ep1"
 
 echo "==> Fetching AMBuild @ ${AMBUILD_COMMIT}"
 # Tag 2.2 is too old for current hl2sdk-manifests. One SHA serves every line.

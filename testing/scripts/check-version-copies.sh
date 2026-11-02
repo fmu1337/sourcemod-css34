@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Fail when generated pin copies drift, or a commit SHA is copied back into a workflow.
-# MM fallback SHAs in the builder scripts stay until a later change removes them.
+# Fail when generated pin copies drift, or a commit SHA is copied back into a workflow
+# or a builder script.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -54,14 +54,18 @@ if grep -R -E -n '[0-9a-f]{40}' .github/workflows; then
   note_fail ".github/workflows still embeds a full commit SHA; generate the matrix from lines.json"
 fi
 
-# Local build fallbacks are still hand-written (not part of the generated matrix).
-expect_file_contains "$repo_root/builder/checkout-deps.sh" "$mm112_commit" "checkout-deps.sh MM fallback"
-expect_file_contains "$repo_root/builder/write-build-stamps.sh" "$mm112_commit" "write-build-stamps.sh MM fallback"
+# The builder takes every SourceMod / Metamod pin from resolve-version.sh and
+# resolve-metamod-pins.py: a pinned commit in a builder script is a stale copy.
+for pin in "$SM_LATEST_COMMIT" "$SM_LATEST_13_COMMIT" "$MM_112_COMMIT" "$MM_110_COMMIT"; do
+  if grep -R -F -n "$pin" builder --include='*.sh' --include='*.ps1'; then
+    note_fail "builder scripts copy pinned commit ${pin:0:12}; read it from builder/versions.env"
+  fi
+done
 
 if [[ "$failures" -gt 0 ]]; then
   echo "==> ${failures} pin consistency error(s). See docs/JULES_DAILY_VERSION_BUMP.md" >&2
   exit 1
 fi
 
-echo "==> Generated matrices, tag map, and MM fallbacks match"
+echo "==> Generated matrices and tag map match; no pin copies in workflows or builder scripts"
 echo "OK: testing/versions/matrix.json is historical and is not a pin source"

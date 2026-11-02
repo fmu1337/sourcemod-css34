@@ -1,123 +1,80 @@
 #!/usr/bin/env bash
-# Resolve SOURCEMOD_* / MMS_* from CSS34_LINE or explicit env overrides.
+# Resolve SOURCEMOD_* / MMS_* (the primary Metamod) from CSS34_LINE.
+# Builders also call css34_require_buildable: master builds SourceMod 1.12+ only.
 set -euo pipefail
 
 builder_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=versions.env
 source "$builder_dir/versions.env"
 
-resolve_mm() {
-  local mode="$1"
-  case "$mode" in
-    1.10)
-      MMS_COMMIT="$MM_110_COMMIT"; MMS_BRANCH="$MM_110_BRANCH"
-      MMS_DIRNAME="$MM_110_DIRNAME"; MMS_MODE="$MM_110_MODE"
-      MMS_GIT_REV="$MM_110_REV"
-      ;;
-    1.12)
-      MMS_COMMIT="$MM_112_COMMIT"; MMS_BRANCH="$MM_112_BRANCH"
-      MMS_DIRNAME="$MM_112_DIRNAME"; MMS_MODE="$MM_112_MODE"
-      MMS_GIT_REV="$MM_112_REV"
-      ;;
-    2.0|2.0k)
-      echo "MM 2.0 builds are archived; use the archive/khook branch" >&2
-      exit 1
-      ;;
-    *)
-      echo "Unknown MM mode '$mode'" >&2
-      exit 1
-      ;;
-  esac
+# Every line's primary Metamod is MM 1.12; a line's MM 1.10 bridge_metamod
+# comes from resolve-metamod-pins.py.
+use_mm_112() {
+  MMS_COMMIT="$MM_112_COMMIT"; MMS_BRANCH="$MM_112_BRANCH"
+  MMS_DIRNAME="$MM_112_DIRNAME"; MMS_MODE="$MM_112_MODE"
+  MMS_GIT_REV="$MM_112_REV"
 }
 
 apply_sm_line() {
   local line="$1"
   case "$line" in
-    sm11-oldstable|sm11|oldstable)
-      SOURCEMOD_COMMIT="$SM_OLDSTABLE_COMMIT"
-      SOURCEMOD_GIT_REV="$SM_OLDSTABLE_REV"
-      SOURCEMOD_MAJOR="$SM_OLDSTABLE_MAJOR"
-      # D7: the primary Metamod is the line's frozen MM 1.12 (lines.json "metamod");
-      # MM 1.10.7 is "secondary_metamod" (resolve-metamod-pins.py).
-      MMS_COMMIT="$MM_112_SM11_COMMIT"; MMS_BRANCH="$MM_112_SM11_BRANCH"
-      MMS_DIRNAME="$MM_112_SM11_DIRNAME"; MMS_MODE="$MM_112_SM11_MODE"
-      MMS_GIT_REV="$MM_112_SM11_REV"
-      ;;
     sm12-latest|sm12|latest)
       SOURCEMOD_COMMIT="$SM_LATEST_COMMIT"
       SOURCEMOD_GIT_REV="$SM_LATEST_REV"
       SOURCEMOD_MAJOR="$SM_LATEST_MAJOR"
-      resolve_mm 1.12
+      use_mm_112
       ;;
     sm13-latest|sm13|bleeding)
       SOURCEMOD_COMMIT="$SM_LATEST_13_COMMIT"
       SOURCEMOD_GIT_REV="$SM_LATEST_13_REV"
       SOURCEMOD_MAJOR="$SM_LATEST_13_MAJOR"
-      resolve_mm 1.12
+      use_mm_112
       ;;
     # Retired CI line; kept for release tag 1.13.0.7404-mm1.12.0 retags.
     sm13-dev|dev)
       SOURCEMOD_COMMIT="$SM_DEV_COMMIT"
       SOURCEMOD_GIT_REV="$SM_DEV_REV"
       SOURCEMOD_MAJOR="$SM_DEV_MAJOR"
-      resolve_mm 1.12
+      use_mm_112
+      ;;
+    # Frozen (T2.7): resolved only for the expectations of its published
+    # packages (smoke, package names). The builder refuses SourceMod < 1.12.
+    sm11-oldstable|sm11|oldstable)
+      SOURCEMOD_COMMIT="$SM_OLDSTABLE_COMMIT"
+      SOURCEMOD_GIT_REV="$SM_OLDSTABLE_REV"
+      SOURCEMOD_MAJOR="$SM_OLDSTABLE_MAJOR"
+      # D7: its primary Metamod is the frozen MM 1.12 (lines.json "metamod").
+      MMS_COMMIT="$MM_112_FROZEN_COMMIT"; MMS_BRANCH="$MM_112_FROZEN_BRANCH"
+      MMS_DIRNAME="$MM_112_FROZEN_DIRNAME"; MMS_MODE="$MM_112_FROZEN_MODE"
+      MMS_GIT_REV="$MM_112_FROZEN_REV"
       ;;
     sm13-mm20|sm13-mm2|sm13-mm20-khook|sm13-khook|khook)
       echo "This build line is archived; use the archive/khook branch" >&2
       exit 1
       ;;
     *)
-      echo "Unknown CSS34_LINE='$line' (expected sm11-oldstable|sm12-latest|sm13-latest)" >&2
+      echo "Unknown CSS34_LINE='$line' (expected sm12-latest|sm13-latest)" >&2
       exit 1
       ;;
   esac
 }
 
-line="${CSS34_LINE:-}"
-if [[ -n "$line" ]]; then
-  apply_sm_line "$line"
-elif [[ -n "${SOURCEMOD_COMMIT:-}" && -n "${SOURCEMOD_GIT_REV:-}" ]]; then
-  SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR:-}"
-  if [[ -z "$SOURCEMOD_MAJOR" ]]; then
-    if [[ "$SOURCEMOD_GIT_REV" -ge 7300 ]]; then SOURCEMOD_MAJOR=13
-    elif [[ "$SOURCEMOD_GIT_REV" -ge 7000 ]]; then SOURCEMOD_MAJOR=12
-    else SOURCEMOD_MAJOR=11
-    fi
-  fi
-  if [[ -z "${MMS_COMMIT:-}" || -z "${MMS_DIRNAME:-}" || -z "${MMS_MODE:-}" ]]; then
-    if [[ -n "${MMS_LINE:-}" ]]; then
-      case "${MMS_LINE}" in
-        1.10|mm110|mm10) resolve_mm 1.10 ;;
-        1.12|mm112|mm12) resolve_mm 1.12 ;;
-        2.0|mm20|mm2) resolve_mm 2.0 ;;
-        2.0k|mm20k|khook) resolve_mm 2.0k ;;
-        *) echo "Unknown MMS_LINE='${MMS_LINE}'" >&2; exit 1 ;;
-      esac
-    elif [[ "$SOURCEMOD_MAJOR" -ge 12 ]]; then
-      resolve_mm 1.12
-    else
-      resolve_mm 1.10
-    fi
-  fi
-else
-  apply_sm_line "${CSS34_LINE:-sm13-latest}"
-fi
+# versions.env defaults CSS34_LINE to lines.json's default_line.
+apply_sm_line "${CSS34_LINE:-sm13-latest}"
 
-# Optional MMS_LINE override after a SM line was chosen.
-if [[ -n "${MMS_LINE:-}" && -n "${CSS34_LINE:-}" ]]; then
-  case "${MMS_LINE}" in
-    1.10|mm110|mm10) resolve_mm 1.10 ;;
-    1.12|mm112|mm12) resolve_mm 1.12 ;;
-    2.0|mm20|mm2) resolve_mm 2.0 ;;
-    2.0k|mm20k|khook) resolve_mm 2.0k ;;
-  esac
-fi
+css34_require_buildable() {
+  if [[ "$SOURCEMOD_MAJOR" -lt 12 ]]; then
+    echo "FAIL: ${CSS34_LINE} (SourceMod 1.${SOURCEMOD_MAJOR}) is frozen: master builds SourceMod 1.12+ only;" \
+      "rebuild it from its freeze tag and input archive (docs/FREEZE.md)" >&2
+    return 1
+  fi
+}
 
 SOURCEMOD_MERGE_MASTER="${SOURCEMOD_MERGE_MASTER:-}"
 SOURCEMOD_BUILD_COMMIT="${SOURCEMOD_BUILD_COMMIT:-}"
 export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV SOURCEMOD_MAJOR SOURCEMOD_MERGE_MASTER SOURCEMOD_BUILD_COMMIT
 MMS_GIT_REV="${MMS_GIT_REV:-}"
 export MMS_COMMIT MMS_BRANCH MMS_DIRNAME MMS_MODE MMS_GIT_REV
-export CSS34_LINE="${CSS34_LINE:-custom}"
+export CSS34_LINE
 
 echo "==> CSS34_LINE=${CSS34_LINE} SM=${SOURCEMOD_GIT_REV} (${SOURCEMOD_COMMIT:0:9}) MM=${MMS_MODE} (${MMS_COMMIT:0:9})" >&2
