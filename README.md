@@ -65,7 +65,8 @@ Pins live in [`builder/lines.json`](builder/lines.json). `python3 builder/lines.
 or a known-bad tag is pinned on a line that publishes a pointer.
 The manifest records line status and known-bad release tags; it is separate from the published pointer index.
 Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
-A daily bump edits `lines.json` and regenerates — see [docs/JULES_DAILY_VERSION_BUMP.md](docs/JULES_DAILY_VERSION_BUMP.md).
+Bumps: `.github/workflows/upstream-bump.yml` opens a PR per lagging line every week and tags the line after
+merge; by hand, see [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md#апгрейд-новая-ревизия-той-же-major).
 
 > `meta version` prints the Metamod build number from `lines.json` (`1.12.0-dev+1228`,
 > or `1.10.7-dev+976` on `sm11-oldstable`) and `Build ID: <rev>:<commit prefix>`.
@@ -271,7 +272,7 @@ non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
 Needs Docker. The build runs in pinned `quay.io/pypa/manylinux2014_i686` (glibc 2.17, GCC 10.2.1). SDKs, AMBuild and static OpenSSL 1.1.1w are fetched into `deps/`.
 
 ```bash
-# Default (SM 1.13.7478 + MM 1.12.1228):
+# Default line (pins: builder/lines.json):
 CSS34_LINE=sm13-latest builder/docker/build.sh
 
 # Other lines:
@@ -320,8 +321,13 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
   **Actions cache**. Reference (rom4s / published-release) botplay, extra distros and bisect are
   `workflow_dispatch` opt-ins.
 - `.github/workflows/release.yml` — tag-driven; tag (minus `-r<N>`) maps to `CSS34_LINE`; packages attach with
-  `gh release upload` (**GitHub Releases**, not Actions artifacts); then `SHA256SUMS`, public-URL smoke
-  on the weekly OS matrix, botplay on `centos:7`, line pointer, pointer smoke.
+  `gh release upload` (**GitHub Releases**, not Actions artifacts) to a **prerelease** with generated notes;
+  public-URL smoke on the weekly OS matrix and botplay on `centos:7`, then `promote` (full release, explicit
+  Latest for the default line), line pointer, pointer smoke, `SHA256SUMS` last.
+- `.github/workflows/upstream-bump.yml` — weekly bump PR per lagging line (`bump/<target>`), and after its merge
+  the line's next tag (needs the owner's GitHub App: `vars.BUMP_APP_ID`, `secrets.BUMP_APP_KEY`).
+- `.github/workflows/frozen-verify.yml` — weekly check of the frozen `sm11-oldstable` release files and pointer;
+  `freeze-inputs.yml` builds a freeze input archive ([docs/FREEZE.md](docs/FREEZE.md)).
 - `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts.
 - `.github/workflows/cleanup-artifacts.yml` — weekly / manual purge of Actions artifacts.
 
@@ -331,10 +337,11 @@ cancel an older run of the same workflow/ref. Botplay baseline comparisons are i
 server crashes and API/ABI probes still fail the job.
 
 ```bash
-git tag 1.13.0.7472-mm1.12.0-r3 && git push origin 1.13.0.7472-mm1.12.0-r3   # rebuild sm13-latest
+git tag 1.13.0.<rev>-mm1.12.0-r<N> && git push origin 1.13.0.<rev>-mm1.12.0-r<N>   # rebuild sm13-latest
 ```
 
-New pins need a new base tag. `release.yml` reads the tag map generated from `builder/lines.json`.
+New pins need a new base tag (`upstream-bump.yml` pushes it after a bump merge). `release.yml` reads the tag
+map generated from `builder/lines.json`.
 
 ## Notes
 

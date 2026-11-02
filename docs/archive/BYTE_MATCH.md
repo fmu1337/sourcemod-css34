@@ -12,7 +12,7 @@
 
 Рабочий golden — то, что уже в `master`: pinned SM+MM по линиям (`builder/versions.env`),
 layout, ABI-чеки (`check-package.sh`), smoke и botplay на живом CS:S v34. На момент решения
-это был один тег `1.11.0.6572-mm1.10.7`; сейчас — пять линий, см. [README](../README.md).
+это был один тег `1.11.0.6572-mm1.10.7`; сейчас — пять линий, см. [README](../../README.md).
 
 > Статус 2026-10-13: вердикт в силе. Сравнение с rom4s имеет смысл только для SM 1.11
 > (`sm11-oldstable`); у линий 1.12/1.13 нет rom4s-аналога.
@@ -85,5 +85,5 @@ Byte-match как «SUPER GOLDEN» остаётся только архивно�
 
 ## Связь с текущим golden
 
-См. также [PATCH_STRATEGY.md](PATCH_STRATEGY.md): один pin, последовательные апгрейды,
+См. также [PATCH_STRATEGY.md](PATCH_STRATEGY_HISTORY.md): один pin, последовательные апгрейды,
 без dual-CI и без слоёв ради слоёв. Byte-match **не** входит в чеклист релиза.
