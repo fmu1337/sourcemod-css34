@@ -1,0 +1,45 @@
+css34: GameConfigs: RTLD_NOLOAD for already-mapped engine binaries
+
+diff --git a/core/logic/GameConfigs.cpp b/core/logic/GameConfigs.cpp
+index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..082f08538e11922eaa25ed3e15c07274d3ecc9b5 100644
+--- a/core/logic/GameConfigs.cpp
++++ b/core/logic/GameConfigs.cpp
+@@ -615,7 +615,8 @@ SMCResult CGameConfig::ReadSMC_LeavingSection(const SMCStates *states)
+ 					/* GNU only: returns 0 on error, inconsistent! >:[ */
+ 					if (dladdr(addrInBase, &info) != 0)
+ 					{
+-						void *handle = dlopen(info.dli_fname, RTLD_NOW);
++						/* css34: RTLD_NOLOAD - dli_fname is an already-mapped module */
++						void *handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD);
+ 						if (handle)
+ 						{
+ 							if (bridge->SymbolsAreHidden())
+@@ -1273,7 +1274,27 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+ 			FreeLibrary(hModule);
+ 		}
+ #else
+-		void *pHandle = dlopen(binary_path, RTLD_NOW);
++		/* css34: RTLD_NOLOAD game binary - avoid loading engine_i486.so while
++		 * engine_i686.so is already mapped. A temporary RTLD_NOW copy runs
++		 * ConVar static ctors into vstdlib's list; dlclose then dangling-pointer
++		 * crashes FindVar (sv_logecho) during SM init. */
++		void *pHandle = dlopen(binary_path, RTLD_NOW | RTLD_NOLOAD);
++		if (!pHandle)
++		{
++			char alt_path[PLATFORM_MAX_PATH];
++			ke::SafeStrcpy(alt_path, sizeof(alt_path), binary_path);
++			char *suf = strstr(alt_path, "_i486.so");
++			if (suf)
++			{
++				memcpy(suf, "_i686.so", 8);
++				pHandle = dlopen(alt_path, RTLD_NOW | RTLD_NOLOAD);
++			}
++			else if ((suf = strstr(alt_path, "_i686.so")) != nullptr)
++			{
++				memcpy(suf, "_i486.so", 8);
++				pHandle = dlopen(alt_path, RTLD_NOW | RTLD_NOLOAD);
++			}
++		}
+ 		if (pHandle)
+ 		{
+ 			info.m_pAddr = dlsym(pHandle, "CreateInterface");

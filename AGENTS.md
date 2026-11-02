@@ -42,8 +42,8 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   SourceMod is no git submodule (T3.3): `builder/fetch-sourcemod.sh` checks out the
   line's pinned commit into `sourcemod/` (gitignored), resets and cleans it, and
   initializes its own submodules.
-- SourceMod patches (T3.4): a line with `builder/patches/series/<line>/` (today
-  `sm13-latest`) gets a git patch series: `<repo>/NNNN-*.patch` per repository
+- SourceMod patches (T3.4): a line with `builder/patches/series/<line>/`
+  (`sm12-latest`, `sm13-latest`) gets a git patch series: `<repo>/NNNN-*.patch` per repository
   (`sourcemod`, or a SourceMod submodule path such as `sourcepawn`,
   `hl2sdk-manifests`), applied by `builder/patches/apply-series.sh` with
   `git apply --index`; `series.json` holds the SourceMod commit and the tree every

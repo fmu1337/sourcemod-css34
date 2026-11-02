@@ -24,7 +24,22 @@ files, exports, `NEEDED` and `SONAME` (`compare-package-abi.py`).
 | `hl2sdk-manifests/0001-episode1-defines` | episode1 Linux defines `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE`. | The SDK's malloc hooks/overrides in SourceMod modules on CS:S v34. |
 | `hl2sdk-manifests/0002-compiler-flag-guard` | Drop manifest compiler flags GCC 10 does not know (`manifest_flag_guard.py`). | Unknown-flag errors from newer manifests (hl2sdk-manifests `ebd6e10`). |
 
-After a pin bump: `builder/scripts/patch-series.sh refresh sm13-latest` rebases
+## sm12-latest patch series
+
+`builder/patches/series/sm12-latest/` is made the same way for SourceMod `e68dada2`
+(1.12.0.7257) and replaces the scripted patcher for sm12-latest. Its patches are the
+sm13 ones above except:
+
+- no `glibc217-database-imports`: SM 1.12's database extensions need neither shim;
+- `sourcemod/0007-sdktools-onmapend-list`: `EntityOutputManager::OnMapEnd` uses
+  `SourceHook::List<omg_hooks *>`, the type `OutputHookList` stores (section
+  "SM 1.12: entity-output map-end cleanup list type" below);
+- `sourcepawn/0001-gcc10-link-flags` also fixes a sign-compare in `vm/shell/shell.cpp`.
+
+A full build from the series matches the scripted build's files, exports, `NEEDED`
+and `SONAME`.
+
+After a pin bump: `builder/scripts/patch-series.sh refresh <line>` rebases
 the series (`git apply --3way`) and rewrites `series.json`; `lines.py check`
 fails until it has run. `builder/scripts/patch-series.sh check <line>` applies
 the series to a fresh checkout of the pin.
@@ -75,7 +90,8 @@ symbol is allowlisted. Revisit the OpenSSL patch when replacing OpenSSL 1.1.1w.
 ## SM 1.12: entity-output map-end cleanup list type
 
 - Introduced by css34 commit `bc2d291` (PR #126, T1.5 / #84).
-- Implementation: `builder/patches/apply-sourcemod-v112.sh`, `PYOUT` block.
+- Implementation: `builder/patches/series/sm12-latest/sourcemod/0007-sdktools-onmapend-list.patch`
+  (generated from the `PYOUT` block of `builder/patches/apply-sourcemod-v112.sh`).
 - Upstream: SourceMod #2589, cherry-picked as `e68dada2979eb3093d81d2e3766f741e7d431e4a`
   (SM 1.12.0.7257).
 - Change: use `SourceHook::List<omg_hooks *>` in

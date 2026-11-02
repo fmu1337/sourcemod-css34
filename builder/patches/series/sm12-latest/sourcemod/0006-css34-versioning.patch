@@ -1,0 +1,81 @@
+css34: versioning: pinned build number, detached/submodule HEAD, css34 pack line in sm version
+
+diff --git a/core/logic/RootConsoleMenu.cpp b/core/logic/RootConsoleMenu.cpp
+index fb6857bf2a8ab2deba249e525d8c05a86b3dabe4..cd999ee6b006513ff7d034c26e51eba5df218304 100644
+--- a/core/logic/RootConsoleMenu.cpp
++++ b/core/logic/RootConsoleMenu.cpp
+@@ -27,6 +27,7 @@
+ #include "RootConsoleMenu.h"
+ #include <amtl/am-string.h>
+ #include <sourcemod_version.h>
++#include <css34_build_stamp.h>
+ #include <ISourceMod.h>
+ #include <bridge/include/CoreProvider.h>
+ #include "HandleSys.h"
+@@ -243,6 +244,7 @@ void RootConsoleMenu::OnRootConsoleCommand(const char *cmdname, const ICommandAr
+ 		ConsolePrint("    Compiled on: %s", SOURCEMOD_BUILD_TIME);
+ #if defined(SM_GENERATED_BUILD)
+ 		ConsolePrint("    Built from: https://github.com/alliedmodders/sourcemod/commit/%s", SOURCEMOD_SHA);
++		ConsolePrint("    CSS34 pack: https://github.com/fmu1337/sourcemod-css34/commit/%s", CSS34_PACK_COMMIT);
+ 		ConsolePrint("    Build ID: %s:%s", SOURCEMOD_LOCAL_REV, SOURCEMOD_SHA);
+ #endif
+ 		ConsolePrint("    http://www.sourcemod.net/");
+diff --git a/tools/buildbot/Versioning b/tools/buildbot/Versioning
+index f2b966a8a0af3d04f2da2e04709fb20c4bd4c475..7e84b521d964549f3e3f9b72c3fdab07c066cbce 100644
+--- a/tools/buildbot/Versioning
++++ b/tools/buildbot/Versioning
+@@ -17,15 +17,31 @@ outputs = [
+   os.path.join(builder.buildFolder, 'includes', 'version_auto.inc'),
+ ]
+ 
+-with open(os.path.join(builder.sourcePath, '.git', 'HEAD')) as fp:
++def _resolve_git_head_path(source_path):
++  git_meta = os.path.join(source_path, '.git')
++  if os.path.isfile(git_meta):
++    with open(git_meta) as meta_fp:
++      gitdir_line = meta_fp.read().strip()
++    if gitdir_line.startswith('gitdir: '):
++      git_dir = gitdir_line[8:]
++      if not os.path.isabs(git_dir):
++        git_dir = os.path.normpath(os.path.join(source_path, git_dir))
++    else:
++      git_dir = git_meta
++  else:
++    git_dir = git_meta
++  return os.path.join(git_dir, 'HEAD')
++
++git_head_path = _resolve_git_head_path(builder.sourcePath)
++with open(git_head_path) as fp:
+   head_contents = fp.read().strip()
+   if re.search('^[a-fA-F0-9]{40}$', head_contents):
+-    git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
++    pass
+   else:
+     git_state = head_contents.split(':')[1].strip()
+-    git_head_path = os.path.join(builder.sourcePath, '.git', git_state)
+-    if not os.path.exists(git_head_path):
+-      git_head_path = os.path.join(builder.sourcePath, '.git', 'HEAD')
++    candidate = os.path.join(os.path.dirname(git_head_path), git_state)
++    if os.path.exists(candidate):
++      git_head_path = candidate
+ 
+ sources = [
+   os.path.join(builder.sourcePath, 'product.version'),
+diff --git a/tools/buildbot/generate_headers.py b/tools/buildbot/generate_headers.py
+index c2d3494489ab0401f6c20a2940394d90e0fdb00a..ac841474d4f96594994f5d6dfc775f6a829c79d4 100644
+--- a/tools/buildbot/generate_headers.py
++++ b/tools/buildbot/generate_headers.py
+@@ -39,7 +39,12 @@ def run_and_return(argv):
+   return text.strip()
+ 
+ def get_git_version():
+-  revision_count = run_and_return(['git', 'rev-list', '--count', 'HEAD'])
++  # css34: lines.json rev. A --depth 1 clone makes git rev-list --count print 1.
++  pinned = os.environ.get('SOURCEMOD_GIT_REV', '').strip()
++  if pinned.isdigit():
++    revision_count = pinned
++  else:
++    revision_count = run_and_return(['git', 'rev-list', '--count', 'HEAD'])
+   revision_hash = run_and_return(['git', 'log', '--pretty=format:%h:%H', '-n', '1'])
+   shorthash, longhash = revision_hash.split(':')
+ 
