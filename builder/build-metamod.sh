@@ -30,11 +30,9 @@ case "$MMS_MODE" in
     ;;
   1.12)
     MM_EXT="2.ep1"
-    if [ ! -f "$MMS_DIR/hl2sdk-manifests/SdkHelpers.ambuild" ]; then
-      echo "==> Initializing Metamod ${MMS_MODE} submodules"
-      git -C "$MMS_DIR" submodule update --init --recursive
-    fi
-    bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$MMS_DIR"
+    # checkout-deps.sh patched the tree (the pin's series + bridge, T3.4).
+    grep -q 'css34: link via C++ driver' "$MMS_DIR/AMBuildScript" ||
+      { echo "FAIL: $MMS_DIR is not css34-patched; run checkout-deps.sh first" >&2; exit 1; }
     ;;
   *)
     echo "Unsupported MMS_MODE=$MMS_MODE (MM 2.0 builds live on the archive/khook branch)" >&2

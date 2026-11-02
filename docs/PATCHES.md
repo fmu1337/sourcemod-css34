@@ -39,10 +39,31 @@ sm13 ones above except:
 A full build from the series matches the scripted build's files, exports, `NEEDED`
 and `SONAME`.
 
-After a pin bump: `builder/scripts/patch-series.sh refresh <line>` rebases
-the series (`git apply --3way`) and rewrites `series.json`; `lines.py check`
-fails until it has run. `builder/scripts/patch-series.sh check <line>` applies
-the series to a fresh checkout of the pin.
+## Metamod 1.12 patch series (MM_112)
+
+`builder/patches/series/MM_112/` (`"root": "metamod"`) is keyed by the Metamod pin
+rather than a line: every line that builds `MM_112_COMMIT` (`cb477558`, 1.12.0
+git1228) uses it. `checkout-deps.sh` fetches the pin with `fetch-sourcemod.sh`
+(exact tree, LF as committed), applies the series whose `commit` matches, then
+`apply-mmsource-oldbridge.sh modern` (the legacy-plugin bridge stays a script: it
+is our own code, kept once in `builder/patches/mm-oldbridge/`). `build-metamod.sh`
+no longer patches MM 1.12. A full build from the series matches the scripted
+build's files, exports, `NEEDED` and `SONAME`.
+
+| Patch | What | Why (failure without it) |
+|-------|------|--------------------------|
+| `metamod/0001-build-episode1-toolchain` | `AMBuildScript`: episode1 `tier1_i486.a` before `vstdlib`; pthread/rt/`gcc_s` `NEEDED`; link through the C++ driver; GCC 10 flags; hidden static libstdc++. | As SourceMod's `0001`: ConVars from `vstdlib`, missing `NEEDED` on glibc 2.17, `-Werror`, exported `std::` symbols. |
+| `metamod/0002-episode1-mem-h` | `provider_ep2.cpp` includes `tier0/mem.h`. | `MemAllocScratch` undeclared on episode1. |
+| `metamod/0003-css34-versioning` | Build number from lines.json (`generate_headers.py`), `CSS34 pack:` line in `meta version`. | A `--depth` clone gives a wrong build number; smoke checks the pack commit. |
+| `hl2sdk-manifests/0001-episode1-defines`, `0002-compiler-flag-guard` | As in SourceMod, for Metamod's own manifests (`4304a88`). | As in SourceMod. |
+
+## Refreshing a series
+
+After a pin bump: `builder/scripts/patch-series.sh refresh <line>` (or
+`refresh MM_112` after an MM pin bump) rebases the series (`git apply --3way`)
+and rewrites `series.json`; `lines.py check` fails until it has run.
+`builder/scripts/patch-series.sh check <series>` applies the series to a fresh
+checkout of the pin.
 
 ## sm13 PostgreSQL explicit_bzero (temporary)
 

@@ -18,17 +18,21 @@ hl2sdk-ep1c удалены из `master`; `sm11-oldstable` пересобира�
 
 ```
 SourceMod:  apply-sourcemod.sh                    # роутер: SM < 1.12 → ошибка (sm11 заморожена)
-              └─ exec apply-sourcemod-v112.sh     # AMBuild 2.2, hl2sdk-manifests, 2.ep1
-                    └─ apply-sm-boot-trace.sh
-Metamod:    apply-mmsource-v112.sh (MM 1.12)      # + apply-mmsource-oldbridge.sh (мост старых плагинов)
+              ├─ apply-series.sh series/<line>/   # T3.4: git-серия патчей линии (sm12, sm13)
+              │     └─ apply-sm-boot-trace.sh
+              └─ exec apply-sourcemod-v112.sh     # линия без серии (уходит в конце T3.4)
+Metamod:    apply-series.sh series/MM_112/        # серия под pin MM 1.12 (checkout-deps.sh)
+              └─ apply-mmsource-oldbridge.sh modern   # мост старых плагинов
             apply-mmsource-css34.sh (MM 1.10)     # legacy-ядро metamod.1.ep1 для моста (bridge_metamod)
 ```
 
 Что из этого следует для апгрейда SM сегодня:
 
 1. Новая ревизия той же major (7472 → 75xx): меняется pin в `builder/versions.env` (и в местах из
-   [JULES_DAILY_VERSION_BUMP.md](JULES_DAILY_VERSION_BUMP.md)), правки — in place в `apply-sourcemod-v112.sh`.
-2. Правка в `apply-sourcemod-v112.sh` действует на **все** линии 1.12/1.13 сразу — проверять CI по всем.
+   [JULES_DAILY_VERSION_BUMP.md](JULES_DAILY_VERSION_BUMP.md)), затем
+   `builder/scripts/patch-series.sh refresh <line>` (или `refresh MM_112`) перебазирует серию
+   (`git apply --3way`); конфликт правится в самом `.patch`. См. [PATCHES.md](PATCHES.md).
+2. Серия своя у каждой линии и у pin'а MM: правка одной линии не задевает другие.
 3. Новая линия = новый case в `resolve-version.sh`, переменные в `versions.env`, строки в матрицах
    `test-server.yml` / `build.yml`, маппинг тега в `release.yml`, запись в `matrix.json`.
 

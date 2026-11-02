@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Apply a line's CS:S v34 patch series to a clean SourceMod checkout (T3.4).
+# Apply a CS:S v34 patch series to a clean checkout (T3.4).
 #
-#   builder/patches/apply-series.sh <series dir> <sourcemod dir>
+#   builder/patches/apply-series.sh <series dir> <checkout dir>
 #
-# <series dir> (builder/patches/series/<line>/) holds one directory per
-# repository: sourcemod/ for the SourceMod tree itself, and <path>/ for a
-# SourceMod submodule at that path (sourcepawn, hl2sdk-manifests, ...). Each
-# holds NNNN-*.patch files applied in order with `git apply --index`.
-# series.json names the SourceMod commit the series is made for and the tree
-# (`git write-tree`) every repository must have afterwards; any difference
-# fails the build. builder/scripts/patch-series.sh regenerates it.
+# <series dir> (builder/patches/series/<line or pin>/) holds one directory per
+# repository: <root>/ for the checkout itself (series.json "root": sourcemod by
+# default, metamod for a Metamod series), and <path>/ for a submodule of it at
+# that path (sourcepawn, hl2sdk-manifests, ...). Each holds NNNN-*.patch files
+# applied in order with `git apply --index`. series.json names the commit the
+# series is made for and the tree (`git write-tree`) every repository must
+# have afterwards; any difference fails the build.
+# builder/scripts/patch-series.sh regenerates it.
 set -euo pipefail
 
 series="${1:?series directory required}"
-sm="${2:?sourcemod directory required}"
+sm="${2:?checkout directory required}"
 manifest="$series/series.json"
 [[ -f "$manifest" ]] || { echo "FAIL: $manifest missing" >&2; exit 1; }
 
@@ -27,25 +28,26 @@ print(data)
 PY
 }
 
+root="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("root", "sourcemod"))' "$manifest")"
 base="$(expect commit)"
 head="$(git -C "$sm" rev-parse HEAD)"
 [[ "$head" == "$base" ]] || {
-  echo "FAIL: $series is made for SourceMod $base, the checkout is at $head" >&2
+  echo "FAIL: $series is made for $root $base, the checkout is at $head" >&2
   echo "      (refresh it with builder/scripts/patch-series.sh after a pin bump)" >&2
   exit 1
 }
 
-# Submodules first, then SourceMod: its tree records their gitlinks, not their files.
+# Submodules first, then the root: its tree records their gitlinks, not their files.
 repos=()
 for dir in "$series"/*/; do
   name="$(basename "$dir")"
-  [[ "$name" == sourcemod ]] || repos+=("$name")
+  [[ "$name" == "$root" ]] || repos+=("$name")
 done
-[[ -d "$series/sourcemod" ]] || { echo "FAIL: $series has no sourcemod/ patches" >&2; exit 1; }
-repos+=(sourcemod)
+[[ -d "$series/$root" ]] || { echo "FAIL: $series has no $root/ patches" >&2; exit 1; }
+repos+=("$root")
 
 for repo in "${repos[@]}"; do
-  if [[ "$repo" == sourcemod ]]; then target="$sm"; else target="$sm/$repo"; fi
+  if [[ "$repo" == "$root" ]]; then target="$sm"; else target="$sm/$repo"; fi
   [[ -e "$target/.git" ]] || { echo "FAIL: $target is not a git checkout" >&2; exit 1; }
   for patch in "$series/$repo"/*.patch; do
     git -c core.autocrlf=false -C "$target" apply --index --whitespace=nowarn "$(cd "$(dirname "$patch")" && pwd)/$(basename "$patch")" ||

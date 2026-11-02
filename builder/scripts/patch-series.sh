@@ -1,29 +1,40 @@
 #!/usr/bin/env bash
-# Maintain a line's SourceMod patch series (T3.4, builder/patches/series/<line>/).
+# Maintain a patch series (T3.4): builder/patches/series/<line>/ for SourceMod,
+# builder/patches/series/<MM pin>/ (MM_112) for Metamod.
 #
-#   builder/scripts/patch-series.sh refresh <line> [workdir]
-#       Rebase the series onto the line's pinned SourceMod commit (lines.json):
+#   builder/scripts/patch-series.sh refresh <series> [workdir]
+#       Rebase the series onto its pinned commit (lines.json):
 #       fetch it, apply each patch with `git apply --3way`, rewrite every patch
 #       from the result (keeping its description) and series.json (commit and
 #       trees). A patch that no longer applies stops with the conflict left in
 #       <workdir> for a manual fix; rerun after editing that patch.
-#   builder/scripts/patch-series.sh check <line> [workdir]
+#   builder/scripts/patch-series.sh check <series> [workdir]
 #       Fetch the pinned commit and run builder/patches/apply-series.sh on it.
 #
 # After a pin bump: refresh, review the patch diff, build and smoke.
 set -euo pipefail
 
-cmd="${1:?usage: patch-series.sh refresh|check <line> [workdir]}"
-line="${2:?line required}"
+cmd="${1:?usage: patch-series.sh refresh|check <series> [workdir]}"
+name="${2:?series name (a line or an MM_ pin) required}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-series="$root/builder/patches/series/$line"
-[[ -f "$series/series.json" ]] || { echo "FAIL: no patch series for $line ($series)" >&2; exit 1; }
+series="$root/builder/patches/series/$name"
+[[ -f "$series/series.json" ]] || { echo "FAIL: no patch series $name ($series)" >&2; exit 1; }
+field() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2], sys.argv[3]))' "$series/series.json" "$@"; }
+top="$(field root sourcemod)"
 
-commit="$(CSS34_LINE="$line" bash -c 'source "$1/builder/resolve-version.sh" >/dev/null 2>&1 && echo "$SOURCEMOD_COMMIT"' _ "$root")"
-[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "FAIL: cannot resolve the SourceMod pin of $line" >&2; exit 1; }
+if [[ "$top" == sourcemod ]]; then
+  commit="$(CSS34_LINE="$name" bash -c 'source "$1/builder/resolve-version.sh" >/dev/null 2>&1 && echo "$SOURCEMOD_COMMIT"' _ "$root")"
+  url="https://github.com/alliedmodders/sourcemod"
+  label=SourceMod
+else
+  commit="$(bash -c 'source "$1/builder/versions.env" && v="$2_COMMIT" && echo "${!v:-}"' _ "$root" "$name")"
+  url="https://github.com/alliedmodders/metamod-source"
+  label=Metamod:Source
+fi
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "FAIL: cannot resolve the pinned commit of $name" >&2; exit 1; }
 work="${3:-$(mktemp -d)}"
-sm="$work/sourcemod"
-bash "$root/builder/fetch-sourcemod.sh" "$sm" "$commit"
+sm="$work/$top"
+SOURCEMOD_URL="$url" bash "$root/builder/fetch-sourcemod.sh" "$sm" "$commit" "$label"
 
 case "$cmd" in
   check)
@@ -39,11 +50,11 @@ trees=()
 repos=()
 for dir in "$series"/*/; do
   name="$(basename "$dir")"
-  [[ "$name" == sourcemod ]] || repos+=("$name")
+  [[ "$name" == "$top" ]] || repos+=("$name")
 done
-repos+=(sourcemod)
+repos+=("$top")
 for repo in "${repos[@]}"; do
-  if [[ "$repo" == sourcemod ]]; then target="$sm"; else target="$sm/$repo"; fi
+  if [[ "$repo" == "$top" ]]; then target="$sm"; else target="$sm/$repo"; fi
   base="$(git -C "$target" rev-parse HEAD)"
   for patch in "$series/$repo"/*.patch; do
     if ! git_c "$target" apply --3way --index --whitespace=nowarn "$patch"; then
@@ -63,11 +74,12 @@ for repo in "${repos[@]}"; do
   echo "==> $repo: series refreshed"
 done
 
-python3 - "$series/series.json" "$line" "$commit" "${trees[@]}" <<'PY'
+python3 - "$series/series.json" "$commit" "${trees[@]}" <<'PY'
 import json, sys
-path, line, commit, *trees = sys.argv[1:]
-data = {"line": line, "commit": commit,
-        "trees": dict(sorted(t.split("=", 1) for t in trees))}
+path, commit, *trees = sys.argv[1:]
+data = json.load(open(path))
+data["commit"] = commit
+data["trees"] = dict(sorted(t.split("=", 1) for t in trees))
 with open(path, "w") as fh:
     json.dump(data, fh, indent=2)
     fh.write("\n")
