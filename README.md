@@ -183,9 +183,14 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/lines.j
 A pointer is created on the first tag release of its line. A line whose builds never passed smoke has a
 pointer release with only `lines.json` (`"tag": null, "smoke": "fail"`).
 
-`release.yml` switches a pointer only after `smoke-release` installed the **public** tag URLs with a plain
-`tar -x` and booted `srcds`; a red smoke leaves the pointer on the previous build (`lines.json[line].candidate`
-records the failed tag). Pointer assets are replaced upload-first (`<name>.next-<run>` → delete old → rename),
+A tag release is created as a **prerelease** with notes generated from the tag commit's pins
+(`builder/scripts/release-notes.py`: SourceMod / Metamod / bridge pins, Linux image and Windows toolchain,
+`min_glibc`, patch series, known-bad tags). `promote` makes it a full release only after `smoke-release`
+installed the **public** tag URLs with a plain `tar -x` and booted `srcds` and `botplay-release` passed;
+GitHub **Latest** is set explicitly, only for a tag of the default line (`lines.json` `default_line`). Windows
+assets never hold back promotion, and `SHA256SUMS` is written last. `release.yml` switches a pointer only
+after promotion; a red smoke leaves the release a prerelease and the pointer on the previous build
+(`lines.json[line].candidate` records the failed tag). Pointer assets are replaced upload-first (`<name>.next-<run>` → delete old → rename),
 so the URL serves the old file during a rebuild; the only gap is two back-to-back API calls. `smoke-pointer`
 then re-runs the smoke against the pointer URLs.
 
@@ -210,6 +215,7 @@ If a published pointer needs to be repointed or rolled back to a specific tag (e
 **What happens during a repoint dispatch:**
 - `resolve-line` validates `repoint_tag` against `^[0-9][0-9A-Za-z.+-]*$`, resolves its line (from `tag-map.sh` or the release package's `css34-package.json`), verifies that the line publishes a pointer (`css34_line_has_pointer`) and is not `known_bad`, retrieves its target commit SHA and timestamp, and verifies the release assets exist on GitHub Releases for that tag.
 - `release-pins`, `smoke-release`, and `botplay-release` execute public-URL smoke tests and centos:7 botplay tests across the line's OS matrix against `repoint_tag` with `SHA256SUMS` verification enabled.
+- `promote` turns the tag into a full release if it was still a prerelease (a repoint never takes GitHub Latest).
 - `line-pointer` updates the line pointer release (`line-<line>`) using `FORCE_REPOINT=1` (with the tag's commit SHA and timestamp) and rebuilds `lines-index/lines.json`.
 - `smoke-pointer` verifies that the pointer URL serves a working, smoke-passed build.
 

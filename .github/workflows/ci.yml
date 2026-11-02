@@ -171,6 +171,9 @@ jobs:
       - name: Check release selection and Docker debug opt-in
         run: python3 testing/scripts/test-release-build-entrypoints.py
 
+      - name: Release notes and prerelease → promote flow (T4.3)
+        run: python3 testing/scripts/test-release-notes.py
+
       - name: Check patch drift acceptance ranges and failures
         timeout-minutes: 30
         run: python3 testing/scripts/test-check-patch-drift.py
