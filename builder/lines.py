@@ -107,8 +107,12 @@ def load_manifest(path):
             ref = line[component]
             require(ref in pins and ref.startswith(prefix), "invalid pin reference for " + name)
         if "secondary_metamod" in line:
+            # D7: dual-core sm11 ships a second Metamod build. Master no longer
+            # builds one (T3.3); only a frozen line may keep the field.
             ref = line["secondary_metamod"]
             require(ref in pins and ref.startswith("MM_"), "invalid secondary_metamod reference for " + name)
+            require(line["status"] == "frozen",
+                    name + ": dual-core lines (secondary_metamod) are frozen; master builds one Metamod per line")
         if "bridge_metamod" in line:
             # Legacy-plugin bridge (T2.9): the MM 1.10 build whose metamod.1.ep1
             # goes into the line's MM 1.12 package; it is not packaged on its own.
@@ -116,8 +120,7 @@ def load_manifest(path):
             require(ref in pins and ref.startswith("MM_"), "invalid bridge_metamod reference for " + name)
             require(pins[ref]["mode"] == "1.10", name + ".bridge_metamod must be an MM 1.10 pin")
             require(pins[line["metamod"]]["mode"] == "1.12", name + ".bridge_metamod needs an MM 1.12 metamod")
-            require("secondary_metamod" not in line,
-                    name + ": a dual-Metamod line bridges through its secondary_metamod")
+            require("secondary_metamod" not in line, name + ": bridge_metamod and secondary_metamod exclude each other")
         if "frozen" in line:
             frozen = line["frozen"]
             require(line["status"] == "frozen", name + ".frozen needs status frozen")
@@ -192,7 +195,7 @@ def validate_runtime_images(data):
 
 
 def mm_version(mode):
-    return {"1.10": "1.10.7", "1.11": "1.11.0", "1.12": "1.12.0", "2.0": "2.0.0"}[mode]
+    return {"1.10": "1.10.7", "1.12": "1.12.0", "2.0": "2.0.0"}[mode]
 
 
 def mm_tag_part(name, mode):
@@ -242,11 +245,8 @@ def line_parts(data, name):
         res["secondary_mm_rev"] = s_mm["rev"]
         res["secondary_mm_mode"] = s_mm["mode"]
         res["secondary_mm_expect"] = mm_version(s_mm["mode"])
-    # The MM 1.10 legacy core the MM 1.12 package ships for PLAPI 7-12 plugins:
-    # bridge_metamod, or a dual line's MM 1.10 secondary (sm11).
+    # The MM 1.10 legacy core the MM 1.12 package ships for PLAPI 7-12 plugins.
     bridge = line.get("bridge_metamod")
-    if bridge is None and "secondary_metamod" in line and mm["mode"] == "1.12":
-        bridge = line["secondary_metamod"] if data["pins"][line["secondary_metamod"]]["mode"] == "1.10" else None
     if bridge is not None:
         res["bridge_mm_commit"] = data["pins"][bridge]["commit"]
         res["bridge_mm_rev"] = data["pins"][bridge]["rev"]
@@ -264,11 +264,6 @@ def row_expect(row, with_commits):
         item["sm_commit"] = row["sm_commit"]
         item["mm_commit"] = row["mm_commit"]
         item["mm_rev"] = row["mm_rev"]
-        if "secondary_mm_commit" in row:
-            item["secondary_mm_commit"] = row["secondary_mm_commit"]
-            item["secondary_mm_rev"] = row["secondary_mm_rev"]
-            item["secondary_mm_mode"] = row["secondary_mm_mode"]
-            item["secondary_mm_expect"] = row["secondary_mm_expect"]
     return item
 
 
@@ -282,89 +277,58 @@ def mm_win_package_name(mode, rev):
     return "mmsource-{}-git{}-css34-windows.zip".format(mm_version(mode), rev)
 
 
-def windows_row(part, variant):
+def windows_row(part):
     """A Windows build/smoke row: the Metamod zip to install and what it must report."""
     item = row_expect(part, False)
-    item.update(mm_runtime(part, variant))
-    mode = part["secondary_mm_mode"] if variant == "secondary" else part["mm_mode"]
-    # Runtime meta version is 1.12.0-dev+<rev> (1.10.7-dev+<rev> on MM 1.10).
+    item.update(mm_runtime(part))
+    # Runtime meta version is 1.12.0-dev+<rev>.
     item["mm_expect"] = "{}-dev+{}".format(item["mm_expect"], item["mm_rev"])
-    item["mm_package"] = mm_win_package_name(mode, item["mm_rev"])
+    item["mm_package"] = mm_win_package_name(part["mm_mode"], item["mm_rev"])
     item["exts"] = WINDOWS_EXTS
     item["load_exts"] = WINDOWS_LOAD_EXTS
     return item
 
 
-def mm_variants(part):
-    """Metamod builds a line ships: dual-core SM 1.11 runs on both."""
-    return ["primary", "secondary"] if "secondary_mm_commit" in part else ["primary"]
-
-
-def mm_runtime(part, variant):
+def mm_runtime(part):
     """What a smoke/botplay row installs and what the running server must report.
 
-    MM 1.10 loads the 1.ep1 core, every newer Metamod the 2.ep1 core. DHooks is
-    built for 2.ep1 only, so it must load exactly when the 2.ep1 core runs.
+    The line's Metamod (MM 1.12) loads the 2.ep1 core, which must offer DHooks.
     """
-    if variant == "secondary":
-        mode, rev, commit = (part["secondary_mm_mode"], part["secondary_mm_rev"],
-                             part["secondary_mm_commit"])
-    else:
-        mode, rev, commit = part["mm_mode"], part["mm_rev"], part["mm_commit"]
+    mode, rev, commit = part["mm_mode"], part["mm_rev"], part["mm_commit"]
     core = "1.ep1" if mode == "1.10" else "2.ep1"
     return {
-        "mm_variant": variant,
         "mm_expect": mm_version(mode),
         "mm_rev": rev,
         "mm_commit": commit,
         "mm_package": mm_package_name(mode, rev),
         "expect_core": core,
         "dhooks_expect": "0" if core == "1.ep1" else "1",
-        # T2.9: an MM 1.12 package with the MM 1.10 legacy core (bridge_metamod or
-        # sm11's secondary) must run a PLAPI 11 plugin on metamod.2.ep1 through it.
+        # T2.9: an MM 1.12 package with the bridge_metamod legacy core must run a
+        # PLAPI 11 plugin on metamod.2.ep1 through it.
         "legacy_bridge": "1" if ("bridge_mm_commit" in part and mode == "1.12") else "0",
     }
 
 
-def runtime_row(part, variant, with_commits):
+def runtime_row(part, with_commits):
     item = row_expect(part, with_commits)
-    item.update(mm_runtime(part, variant))
+    item.update(mm_runtime(part))
     return item
 
 
-def switch_rows(part):
-    """Install one Metamod, then switch to the other over it (README procedure)."""
-    rows = []
-    for target, source in (("secondary", "primary"), ("primary", "secondary")):
-        item = runtime_row(part, target, True)
-        item["mm_variant"] = "switch-to-" + target
-        item["switch_from_package"] = mm_runtime(part, source)["mm_package"]
-        rows.append(item)
-    return rows
-
-
 def debian_rows(data):
-    """Per-PR smoke, image-major, in the order each line lists its images.
-
-    Dual-Metamod lines smoke every image on each Metamod, and the first image
-    also checks switching from one Metamod to the other.
-    """
+    """Per-PR smoke, image-major, in the order each line lists its images."""
     order = []
     by_image = {}
     for name, line in data["lines"].items():
         if line["status"] != "active":
             continue
         part = line_parts(data, name)
-        for index, entry in enumerate(line["smoke"]):
+        for entry in line["smoke"]:
             image = entry["image"]
             if image not in by_image:
                 order.append(image)
                 by_image[image] = []
-            for variant in mm_variants(part):
-                by_image[image].append(attach_image(runtime_row(part, variant, True), data, image))
-            if index == 0 and len(mm_variants(part)) > 1:
-                for item in switch_rows(part):
-                    by_image[image].append(attach_image(item, data, image))
+            by_image[image].append(attach_image(runtime_row(part, True), data, image))
     rows = []
     for image in order:
         rows.extend(by_image[image])
@@ -378,16 +342,15 @@ def weekly_rows(data):
         for name, line in data["lines"].items():
             if line["status"] != "active":
                 continue
-            rows.append(attach_image(runtime_row(line_parts(data, name), "primary", True), data, image))
+            rows.append(attach_image(runtime_row(line_parts(data, name), True), data, image))
     require(rows, "weekly smoke matrix is empty")
     return rows
 
 
-def image_rows(data, image_name, with_commits, all_variants=False):
+def image_rows(data, image_name, with_commits):
     rows = []
     for row in active_rows(data):
-        for variant in (mm_variants(row) if all_variants else ["primary"]):
-            rows.append(attach_image(runtime_row(row, variant, with_commits), data, image_name))
+        rows.append(attach_image(runtime_row(row, with_commits), data, image_name))
     require(rows, "matrix for " + image_name + " is empty")
     return rows
 
@@ -402,10 +365,9 @@ def ci_matrix(data):
         if line.get("host_smoke"):
             host.append(row_expect(part, True))
         if line.get("windows") and line["status"] == "active":
-            # One build per line (native smoke on the primary Metamod); Wine smoke
-            # runs on every Metamod build the line ships.
-            windows.append(windows_row(part, "primary"))
-            windows_smoke.extend(windows_row(part, variant) for variant in mm_variants(part))
+            # One build per line (native smoke there), then a Wine smoke.
+            windows.append(windows_row(part))
+            windows_smoke.append(windows_row(part))
     require(host, "host matrix must be non-empty")
     release = []
     for row in rows:
@@ -425,7 +387,7 @@ def ci_matrix(data):
     return {
         "build": [row_expect(row, True) for row in rows],
         "debian": debian_rows(data),
-        "botplay": image_rows(data, data["botplay_image"], False, all_variants=True),
+        "botplay": image_rows(data, data["botplay_image"], False),
         "weekly": weekly_rows(data),
         "weekly_botplay": image_rows(data, data["weekly_botplay_image"], False),
         "host": host,
@@ -580,11 +542,6 @@ def render_versions(data):
     for prefix, fields in data["pins"].items():
         for field, value in fields.items():
             rows.append("{}={}".format(prefix + "_" + field.upper(), shlex.quote(str(value))))
-        rows.append("")
-    # Add backward compatibility aliases for SM11 frozen MM
-    if "MM_112_FROZEN" in data["pins"]:
-        for field, value in data["pins"]["MM_112_FROZEN"].items():
-            rows.append("MM_112_SM11_{}={}".format(field.upper(), shlex.quote(str(value))))
         rows.append("")
     rows.append("CSS34_LINE=${CSS34_LINE:-" + data["default_line"] + "}")
     return "\n".join(rows) + "\n"

@@ -3,9 +3,10 @@
 ## Cursor Cloud specific instructions
 
 This repo is a **build system** (not a long-running app). It compiles patched
-**SourceMod + Metamod:Source** packages for **Counter-Strike: Source v34** — three
-lines selected by `CSS34_LINE` (default `sm13-latest` = SM 1.13.0.7472 + MM 1.12
-git1226; pins in `builder/lines.json`; generated `builder/versions.env`) — and
+**SourceMod + Metamod:Source** packages for **Counter-Strike: Source v34** — two
+buildable lines selected by `CSS34_LINE` (`sm12-latest`, default `sm13-latest` =
+SM 1.13.0.7478 + MM 1.12 git1228; pins in `builder/lines.json`; generated
+`builder/versions.env`; `sm11-oldstable` is frozen) — and
 smoke-tests them on a real `srcds`
 dedicated server. See `README.md`, `docs/README.md`, `testing/README.md`, and
 `.github/workflows/` for the canonical commands; the notes below only cover
@@ -37,8 +38,7 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   is bind-mounted and owned by uid 1000, git blocks submodule ops otherwise).
   `build.sh` does this itself.
 - The builder self-provisions deps into `deps/` (pinned hl2sdk episode1,
-  rom4s/hl2sdk-ep1c, AMBuild, static OpenSSL 1.1.1w, PIC zlib 1.3.1,
-  MySQL / MariaDB SDKs).
+  AMBuild, static OpenSSL 1.1.1w, PIC zlib 1.3.1, MySQL / MariaDB SDKs).
   Downloads come from github.com, bitbucket.org, cdn.mysql.com, www.openssl.org,
   snapshot.debian.org and archive.debian.org — all reachable. Tarball downloads
   are sha256-pinned.
@@ -50,22 +50,25 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 - sm11 is **frozen** (T2.7, `docs/FREEZE.md`): `status: frozen`, `releasable: false`, a `frozen`
   block (tag, `sm11-freeze`, `sm11-freeze-inputs`, sha256 of every release asset). CI no longer
   builds it, a new sm11 tag is refused, and `frozen-verify.yml` re-checks its published files weekly
-  (`lines.py frozen-gha`, `testing/scripts/verify-frozen-line.py`). Tests that cover the dual-core
-  CI paths thaw sm11 in a temporary `lines.json`.
+  (`lines.py frozen-gha`, `testing/scripts/verify-frozen-line.py`). Its dual-core build code (SM 1.11
+  patcher, `secondary_metamod` builds, the rom4s hl2sdk-ep1c SDK) left master with T3.3: rebuild it
+  only from the `sm11-freeze` tag. The builder (`css34_require_buildable` in `resolve-version.sh`:
+  SourceMod 1.12+ only) and `resolve-metamod-pins.py` refuse it; `resolve-version.sh` still resolves its
+  pins for smoke expectations. `lines.py check` allows `secondary_metamod` only on a frozen line.
 - sm11 (D7): primary Metamod is the frozen MM 1.12 (git1227), secondary MM 1.10.7;
   its tag is `1.11.0.6970-mm1.12.0-dual` and `line-sm11-oldstable` also serves MM 1.10.7 as
   `mmsource-legacy-css34-linux.tar.gz` (`lines.py legacy-mm-asset <line>`, `update-line-pointer.sh`
-  5th argument, a second `release-smoke.sh` in `smoke-pointer`).
-- sm11's primary and secondary Metamod inputs are resolved from `metamod` and
-  `secondary_metamod` in `builder/lines.json` by `builder/resolve-metamod-pins.py`.
-  Checkout, Linux/Windows dual-MM builds, and the package verifier share this
-  resolver; unknown lines and invalid pin references are errors.
+  5th argument, a second `release-smoke.sh` in `smoke-pointer` and `frozen-verify.yml`).
+- A buildable line's Metamod inputs come from `metamod` (MM 1.12) and `bridge_metamod` (MM 1.10) in
+  `builder/lines.json`, resolved by `builder/resolve-metamod-pins.py`. Checkout, the Linux/Windows
+  builds and the package verifier share this resolver; unknown lines and invalid pin references are
+  errors. The builder holds no pinned commits of its own (`check-version-copies.sh`).
 - Windows (`builder/run/windows.sh`) builds on `windows-2022` with MSVC toolset
   `14.44` (`-vcvars_ver=14.44`) and Windows SDK `10.0.26100.0`
   (`builder/windows-toolchain.env`). `builder/package_windows.py` writes the zips
   (POSIX `/` paths, `css34-package.json` inside, full toolset and SDK versions
-  in the manifest). `sm11-oldstable`, `sm12-latest` and `sm13-latest` have `"windows": true`;
-  sm11 Windows builds both cores and both Metamod zips, and `wine-smoke` runs on each.
+  in the manifest). `sm12-latest` and `sm13-latest` have `"windows": true`; `wine-smoke`
+  runs one row per line.
 
 ### Verifying / testing
 - **Static ABI check** (the "ABI / export checks" step of `build-linux` in
@@ -98,16 +101,10 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `Build ID: <MM_REV>:<sha prefix>`; `sm version` must be `<major>.<SM_REV>`
   (the revs come from `builder/lines.json`). Image digests live only in
   `builder/lines.json`; `python3 builder/lines.py gen` writes the matrix.
-- **Dual-core SM 1.11 gates** (T2.4): each matrix row names the Metamod build it
-  installs (`mm_variant`, `mm_package`) and the core that must run
-  (`expect_core`). `sm11-oldstable` smokes every per-PR image on MM 1.10.7
-  (`1.ep1`) and MM 1.12 (`2.ep1`), switches between them on the first image with
-  `testing/scripts/switch-metamod.sh`, and runs botplay on both. `smoke-test.sh`
-  takes `SMOKE_EXPECT_CORE=1.ep1|2.ep1`: DHooks ships only as
-  `dhooks.ext.2.ep1`, so it must load exactly on the 2.ep1 core.
-  `check-sm11-build-log.sh` checks the include roots and 0 `WARN` lines in the
-  1.11 build log, and `plapi-runtime` requires the published
-  `1.11.0.6970-mm1.10.7` package to fail the PLAPI probe.
+- **Core gates**: each matrix row names the Metamod package it installs (`mm_package`)
+  and the core that must run (`expect_core`, `2.ep1`). `smoke-test.sh` takes
+  `SMOKE_EXPECT_CORE=1.ep1|2.ep1` (`1.ep1` only for the frozen sm11 pointer's
+  `mmsource-legacy`), and `plapi-runtime` probes the PLAPI of every built core.
 - **Legacy-plugin bridge** (T2.9, #144): MM 1.12 (`metamod.2.ep1`) hands
   PLAPI 7-12 plugins to the MM 1.10 legacy core (`metamod.1.ep1`) from its own
   `bin/` directory, as rom4s's MM 1.12 git1159 does. Code:
@@ -116,7 +113,7 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `apply-mmsource-v112.sh`). A line's MM 1.10 legacy core comes from
   `bridge_metamod` in `lines.json` (`sm12-latest`, `sm13-latest`; role `bridge` in
   `resolve-metamod-pins.py`: built first, its `metamod.1.ep1` copied into the MM 1.12
-  package, never packaged itself) or from sm11's MM 1.10 `secondary_metamod`.
+  package, never packaged itself).
   `verify-line-metamod-packages.sh` requires that core inside the MM 1.12 package,
   built from the bridge pin, with `legacy_bridge: true`. The PLAPI 11 test plugin
   `css34_legacy_probe` lands in `packages/test-plugins/` (never released). Matrix

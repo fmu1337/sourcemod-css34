@@ -42,7 +42,6 @@ case "${BOTPLAY_PROFILE}" in
           if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
             case "${RESOLVED_MM_MODE:-}" in
               1.10) MM_VERSION_EXPECT="1.10.7" ;;
-              1.11) MM_VERSION_EXPECT="1.11.0" ;;
               1.12) MM_VERSION_EXPECT="1.12.0" ;;
               2.0)  MM_VERSION_EXPECT="2.0.0" ;;
               *)    MM_VERSION_EXPECT="1.12.0" ;;

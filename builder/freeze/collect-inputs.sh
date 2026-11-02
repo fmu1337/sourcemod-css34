@@ -2,7 +2,7 @@
 # T2.7: build a line online once and archive every input of that build, so it
 # can be rebuilt later with --network none (builder/freeze/build-offline.sh).
 #
-#   CSS34_LINE=sm11-oldstable builder/freeze/collect-inputs.sh OUT_DIR
+#   CSS34_LINE=<line> builder/freeze/collect-inputs.sh OUT_DIR   (sm11: at the sm11-freeze tag)
 #
 # Run it in a fresh checkout (no deps/, sourcemod submodule not initialized):
 # cached deps skip their downloads, and those files would be missing.
@@ -10,10 +10,10 @@
 # OUT_DIR/assets gets, each as its own file (release sm11-freeze-inputs):
 #   git-<owner>-<repo>.tar.zst   bare mirror holding the pinned commit(s) of a
 #                                repository the build clones (SourceMod and its
-#                                submodules, Metamod 1.10 / 1.12, hl2sdk
-#                                episode1, ep1c, AMBuild, Metamod submodules)
+#                                submodules, Metamod 1.10 / 1.12 + submodules,
+#                                hl2sdk episode1, AMBuild; sm11's also ep1c)
 #   dl-<name>                    every pinned download (zlib, OpenSSL, MySQL,
-#                                GeoLite2, hl2sdk css headers)
+#                                GeoLite2; sm11's also hl2sdk css headers)
 #   build-image.tar.zst          docker save of the build image, tagged
 #                                css34-build-ml2014:<line>-freeze
 #   <package>                    the packages of this online build

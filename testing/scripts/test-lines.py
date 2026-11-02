@@ -22,23 +22,12 @@ class LinesTest(unittest.TestCase):
         for name in ("builder/lines.py", "builder/lines.json", "builder/versions.env",
                      "builder/generated/ci-matrix.json", "builder/generated/tag-map.sh",
                      "README.md",
-                     "builder/checkout-deps.sh", "builder/write-build-stamps.sh",
                      "testing/scripts/check-version-copies.sh",
                      ".github/workflows/ci.yml",
                      ".github/workflows/release.yml"):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
-
-    def thaw_sm11(self):
-        """Make sm11-oldstable an active CI line again (T2.7 froze it) and regenerate."""
-        target = self.root / "builder/lines.json"
-        data = json.loads(target.read_text())
-        line = data["lines"]["sm11-oldstable"]
-        line.pop("frozen")
-        line.update(status="active", releasable=True)
-        target.write_text(json.dumps(data))
-        self.run_command("gen")
 
     def edit_frozen(self, change):
         target = self.root / "builder/lines.json"
@@ -108,8 +97,7 @@ class LinesTest(unittest.TestCase):
         # sm11-oldstable is frozen (T2.7): out of every CI matrix.
         for key in ("build", "debian", "botplay", "weekly", "weekly_botplay", "windows", "windows_smoke"):
             self.assertNotIn("sm11-oldstable", {row["line"] for row in matrix[key]}, key)
-        self.assertEqual([(row["line"], row["mm_variant"]) for row in matrix["botplay"]],
-                         [("sm12-latest", "primary"), ("sm13-latest", "primary")])
+        self.assertEqual([row["line"] for row in matrix["botplay"]], ["sm12-latest", "sm13-latest"])
         self.assertEqual({row["image_name"] for row in matrix["botplay"]}, {"debian:11"})
         self.assertEqual([row["image_name"] for row in matrix["weekly_botplay"]], ["centos:7"] * 2)
         self.assertTrue(all("@sha256:" in row["image"] for row in matrix["weekly"] + matrix["botplay"]))
@@ -118,41 +106,37 @@ class LinesTest(unittest.TestCase):
         for name in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
             self.assertNotIn("sha256:", (self.root / name).read_text(), name)
 
-    def test_dual_metamod_rows_follow_lines_json(self):
-        self.thaw_sm11()  # the only dual-Metamod line
+    def test_runtime_rows_follow_the_line_metamod(self):
+        """One row per line and image: the line's MM 1.12 package on the 2.ep1 core."""
         data = json.loads((self.root / "builder/lines.json").read_text())
         matrix = json.loads((self.root / "builder/generated/ci-matrix.json").read_text())
-        pins = data["pins"]
-        version = {"1.10": "1.10.7", "1.12": "1.12.0"}
-        for name, line in data["lines"].items():
-            if line["status"] != "active":
-                continue
-            roles = {"primary": pins[line["metamod"]]}
-            if "secondary_metamod" in line:
-                roles["secondary"] = pins[line["secondary_metamod"]]
-            rows = [row for row in matrix["debian"] if row["line"] == name]
-            for image in [entry["image"] for entry in line["smoke"]]:
-                got = {row["mm_variant"] for row in rows if row["image_name"] == image}
-                self.assertTrue(set(roles) <= got, (name, image, got))
-            for row in rows + [r for r in matrix["botplay"] if r["line"] == name]:
-                role = row["mm_variant"].replace("switch-to-", "")
-                pin = roles[role]
-                core = "1.ep1" if pin["mode"] == "1.10" else "2.ep1"
-                self.assertEqual(row["mm_package"], "mmsource-{}-git{}-css34-linux.tar.gz".format(
-                    version[pin["mode"]], pin["rev"]), row)
-                self.assertEqual((row["mm_commit"], row["mm_rev"], row["mm_expect"]),
-                                 (pin["commit"], pin["rev"], version[pin["mode"]]), row)
-                self.assertEqual((row["expect_core"], row["dhooks_expect"]),
-                                 (core, "0" if core == "1.ep1" else "1"), row)
-            switches = [row for row in rows if row["mm_variant"].startswith("switch-to-")]
-            if len(roles) > 1:
-                self.assertEqual(sorted(row["mm_variant"] for row in switches),
-                                 ["switch-to-primary", "switch-to-secondary"], name)
-                for row in switches:
-                    self.assertEqual(row["image_name"], line["smoke"][0]["image"])
-                    self.assertNotEqual(row["switch_from_package"], row["mm_package"])
-            else:
-                self.assertEqual(switches, [], name)
+        for key in ("debian", "botplay", "weekly", "weekly_botplay"):
+            for row in matrix[key]:
+                pin = data["pins"][data["lines"][row["line"]]["metamod"]]
+                self.assertEqual(row["mm_package"],
+                                 "mmsource-1.12.0-git{}-css34-linux.tar.gz".format(pin["rev"]), (key, row))
+                self.assertEqual((row["mm_rev"], row["mm_expect"], row["expect_core"], row["dhooks_expect"]),
+                                 (pin["rev"], "1.12.0", "2.ep1", "1"), (key, row))
+                self.assertFalse({"mm_variant", "switch_from_package", "secondary_mm_commit"} & set(row), row)
+        for row in matrix["debian"]:
+            self.assertEqual(row["mm_commit"], data["pins"][data["lines"][row["line"]]["metamod"]]["commit"])
+        pairs = [(row["line"], row["image_name"]) for row in matrix["debian"]]
+        self.assertEqual(len(pairs), len(set(pairs)))
+
+    def test_only_a_frozen_line_keeps_a_second_metamod(self):
+        """T3.3: master builds one Metamod per line; dual-core sm11 stays frozen."""
+        cases = (
+            (lambda d: d["lines"]["sm11-oldstable"].update(status="retired"), "dual-core lines (secondary_metamod) are frozen"),
+            (lambda d: d["lines"]["sm13-latest"].update(secondary_metamod="MM_110"), "master builds one Metamod per line"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                self.setUp()
+                target = self.root / "builder/lines.json"
+                data = json.loads(target.read_text())
+                change(data)
+                target.write_text(json.dumps(data))
+                self.assertIn(message, self.run_command("check", False).stderr)
 
     def frozen_rows(self):
         out = self.run_command("frozen-gha").stdout
@@ -182,7 +166,8 @@ class LinesTest(unittest.TestCase):
 
     def test_frozen_block_rules(self):
         cases = (
-            (lambda l: l.update(status="active"), "needs status frozen"),
+            (lambda l: (l.pop("secondary_metamod"), l.update(status="active")), "needs status frozen"),
+            (lambda l: l.update(status="active"), "master builds one Metamod per line"),
             (lambda l: l.update(releasable=True), "rebuilt only from sm11-freeze"),
             (lambda l: l["frozen"].update(tag="1.11.0.6970-mm1.10.7"), "is not a build of"),
             (lambda l: l["frozen"]["assets"].update({"x.tar.gz": "abc"}), "needs a sha256"),
@@ -218,7 +203,7 @@ class LinesTest(unittest.TestCase):
             (lambda d: d["lines"]["sm13-latest"].update(bridge_metamod="MM_112"), "must be an MM 1.10 pin"),
             (lambda d: d["lines"]["sm13-latest"].update(bridge_metamod="MM_NOPE"), "invalid bridge_metamod reference"),
             (lambda d: d["lines"]["sm13-mm20"].update(bridge_metamod="MM_110"), "needs an MM 1.12 metamod"),
-            (lambda d: d["lines"]["sm13-latest"].update(secondary_metamod="MM_110"), "bridges through its secondary_metamod"),
+            (lambda d: d["lines"]["sm11-oldstable"].update(bridge_metamod="MM_110"), "exclude each other"),
         )
         for change, message in cases:
             with self.subTest(message=message):

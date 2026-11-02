@@ -42,9 +42,9 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 7. **sdkhooks.games** `OnTakeDamage` linux offset **61** (css34)
 8. Every SDKTools / SDKHooks vtable offset in the installed gamedata matches the `CCSPlayer` / `CWeaponCSBase` vtables of the v34 `server_i486.so` (`check-css34-vtables.py`; needs `python3` + `c++filt`, which `install-deps.sh` provides, including Python 3.4 on Debian 8 and Ubuntu 14.04). `CSS34_CI=1` fails the run if that check is skipped.
 9. No segfault; not flooded with `Unknown command` (buffer bug signature)
-10. With `SMOKE_EXPECT_CORE=1.ep1|2.ep1` (CI sets it from the matrix row): the expected SourceMod core runs. The dual-core SM 1.11 package ships DHooks only as `dhooks.ext.2.ep1`, so `sm exts list` must show DHooks on the 2.ep1 core (MM 1.12) and must not on the 1.ep1 core (MM 1.10.7).
+10. With `SMOKE_EXPECT_CORE=1.ep1|2.ep1` (CI sets it from the matrix row): the expected SourceMod core runs, and DHooks loads exactly on the 2.ep1 core. Built lines run `2.ep1`; `1.ep1` is left for the frozen dual-core SM 1.11 (`frozen-verify.yml` smokes its pointer's `mmsource-legacy` on MM 1.10.7, where its `dhooks.ext.2.ep1` must not load).
 
-`sm11-oldstable` smokes each per-PR image on both Metamod builds, and the first image also switches from one Metamod to the other with `testing/scripts/switch-metamod.sh` (remove `addons/metamod/bin/{server*,metamod.*}`, extract the other package, keep `metaplugins.ini`). Botplay runs on both too, and `BOTPLAY_EXPECT_DHOOKS` makes the DHooks probe mandatory on MM 1.12 and forbidden on MM 1.10.7.
+`BOTPLAY_EXPECT_DHOOKS` (from the row's `dhooks_expect`) makes the botplay DHooks probe mandatory.
 
 The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs) + `css34_cstrike_forward_probe.smx` (requires cstrike TerminateRound / buy / price detour hits and a `GetPlayerWeaponSlot` → `CS_DropWeapon` → `GivePlayerItem` round, `css34_cs_probe_mode 8` in `botplay-stress.cfg`)) + `css34_dhooks_probe.smx` (where dhooks.ext ships: DHooks virtual hooks on `CCSPlayer::OnTakeDamage`, `CBasePlayer::EyePosition` (Vector return, override) and `CCSPlayer::PlayStepSound` (float param, `MRES_ChangedHandled` recall), and detours on `CCSPlayer::RoundRespawn` and `CWeaponCSBase::GetMaxSpeed` (float return, override) must install, fire and return sane values; probe gamedata lives in `testing/plugins/gamedata/`; lines without DHooks log `available=0` and are skipped) + `css34_upstream_probe.smx` (sound hook `Plugin_Changed` continues into the next hook on SM 1.13.0.7475+, a `HookSingleEntityOutput` does not fire on a new `logic_relay` after a map change, and `GetClientOfUserId` rejects out-of-range userids). Runs for all `CSS34_LINE` builds on every `master` push.
 
@@ -128,8 +128,8 @@ Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary;
 
 ## Legacy-plugin bridge (T2.9)
 
-Every MM 1.12 package with the bridge (`sm11-oldstable`, and `sm12-latest` /
-`sm13-latest` through `bridge_metamod` in `builder/lines.json`) ships
+Every MM 1.12 package with the bridge (`sm12-latest` / `sm13-latest` through
+`bridge_metamod` in `builder/lines.json`, and the frozen `sm11-oldstable`) ships
 `metamod.2.ep1` and the MM 1.10 legacy core `metamod.1.ep1`. MM 1.12 refuses PLAPI 7-12 plugins upstream ("Older Metamod
 version required"); with the bridge it loads `metamod.1.ep1` on first use and
 lets it host them, so old MM 1.4-1.10 plugins run next to SourceMod (2.ep1
@@ -160,13 +160,10 @@ binaries from rom4s `srcds_css34_w_a.zip` (`srcds.exe`, `bin/*.dll`,
 extensions (`LOAD_EXTS` are loaded first; the matrix loads `sdkhooks` and
 requires **SDK Hooks**). When the package contains `dhooks.ext.dll` the script
 also loads it and requires **DHooks**. `DHOOKS_EXPECT` (from the matrix
-`dhooks_expect`) overrides that: the dual-core SM 1.11 zip ships
-`dhooks.ext.2.ep1.dll`, so DHooks must load on MM 1.12 (2.ep1 core) and must not
-on MM 1.10.7 (1.ep1 core). Then a `changelevel`.
+`dhooks_expect`) overrides that. Then a `changelevel`.
 
-`wine-smoke` runs one row per Metamod build (`windows_smoke` matrix): sm11 on
-`mmsource-1.10.7-git<rev>` and `mmsource-1.12.0-git<rev>`, sm12/sm13 on MM 1.12.
-`build-windows` smokes the primary Metamod natively and then runs
+`wine-smoke` runs one row per line (`windows_smoke` matrix) on the line's MM 1.12
+zip. `build-windows` smokes it natively and then runs
 `check-core-plapi.sh` on the installed server: the probe is built with `cl`
 and requires PLAPI 11 from `sourcemod.1.ep1.dll` and 16 from `sourcemod.2.ep1.dll`. On a failure
 `testing/scripts/wine-crash-report.py` maps every access violation in the

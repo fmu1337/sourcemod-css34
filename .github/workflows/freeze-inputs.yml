@@ -36,7 +36,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PURE_SOURCE_BUILD: "1"
   CSS34_LINE: ${{ github.event.inputs.css34_line }}
 
 jobs:

@@ -80,8 +80,8 @@ public Action CS_OnTerminateRound(float &delay, CSRoundEndReason &reason)
 	return Plugin_Continue;
 }
 
-// No `donated` argument: css34 SM 1.11 declares it as `bool donated=false`
-// (apply-api-compat.sh) and spcomp 1.11 rejects both spellings of the third
+// No `donated` argument: the frozen css34 SM 1.11 (sm11-oldstable) declares it
+// as `bool donated=false` and spcomp 1.11 rejects both spellings of the third
 // parameter there; the two-argument form compiles on every line.
 public Action CS_OnCSWeaponDrop(int client, int weaponIndex)
 {

@@ -9,12 +9,12 @@ SOURCEMOD_DIR="$WDIR/sourcemod"
 
 # shellcheck source=../resolve-version.sh
 source "$BUILDER_DIR/resolve-version.sh"
+css34_require_buildable
 MMS_DIR="${MMS_DIR:-$DEPS_DIR/$MMS_DIRNAME}"
 
 export BUILD_PLATFORM=windows
 export SOURCEMOD_MAJOR MMS_MODE MMS_DIR MMS_DIRNAME MMS_COMMIT MMS_BRANCH MMS_GIT_REV
 export SOURCEMOD_COMMIT SOURCEMOD_GIT_REV SOURCEMOD_DIR WDIR
-export PURE_SOURCE_BUILD="${PURE_SOURCE_BUILD:-1}"
 # One timestamp for both css34-package.json manifests of this build.
 export BUILD_DATE="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 
@@ -83,9 +83,8 @@ build_and_package_mm_win() {
     bash "$BUILDER_DIR/build-metamod.sh"
 
   # css34 legacy-plugin bridge (T2.9): the MM 1.12 package also ships the line's
-  # MM 1.10 legacy core (bridge_metamod, or sm11's secondary); metamod.2.ep1
-  # loads it for PLAPI 7-12 plugins. The PLAPI 11 test plugin goes to
-  # packages/test-plugins (never released).
+  # MM 1.10 legacy core (bridge_metamod); metamod.2.ep1 loads it for PLAPI 7-12
+  # plugins. The PLAPI 11 test plugin goes to packages/test-plugins (never released).
   local mm_bin="$mm_dir/build/package/addons/metamod/bin"
   if [[ "$mm_mode" == 1.10 ]]; then
     local probe
@@ -93,11 +92,11 @@ build_and_package_mm_win() {
     [[ -n "$probe" ]] || { echo "FAIL: css34_legacy_probe.dll was not built in $mm_dir/build" >&2; exit 1; }
     mkdir -p "$PACKAGES_DIR/test-plugins"
     cp -f "$probe" "$PACKAGES_DIR/test-plugins/"
-    SM11_LEGACY_CORE="$mm_bin/metamod.1.ep1.dll"
-  elif [[ "$mm_mode" == 1.12 && -n "${SM11_LEGACY_CORE:-}" ]]; then
-    [[ -f "$SM11_LEGACY_CORE" ]] || { echo "FAIL: missing the MM 1.10 legacy core $SM11_LEGACY_CORE" >&2; exit 1; }
-    cp -f "$SM11_LEGACY_CORE" "$mm_bin/"
-    echo "==> Added $(basename "$SM11_LEGACY_CORE") to the MM 1.12 package (legacy-plugin bridge)"
+    LEGACY_CORE="$mm_bin/metamod.1.ep1.dll"
+  elif [[ "$mm_mode" == 1.12 && -n "${LEGACY_CORE:-}" ]]; then
+    [[ -f "$LEGACY_CORE" ]] || { echo "FAIL: missing the MM 1.10 legacy core $LEGACY_CORE" >&2; exit 1; }
+    cp -f "$LEGACY_CORE" "$mm_bin/"
+    echo "==> Added $(basename "$LEGACY_CORE") to the MM 1.12 package (legacy-plugin bridge)"
   fi
   if [[ "$mm_role" == bridge ]]; then
     echo "==> MM ${mm_mode} built for the legacy-plugin bridge only; not packaged"
@@ -118,9 +117,8 @@ build_and_package_mm_win() {
 }
 
 # Every Metamod build of the line, MM 1.10 first: the primary (MMS_*,
-# resolve-version.sh) plus lines.json's secondary_metamod (dual-core sm11,
-# packaged on its own) and bridge_metamod (only its metamod.1.ep1 goes into the
-# MM 1.12 package: legacy-plugin bridge, T2.9).
+# resolve-version.sh) and lines.json's bridge_metamod (only its metamod.1.ep1
+# goes into the MM 1.12 package: legacy-plugin bridge, T2.9).
 mm_extra="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm13-latest}")" ||
   { echo "FAIL: cannot resolve the Metamod inputs of ${CSS34_LINE:-sm13-latest}" >&2; exit 1; }
 mm_inputs="$(
@@ -129,38 +127,11 @@ mm_inputs="$(
     awk -F'\t' '$1 != "primary"' <<< "$mm_extra"
   } | sort -t$'\t' -k3,3
 )"
-MM_LEGACY_DIR=""
-MM_MODERN_DIR=""
-SM11_LEGACY_CORE=""
+LEGACY_CORE=""
 while IFS=$'\t' read -r role dirname mode branch commit rev version; do
   [[ "$rev" != - ]] || rev=""
   build_and_package_mm_win "$DEPS_DIR/$dirname" "$mode" "$dirname" "$rev" "$commit" "$role"
-  case "$mode" in
-    1.10) [[ -z "$MM_LEGACY_DIR" ]] || { echo "FAIL: two MM 1.10 inputs for ${CSS34_LINE:-}" >&2; exit 1; }
-          MM_LEGACY_DIR="$DEPS_DIR/$dirname" ;;
-    1.12) [[ -z "$MM_MODERN_DIR" ]] || { echo "FAIL: two MM 1.12 inputs for ${CSS34_LINE:-}" >&2; exit 1; }
-          MM_MODERN_DIR="$DEPS_DIR/$dirname" ;;
-  esac
 done <<< "$mm_inputs"
-
-if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
-  # Dual-core SM 1.11 (same as run/linux.sh): 1.ep1 builds against MM 1.10 legacy
-  # headers, 2.ep1 against MM 1.12.
-  if [[ -z "$MM_LEGACY_DIR" || -z "$MM_MODERN_DIR" ]]; then
-    echo "FAIL: SM 1.11 needs one MM 1.10 and one MM 1.12 input (got legacy='${MM_LEGACY_DIR}' modern='${MM_MODERN_DIR}')" >&2
-    exit 1
-  fi
-  if [[ ! -d "$MM_LEGACY_DIR/core-css34legacy" || ! -d "$MM_MODERN_DIR/core" ]]; then
-    echo "FAIL: missing $MM_LEGACY_DIR/core-css34legacy or $MM_MODERN_DIR/core" >&2
-    exit 1
-  fi
-  # configure.py runs under Windows Python: hand it a C:/... path, not /c/...
-  CSS34_MMS_LEGACY_CORE="$MM_LEGACY_DIR/core-css34legacy"
-  if command -v cygpath >/dev/null 2>&1; then
-    CSS34_MMS_LEGACY_CORE="$(cygpath -m "$CSS34_MMS_LEGACY_CORE")"
-  fi
-  export CSS34_MMS_LEGACY_CORE
-fi
 
 echo "==> Applying CS:S v34 compatibility patches"
 bash "$BUILDER_DIR/patches/apply-sourcemod.sh" "$SOURCEMOD_DIR"
@@ -186,20 +157,8 @@ CONFIGURE_ARGS=(
   --mms-path="$MMS_DIR"
   "${DB_PATH_ARGS[@]}"
   --sdks=episode1
+  --targets=x86
 )
-if [ "$SOURCEMOD_MAJOR" -ge 12 ]; then
-  CONFIGURE_ARGS+=(--targets=x86)
-elif [ "$SOURCEMOD_MAJOR" -lt 12 ]; then
-  # SM 1.11 css34 builds dual 1.ep1 (MM 1.10) + 2.ep1 (MM 1.12) cores; --mms-path is the
-  # MM 1.12 input resolved from lines.json above, never a silent fallback to MM 1.10.
-  CONFIGURE_ARGS=(
-    --enable-optimize
-    --hl2sdk-root="$DEPS_DIR"
-    --mms-path="$MM_MODERN_DIR"
-    "${DB_PATH_ARGS[@]}"
-    --sdks=ep1,episode1
-  )
-fi
 
 python ../configure.py "${CONFIGURE_ARGS[@]}"
 

@@ -3,7 +3,7 @@
 # check-patch-drift.sh - Dry-run css34 patch layer on target commit/directory to detect anchor drift
 #
 # Usage:
-#   builder/scripts/check-patch-drift.sh --dir <path> [--mode sm12|sm13|sm11|mm112|mm110]
+#   builder/scripts/check-patch-drift.sh --dir <path> [--mode sm12|sm13|mm112|mm110]
 #   builder/scripts/check-patch-drift.sh --sm-commit <commit_or_rev> [--mode sm12|sm13]
 #   builder/scripts/check-patch-drift.sh --mm-commit <commit_or_rev> [--mode mm112|mm110]
 #   builder/scripts/check-patch-drift.sh --range <old>..<new> [--line sm12|sm13|mm112]
@@ -21,7 +21,7 @@ check-patch-drift.sh - Dry-run css34 patch layer to detect patch anchor drift.
 
 Options:
   --dir <path>             Path to SourceMod or Metamod directory to dry-run patch layer on.
-  --mode <mode>            Patch mode: sm12, sm13, sm11, mm112, mm110 (default: sm13 or auto-detect).
+  --mode <mode>            Patch mode: sm12, sm13, mm112, mm110 (default: sm13 or auto-detect).
   --sm-commit <commit|rev> Fetch/checkout SourceMod commit or revision and test for drift.
   --mm-commit <commit|rev> Fetch/checkout Metamod commit or revision and test for drift.
   --range <old>..<new>     Test patch drift across a revision bump (e.g. 7253..7255 or 7472..7477).
@@ -111,9 +111,6 @@ dry_run_patch_dir() (
   case "$mode" in
     sm12|sm13|sm12-latest|sm13-latest|sm13-dev)
       patch_script="$ROOT_DIR/builder/patches/apply-sourcemod-v112.sh"
-      ;;
-    sm11|sm11-oldstable)
-      patch_script="$ROOT_DIR/builder/patches/apply-sourcemod.sh"
       ;;
     mm112|mm112_frozen|MM_112)
       patch_script="$ROOT_DIR/builder/patches/apply-mmsource-v112.sh"
@@ -213,7 +210,6 @@ test_sm_commit() (
     branch="1.12-dev"
   fi
 
-  if [[ "$mode" == "sm11"* ]]; then branch="1.11-dev"; fi
   local sha
   sha="$(resolve_sm_rev_commit "$commit_or_rev" "$branch")"
 
@@ -305,7 +301,7 @@ for line in data["lines"].values():
     task = ("sm" + str(sm["major"]), sm["commit"])
     if task not in seen:
         print(*task); seen.add(task)
-    for key in ("metamod", "secondary_metamod", "bridge_metamod"):
+    for key in ("metamod", "bridge_metamod"):
         if key not in line:
             continue
         mm = data["pins"][line[key]]

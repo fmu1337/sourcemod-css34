@@ -44,64 +44,11 @@ required=(
   "cfg/sourcemod/sourcemod.cfg"
 )
 
-# Dual 1.ep1 + 2.ep1 packages (SM 1.11) contain both core binaries and extensions.
-if [[ -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" \
-   && -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.2.ep1.so" ]]; then
-  required=(
-    "addons/metamod/sourcemod.vdf"
-    "addons/sourcemod/bin/sourcemod.1.ep1.so"
-    "addons/sourcemod/bin/sourcemod.2.ep1.so"
-    "addons/sourcemod/extensions/dbi.mysql.ext.so"
-    "addons/sourcemod/extensions/dbi.sqlite.ext.so"
-    "addons/sourcemod/extensions/game.cstrike.ext.1.ep1.so"
-    "addons/sourcemod/extensions/game.cstrike.ext.2.ep1.so"
-    "addons/sourcemod/extensions/sdkhooks.ext.1.ep1.so"
-    "addons/sourcemod/extensions/sdkhooks.ext.2.ep1.so"
-    "addons/sourcemod/extensions/sdktools.ext.1.ep1.so"
-    "addons/sourcemod/extensions/sdktools.ext.2.ep1.so"
-    "addons/sourcemod/extensions/dhooks.ext.2.ep1.so"
-    "addons/sourcemod/gamedata/core.games/blacklist.plugins.txt"
-    "addons/sourcemod/gamedata/core.games/common.games.txt"
-    "addons/sourcemod/gamedata/core.games/engine.ep1.txt"
-    "addons/sourcemod/gamedata/core.games/master.games.txt"
-    "addons/sourcemod/gamedata/funcommands.games.txt"
-    "addons/sourcemod/gamedata/sdkhooks.games/common.games.txt"
-    "addons/sourcemod/gamedata/sdkhooks.games/game.cstrike.txt"
-    "addons/sourcemod/gamedata/sdkhooks.games/master.games.txt"
-    "addons/sourcemod/gamedata/sdktools.games/common.games.txt"
-    "addons/sourcemod/gamedata/sdktools.games/engine.ep1.txt"
-    "addons/sourcemod/gamedata/sdktools.games/game.cstrike.txt"
-    "addons/sourcemod/gamedata/sdktools.games/master.games.txt"
-    "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt"
-    "addons/sourcemod/gamedata/sm-cstrike.games/master.games.txt"
-    "addons/sourcemod/scripting/include/version_auto.inc"
-    "cfg/sourcemod/sourcemod.cfg"
-  )
-elif [[ ! -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.2.ep1.so" \
-   && -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" ]]; then
-  required=(
-    "addons/metamod/sourcemod.vdf"
-    "addons/sourcemod/bin/sourcemod.1.ep1.so"
-    "addons/sourcemod/extensions/dbi.mysql.ext.so"
-    "addons/sourcemod/extensions/dbi.sqlite.ext.so"
-    "addons/sourcemod/extensions/game.cstrike.ext.1.ep1.so"
-    "addons/sourcemod/gamedata/core.games/blacklist.plugins.txt"
-    "addons/sourcemod/gamedata/core.games/common.games.txt"
-    "addons/sourcemod/gamedata/core.games/engine.ep1.txt"
-    "addons/sourcemod/gamedata/core.games/master.games.txt"
-    "addons/sourcemod/gamedata/funcommands.games.txt"
-    "addons/sourcemod/gamedata/sdkhooks.games/common.games.txt"
-    "addons/sourcemod/gamedata/sdkhooks.games/game.cstrike.txt"
-    "addons/sourcemod/gamedata/sdkhooks.games/master.games.txt"
-    "addons/sourcemod/gamedata/sdktools.games/common.games.txt"
-    "addons/sourcemod/gamedata/sdktools.games/engine.ep1.txt"
-    "addons/sourcemod/gamedata/sdktools.games/game.cstrike.txt"
-    "addons/sourcemod/gamedata/sdktools.games/master.games.txt"
-    "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt"
-    "addons/sourcemod/gamedata/sm-cstrike.games/master.games.txt"
-    "addons/sourcemod/scripting/include/version_auto.inc"
-    "cfg/sourcemod/sourcemod.cfg"
-  )
+# SourceMod 1.12+ has one core (2.ep1); a 1.ep1 core means an SM 1.11 tree,
+# which master no longer builds (sm11-oldstable is frozen, docs/FREEZE.md).
+if [[ -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" ]]; then
+  echo "FAIL: unexpected sourcemod.1.ep1.so: master packages SourceMod 1.12+ (2.ep1) only" >&2
+  exit 1
 fi
 
 for rel in "${required[@]}"; do
@@ -120,14 +67,9 @@ if ! grep -Fq '"game.cstrike.txt"' "$sdkhooks_master"; then
   exit 1
 fi
 
-if [[ -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" && "${MMS_MODE:-}" == "1.10" ]]; then
-  mm_binary=metamod.1.ep1
-else
-  mm_binary=metamod.2.ep1
-fi
 SOURCEMOD_DIR="$SOURCEMOD_DIR" SOURCEMOD_GIT_REV="$rev" \
   bash "$BUILDER_DIR/write-package-manifest.sh" \
-  "$PACKAGE_DIR/addons/sourcemod/css34-package.json" "$mm_binary"
+  "$PACKAGE_DIR/addons/sourcemod/css34-package.json" metamod.2.ep1
 
 tar -C "$PACKAGE_DIR" -czf "$archive" addons cfg
 echo "$archive"

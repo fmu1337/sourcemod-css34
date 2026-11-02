@@ -41,7 +41,7 @@ on:
         required: false
         default: true
       run_reference_botplay:
-        description: "Run rom4s / GitHub Release reference botplay jobs (not pure-source)"
+        description: "Run rom4s / GitHub Release reference botplay jobs (published binaries, not this build)"
         type: boolean
         required: false
         default: false
@@ -59,9 +59,6 @@ on:
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  PURE_SOURCE_BUILD: "1"
 
 jobs:
   plan:
@@ -174,24 +171,15 @@ jobs:
       - name: Check release selection and Docker debug opt-in
         run: python3 testing/scripts/test-release-build-entrypoints.py
 
-      - name: Check SM 1.11 DHooks generation
-        run: python3 testing/scripts/test-sm11-dhooks-builder.py
-
       - name: Check patch drift acceptance ranges and failures
         timeout-minutes: 30
         run: python3 testing/scripts/test-check-patch-drift.py
-
-      - name: Check the Metamod switch procedure
-        run: python3 testing/scripts/test-switch-metamod.py
 
       - name: Legacy-plugin bridge patch tests (T2.9)
         run: python3 testing/scripts/test-mm-oldbridge-patch.py
 
       - name: Freeze tool tests (T2.7)
         run: python3 testing/scripts/test-freeze-tools.py
-
-      - name: Check the SM 1.11 build log gate
-        run: python3 testing/scripts/test-sm11-build-log.py
 
       - name: Check patch failures and generated Versioning
         run: python3 testing/scripts/test-patch-fail-closed.py
@@ -246,11 +234,10 @@ jobs:
             echo "skip=0" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build SourceMod+Metamod (${{ matrix.line }}) pure-source
+      - name: Build SourceMod+Metamod (${{ matrix.line }})
         if: steps.select.outputs.skip != '1'
         env:
           CSS34_LINE: ${{ matrix.line }}
-          PURE_SOURCE_BUILD: "1"
         run: |
           chmod +x builder/docker/build.sh builder/run/linux.sh \
             builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
@@ -258,10 +245,6 @@ jobs:
             builder/resolve-version.sh builder/py.sh builder/patches/*.sh
           set -o pipefail
           builder/docker/build.sh 2>&1 | tee build.log
-
-      - name: Dual-core build log gates (include roots, 0 WARN)
-        if: steps.select.outputs.skip != '1' && matrix.secondary_mm_commit
-        run: bash testing/scripts/check-sm11-build-log.sh build.log "${{ matrix.line }}"
 
       - name: ABI / export checks
         if: steps.select.outputs.skip != '1'
@@ -314,7 +297,6 @@ jobs:
         shell: bash
         env:
           CSS34_LINE: ${{ matrix.line }}
-          PURE_SOURCE_BUILD: "1"
         run: |
           export WDIR="$PWD"
           chmod +x builder/run/windows.sh builder/checkout-deps.sh builder/prepare-package.sh \
@@ -341,7 +323,7 @@ jobs:
         run: |
           mkdir -p win-art/pdb
           cp packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip win-art/
-          # T2.9: the PLAPI 11 test plugin for the legacy-plugin bridge (sm11 only)
+          # T2.9: the PLAPI 11 test plugin for the legacy-plugin bridge (never released)
           if [[ -d packages/test-plugins ]]; then cp -r packages/test-plugins win-art/; fi
           find sourcemod/build deps -name '*.pdb' -path '*build*' -exec cp -f {} win-art/pdb/ \;
           ls -la win-art win-art/pdb
@@ -459,7 +441,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # One row per Metamod build: dual-core SM 1.11 runs on MM 1.10.7 and MM 1.12
         include: ${{ fromJSON(needs.plan.outputs.windows_smoke) }}
     steps:
       - name: Install Wine
@@ -555,7 +536,7 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Smoke test ${{ matrix.line }} (${{ matrix.mm_variant }} Metamod) in ${{ matrix.image_name }}
+      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
         if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
@@ -566,24 +547,16 @@ jobs:
           SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
           SMOKE_EXPECT_CORE: ${{ matrix.expect_core }}
           MM_PACKAGE_NAME: ${{ matrix.mm_package }}
-          SWITCH_FROM_PACKAGE: ${{ matrix.switch_from_package }}
           LEGACY_BRIDGE: ${{ matrix.legacy_bridge }}
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
           CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
-          # The matrix row names the Metamod build this job runs (primary,
-          # secondary, or a switch from one to the other).
           MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          switch_from=""
-          if [[ -n "${SWITCH_FROM_PACKAGE}" ]]; then
-            switch_from="/workspace/packages/${SWITCH_FROM_PACKAGE}"
-            test -f "packages/${SWITCH_FROM_PACKAGE}"
-          fi
-          # T2.9: on the dual line's MM 1.12 rows a PLAPI 11 plugin must run through
-          # the nested legacy core next to SourceMod.
+          # T2.9: a PLAPI 11 plugin must run through the nested legacy core that
+          # the MM 1.12 package ships next to metamod.2.ep1.
           legacy_probe=""
           if [[ "${LEGACY_BRIDGE}" == 1 ]]; then
             legacy_probe="/workspace/packages/test-plugins/css34_legacy_probe.so"
@@ -595,7 +568,6 @@ jobs:
             -e CACHE_DIR=/workspace/.ci-cache \
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
-            -e MM_SWITCH_FROM="${switch_from}" \
             -e LEGACY_PROBE="${legacy_probe}" \
             -e MM_VERSION_EXPECT \
             -e MM_REV_EXPECT \
@@ -616,12 +588,7 @@ jobs:
               mkdir -p /workspace/.ci-server /workspace/.ci-cache
               tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
               testing/scripts/install-deps.sh
-              if [[ -n "${MM_SWITCH_FROM}" ]]; then
-                MM_PACKAGE="${MM_SWITCH_FROM}" testing/scripts/install-addons.sh
-                testing/scripts/switch-metamod.sh "${MM_PACKAGE}"
-              else
-                testing/scripts/install-addons.sh
-              fi
+              testing/scripts/install-addons.sh
               testing/scripts/smoke-test.sh
               if [[ -n "${LEGACY_PROBE}" ]]; then
                 testing/scripts/legacy-bridge-test.sh
@@ -684,7 +651,7 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Botplay stress ${{ matrix.line }} (${{ matrix.mm_variant }} Metamod; SDKTools + SDKHooks + OnTakeDamage)
+      - name: Botplay stress ${{ matrix.line }} (SDKTools + SDKHooks + OnTakeDamage)
         if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
@@ -1290,7 +1257,7 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Smoke test ${{ matrix.line }} (${{ matrix.mm_variant }} Metamod) in ${{ matrix.image_name }}
+      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
         if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
@@ -1301,24 +1268,16 @@ jobs:
           SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
           SMOKE_EXPECT_CORE: ${{ matrix.expect_core }}
           MM_PACKAGE_NAME: ${{ matrix.mm_package }}
-          SWITCH_FROM_PACKAGE: ${{ matrix.switch_from_package }}
           LEGACY_BRIDGE: ${{ matrix.legacy_bridge }}
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
         run: |
           set -euo pipefail
           chmod +x testing/scripts/*.sh
           CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
-          # The matrix row names the Metamod build this job runs (primary,
-          # secondary, or a switch from one to the other).
           MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          switch_from=""
-          if [[ -n "${SWITCH_FROM_PACKAGE}" ]]; then
-            switch_from="/workspace/packages/${SWITCH_FROM_PACKAGE}"
-            test -f "packages/${SWITCH_FROM_PACKAGE}"
-          fi
-          # T2.9: on the dual line's MM 1.12 rows a PLAPI 11 plugin must run through
-          # the nested legacy core next to SourceMod.
+          # T2.9: a PLAPI 11 plugin must run through the nested legacy core that
+          # the MM 1.12 package ships next to metamod.2.ep1.
           legacy_probe=""
           if [[ "${LEGACY_BRIDGE}" == 1 ]]; then
             legacy_probe="/workspace/packages/test-plugins/css34_legacy_probe.so"
@@ -1330,7 +1289,6 @@ jobs:
             -e CACHE_DIR=/workspace/.ci-cache \
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
-            -e MM_SWITCH_FROM="${switch_from}" \
             -e LEGACY_PROBE="${legacy_probe}" \
             -e MM_VERSION_EXPECT \
             -e MM_REV_EXPECT \
@@ -1351,12 +1309,7 @@ jobs:
               mkdir -p /workspace/.ci-server /workspace/.ci-cache
               tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
               testing/scripts/install-deps.sh
-              if [[ -n "${MM_SWITCH_FROM}" ]]; then
-                MM_PACKAGE="${MM_SWITCH_FROM}" testing/scripts/install-addons.sh
-                testing/scripts/switch-metamod.sh "${MM_PACKAGE}"
-              else
-                testing/scripts/install-addons.sh
-              fi
+              testing/scripts/install-addons.sh
               testing/scripts/smoke-test.sh
               if [[ -n "${LEGACY_PROBE}" ]]; then
                 testing/scripts/legacy-bridge-test.sh
@@ -1526,28 +1479,6 @@ jobs:
           tar -xzf server-art/css34-server.tar.gz -C "$SERVER_DIR"
           bash testing/scripts/install-addons.sh
           bash testing/scripts/check-core-plapi.sh
-
-      - name: Published pre-T2.3 dual package must fail the PLAPI probe
-        if: steps.select.outputs.skip != '1' && matrix.secondary_mm_commit
-        env:
-          CSS34_LINE: ${{ matrix.line }}
-          SERVER_DIR: ${{ github.workspace }}/.ci-plapi-old
-          OLD_SM_URL: https://github.com/${{ github.repository }}/releases/download/1.11.0.6970-mm1.10.7/sourcemod-1.11.0-git6970-css34-linux.tar.gz
-        run: |
-          set -euo pipefail
-          source builder/package-paths.sh
-          mkdir -p "$SERVER_DIR" old-release
-          curl -fsSL --retry 5 -o old-release/sourcemod-old.tar.gz "$OLD_SM_URL"
-          tar -xzf server-art/css34-server.tar.gz -C "$SERVER_DIR"
-          SM_PACKAGE="$PWD/old-release/sourcemod-old.tar.gz" MM_PACKAGE="$MM_PACKAGE" \
-            bash testing/scripts/install-addons.sh
-          if bash testing/scripts/check-core-plapi.sh > old-plapi.log 2>&1; then
-            cat old-plapi.log
-            echo "FAIL: the published 1.11.0.6970-mm1.10.7 package passed the PLAPI gate" >&2
-            exit 1
-          fi
-          cat old-plapi.log
-          grep -q 'sourcemod.2.ep1.so returned PLAPI:11, expected PLAPI:16' old-plapi.log
 
   gate:
     name: gate

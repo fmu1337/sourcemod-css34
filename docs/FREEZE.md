@@ -78,8 +78,12 @@ with a `frozen` block:
     `freeze_tag` commit, and its listed assets to match `SHA256SUMS`.
   - `release-smoke.sh` then boots srcds from the pointer URLs on every Metamod
     build the pointer serves.
-- The 1.11 build code stays on master until T3.3 removes it. Its CI paths are
-  still exercised by tests that thaw sm11 in a temporary `lines.json`.
+- **Master no longer carries the 1.11 build code** (T3.3): the SM 1.11 patcher,
+  dual-core packaging and `secondary_metamod` builds live only at `freeze_tag`.
+  The builder refuses SourceMod < 1.12 (`css34_require_buildable` in
+  `resolve-version.sh`, which still resolves the line's pins for smoke
+  expectations) and `resolve-metamod-pins.py` refuses the line; `lines.py check`
+  allows `secondary_metamod` only on a frozen line.
 
 ## Owner steps
 

@@ -38,7 +38,6 @@ if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" ]]; then
       if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
         case "${RESOLVED_MM_MODE:-}" in
           1.10) export MM_VERSION_EXPECT="1.10.7" ;;
-          1.11) export MM_VERSION_EXPECT="1.11.0" ;;
           1.12) export MM_VERSION_EXPECT="1.12.0" ;;
           2.0)  export MM_VERSION_EXPECT="2.0.0" ;;
           *)    export MM_VERSION_EXPECT="1.12.0" ;;

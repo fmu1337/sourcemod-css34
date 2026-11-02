@@ -33,7 +33,7 @@ class Entrypoints(unittest.TestCase):
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, dest)
         self.env = os.environ.copy()
-        for key in ("PACKAGES_DIR", "MMS_LINE", "CHECK_METAMOD_SCRIPT",
+        for key in ("PACKAGES_DIR", "CHECK_METAMOD_SCRIPT", "REJECT_REV",
                     "CSS34_DEBUG_TRACE"):
             self.env.pop(key, None)
         self.env.update(GITHUB_OUTPUT=str(self.root / "outputs"),
@@ -57,7 +57,7 @@ class Entrypoints(unittest.TestCase):
         subprocess.run(["tar", "-czf", str(path), "-C", str(staging), "addons"], check=True)
         shutil.rmtree(staging)
 
-    def release(self, line, missing_secondary=False, reject_secondary=False):
+    def release(self, line, reject_primary=False):
         self.env["CSS34_LINE"] = line
         self.executable("testing/scripts/check-package.sh", 'test -f "$SM_PACKAGE"\n')
         self.executable("testing/scripts/check-metamod-package.sh", """
@@ -72,23 +72,15 @@ printf '%s %s %s\n' "$MM_PACKAGE" "$EXPECTED_MM_REV" "$EXPECTED_MM_COMMIT" >> "$
         packages.mkdir()
         sm_name = f'sourcemod-1.{sm["major"]}.0-git{sm["rev"]}-css34-linux.tar.gz'
         (packages / sm_name).touch()
-        mm_names = []
-        for role in ("metamod", "secondary_metamod"):
-            if role not in config:
-                continue
-            pin = data["pins"][config[role]]
-            version = {"1.10": "1.10.7", "1.12": "1.12.0"}[pin["mode"]]
-            name = f'mmsource-{version}-git{pin["rev"]}-css34-linux.tar.gz'
-            mm_names.append(name)
-            if role == "secondary_metamod":
-                if missing_secondary:
-                    continue
-                if reject_secondary:
-                    self.env["REJECT_REV"] = str(pin["rev"])
-            if role == "metamod" and "bridge_metamod" in config:
-                self.bridge_package(packages / name, data["pins"][config["bridge_metamod"]])
-            else:
-                (packages / name).touch()
+        pin = data["pins"][config["metamod"]]
+        version = {"1.10": "1.10.7", "1.12": "1.12.0"}[pin["mode"]]
+        mm_names = [f'mmsource-{version}-git{pin["rev"]}-css34-linux.tar.gz']
+        if reject_primary:
+            self.env["REJECT_REV"] = str(pin["rev"])
+        if "bridge_metamod" in config:
+            self.bridge_package(packages / mm_names[0], data["pins"][config["bridge_metamod"]])
+        else:
+            (packages / mm_names[0]).touch()
         # Older packages must not affect primary selection.
         (packages / "mmsource-1.12.0-git1-css34-linux.tar.gz").touch()
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
@@ -100,33 +92,30 @@ printf '%s %s %s\n' "$MM_PACKAGE" "$EXPECTED_MM_REV" "$EXPECTED_MM_COMMIT" >> "$
                                 env=self.env, capture_output=True, text=True)
         return result, sm_name, mm_names
 
-    def test_sm11_checks_both_and_outputs_primary(self):
-        result, sm, mm = self.release("sm11-oldstable")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "outputs").read_text(),
-                         f"sm_asset={sm}\nmm_asset={mm[0]}\n")
-        calls = (self.root / "calls").read_text().splitlines()
-        self.assertEqual([row.split()[0] for row in calls],
-                         ["packages/" + name for name in mm])
-
-    def test_sm11_missing_secondary_fails_before_outputs(self):
-        result, _, _ = self.release("sm11-oldstable", missing_secondary=True)
+    def test_frozen_sm11_is_refused_before_outputs(self):
+        # T3.3: sm11-oldstable is rebuilt only from its freeze tag (docs/FREEZE.md).
+        result, _, _ = self.release("sm11-oldstable")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("expected secondary Metamod package", result.stderr)
+        self.assertIn("frozen dual-core line", result.stderr)
         self.assertFalse((self.root / "outputs").exists())
 
-    def test_sm11_secondary_check_failure_propagates(self):
-        result, _, _ = self.release("sm11-oldstable", reject_secondary=True)
+    def test_metamod_check_failure_propagates(self):
+        result, _, _ = self.release("sm12-latest", reject_primary=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.root / "outputs").exists())
 
-    def test_sm13_single_mm(self):
-        result, sm, mm = self.release("sm13-latest")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "outputs").read_text(),
-                         f"sm_asset={sm}\nmm_asset={mm[0]}\n")
-        # One MM 1.12 package; the bridge's MM 1.10 core is inside it, not beside it.
-        self.assertIn("ships the MM 1.10.7 git976 legacy core", result.stdout)
+    def test_single_mm_with_the_bridge_core(self):
+        for line in ("sm12-latest", "sm13-latest"):
+            with self.subTest(line=line):
+                self.setUp()
+                result, sm, mm = self.release(line)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual((self.root / "outputs").read_text(),
+                                 f"sm_asset={sm}\nmm_asset={mm[0]}\n")
+                calls = (self.root / "calls").read_text().splitlines()
+                self.assertEqual([row.split()[0] for row in calls], ["packages/" + mm[0]])
+                # One MM 1.12 package; the bridge's MM 1.10 core is inside it, not beside it.
+                self.assertIn("ships the MM 1.10.7 git976 legacy core", result.stdout)
 
     def test_docker_debug_default_and_opt_in(self):
         self.executable("bin/docker", """

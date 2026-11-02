@@ -10,7 +10,7 @@ Verifies:
 - Doc-only PR -> planner outputs code_changed=False, run_code_jobs=False, required_jobs=['plan']
 - Empty applicable matrix / line matrix updates on temporary lines.json
 - Windows eligibility and weekly/event selection
-- Single-line dispatch (sm11, sm12, sm13) matrix and required_jobs handling (host smoke, windows, release_botplay, botplay_extra)
+- Single-line dispatch (sm12, sm13) matrix and required_jobs handling (host smoke, windows, release_botplay, botplay_extra)
 - Incompatible single-line + run_botplay_bisect rejection
 """
 
@@ -37,20 +37,6 @@ plan_ci = ci_planner_mod.plan_ci
 
 ci_gate_mod = load_module_from_path("ci_gate", ROOT / "builder/scripts/ci_gate.py")
 evaluate_gate = ci_gate_mod.evaluate_gate
-
-
-def sm11_active_lines():
-    """lines.json with sm11-oldstable thawed (T2.7 froze it), so the dual-core
-    CI paths keep their coverage until the 1.11 code leaves master (T3.3)."""
-    data = json.loads((ROOT / "builder/lines.json").read_text(encoding="utf-8"))
-    line = data["lines"]["sm11-oldstable"]
-    line.pop("frozen", None)
-    line["status"] = "active"
-    line["releasable"] = True
-    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
-    with tmp:
-        json.dump(data, tmp)
-    return tmp.name
 
 
 def simulate_paths_filter(changed_files):
@@ -81,11 +67,9 @@ class TestCIPlannerGate(unittest.TestCase):
             plan_ci(event_name="workflow_dispatch", code_changed="true", inputs={"css34_line": "sm11-oldstable"})
 
     def test_plapi_runtime_is_required_for_code_and_selected_line(self):
-        lines = sm11_active_lines()
-        self.addCleanup(Path(lines).unlink, missing_ok=True)
         for event, inputs in (("pull_request", {}),
-                              ("workflow_dispatch", {"css34_line": "sm11-oldstable"})):
-            plan = plan_ci(event, True, inputs, lines_path=lines)
+                              ("workflow_dispatch", {"css34_line": "sm12-latest"})):
+            plan = plan_ci(event, True, inputs)
             self.assertIn("plapi-runtime", plan["required_jobs"])
             for result in ("failure", "skipped", "cancelled"):
                 needs = {name: {"result": "success"} for name in plan["required_jobs"]}
@@ -114,7 +98,7 @@ class TestCIPlannerGate(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         hygiene = workflow.split("\n  hygiene:", 1)[1].split("\n  build-linux:", 1)[0]
         for script in ("test-release-build-entrypoints.py", "test-patch-fail-closed.py",
-                       "test-sm11-dhooks-builder.py"):
+                       "test-mm-oldbridge-patch.py"):
             self.assertIn("python3 testing/scripts/" + script, hygiene)
         # Every regression script must run somewhere in ci.yml: a step lost while
         # moving jobs between workflows must fail here, not pass silently.
@@ -244,33 +228,21 @@ class TestCIPlannerGate(unittest.TestCase):
 
     def test_windows_eligibility_and_matrices(self):
         """Windows matrix in planner must only contain active lines with windows: true."""
-        lines = sm11_active_lines()
-        self.addCleanup(Path(lines).unlink, missing_ok=True)
-        plan = plan_ci(event_name="pull_request", code_changed="true", lines_path=lines)
-        with open(lines, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        plan = plan_ci(event_name="pull_request", code_changed="true")
+        data = json.loads((ROOT / "builder/lines.json").read_text(encoding="utf-8"))
         want = {name for name, line in data["lines"].items()
                 if line.get("windows") and line["status"] == "active"}
-        win_matrix = plan["matrices"]["windows"]
-        win_lines = [entry["line"] for entry in win_matrix]
-        # One Windows build per line, on its primary Metamod
-        self.assertEqual(sorted(win_lines), sorted(want))
-        self.assertEqual({entry["mm_variant"] for entry in win_matrix}, {"primary"})
-        # Wine smoke runs every Metamod build: dual-core sm11 on MM 1.10.7 and MM 1.12
-        smoke = {(e["line"], e["mm_variant"]): e for e in plan["matrices"]["windows_smoke"]}
-        for name in want:
-            variants = ["primary"] + (["secondary"] if data["lines"][name].get("secondary_metamod") else [])
-            self.assertEqual(sorted(v for (l, v) in smoke if l == name), sorted(variants))
-        for row in smoke.values():
-            # MM 1.10.7 runs the 1.ep1 core (no DHooks), MM 1.12 the 2.ep1 core.
-            legacy = row["mm_expect"].startswith("1.10.")
-            self.assertEqual(row["expect_core"], "1.ep1" if legacy else "2.ep1")
-            self.assertEqual(row["dhooks_expect"], "0" if legacy else "1")
-            self.assertTrue(row["mm_package"].endswith("-css34-windows.zip"))
-        dual = [k for k in smoke if k[1] == "secondary"]
-        for line, _ in dual:
-            # The dual line's MM 1.12 row also checks the legacy-plugin bridge (T2.9).
-            self.assertEqual(sorted(smoke[(line, v)]["legacy_bridge"] for v in ("primary", "secondary")), ["0", "1"])
+        # One Windows build and one Wine smoke per line, on the line's MM 1.12 zip.
+        for key in ("windows", "windows_smoke"):
+            rows = plan["matrices"][key]
+            self.assertEqual(sorted(entry["line"] for entry in rows), sorted(want), key)
+            for row in rows:
+                self.assertEqual((row["expect_core"], row["dhooks_expect"]), ("2.ep1", "1"))
+                self.assertTrue(row["mm_package"].startswith("mmsource-1.12.0-"), row)
+                self.assertTrue(row["mm_package"].endswith("-css34-windows.zip"), row)
+                # T2.9: lines with bridge_metamod run the PLAPI 11 probe under Wine.
+                bridged = "bridge_metamod" in data["lines"][row["line"]]
+                self.assertEqual(row["legacy_bridge"], "1" if bridged else "0", row)
 
     def test_empty_windows_matrix_support(self):
         """When no lines are windows-eligible, windows matrix is [] and build-windows/wine-smoke are skipped."""
@@ -300,20 +272,18 @@ class TestCIPlannerGate(unittest.TestCase):
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
-    def test_css34_line_filtering_sm11_windows_and_run_reference_botplay(self):
-        """Single-line dispatch for sm11-oldstable with run_reference_botplay=true omits host, keeps its Windows rows and runs reference botplay."""
-        lines = sm11_active_lines()
-        self.addCleanup(Path(lines).unlink, missing_ok=True)
+    def test_css34_line_filtering_windows_and_run_reference_botplay(self):
+        """Single-line dispatch for sm12-latest with run_reference_botplay=true omits host, keeps its Windows rows and runs reference botplay."""
+        lines = ROOT / "builder/lines.json"
         plan = plan_ci(
             event_name="workflow_dispatch",
             code_changed="true",
-            inputs={"css34_line": "sm11-oldstable", "run_reference_botplay": "true"},
-            lines_path=lines,
+            inputs={"css34_line": "sm12-latest", "run_reference_botplay": "true"},
         )
         self.assertEqual(len(plan["matrices"]["build"]), 1)
-        self.assertEqual(plan["matrices"]["build"][0]["line"], "sm11-oldstable")
-        self.assertEqual([e["line"] for e in plan["matrices"]["windows"]], ["sm11-oldstable"])
-        self.assertEqual(len(plan["matrices"]["windows_smoke"]), 2)
+        self.assertEqual(plan["matrices"]["build"][0]["line"], "sm12-latest")
+        self.assertEqual([e["line"] for e in plan["matrices"]["windows"]], ["sm12-latest"])
+        self.assertEqual([e["line"] for e in plan["matrices"]["windows_smoke"]], ["sm12-latest"])
         self.assertTrue(plan["run_windows"])
         self.assertFalse(plan["run_host"])
         self.assertTrue(plan["run_release_botplay"])
@@ -332,7 +302,7 @@ class TestCIPlannerGate(unittest.TestCase):
         needs["test-built-smoke"] = {"result": "skipped"}
 
         ok, errors = evaluate_gate(needs, plan)
-        self.assertTrue(ok, f"Gate failed for sm11-oldstable dispatch: {errors}")
+        self.assertTrue(ok, f"Gate failed for sm12-latest dispatch: {errors}")
 
     def test_css34_line_filtering_sm12_with_windows_and_extra_images(self):
         """Single-line dispatch for sm12-latest with botplay_extra_distros=true must include windows and preserve extra image rows."""
@@ -356,15 +326,12 @@ class TestCIPlannerGate(unittest.TestCase):
         self.assertEqual(len(plan["matrices"]["botplay_extra_images"]), 3)
 
     def test_botplay_extra_runs_built_matrix_only_with_lines(self):
-        lines = sm11_active_lines()
-        self.addCleanup(Path(lines).unlink, missing_ok=True)
-        for line, expected in (("sm13-latest", True), ("sm11-oldstable", False), ("", True)):
+        for line, expected in (("sm13-latest", True), ("sm12-latest", False), ("", True)):
             with self.subTest(line=line):
                 inputs = {"botplay_extra_distros": "true"}
                 if line:
                     inputs["css34_line"] = line
-                plan = plan_ci(event_name="workflow_dispatch", code_changed="true", inputs=inputs,
-                               lines_path=lines)
+                plan = plan_ci(event_name="workflow_dispatch", code_changed="true", inputs=inputs)
                 self.assertEqual(plan["run_built_botplay_extra"], expected)
                 self.assertEqual("test-built-botplay-extra" in plan["required_jobs"], expected)
                 self.assertEqual(bool(plan["matrices"]["botplay_extra"].get("line")), expected)
@@ -402,7 +369,7 @@ class TestCIPlannerGate(unittest.TestCase):
             plan_ci(
                 event_name="workflow_dispatch",
                 code_changed="true",
-                inputs={"css34_line": "sm11-oldstable", "run_botplay_bisect": "true"},
+                inputs={"css34_line": "sm12-latest", "run_botplay_bisect": "true"},
             )
 
     def test_lines_json_addition_reflected_in_matrices(self):

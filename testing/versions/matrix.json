@@ -217,7 +217,7 @@
     }
   },
   "notes": [
-    "All CI builds use PURE_SOURCE_BUILD=1 (no rom4s binary splice).",
+    "All CI builds are built from source (no rom4s binary splice).",
     "CI matrix: sm11-oldstable, sm12-latest, sm13-latest, sm13-mm20 (7404 + MM 2.0 git1407), sm13-mm20-khook. sm13-dev (7404 + MM 1.12) retired.",
     "Smoke and check-package.sh assert sdkhooks.games and OnTakeDamage css34 offsets.",
     "Botplay matrix runs SMAC + SDKHooks OnTakeDamage + css34_sm_api_probe on all CI lines.",
