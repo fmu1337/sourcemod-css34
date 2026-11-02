@@ -111,43 +111,13 @@ sm = Path(os.environ['SOURCEMOD_DIR'])
 ambuild = sm / 'AMBuildScript'
 text = ambuild.read_text()
 
-mms_inc_old = """    compiler.cxxincludes += [
-      os.path.join(self.mms_root, 'core'),
-      os.path.join(self.mms_root, 'core', 'sourcehook'),
-    ]"""
-mms_inc_new = """    legacy_core = os.path.join(self.mms_root, 'core-css34legacy')
-    sdk_name = sdk.get('name') if isinstance(sdk, dict) else getattr(sdk, 'name', None)
-    if sdk_name in ('ep1', 'episode1'):
-      if os.path.isdir(legacy_core):
-        mms_core = legacy_core
-        print('==> Using Metamod core-css34legacy include path for ' + str(sdk_name) + ': ' + mms_core)
-      elif os.path.isdir(os.path.join(self.mms_root, 'core-legacy')):
-        raise SystemExit('MM 1.10 detected (core-legacy exists) but core-css34legacy is missing in ' + self.mms_root + '! Run checkout-deps.sh / apply-mmsource-css34.sh first.')
-      else:
-        mms_core = os.path.join(self.mms_root, 'core')
-    else:
-      mms_core = os.path.join(self.mms_root, 'core')
-    compiler.cxxincludes += [
-      mms_core,
-      os.path.join(mms_core, 'sourcehook'),
-    ]"""
-if 'core-css34legacy' in text:
-    print('==> ConfigureForHL2 cxxincludes already patched for core-css34legacy')
-elif mms_inc_old in text:
-    text = text.replace(mms_inc_old, mms_inc_new, 1)
-    print('==> Patched ConfigureForHL2 cxxincludes for core-css34legacy')
-else:
-    raise SystemExit('FAIL: ConfigureForHL2 cxxincludes anchor not found in AMBuildScript')
-
-# css34: for episode1 (and optional ep1) embed ConVar from static tier1 before
+# css34: for episode1 embed ConVar from static tier1 before
 # shared vstdlib, and record pthread/rt DT_NEEDED on older glibc.
 needle = "    SdkHelpers.configureCxx(context, binary, sdk)\n\n    return binary"
 insert = """    SdkHelpers.configureCxx(context, binary, sdk)
 
-    # css34: episode1 -> sourcemod.2.ep1.so (Metamod 1.12); optional ep1 -> 1.ep1
-    if sdk.get('name') in ('ep1', 'episode1'):
-      if sdk.get('name') == 'ep1':
-        compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']
+    # css34: episode1 -> sourcemod.2.ep1.so (Metamod 1.12)
+    if sdk.get('name') == 'episode1':
       # Static tier1 BEFORE shared vstdlib so ConVar is embedded, not imported.
       if compiler.target.platform == 'linux':
         tier1 = os.path.join(sdk['path'], 'linux_sdk', 'tier1_i486.a')
@@ -158,31 +128,13 @@ insert = """    SdkHelpers.configureCxx(context, binary, sdk)
             compiler.linkflags += [flag]
 
     return binary"""
-if 'css34: episode1 -> sourcemod.2.ep1.so' not in text and 'SM_CSS34_GAMEFIX_1_EP1' not in text:
-    if needle not in text:
-        raise SystemExit('Failed to locate ConfigureForHL2 SdkHelpers.configureCxx return')
+if 'css34: episode1 -> sourcemod.2.ep1.so' in text:
+    print('==> ConfigureForHL2 episode1 css34 link already patched')
+elif text.count(needle) == 1:
     text = text.replace(needle, insert, 1)
     print('==> Patched ConfigureForHL2 for episode1 tier1-before-vstdlib')
-elif 'css34: episode1 -> sourcemod.2.ep1.so' in text:
-    print('==> ConfigureForHL2 episode1 css34 link already patched')
 else:
-    # Older patch only covered ep1 - widen to episode1.
-    if "if sdk.get('name') == 'ep1':" in text and "in ('ep1', 'episode1')" not in text:
-        text = text.replace(
-            "    # css34: sourcemod.1.ep1.so / extensions must advertise gamesuffix 1.ep1\n"
-            "    if sdk.get('name') == 'ep1':\n"
-            "      compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']\n",
-            "    # css34: episode1 -> sourcemod.2.ep1.so (Metamod 1.12); optional ep1 -> 1.ep1\n"
-            "    if sdk.get('name') in ('ep1', 'episode1'):\n"
-            "      if sdk.get('name') == 'ep1':\n"
-            "        compiler.defines += ['SM_CSS34_GAMEFIX_1_EP1']\n",
-            1,
-        )
-        if 'css34: episode1 -> sourcemod.2.ep1.so' not in text:
-            raise SystemExit('FAIL: ConfigureForHL2 legacy upgrade anchor not found')
-        print('==> Widened ConfigureForHL2 css34 link patch to episode1')
-    else:
-        raise SystemExit('FAIL: unrecognized ConfigureForHL2 css34 link patch')
+    raise SystemExit('FAIL: ConfigureForHL2 SdkHelpers.configureCxx return anchor not found')
 
 # ExtLibrary pthread/rt + leave META_NO_HL2SDK happy against Metamod 1.12 headers
 old_ext = """  def ExtLibrary(self, context, compiler, name):
@@ -518,10 +470,6 @@ if logic_am.exists():
     binary.compiler.postlink += ['-lpthread', '-lrt', '-lm']
   elif binary.compiler.target.platform == 'mac':""",
             """  if binary.compiler.target.platform == 'linux':
-    # css34: force pthread/rt NEEDED for Debian 11 / CentOS 7 glibc
-    binary.compiler.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt']
-  elif binary.compiler.target.platform == 'mac':""",
-            """  if binary.compiler.target.platform == 'linux':
     binary.compiler.postlink += ['-lpthread', '-lrt']
   elif binary.compiler.target.platform == 'mac':""",
         ]
@@ -713,9 +661,8 @@ cstrike = sm / 'extensions/cstrike/AMBuilder'
 ct = cstrike.read_text()
 old = "for sdk_name in ['css', 'csgo']:"
 new = "for sdk_name in ['episode1', 'css', 'csgo']:"
-dual = "for sdk_name in ['ep1', 'episode1', 'css', 'csgo']:"
-if ct.count(new) == 1 or ct.count(dual) == 1:
-    if old in ct or (new in ct and dual in ct):
+if ct.count(new) == 1:
+    if old in ct:
         raise SystemExit('FAIL: ambiguous cstrike SDK loop in extensions/cstrike/AMBuilder')
     print('==> cstrike AMBuilder already includes episode1')
 elif ct.count(old) == 1:
@@ -943,15 +890,6 @@ PYIFACE
 while IFS= read -r -d '' file; do
   sed -i 's/\r$//' "$file"
 done < <(find "$sourcemod_dir" -type f \( -name '*.h' -o -name '*.cpp' -o -name 'AMBuildScript' -o -name 'AMBuilder' \) -print0)
-
-# Episode One CON_COMMAND / pre-OB guards (SE_CSS leftovers still matter for some units)
-while IFS= read -r -d '' file; do
-  sed -i 's/#if SOURCE_ENGINE <= SE_DARKMESSIAH$/#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS/g' "$file"
-done < <(find "$sourcemod_dir" -type f \( -name '*.h' -o -name '*.cpp' \) -print0)
-
-while IFS= read -r -d '' file; do
-  sed -i 's/#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_CSS/#if SOURCE_ENGINE <= SE_DARKMESSIAH || SOURCE_ENGINE == SE_CSS/g' "$file"
-done < <(find "$sourcemod_dir" -type f \( -name '*.h' -o -name '*.cpp' \) -print0)
 
 # MIN macros
 # ALLOWLIST: these syntax cleanups may match zero uses when upstream has already
