@@ -55,8 +55,8 @@ attached to the per-tag releases (pointers are Linux-only).
 | `sm13-mm20-khook` | **1.13.0.7565** (KHook branch + master) (`25954d4a…`) | **2.0 git1472 (KHook)** (`05c5c63a…`) | Frozen outside CI ([docs](docs/MM20_KHOOK.md)) |
 <!-- lines-versions:end -->
 
-`sm13-dev` (7404 + MM 1.12) is **retired** — use `sm13-latest`. Its alias stays in `resolve-version.sh` /
-`release.yml` only so the `1.13.0.7404-mm1.12.0` tag can be rebuilt.
+`sm13-dev` (7404 + MM 1.12) is gone (T3.3): use `sm13-latest`. Its last tag, `1.13.0.7404-mm1.12.0`, is no
+longer rebuildable from master.
 
 Pins live in [`builder/lines.json`](builder/lines.json). `python3 builder/lines.py gen` writes
 [`builder/versions.env`](builder/versions.env), [`builder/generated/ci-matrix.json`](builder/generated/ci-matrix.json),
@@ -117,7 +117,7 @@ known-bad and are not needed by any line, pointer or installer.
 | [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev (git1407) | installer fallback |
 | [`1.13.0.7565-mm2.0.0-khook-dhooks`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks) | `sm13-mm20-khook` | 1.13.0-git7565, + `dhooks.ext` | 2.0.0-dev (git1472, `05c5c63`) | installer fallback |
 | [`1.13.0.7565-mm2.0.0-khook`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook) | `sm13-mm20-khook` | 1.13.0-git7565 | 2.0.0-dev (git1472, `05c5c63`) | base tag of the line; Windows assets untested (below) |
-| [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` (retired) | 1.13.0-git7404 | 1.12.0-dev (git1226) | historical; the `sm13-dev` alias exists only to rebuild it |
+| `1.13.0.7404-mm1.12.0` | `sm13-dev` (removed) | 1.13.0-git7404 | 1.12.0-dev (git1226) | superseded by `sm13-latest`; no line maps to it since T3.3 |
 | `1.11.0.6970-mm1.10.7` | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | **known-bad** (below); CI stopped downloading it with the 1.11 build code (T3.3) |
 | [`1.11.0.6572-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6572-mm1.10.7) | pre-matrix | 1.11.0-git6572 | 1.10.7-dev | **known-bad** SourceMod; its Windows MM 1.10.7 zip serves the installer's `--sm rom4s` on Windows |
 | `1.13.0.7472-mm1.12.0-r2`, `1.12.0.7253-mm1.12.0-r2` | `sm13-latest`, `sm12-latest` | 7472 / 7253 | 1.12.0 git1226 | superseded by 7478 / 7257 |

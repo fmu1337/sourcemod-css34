@@ -109,7 +109,7 @@ dry_run_patch_dir() (
 
   local patch_script=""
   case "$mode" in
-    sm12|sm13|sm12-latest|sm13-latest|sm13-dev)
+    sm12|sm13|sm12-latest|sm13-latest)
       patch_script="$ROOT_DIR/builder/patches/apply-sourcemod-v112.sh"
       ;;
     mm112|mm112_frozen|MM_112)

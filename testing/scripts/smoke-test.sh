@@ -34,7 +34,6 @@ if [[ -z "$resolve_line" && -f "${ROOT}/builder/versions.env" ]]; then
     "${MM_112_COMMIT:-}")
       case "${SM_COMMIT_EXPECT:-}" in
         "${SM_LATEST_COMMIT:-}") resolve_line=sm12-latest ;;
-        "${SM_DEV_COMMIT:-}") resolve_line=sm13-dev ;;
         *) resolve_line=sm13-latest ;;
       esac
       ;;

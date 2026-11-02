@@ -483,14 +483,14 @@ def mm_text(part, style):
 
 
 def version_names(data):
-    return [name for name in data["lines"] if name != "sm13-dev"]
+    return list(data["lines"])
 
 
 def install_names(data):
     preferred = [data["default_line"], "sm12-latest", "sm13-mm20-khook", "sm13-mm20"]
     names = []
     for name in preferred + list(data["lines"]):
-        if name in names or name not in data["lines"] or name == "sm13-dev":
+        if name in names or name not in data["lines"]:
             continue
         if data["lines"][name].get("pointer"):
             names.append(name)

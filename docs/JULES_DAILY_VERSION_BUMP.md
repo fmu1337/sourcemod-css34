@@ -76,7 +76,7 @@ commit SHA back in (T3.3 removed the hand-written MM fallbacks of `checkout-deps
 | `sm12-latest` | `1.12-dev` on alliedmodders/sourcemod | `1.12-dev` on alliedmodders/metamod-source |
 | `sm13-latest` | `master` on alliedmodders/sourcemod | same MM 1.12 pin as sm12-latest |
 
-Do **not** bump `sm13-mm20` (7404 + MM 2.0) unless explicitly asked. `sm13-dev` is retired.
+Do **not** bump `sm13-mm20` (7404 + MM 2.0) unless explicitly asked. `sm13-dev` was removed (T3.3).
 
 ## Verification commands
 
