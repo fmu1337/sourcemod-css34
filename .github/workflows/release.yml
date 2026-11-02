@@ -125,8 +125,8 @@ jobs:
       - name: Render release notes for every releasable tag (T4.3)
         run: |
           set -euo pipefail
-          while IFS=$'\t' read -r kind a b c; do
-            [[ "$kind" != known && "$c" == 1 ]] || continue
+          while IFS=$'\t' read -r kind _ _ releasable; do
+            [[ "$kind" != known && "$releasable" == 1 ]] || continue
             echo "=== release notes: $kind-r2 ==="
             python3 builder/scripts/release-notes.py "$kind-r2" --commit "${GITHUB_SHA}"
             echo
