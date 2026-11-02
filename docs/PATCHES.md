@@ -60,9 +60,12 @@ build's files, exports, `NEEDED` and `SONAME`.
 
 ## Refreshing a series
 
-After a pin bump: `builder/scripts/patch-series.sh refresh <line>` (or
-`refresh MM_112` after an MM pin bump) rebases the series (`git apply --3way`)
-and rewrites `series.json`; `lines.py check` fails until it has run.
+After a pin bump in `builder/lines.json`: `builder/scripts/patch-series.sh
+refresh <line>` (or `refresh MM_112` after an MM pin bump) rebases the series
+(`git apply --3way`) and rewrites `series.json`; it reads the pin from
+`lines.json` itself, because `lines.py gen` and `check` fail until it has run.
+Then run `python3 builder/lines.py gen`. `builder/scripts/upstream-bump.py`
+(T4.4) does all of this for the weekly bump PRs.
 `builder/scripts/patch-series.sh check <series>` applies the series to a fresh
 checkout of the pin. Before a bump, `builder/scripts/check-patch-drift.sh
 --sm-commit <rev> --line <line>` (or `--range old..new`, `--mm-commit`) dry-runs

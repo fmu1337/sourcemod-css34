@@ -1,5 +1,9 @@
 # Jules: daily SourceMod / Metamod version bump
 
+> **Superseded (T4.4):** `.github/workflows/upstream-bump.yml` opens the weekly bump PRs
+> and pushes the release tags after merge (see AGENTS.md, "Version pin bumps"). Disable
+> the Jules task; this prompt is kept for reference until T5.1 archives it.
+
 Use this as the **daily scheduled task** prompt for Jules. Goal: when AlliedMods publishes newer git builds, bump `sm12-latest` and `sm13-latest`, open **one** PR, and let CI prove smoke + botplay (SDKHooks / SDKTools).
 
 ## Task prompt (copy into Jules)
@@ -16,7 +20,8 @@ Repository: fmu1337/sourcemod-css34
    - SM 1.13: git fetch origin master on alliedmodders/sourcemod.
    - MM 1.12: git fetch origin 1.12-dev on alliedmodders/metamod-source.
 
-3. Edit pins in builder/lines.json, then run: python3 builder/lines.py gen
+3. Edit pins in builder/lines.json, refresh the patch series (below), then run:
+   python3 builder/lines.py gen   (it refuses to run while a series is for an old pin)
    Generated (do not edit by hand):
    - builder/versions.env
    - builder/generated/ci-matrix.json
