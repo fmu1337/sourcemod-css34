@@ -49,15 +49,9 @@ export CXX="${CXX:-g++}"
 echo "==> Using compiler: $($CC --version | head -1)"
 echo "==> Using C++ compiler: $($CXX --version | head -1)"
 
-echo "==> Initializing SourceMod submodule"
+echo "==> Fetching SourceMod at the pinned commit"
 cd "$WDIR"
-if [ ! -e "$SOURCEMOD_DIR/.git" ]; then
-  git submodule update --init sourcemod
-fi
-git -C "$SOURCEMOD_DIR" submodule foreach --recursive "git reset --hard && git clean -fd" 2>/dev/null || true
-git -C "$SOURCEMOD_DIR" fetch --depth=8192 origin "$SOURCEMOD_COMMIT"
-git -C "$SOURCEMOD_DIR" reset --hard "$SOURCEMOD_COMMIT"
-git -C "$SOURCEMOD_DIR" submodule update --init --recursive
+bash "$BUILDER_DIR/fetch-sourcemod.sh" "$SOURCEMOD_DIR" "$SOURCEMOD_COMMIT"
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"

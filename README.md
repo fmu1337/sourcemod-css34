@@ -265,8 +265,6 @@ non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
 Needs Docker. The build runs in pinned `quay.io/pypa/manylinux2014_i686` (glibc 2.17, GCC 10.2.1). SDKs, AMBuild and static OpenSSL 1.1.1w are fetched into `deps/`.
 
 ```bash
-git submodule update --init --recursive
-
 # Default (SM 1.13.7478 + MM 1.12.1228):
 CSS34_LINE=sm13-latest builder/docker/build.sh
 

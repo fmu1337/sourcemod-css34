@@ -39,6 +39,9 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `build.sh` does this itself.
 - The builder self-provisions deps into `deps/` (pinned hl2sdk episode1,
   AMBuild, static OpenSSL 1.1.1w, PIC zlib 1.3.1, MySQL / MariaDB SDKs).
+  SourceMod is no git submodule (T3.3): `builder/fetch-sourcemod.sh` checks out the
+  line's pinned commit into `sourcemod/` (gitignored), resets and cleans it, and
+  initializes its own submodules.
   Downloads come from github.com, bitbucket.org, cdn.mysql.com, www.openssl.org,
   snapshot.debian.org and archive.debian.org — all reachable. Tarball downloads
   are sha256-pinned.
