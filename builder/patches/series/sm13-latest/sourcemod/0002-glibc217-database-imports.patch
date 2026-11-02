@@ -1,0 +1,47 @@
+css34: glibc 2.17: hidden explicit_bzero for libpq, static zlib for MariaDB
+
+diff --git a/extensions/mysql/AMBuilder b/extensions/mysql/AMBuilder
+index ba22d75dcccfd4beecc182c27f4936ef2eaccdba..990588494b7f133cc2a8e533686d7522b41c6d85 100644
+--- a/extensions/mysql/AMBuilder
++++ b/extensions/mysql/AMBuilder
+@@ -23,8 +23,8 @@ if SM.mariadb_root:
+         '-Wl,-Bstatic',
+         '-lssl',
+         '-lcrypto',
++        '-lz',  # css34: embed pinned PIC zlib with the static TLS libraries
+         '-Wl,-Bdynamic',
+-        '-lz',
+         '-lpthread',
+         '-lm',
+         '-lrt',
+diff --git a/extensions/pgsql/AMBuilder b/extensions/pgsql/AMBuilder
+index f1c816f5c4e4d6faf762399ac51608d299e21984..9d29c4053f94beae8d3f5fd191b0ea08c797ea26 100644
+--- a/extensions/pgsql/AMBuilder
++++ b/extensions/pgsql/AMBuilder
+@@ -57,4 +57,7 @@ for cxx in builder.targets:
+     os.path.join('pgsql', 'PgStatement.cpp'),
+     'extension.cpp'
+   ]
++  # css34: temporary glibc 2.17 explicit_bzero for vendored libpq.
++  if compiler.target.platform == 'linux':
++    binary.sources += ['css34_explicit_bzero.c']
+   SM.extensions += [builder.Add(binary)]
+diff --git a/extensions/pgsql/css34_explicit_bzero.c b/extensions/pgsql/css34_explicit_bzero.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..f8e7375d2a046ebb15d5d460ed2516dc3a66c00f
+--- /dev/null
++++ b/extensions/pgsql/css34_explicit_bzero.c
+@@ -0,0 +1,13 @@
++/* Temporary until libpq is built from source in manylinux2014.
++ * PostgreSQL provides src/port/explicit_bzero.c for that build.
++ * Hidden: never interpose on the host libc or another extension.
++ */
++#include <string.h>
++
++__attribute__((visibility("hidden")))
++void explicit_bzero(void *buf, size_t len)
++{
++    memset(buf, 0, len);
++    /* Prevent dead-store elimination of password erasure. */
++    __asm__ __volatile__("" : : "r"(buf) : "memory");
++}

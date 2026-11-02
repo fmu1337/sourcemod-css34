@@ -1,0 +1,68 @@
+css34: cstrike for episode1: SDK loop, SE_EPISODEONE guards, FindDataMapInfo
+
+diff --git a/extensions/cstrike/AMBuilder b/extensions/cstrike/AMBuilder
+index 97a8209651678e2cc133df92636675ce437dbe49..dbff686c1c54874fc6aa774729496979fb68cf8b 100644
+--- a/extensions/cstrike/AMBuilder
++++ b/extensions/cstrike/AMBuilder
+@@ -12,7 +12,7 @@ project.sources += [
+   '../../public/smsdk_ext.cpp'
+ ]
+ 
+-for sdk_name in ['css', 'csgo']:
++for sdk_name in ['episode1', 'css', 'csgo']:
+   if sdk_name not in SM.sdks:
+     continue
+   sdk = SM.sdks[sdk_name]
+diff --git a/extensions/cstrike/forwards.cpp b/extensions/cstrike/forwards.cpp
+index 505d67f5dc1275a4b05ae56034bb098bf5aea27d..b5500d7bdb48d2ce38bb80f161ec7f6d0ce25d29 100644
+--- a/extensions/cstrike/forwards.cpp
++++ b/extensions/cstrike/forwards.cpp
+@@ -126,7 +126,7 @@ DETOUR_DECL_MEMBER0(DetourWeaponPrice, int)
+ }
+ #endif
+ 
+-#if SOURCE_ENGINE == SE_CSS
++#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE
+ DETOUR_DECL_MEMBER2(DetourTerminateRound, void, float, delay, int, reason)
+ {
+ 	if (g_pIgnoreTerminateDetour)
+@@ -189,7 +189,7 @@ DETOUR_DECL_MEMBER3(DetourTerminateRound, void, int, reason, int, unknown, int,
+ 	reason++;
+ #endif
+ 	
+-#if SOURCE_ENGINE == SE_CSS
++#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE
+ 	if (result == Pl_Changed)
+ 		return DETOUR_MEMBER_CALL(DetourTerminateRound)(delay, reason);
+ 
+diff --git a/extensions/cstrike/natives.cpp b/extensions/cstrike/natives.cpp
+index aa6dd928feebd4a9b91fe733c2ca9cd272bf758c..5b2a35f6ad3a1e0b3a998537806d2c0acfeae09e 100644
+--- a/extensions/cstrike/natives.cpp
++++ b/extensions/cstrike/natives.cpp
+@@ -307,7 +307,7 @@ static cell_t CS_TerminateRound(IPluginContext *pContext, const cell_t *params)
+ 	reason++;
+ #endif
+ 	
+-#if SOURCE_ENGINE == SE_CSS
++#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_EPISODEONE
+ 	static ICallWrapper *pWrapper = NULL;
+ 
+ 	if (!pWrapper)
+@@ -675,14 +675,10 @@ static inline T *GetPlayerVarAddressOrError(const char *pszGamedataName, IPlugin
+ 	else
+ 	{
+ 		datamap_t *pMap = gamehelpers->GetDataMap(pPlayerEntity);
+-		typedescription_t *td = gamehelpers->FindInDataMap(pMap, pszBaseVar);
+-		if (td)
++		sm_datatable_info_t datamapInfo;
++		if (gamehelpers->FindDataMapInfo(pMap, pszBaseVar, &datamapInfo))
+ 		{
+-#if SOURCE_ENGINE >= SE_LEFT4DEAD
+-			interimOffset = td->fieldOffset;
+-#else
+-			interimOffset = td->fieldOffset[TD_OFFSET_NORMAL];
+-#endif
++			interimOffset = datamapInfo.actual_offset;
+ 		}
+ 	}
+ 

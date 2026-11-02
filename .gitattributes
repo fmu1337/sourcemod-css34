@@ -2,3 +2,4 @@
 # SourceMod lines); keep Windows checkouts (core.autocrlf) from rewriting them.
 builder/patches/*.patch -text
 builder/patches/*.take -text
+builder/patches/series/** -text

@@ -1,0 +1,26 @@
+css34: episode1 manifest: css34 linux defines
+
+diff --git a/manifests/episode1.json b/manifests/episode1.json
+index 5cf99a71cd826964f6f6caf73011f50b377c0a8c..5793631c488d41e6c9f9a0d149fab82c1022c1eb 100644
+--- a/manifests/episode1.json
++++ b/manifests/episode1.json
+@@ -38,7 +38,11 @@
+                 "linux_sdk/vstdlib_i486.so"
+             ]
+         },
+-        "uses_system_cxxlib": false
++        "uses_system_cxxlib": false,
++        "defines": [
++            "NO_HOOK_MALLOC",
++            "NO_MALLOC_OVERRIDE"
++        ]
+     },
+     "windows": {
+         "x86": {
+@@ -50,4 +54,4 @@
+             ]
+         }
+     }
+-}
+\ No newline at end of file
++}

@@ -153,7 +153,32 @@ def load_manifest(path):
                     "{}.frozen.tag {} is not a build of {}".format(name, tag, part["tag"]))
             require(tag not in data["known_bad"], name + " is frozen on known-bad tag " + tag)
     validate_runtime_images(data)
+    validate_patch_series(data, path.parent / "patches" / "series")
     return data
+
+
+def validate_patch_series(data, series_root):
+    """T3.4: a line's patch series is made for exactly its SourceMod pin.
+
+    A pin bump without `builder/scripts/patch-series.sh refresh <line>` fails here
+    instead of in the build's apply-series.sh.
+    """
+    for manifest in sorted(series_root.glob("*/series.json")):
+        line = manifest.parent.name
+        series = json.loads(manifest.read_text(encoding="utf-8"))
+        require(line in data["lines"], "patch series for unknown line " + line)
+        require(series.get("line") == line, str(manifest) + " names line " + repr(series.get("line")))
+        require(data["lines"][line]["status"] == "active", "patch series for inactive line " + line)
+        pin = data["pins"][data["lines"][line]["sourcemod"]]
+        require(series.get("commit") == pin["commit"],
+                "{}: patch series is for SourceMod {}, the pin is {}; run builder/scripts/patch-series.sh refresh {}".format(
+                    line, series.get("commit"), pin["commit"], line))
+        trees = series.get("trees")
+        require(isinstance(trees, dict) and "sourcemod" in trees, str(manifest) + " needs trees.sourcemod")
+        for repo, tree in trees.items():
+            require(re.fullmatch(r"[0-9a-f]{40}", str(tree)), "invalid tree for {} in {}".format(repo, manifest))
+            require((manifest.parent / repo).is_dir() and list((manifest.parent / repo).glob("*.patch")),
+                    "{}: no patches for {}".format(manifest.parent, repo))
 
 
 def image_ref(data, name):

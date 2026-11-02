@@ -1,0 +1,51 @@
+css34: sourcepawn: -Wno-sign-compare, pthread/rt/-lgcc_s NEEDED
+
+diff --git a/AMBuildScript b/AMBuildScript
+index 8116f0c8c61034291dfc5184345fe43ecb12cc06..ba39b377092f2bb98dd3c53807fbaa0f69f3412f 100644
+--- a/AMBuildScript
++++ b/AMBuildScript
+@@ -111,7 +111,7 @@ class Config(object):
+         # Platform-specifics
+         if not cxx.like('emscripten'):
+             if cxx.target.platform == 'linux':
+-                cxx.postlink += ['-lpthread', '-lrt']
++                cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']
+             elif cxx.target.platform == 'mac':
+                 cxx.cflags += ['-mmacosx-version-min=10.15']
+                 cxx.linkflags += ['-mmacosx-version-min=10.15']
+@@ -144,9 +144,11 @@ class Config(object):
+             '-pipe',
+             '-Wall',
+             '-Werror',
++            '-Wno-sign-compare',  # CSS34 sign-compare
+             '-Wno-switch',
+         ]
+         cxx.cxxflags += ['-std=c++20']
++        cxx.cxxflags += ['-Wno-sign-compare']  # CSS34 sign-compare
+ 
+         if builder.options.debug == '1':
+             cxx.cflags += ['-gdwarf-4']
+@@ -402,6 +404,11 @@ class SourcePawn(object):
+         binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')
+ 
+         self.SetupBinForArch(binary, builder)
++        # css34: libsourcepawn pthread/rt DT_NEEDED
++        if binary.compiler.target.platform == 'linux':
++          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):
++            if flag not in binary.compiler.linkflags:
++              binary.compiler.linkflags += [flag]
+ 
+         vars = self.vars.copy()
+         vars['binary'] = binary
+@@ -519,8 +526,9 @@ class SourcePawn(object):
+             self.capstone[target],
+         ]
+ 
+-        if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
+-            binary.compiler.linkflags += ['-Wl,--end-group']
++        if binary.compiler.target.platform == 'linux':
++            # css34: AddStaticLibraries lgcc_s for 32-bit __mulodi4 in spcomp
++            binary.compiler.linkflags += ['-lgcc', '-lgcc_s', '-Wl,--end-group']
+ 
+     def BuildFatSpcomp(self, builder):
+         # Building fat binaries is currently only supported on macOS hosts
