@@ -21,7 +21,7 @@ css34_line_has_pointer() {
 
 css34_line_can_release() {
   case "$1" in
-    sm13-mm20|sm13-mm20-khook) return 1 ;;
+    sm11-oldstable|sm13-mm20|sm13-mm20-khook) return 1 ;;
     *) return 0 ;;
   esac
 }

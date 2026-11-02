@@ -22,15 +22,16 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 | `sm12-latest` | 1.12.0.7257 | 1.12.0 git1228 | Latest 1.12 |
 | `sm13-mm20-khook` | 1.13.0.7565 (KHook branch + master) | 2.0.0 git1472 (KHook) | Frozen outside CI; archived builder, ships `dhooks.ext` |
 | `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Retired outside CI |
-| `sm11-oldstable` | 1.11.0.6970 | 1.12.0 git1227 | OldStable, dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy |
+| `sm11-oldstable` | 1.11.0.6970 | 1.12.0 git1227 | OldStable, frozen: dual-core; MM 1.12 default, MM 1.10.7 as mmsource-legacy |
 <!-- lines-install:end -->
 
 `sm11-oldstable` (SM 1.11.0.6970, dual-core) serves frozen MM 1.12 (both Metamod cores, legacy-plugin bridge) as
 `mmsource-css34-linux.tar.gz` and MM 1.10.7 as `mmsource-legacy-css34-linux.tar.gz` — see
-[SourceMod 1.11: choosing Metamod](#sourcemod-111-choosing-metamod). Its pointer appears with the first
-`1.11.0.6970-mm1.12.0-dual` release. The two Metamod inputs come from the line's `metamod` (MM 1.12) and
-`secondary_metamod` (MM 1.10.7) references in `builder/lines.json`; dependency checkout, builds, and package
-verification use the same resolver.
+[SourceMod 1.11: choosing Metamod](#sourcemod-111-choosing-metamod). The line is **frozen** (T2.7,
+[docs/FREEZE.md](docs/FREEZE.md)): its pointer serves `1.11.0.6970-mm1.12.0-dual-r3` for good, `builder/lines.json`
+records the sha256 of every file of that release, CI no longer builds it, and it is rebuilt only from the tag
+`sm11-freeze` and the input archive `sm11-freeze-inputs` (`--network none`). `frozen-verify.yml` re-checks the
+published files and smokes the pointer every week.
 What each pointer serves right now (tag, commits, smoke result) is in
 [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json).
 
@@ -47,7 +48,7 @@ attached to the per-tag releases (pointers are Linux-only).
 <!-- lines-versions:begin -->
 | Line (`CSS34_LINE`) | SourceMod | Metamod | Role |
 |---------------------|-----------|---------|------|
-| `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.12 git1227** (`75dd7b26…`) | OldStable, dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy |
+| `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.12 git1227** (`75dd7b26…`) | OldStable, frozen ([docs](docs/FREEZE.md)): dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy |
 | `sm12-latest` | **1.12.0.7257** (`e68dada2…`) | **1.12 git1228** (`cb477558…`) | Latest 1.12 |
 | `sm13-latest` | **1.13.0.7478** (`b34de51b…`) | **1.12 git1228** (`cb477558…`) | Latest 1.13 (default) |
 | `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | 2.0 git1407 (last SourceHook MM 2.0) (`0084b86a…`) | Retired outside CI ([docs](docs/SM13_MM20.md)) |
@@ -259,8 +260,9 @@ git submodule update --init --recursive
 CSS34_LINE=sm13-latest builder/docker/build.sh
 
 # Other lines:
-CSS34_LINE=sm11-oldstable  builder/docker/build.sh
 CSS34_LINE=sm12-latest     builder/docker/build.sh
+# sm11-oldstable is frozen: rebuild it from its input archive (docs/FREEZE.md)
+git checkout sm11-freeze && builder/freeze/build-offline.sh <sm11-freeze-inputs assets> <out>
 ```
 
 MM 2.0 builds (`sm13-mm20`, `sm13-mm20-khook`) are archived outside CI in
@@ -293,7 +295,7 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 - `.github/workflows/ci.yml` — the main CI workflow and unified gate (push to `master` / `cursor/**`, PRs, and a weekly schedule).
   Includes Linux builds, static ABI/import/Metamod checks, Windows builds on `windows-2022` (MSVC 14.44, SDK 10.0.26100.0), native and Wine smoke (`wine-smoke`), version-pin consistency, hygiene regression checks, and server smoke and botplay stress suites.
   Doc-only changes skip the build and server jobs; the unified `gate` job always evaluates and reports the result.
-  Builds **three active** lines (`sm11-oldstable`, `sm12-latest`, `sm13-latest`) with `builder/docker/build.sh` + `check-package.sh` / `check-metamod-package.sh`;
+  Builds the **active** lines (`sm12-latest`, `sm13-latest`; frozen `sm11-oldstable` is checked by `frozen-verify.yml`) with `builder/docker/build.sh` + `check-package.sh` / `check-metamod-package.sh`;
   every PR smokes `centos:7`, `ubuntu:24.04` and `debian:13` for every active line, plus the ubuntu-22.04 host for
   `sm13-latest`, and one **botplay-stress** run per line on `debian:11`
   (SMAC + SDKHooks OnTakeDamage + SM API / cstrike / DHooks probes).

@@ -30,6 +30,22 @@ class LinesTest(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
 
+    def thaw_sm11(self):
+        """Make sm11-oldstable an active CI line again (T2.7 froze it) and regenerate."""
+        target = self.root / "builder/lines.json"
+        data = json.loads(target.read_text())
+        line = data["lines"]["sm11-oldstable"]
+        line.pop("frozen")
+        line.update(status="active", releasable=True)
+        target.write_text(json.dumps(data))
+        self.run_command("gen")
+
+    def edit_frozen(self, change):
+        target = self.root / "builder/lines.json"
+        data = json.loads(target.read_text())
+        change(data["lines"]["sm11-oldstable"])
+        target.write_text(json.dumps(data))
+
     def run_command(self, command, success=True):
         result = subprocess.run([sys.executable, str(self.root / "builder/lines.py"), command],
                                 cwd=self.temp.name, capture_output=True, text=True)
@@ -71,7 +87,7 @@ class LinesTest(unittest.TestCase):
 
     def test_debian_matrix_requires_new_os_and_drops_latest(self):
         matrix = json.loads((self.root / "builder/generated/ci-matrix.json").read_text())
-        lines = ("sm11-oldstable", "sm12-latest", "sm13-latest")
+        lines = ("sm12-latest", "sm13-latest")
         per_pr = ("centos:7", "ubuntu:24.04", "debian:13")
         weekly = ("debian:8", "debian:9", "debian:10", "debian:11",
                   "ubuntu:14.04", "ubuntu:16.04", "ubuntu:18.04", "rockylinux:9")
@@ -89,12 +105,13 @@ class LinesTest(unittest.TestCase):
         for line in lines:
             for image in weekly:
                 self.assertIn((line, image), weekly_pairs)
-        # Dual-Metamod sm11 runs botplay on both Metamod builds.
+        # sm11-oldstable is frozen (T2.7): out of every CI matrix.
+        for key in ("build", "debian", "botplay", "weekly", "weekly_botplay", "windows", "windows_smoke"):
+            self.assertNotIn("sm11-oldstable", {row["line"] for row in matrix[key]}, key)
         self.assertEqual([(row["line"], row["mm_variant"]) for row in matrix["botplay"]],
-                         [("sm11-oldstable", "primary"), ("sm11-oldstable", "secondary"),
-                          ("sm12-latest", "primary"), ("sm13-latest", "primary")])
+                         [("sm12-latest", "primary"), ("sm13-latest", "primary")])
         self.assertEqual({row["image_name"] for row in matrix["botplay"]}, {"debian:11"})
-        self.assertEqual([row["image_name"] for row in matrix["weekly_botplay"]], ["centos:7"] * 3)
+        self.assertEqual([row["image_name"] for row in matrix["weekly_botplay"]], ["centos:7"] * 2)
         self.assertTrue(all("@sha256:" in row["image"] for row in matrix["weekly"] + matrix["botplay"]))
         self.assertEqual([row["line"] for row in matrix["host"]], ["sm13-latest"])
         self.assertNotIn("rhel", matrix)
@@ -102,6 +119,7 @@ class LinesTest(unittest.TestCase):
             self.assertNotIn("sha256:", (self.root / name).read_text(), name)
 
     def test_dual_metamod_rows_follow_lines_json(self):
+        self.thaw_sm11()  # the only dual-Metamod line
         data = json.loads((self.root / "builder/lines.json").read_text())
         matrix = json.loads((self.root / "builder/generated/ci-matrix.json").read_text())
         pins = data["pins"]
@@ -135,6 +153,53 @@ class LinesTest(unittest.TestCase):
                     self.assertNotEqual(row["switch_from_package"], row["mm_package"])
             else:
                 self.assertEqual(switches, [], name)
+
+    def frozen_rows(self):
+        out = self.run_command("frozen-gha").stdout
+        self.assertTrue(out.startswith("frozen<<EOF\n") and out.endswith("\nEOF\n"), out)
+        return json.loads(out.split("\n")[1])
+
+    def test_frozen_line_rows_map_pointer_files_to_release_assets(self):
+        data = json.loads((self.root / "builder/lines.json").read_text())
+        rows = self.frozen_rows()
+        self.assertEqual([r["image_name"] for r in rows],
+                         [e["image"] for e in data["lines"]["sm11-oldstable"]["smoke"]])
+        row = rows[0]
+        self.assertEqual((row["line"], row["freeze_tag"], row["inputs_release"]),
+                         ("sm11-oldstable", "sm11-freeze", "sm11-freeze-inputs"))
+        pins = data["pins"]
+        self.assertEqual(json.loads(row["pointer_assets"]), {
+            "sourcemod-css34-linux.tar.gz": "sourcemod-1.11.0-git{}-css34-linux.tar.gz".format(pins["SM_OLDSTABLE"]["rev"]),
+            "mmsource-css34-linux.tar.gz": "mmsource-1.12.0-git{}-css34-linux.tar.gz".format(pins["MM_112_FROZEN"]["rev"]),
+            "mmsource-legacy-css34-linux.tar.gz": "mmsource-1.10.7-git{}-css34-linux.tar.gz".format(pins["MM_110"]["rev"]),
+        })
+        self.assertEqual(json.loads(row["assets"]), data["lines"]["sm11-oldstable"]["frozen"]["assets"])
+        self.assertIn("@sha256:", row["image"])
+        # A frozen line takes no new release tag (release.yml css34_line_can_release).
+        tag_map = (self.root / "builder/generated/tag-map.sh").read_text()
+        can_release = tag_map.split("css34_line_can_release() {", 1)[1].split("}", 1)[0]
+        self.assertIn("sm11-oldstable", can_release.split("return 1")[0])
+
+    def test_frozen_block_rules(self):
+        cases = (
+            (lambda l: l.update(status="active"), "needs status frozen"),
+            (lambda l: l.update(releasable=True), "rebuilt only from sm11-freeze"),
+            (lambda l: l["frozen"].update(tag="1.11.0.6970-mm1.10.7"), "is not a build of"),
+            (lambda l: l["frozen"]["assets"].update({"x.tar.gz": "abc"}), "needs a sha256"),
+            (lambda l: l["frozen"].pop("inputs_release"), "must have exactly"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                self.setUp()
+                self.edit_frozen(change)
+                self.assertIn(message, self.run_command("check", False).stderr)
+
+    def test_frozen_assets_must_cover_the_pointer(self):
+        self.edit_frozen(lambda l: l["frozen"]["assets"].pop("mmsource-1.10.7-git976-css34-linux.tar.gz"))
+        result = subprocess.run([sys.executable, str(self.root / "builder/lines.py"), "frozen-gha"],
+                                cwd=self.temp.name, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("frozen.assets lacks mmsource-1.10.7-git976-css34-linux.tar.gz", result.stderr)
 
     def test_duplicate_image_is_rejected(self):
         target = self.root / "builder/lines.json"

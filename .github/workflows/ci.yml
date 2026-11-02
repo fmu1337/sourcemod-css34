@@ -28,7 +28,7 @@ on:
         required: false
         default: "1"
       css34_line:
-        description: "Optional single CSS34_LINE (sm11-oldstable|sm12-latest|sm13-latest); empty = matrix"
+        description: "Optional single CSS34_LINE (an active line: sm12-latest|sm13-latest; frozen sm11-oldstable is refused); empty = matrix"
         required: false
         default: ""
       record_secs:

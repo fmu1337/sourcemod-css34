@@ -1,0 +1,108 @@
+name: Frozen verify
+
+# T2.7 (docs/FREEZE.md): every week, re-check what a frozen line has published.
+# For each line with a "frozen" block in builder/lines.json (one row per smoke
+# image, from `python3 builder/lines.py frozen-gha`):
+#   * testing/scripts/verify-frozen-line.py: the frozen tag's assets and the
+#     line-<line> pointer files match the sha256 values in lines.json, the
+#     pointer serves that tag with smoke=pass, and the input archive release was
+#     collected at the freeze tag;
+#   * testing/scripts/release-smoke.sh boots srcds from the pointer URLs on the
+#     line's smoke images, on every Metamod build the pointer serves.
+on:
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/frozen-verify.yml"
+      - "testing/scripts/verify-frozen-line.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frozen-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-22.04
+    outputs:
+      frozen: ${{ steps.m.outputs.frozen }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Frozen lines
+        id: m
+        run: |
+          set -euo pipefail
+          python3 builder/lines.py check >/dev/null
+          python3 builder/lines.py frozen-gha >> "$GITHUB_OUTPUT"
+          python3 builder/lines.py frozen-gha
+
+  verify:
+    needs: plan
+    if: needs.plan.outputs.frozen != '[]'
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.frozen) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Published files of ${{ matrix.line }} match lines.json
+        env:
+          ROW: ${{ toJSON(matrix) }}
+        run: |
+          set -euo pipefail
+          python3 - "$ROW" <<'PY' > args.txt
+          import json, sys
+          r = json.loads(sys.argv[1])
+          for k in ("line", "tag", "freeze_tag", "inputs_release", "assets", "pointer_assets"):
+              print("--" + k.replace("_", "-"))
+              print(r[k])
+          PY
+          mapfile -t args < args.txt
+          python3 testing/scripts/verify-frozen-line.py \
+            --base "https://github.com/${GITHUB_REPOSITORY}/releases/download" \
+            --repo-git "https://github.com/${GITHUB_REPOSITORY}" "${args[@]}"
+
+      - name: Restore cached server tree
+        id: server-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+
+      - name: Prepare server tree (cache miss)
+        if: steps.server-cache.outputs.cache-hit != 'true'
+        env:
+          SERVER_DIR: ${{ github.workspace }}/.ci-server
+          CACHE_DIR: ${{ github.workspace }}/.ci-cache
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl unzip unrar
+          chmod +x testing/scripts/*.sh
+          testing/scripts/fetch-server.sh
+          testing/scripts/apply-valve-rc-fix.sh
+          testing/scripts/apply-srcds-patch.sh
+          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
+          mkdir -p server-art
+          tar -C .ci-server -czf server-art/css34-server.tar.gz .
+          rm -rf .ci-server
+
+      - name: Smoke the pointer of ${{ matrix.line }} in ${{ matrix.image_name }}
+        env:
+          BASE_URL: https://github.com/${{ github.repository }}/releases/download/line-${{ matrix.line }}
+          IMAGE: ${{ matrix.image }}
+          SM_ASSET: sourcemod-css34-linux.tar.gz
+          POINTER_ASSETS: ${{ matrix.pointer_assets }}
+        run: |
+          set -euo pipefail
+          chmod +x testing/scripts/*.sh
+          MM_ASSET=mmsource-css34-linux.tar.gz testing/scripts/release-smoke.sh
+          if python3 -c 'import json,os,sys; sys.exit("mmsource-legacy-css34-linux.tar.gz" not in json.loads(os.environ["POINTER_ASSETS"]))'; then
+            MM_ASSET=mmsource-legacy-css34-linux.tar.gz SMOKE_EXPECT_CORE=1.ep1 testing/scripts/release-smoke.sh
+          fi
