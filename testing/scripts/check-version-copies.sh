@@ -63,7 +63,7 @@ for pin in "$SM_LATEST_COMMIT" "$SM_LATEST_13_COMMIT" "$MM_112_COMMIT" "$MM_110_
 done
 
 if [[ "$failures" -gt 0 ]]; then
-  echo "==> ${failures} pin consistency error(s). See docs/JULES_DAILY_VERSION_BUMP.md" >&2
+  echo "==> ${failures} pin consistency error(s). See docs/PATCH_STRATEGY.md" >&2
   exit 1
 fi
 

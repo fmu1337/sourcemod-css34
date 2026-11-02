@@ -15,8 +15,8 @@ doc carries a status note at the top saying what is still true.
 | [SM13_MM20.md](SM13_MM20.md) | `sm13-mm20` (frozen on MM 2.0 git1407) |
 | [FREEZE.md](FREEZE.md) | Freezing a line (T2.7): the input archive, `--network none` rebuild, ABI comparison |
 | [MM20_KHOOK.md](MM20_KHOOK.md) | `sm13-mm20-khook`: KHook SourceMod + Metamod 2.0, DHooks x86, Windows |
-| [PATCH_STRATEGY.md](PATCH_STRATEGY.md) | How the patch sets are laid out today and how to upgrade SM (status section on top; the rest is history) |
-| [JULES_DAILY_VERSION_BUMP.md](JULES_DAILY_VERSION_BUMP.md) | Every place a pin is copied to; daily bump prompt |
+| [PATCH_STRATEGY.md](PATCH_STRATEGY.md) | The patch model (one git patch series per line / MM pin, `lines.json`) and how pins are bumped (weekly bump PRs, by hand) |
+| [PATCHES.md](PATCHES.md) | Every patch of every series: what it changes and what breaks without it |
 | [UPSTREAM_REPORTS.md](UPSTREAM_REPORTS.md) | Draft bug reports for SourceMod / Metamod / KHook |
 | [ROADMAP.md](ROADMAP.md) | Agent work plan: three SM lines (1.11 dual-core frozen, 1.12, 1.13), glibc 2.17, Windows; tracked in issue #73 |
 | [REVIEW_2026-10.md](REVIEW_2026-10.md) | Doc / project inconsistencies found on 2026-10-13 and simplification proposals |
@@ -27,7 +27,9 @@ doc carries a status note at the top saying what is still true.
 
 | Doc | What it records |
 |-----|-----------------|
-| [BYTE_MATCH.md](BYTE_MATCH.md) | Why byte-identical `.so` vs rom4s 6572 is not a goal (still valid) |
+| [archive/PATCH_STRATEGY_HISTORY.md](archive/PATCH_STRATEGY_HISTORY.md) | The 2026-07 single-pin vs layered-patches debate, upgrade traps of the SM 1.11 era (6572 / 6588 / 6970), the 2026-10-13 status snapshot |
+| [archive/JULES_DAILY_VERSION_BUMP.md](archive/JULES_DAILY_VERSION_BUMP.md) | The daily Jules bump prompt, superseded by `upstream-bump.yml` (T4.4) |
+| [archive/BYTE_MATCH.md](archive/BYTE_MATCH.md) | Why byte-identical `.so` vs rom4s 6572 is not a goal (still valid) |
 | [SDKHOOKS_EP1_RELEASE_BLOCKERS.md](SDKHOOKS_EP1_RELEASE_BLOCKERS.md) | 2026-07 field report: PLAPI 11 vs MM 1.11 mix, SDKHooks vtables on the 6572 tag |
-| [V34_COMPARISON_v1.11.6572_vs_v1.12.7239.md](V34_COMPARISON_v1.11.6572_vs_v1.12.7239.md) | What changed for v34 between SM 6572 and 7239 (first 1.12 port, PR #23) |
-| [v34-variant-6522-notes.md](v34-variant-6522-notes.md) | myarena SM 6522 bundle, forum notes (myarena, HLmod / FrozDark) |
+| [archive/V34_COMPARISON_v1.11.6572_vs_v1.12.7239.md](archive/V34_COMPARISON_v1.11.6572_vs_v1.12.7239.md) | What changed for v34 between SM 6572 and 7239 (first 1.12 port, PR #23) |
+| [archive/v34-variant-6522-notes.md](archive/v34-variant-6522-notes.md) | myarena SM 6522 bundle, forum notes (myarena, HLmod / FrozDark) |
