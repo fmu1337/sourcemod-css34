@@ -1,0 +1,184 @@
+name: Freeze inputs
+
+# T2.7: archive every input of a line's build and prove it rebuilds offline.
+#
+# One job (the ~0.8 GB archive must not become an Actions artifact):
+#  1. builds the line online once (builder/freeze/collect-inputs.sh), recording
+#     every pinned download and mirroring every pinned git commit; with
+#     publish=true it pushes the build image to ghcr.io/<owner>/css34-build-ml2014
+#     and uploads the archive to the release <line-prefix>-freeze-inputs
+#     (sm11-freeze-inputs), then downloads it back;
+#  2. deletes the build image and rebuilds from the archive alone, in a second
+#     fresh checkout, with --network none (builder/freeze/build-offline.sh);
+#  3. requires the same files, exports, NEEDED and SONAME as the online build and
+#     as the line's published release, and the expected core PLAPI.
+#
+# Dispatch it on the freeze tag (sm11-freeze): the archive records the builder
+# commit, and an offline rebuild must check out that commit.
+on:
+  workflow_dispatch:
+    inputs:
+      css34_line:
+        description: "Line to freeze"
+        required: true
+        default: "sm11-oldstable"
+      publish:
+        description: "Push the image to ghcr and upload the archive to the <line>-freeze-inputs release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: freeze-inputs-${{ github.event.inputs.css34_line }}
+  cancel-in-progress: false
+
+env:
+  PURE_SOURCE_BUILD: "1"
+  CSS34_LINE: ${{ github.event.inputs.css34_line }}
+
+jobs:
+  freeze:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Names
+        id: names
+        run: |
+          set -euo pipefail
+          python3 builder/lines.py check >/dev/null
+          prefix="${CSS34_LINE%%-*}"
+          echo "release=${prefix}-freeze-inputs" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${CSS34_LINE}-freeze" >> "$GITHUB_OUTPUT"
+
+      - name: Install zstd
+        run: sudo apt-get update && sudo apt-get install -y zstd
+
+      - name: Push the build image to ghcr
+        id: ghcr
+        if: github.event.inputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_TAG: ${{ steps.names.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          image="$(sed -nE 's/^IMAGE="\$\{ML2014_IMAGE:-(.*)\}"$/\1/p' builder/docker/build.sh)"
+          [[ -n "$image" ]] || { echo "FAIL: no default image in builder/docker/build.sh" >&2; exit 1; }
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          dest="ghcr.io/${owner}/css34-build-ml2014:${IMAGE_TAG}"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          docker pull "$image"
+          docker tag "$image" "$dest"
+          docker push "$dest"
+          ref="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$dest" | grep '^ghcr.io/' | head -n1)"
+          [[ -n "$ref" ]] || { echo "FAIL: no ghcr digest for $dest" >&2; exit 1; }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "==> $ref"
+
+      - name: Collect inputs (online build)
+        env:
+          IMAGE_REGISTRY_REF: ${{ steps.ghcr.outputs.ref }}
+        run: bash builder/freeze/collect-inputs.sh "$RUNNER_TEMP/freeze"
+
+      - name: Publish the archive to ${{ steps.names.outputs.release }}
+        if: github.event.inputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ steps.names.outputs.release }}
+        run: |
+          set -euo pipefail
+          assets="$RUNNER_TEMP/freeze/assets"
+          if ! gh release view "$RELEASE" >/dev/null 2>&1; then
+            gh release create "$RELEASE" --prerelease --latest=false --target "$GITHUB_SHA" \
+              --title "$RELEASE" \
+              --notes "Build inputs of line \`${CSS34_LINE}\` (T2.7): git mirrors, pinned downloads, the build image and MANIFEST.json. Rebuild with \`builder/freeze/build-offline.sh\` from builder commit \`${GITHUB_SHA}\`."
+          fi
+          gh release upload "$RELEASE" --clobber "$assets"/*
+          # Rebuild from what was published, not from the local copy.
+          rm -rf "$assets"
+          mkdir -p "$assets"
+          gh release download "$RELEASE" --dir "$assets"
+
+      # The archive is ~0.8 GB: no Actions artifact (0.5 GB quota). The rebuild
+      # runs here, in a second fresh checkout, after the build image is deleted.
+      - name: Fresh checkout for the offline rebuild
+        uses: actions/checkout@v4
+        with:
+          path: offline-checkout
+
+      - name: Delete the build image and the online build tree
+        run: |
+          set -euo pipefail
+          # Every tag of the image goes, so the rebuild must load the archive's.
+          id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"]["id"])' "$RUNNER_TEMP/freeze/assets/MANIFEST.json")"
+          docker image rm -f "$id"
+          if docker image inspect "$id" >/dev/null 2>&1; then echo "FAIL: $id is still present" >&2; exit 1; fi
+          sudo rm -rf deps sourcemod/build "$RUNNER_TEMP/freeze/work"
+          df -h "$RUNNER_TEMP"
+
+      - name: Rebuild with --network none
+        run: |
+          sudo apt-get install -y gcc-multilib lib32stdc++6 lib32z1
+          bash offline-checkout/builder/freeze/build-offline.sh "$RUNNER_TEMP/freeze/assets" "$RUNNER_TEMP/offline"
+
+      - name: Same ABI as the online build
+        run: |
+          set -euo pipefail
+          for pkg in "$RUNNER_TEMP"/offline/*.tar.gz; do
+            python3 testing/scripts/compare-package-abi.py "$RUNNER_TEMP/freeze/assets/$(basename "$pkg")" "$pkg"
+          done
+
+      - name: Same ABI as the published release
+        env:
+          BASE: https://github.com/${{ github.repository }}/releases/download
+        run: |
+          set -euo pipefail
+          tag="$(curl -fsSL --retry 5 "$BASE/line-${CSS34_LINE}/lines.json" | python3 -c 'import json,os,sys; print(json.load(sys.stdin)[os.environ["CSS34_LINE"]]["tag"])')"
+          echo "==> line-${CSS34_LINE} -> ${tag}"
+          mkdir -p "$RUNNER_TEMP/published"
+          for pkg in "$RUNNER_TEMP"/offline/*.tar.gz; do
+            name="$(basename "$pkg")"
+            curl -fsSL --retry 5 -o "$RUNNER_TEMP/published/$name" "$BASE/$tag/$name"
+            python3 testing/scripts/compare-package-abi.py "$RUNNER_TEMP/published/$name" "$pkg"
+          done
+
+      - name: Restore cached server tree
+        id: server-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: server-art/css34-server.tar.gz
+          key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+
+      - name: Prepare server tree (cache miss)
+        if: steps.server-cache.outputs.cache-hit != 'true'
+        env:
+          SERVER_DIR: ${{ github.workspace }}/.ci-server
+          CACHE_DIR: ${{ github.workspace }}/.ci-cache
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y curl unzip unrar
+          testing/scripts/fetch-server.sh
+          testing/scripts/apply-valve-rc-fix.sh
+          testing/scripts/apply-srcds-patch.sh
+          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
+          mkdir -p server-art
+          tar -C .ci-server -czf server-art/css34-server.tar.gz .
+          rm -rf .ci-server
+
+      - name: Core PLAPI of the rebuild
+        env:
+          SERVER_DIR: ${{ github.workspace }}/.ci-plapi-server
+          PACKAGES_DIR: ${{ runner.temp }}/offline
+        run: |
+          set -euo pipefail
+          source builder/package-paths.sh
+          export SM_PACKAGE MM_PACKAGE
+          mkdir -p "$SERVER_DIR"
+          tar -xzf server-art/css34-server.tar.gz -C "$SERVER_DIR"
+          bash testing/scripts/install-addons.sh
+          bash testing/scripts/check-core-plapi.sh

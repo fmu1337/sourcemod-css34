@@ -56,7 +56,14 @@ fi
 if [[ ! -f "${CACHE_FILE}" ]]; then
   echo "==> Downloading ${GEOLITE2_NAME}"
   tmp="$(mktemp)"
-  curl -fsSL --retry 3 --retry-delay 2 -o "${tmp}" "${GEOLITE2_URL}"
+  if [[ -n "${CSS34_DOWNLOADS:-}" && -f "${CSS34_DOWNLOADS}/${GEOLITE2_NAME}" ]]; then
+    cp -f "${CSS34_DOWNLOADS}/${GEOLITE2_NAME}" "${tmp}"   # frozen line's input archive
+  elif [[ "${CSS34_OFFLINE:-0}" == 1 ]]; then
+    echo "FAIL: offline build: ${GEOLITE2_NAME} is not in CSS34_DOWNLOADS=${CSS34_DOWNLOADS:-<unset>}" >&2
+    exit 1
+  else
+    curl -fsSL --retry 3 --retry-delay 2 -o "${tmp}" "${GEOLITE2_URL}"
+  fi
   size="$(wc -c < "${tmp}" | tr -d ' ')"
   if [[ "${size}" -lt 1000000 ]]; then
     rm -f "${tmp}"
@@ -70,5 +77,9 @@ fi
 
 verify_geolite "${CACHE_FILE}"
 cp -f "${CACHE_FILE}" "${TARGET_DIR}/${GEOLITE2_NAME}"
+if [[ -n "${CSS34_SAVE_DOWNLOADS:-}" ]]; then
+  mkdir -p "${CSS34_SAVE_DOWNLOADS}"
+  cp -f "${CACHE_FILE}" "${CSS34_SAVE_DOWNLOADS}/${GEOLITE2_NAME}"
+fi
 write_attribution
 echo "==> Packaged ${TARGET_DIR}/${GEOLITE2_NAME} (MaxMind GeoLite2)"

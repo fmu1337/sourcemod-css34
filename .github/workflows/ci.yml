@@ -187,6 +187,9 @@ jobs:
       - name: Legacy-plugin bridge patch tests (T2.9)
         run: python3 testing/scripts/test-mm-oldbridge-patch.py
 
+      - name: Freeze tool tests (T2.7)
+        run: python3 testing/scripts/test-freeze-tools.py
+
       - name: Check the SM 1.11 build log gate
         run: python3 testing/scripts/test-sm11-build-log.py
 
