@@ -1,0 +1,75 @@
+css34: SdkHelpers: drop manifest compiler flags GCC 10 rejects
+
+diff --git a/SdkHelpers.ambuild b/SdkHelpers.ambuild
+index 875d6f9b4a1de8e049432007a608a0da19b68857..af2c0859f60a3c319976e40f3b15626b54b6ed4f 100644
+--- a/SdkHelpers.ambuild
++++ b/SdkHelpers.ambuild
+@@ -2,6 +2,53 @@
+ import json
+ import os
+ 
++def css34_probe_flag(compiler, flag):
++    import subprocess
++    proc = subprocess.run(
++        compiler + ['-Werror', flag, '-fsyntax-only', '-x', 'c++', '/dev/null'],
++        stdout=subprocess.PIPE,
++        stderr=subprocess.PIPE,
++    )
++    err = proc.stderr.decode('utf-8', 'replace')
++    if proc.returncode == 0:
++        return True, err
++    low = err.lower()
++    unsupported = (
++        'unrecognized command' in low
++        or 'unknown warning option' in low
++        or 'unknown argument' in low
++    )
++    if unsupported:
++        return False, err
++    raise SystemExit(
++        'css34: compiler flag probe failed for %s (not an unsupported-flag result):\n%s'
++        % (flag, err)
++    )
++
++def css34_supported_flags(cxx, flags):
++    # css34: drop compiler flags this compiler rejects
++    import os
++    compiler = os.environ.get('CXX', '').split()
++    if not compiler:
++        argv = getattr(cxx, 'cxx_argv', None) or ['g++']
++        compiler = [argv[0]]
++    kept = []
++    for flag in flags:
++        ok, err = css34_probe_flag(compiler, flag)
++        # GCC accepts an unknown -Wno-* on an empty file and only reports it
++        # once some other diagnostic is emitted. Probe the positive -W form,
++        # which fails immediately, so ebd6e10 flags are dropped on GCC 10.
++        if ok and flag.startswith('-Wno-'):
++            positive = '-W' + flag[len('-Wno-'):]
++            ok, err = css34_probe_flag(compiler, positive)
++        if ok:
++            kept.append(flag)
++            continue
++        lines = [line for line in err.splitlines() if line.strip()]
++        tail = lines[-1] if lines else 'unsupported'
++        print('==> css34: dropping unsupported compiler flag %s (%s)' % (flag, tail))
++    return kept
++
+ def get_this_file_path():
+     return get_this_file_path.__code__.co_filename
+ 
+@@ -258,11 +305,12 @@ class SdkHelpers(object):
+             cxx.linkflags[0:0] = [file_name]
+ 
+         # cflags
+-        for cflag in SdkHelpers.getLists(sdk, 'cflags', cxx):
++        # css34: drop compiler flags this compiler rejects
++        for cflag in css34_supported_flags(cxx, SdkHelpers.getLists(sdk, 'cflags', cxx)):
+             cxx.cflags += [cflag]
+ 
+         # cxxflags
+-        for cxxflag in SdkHelpers.getLists(sdk, 'cxxflags', cxx):
++        for cxxflag in css34_supported_flags(cxx, SdkHelpers.getLists(sdk, 'cxxflags', cxx)):
+             cxx.cxxflags += [cxxflag]
+ 
+         if cxx.target.platform == 'linux':

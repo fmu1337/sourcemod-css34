@@ -196,13 +196,35 @@ echo "==> Fetching Metamod:Source"
 : "${MMS_DIRNAME:?MMS_DIRNAME is required}" "${MMS_COMMIT:?MMS_COMMIT is required}"
 MMS_BRANCH="${MMS_BRANCH:-}"
 
+# The Metamod patch series made for <commit> (builder/patches/series/*/series.json
+# with root "metamod"), or nothing.
+mm_series_for() {
+  local manifest
+  for manifest in "$BUILDER_DIR"/patches/series/*/series.json; do
+    [[ -f "$manifest" ]] || continue
+    if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get("root") == "metamod" and d.get("commit") == sys.argv[2] else 1)' "$manifest" "$1"; then
+      dirname "$manifest"
+      return 0
+    fi
+  done
+}
+
 fetch_and_patch_mms() {
   local dirname="$1"
   local mode="$2"
   local branch="$3"
   local commit="$4"
 
-  clone_repo "$dirname" "https://github.com/alliedmodders/metamod-source" "$branch" "$commit"
+  local series=""
+  [[ "$mode" != 1.12 ]] || series="$(mm_series_for "$commit")"
+  if [[ -n "$series" ]]; then
+    # Exactly the pinned tree, LF as committed (also on Windows), even in a
+    # reused deps directory: the series applies only to that.
+    SOURCEMOD_URL="https://github.com/alliedmodders/metamod-source" \
+      bash "$BUILDER_DIR/fetch-sourcemod.sh" "$DEPS/$dirname" "$commit" Metamod:Source
+  else
+    clone_repo "$dirname" "https://github.com/alliedmodders/metamod-source" "$branch" "$commit"
+  fi
   echo "==> Metamod:Source (${mode}) in $dirname at $(git -C "$DEPS/$dirname" rev-parse HEAD)"
 
   case "$mode" in
@@ -210,8 +232,14 @@ fetch_and_patch_mms() {
       MMS_DIR="$DEPS/$dirname" bash "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/$dirname"
       ;;
     1.12)
-      git -C "$DEPS/$dirname" submodule update --init --recursive
-      bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/$dirname"
+      if [[ -n "$series" ]]; then
+        # T3.4: the pin's patch series, then the legacy-plugin bridge (our own code).
+        bash "$BUILDER_DIR/patches/apply-series.sh" "$series" "$DEPS/$dirname"
+        bash "$BUILDER_DIR/patches/apply-mmsource-oldbridge.sh" modern "$DEPS/$dirname"
+      else
+        git -C "$DEPS/$dirname" submodule update --init --recursive
+        bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/$dirname"
+      fi
       ;;
     *)
       echo "Unsupported MMS_MODE=$mode" >&2

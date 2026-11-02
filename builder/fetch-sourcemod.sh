@@ -2,7 +2,10 @@
 # Check out SourceMod at the line's pinned commit (T3.3: no git submodule; the
 # pin lives in builder/lines.json, resolved by resolve-version.sh).
 #
-#   builder/fetch-sourcemod.sh <sourcemod dir> <commit>
+#   builder/fetch-sourcemod.sh <sourcemod dir> <commit> [label]
+#
+# Also fetches Metamod:Source for its patch series (SOURCEMOD_URL=<metamod url>,
+# label Metamod:Source; checkout-deps.sh, patch-series.sh).
 #
 # Reuses an existing checkout (including an old submodule checkout) and leaves
 # exactly the pinned tree: tracked files reset, untracked files removed, nested
@@ -12,9 +15,10 @@ set -euo pipefail
 
 dir="${1:?sourcemod directory required}"
 commit="${2:?SourceMod commit required}"
+label="${3:-SourceMod}"
 url="${SOURCEMOD_URL:-https://github.com/alliedmodders/sourcemod}"
 
-[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "FAIL: SourceMod commit must be a full SHA: $commit" >&2; exit 1; }
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "FAIL: $label commit must be a full SHA: $commit" >&2; exit 1; }
 
 if [[ ! -e "$dir/.git" ]]; then
   mkdir -p "$dir"
@@ -42,5 +46,5 @@ git_sm clean -fdxq
 git_sm submodule update --init --recursive
 
 head="$(git -C "$dir" rev-parse HEAD)"
-[[ "$head" == "$commit" ]] || { echo "FAIL: SourceMod is at $head, expected $commit" >&2; exit 1; }
-echo "==> SourceMod ${commit:0:12} in $dir"
+[[ "$head" == "$commit" ]] || { echo "FAIL: $label is at $head, expected $commit" >&2; exit 1; }
+echo "==> $label ${commit:0:12} in $dir"

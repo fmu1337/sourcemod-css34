@@ -33,7 +33,9 @@ Repository: fmu1337/sourcemod-css34
 
    For each line whose SourceMod pin changed, rebase its patch series (T3.4):
    builder/scripts/patch-series.sh refresh sm12-latest   (and/or sm13-latest)
-   It rewrites builder/patches/series/<line>/ (patches + series.json). If a
+   If the MM 1.12 pin (MM_112_*) changed, rebase its series too:
+   builder/scripts/patch-series.sh refresh MM_112
+   It rewrites builder/patches/series/<line or MM_112>/ (patches + series.json). If a
    patch no longer applies it stops with the conflict; do NOT open the PR then:
    report which patch failed and the upstream commits that touched its files.
 

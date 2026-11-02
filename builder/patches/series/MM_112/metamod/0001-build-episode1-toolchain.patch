@@ -1,0 +1,52 @@
+css34: episode1 build: tier1 before vstdlib, pthread/rt/gcc_s NEEDED, C++ link driver, GCC 10 flags, hidden static libstdc++
+
+diff --git a/AMBuildScript b/AMBuildScript
+index eeedafb9e9956268159a83027cecb1a7b3e2ee1d..64da20ff0067686788c6b22427c3559a805da62e 100644
+--- a/AMBuildScript
++++ b/AMBuildScript
+@@ -54,6 +54,10 @@ class MMSConfig(object):
+     if not self.all_targets:
+         raise Exception('No suitable C/C++ compiler was found.')
+ 
++    # css34: link via C++ driver (AMBuild tip detects raw ld into linker_argv)
++    for _cxx in self.all_targets:
++      _cxx.linker_argv = list(_cxx.cxx_argv)
++
+   def use_auto_versioning(self):
+     if builder.backend != 'amb2':
+       return False
+@@ -229,10 +233,12 @@ class MMSConfig(object):
+     if cxx.target.platform == 'linux':
+       cxx.defines += ['LINUX', '_LINUX', 'POSIX', '_FILE_OFFSET_BITS=64']
+       if cxx.family == 'gcc':
+-        cxx.linkflags += ['-static-libgcc']
++        # css34: libgcc_s stays dynamic; hide static libstdc++ (GCC 10 / glibc 2.17)
++        cxx.linkflags += ['-lgcc_s']
++        cxx.cxxflags += ['-Wno-format-truncation', '-Wno-stringop-truncation', '-Wno-volatile']
+       elif cxx.family == 'clang':
+         cxx.linkflags += ['-lgcc_eh']
+-      cxx.linkflags += ['-static-libstdc++']
++      cxx.linkflags += ['-static-libstdc++', '-Wl,--exclude-libs=libstdc++.a:libsupc++.a']
+     elif cxx.target.platform == 'mac':
+       cxx.defines += ['OSX', '_OSX', 'POSIX']
+ 
+@@ -332,6 +338,19 @@ class MMSConfig(object):
+ 
+     SdkHelpers.configureCxx(context, binary, sdk)
+ 
++    # css34: episode1 tier1 before vstdlib so ConVar is embedded, not imported
++    if sdk.get('name') == 'episode1' and cxx.target.platform == 'linux':
++      import os as _os
++      tier1 = _os.path.join(sdk['path'], 'linux_sdk', 'tier1_i486.a')
++      if _os.path.isfile(tier1):
++        # Drop copy that configureCxx placed in postlink; put it first in linkflags.
++        cxx.postlink = [x for x in cxx.postlink if x != tier1]
++        if tier1 not in cxx.linkflags:
++          cxx.linkflags[0:0] = [tier1]
++      for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):
++        if flag not in cxx.linkflags:
++          cxx.linkflags += [flag]
++
+     return binary
+ 
+ if getattr(builder, 'target', None) is not None:

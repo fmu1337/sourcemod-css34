@@ -1,0 +1,9 @@
+{
+  "pin": "MM_112",
+  "root": "metamod",
+  "commit": "cb47755826fad1483291e5dc00222aa64303d12f",
+  "trees": {
+    "hl2sdk-manifests": "753d0d6442c4fd79f8e83604ac8f99f1d75c39d4",
+    "metamod": "60e61f4d1d9300d97160c1e7950611fae0face3a"
+  }
+}

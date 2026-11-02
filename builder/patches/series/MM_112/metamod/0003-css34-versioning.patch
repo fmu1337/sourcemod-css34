@@ -1,0 +1,40 @@
+css34: versioning: pinned build number, css34 pack line in meta version
+
+diff --git a/core/metamod_console.cpp b/core/metamod_console.cpp
+index 61aa4807e3c7a8eb6f34f2f7a2270e2282044452..8b56e580a466a6276b85ea3804ab42c213647182 100644
+--- a/core/metamod_console.cpp
++++ b/core/metamod_console.cpp
+@@ -27,6 +27,7 @@
+ #include "metamod_oslink.h"
+ #include <ctype.h>
+ #include <metamod_version.h>
++#include <css34_build_stamp.h>
+ #include "metamod.h"
+ #include "metamod_util.h"
+ #include "metamod_console.h"
+@@ -95,6 +96,7 @@ static void ReplyVersion(edict_t *client = nullptr)
+ 	CMDMSG(client, "    Compiled on: %s\n", MMS_BUILD_TIMESTAMP);
+ #if defined(MMS_GENERATED_BUILD)
+ 	CMDMSG(client, "    Built from: https://github.com/alliedmodders/metamod-source/commit/%s\n", METAMOD_SHA);
++	CMDMSG(client, "    CSS34 pack: https://github.com/fmu1337/sourcemod-css34/commit/%s\n", CSS34_PACK_COMMIT);
+ 	CMDMSG(client, "    Build ID: %s:%s\n", METAMOD_LOCAL_REV, METAMOD_SHA);
+ #endif
+ 	CMDMSG(client, "    http://www.metamodsource.net/\n");
+diff --git a/support/buildbot/generate_headers.py b/support/buildbot/generate_headers.py
+index 578dcb7d31986dcf9e133584e547ba86d7c9020b..2364c4cc20cf7c362f3546c841633230c0176a03 100644
+--- a/support/buildbot/generate_headers.py
++++ b/support/buildbot/generate_headers.py
+@@ -39,7 +39,12 @@ def run_and_return(argv):
+   return text.strip()
+ 
+ def get_git_version():
+-  revision_count = run_and_return(['git', 'rev-list', '--count', 'HEAD'])
++  # css34: lines.json rev. A --depth 1 clone makes git rev-list --count print 1.
++  pinned = os.environ.get('MMS_GIT_REV', '').strip()
++  if pinned.isdigit():
++    revision_count = pinned
++  else:
++    revision_count = run_and_return(['git', 'rev-list', '--count', 'HEAD'])
+   revision_hash = run_and_return(['git', 'log', '--pretty=format:%h:%H', '-n', '1'])
+   shorthash, longhash = revision_hash.split(':')
+ 

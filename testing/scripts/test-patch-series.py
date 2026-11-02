@@ -92,7 +92,7 @@ class PatchSeriesTest(unittest.TestCase):
         self.write_manifest("0" * 40, self.trees)
         res = self.apply()
         self.assertNotEqual(res.returncode, 0)
-        self.assertIn("is made for SourceMod " + "0" * 40, res.stderr)
+        self.assertIn("is made for sourcemod " + "0" * 40, res.stderr)
         self.assertEqual((self.sm / "AMBuildScript").read_text(), "a = 1\n")
 
     def test_tree_mismatch_fails(self):
@@ -136,6 +136,45 @@ class PatchSeriesTest(unittest.TestCase):
                 lines.load_manifest(root / "builder/lines.json")
         finally:
             sys.path.remove(str(root / "builder"))
+
+    def test_lines_check_rejects_an_mm_series_for_another_pin(self):
+        root = self.tmp / "repo"
+        for name in ("builder/lines.py", "builder/lines.json"):
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(ROOT / name, root / name)
+        series = root / "builder/patches/series/MM_112"
+        shutil.copytree(ROOT / "builder/patches/series/MM_112", series)
+        sys.path.insert(0, str(root / "builder"))
+        try:
+            import importlib
+            lines = importlib.import_module("lines")
+            importlib.reload(lines)
+            lines.load_manifest(root / "builder/lines.json")
+            data = json.loads((series / "series.json").read_text())
+            (series / "series.json").write_text(json.dumps(dict(data, commit="0" * 40)))
+            with self.assertRaisesRegex(ValueError, "patch-series.sh refresh MM_112"):
+                lines.load_manifest(root / "builder/lines.json")
+        finally:
+            sys.path.remove(str(root / "builder"))
+
+    def test_metamod_root_series(self):
+        mm = self.tmp / "mm"
+        commit = make_repo(mm, {"AMBuildScript": b"m = 1\n"})
+        series = self.tmp / "mmseries"
+        self.series = series
+        self.write_patch("metamod", "0001-m.patch", mm, {"AMBuildScript": b"m = 2\n"})
+        tree = self.tree_after("metamod", mm)
+        (series / "series.json").write_text(json.dumps(
+            {"pin": "MM_X", "root": "metamod", "commit": commit, "trees": {"metamod": tree}}))
+        res = subprocess.run(["bash", str(APPLY), str(series), str(mm)], capture_output=True, text=True, env=GIT_ENV)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertIn("metamod: tree " + tree + " matches", res.stdout)
+        self.assertEqual((mm / "AMBuildScript").read_text(), "m = 2\n")
+        shutil.rmtree(series / "metamod")
+        git(mm, "reset", "-q", "--hard")
+        res = subprocess.run(["bash", str(APPLY), str(series), str(mm)], capture_output=True, text=True, env=GIT_ENV)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("has no metamod/ patches", res.stderr)
 
 
 if __name__ == "__main__":
