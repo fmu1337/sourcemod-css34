@@ -1,0 +1,219 @@
+css34: episode1 build: tier1 before vstdlib, pthread/rt NEEDED, C++ link driver, GCC 10 flags, static hidden libstdc++, dynamic libgcc_s
+
+diff --git a/AMBuildScript b/AMBuildScript
+index 1953defab13b7f271e0a102907d8e5f4348c42b6..d31c273cd67b7aa2641ea53111c8af4963b90245 100644
+--- a/AMBuildScript
++++ b/AMBuildScript
+@@ -78,6 +78,10 @@ class SMConfig(object):
+     if not self.all_targets:
+         raise Exception('No suitable C/C++ compiler was found.')
+ 
++    # css34: link via C++ driver (AMBuild tip uses raw ld by default)
++    for _cxx in self.all_targets:
++      _cxx.linker_argv = list(_cxx.cxx_argv)
++
+   def use_auto_versioning(self):
+     if builder.backend != 'amb2':
+       return False
+@@ -282,6 +286,10 @@ class SMConfig(object):
+     ]
+ 
+     have_gcc = cxx.family == 'gcc'
++    # CSS34 SDK compatibility (early)
++    cxx.cxxflags += ['-Wno-reorder', '-fpermissive', '-Wno-write-strings', '-Wno-sign-compare', '-Wno-ignored-attributes', '-Wno-volatile']
++    if cxx.family == 'gcc':
++      cxx.cflags += ['-Wno-stringop-overflow', '-Wno-error=stringop-overflow', '-Wno-stringop-truncation', '-Wno-error=stringop-truncation', '-Wno-format-truncation', '-Wno-error=format-truncation']
+     have_clang = cxx.family == 'clang'
+     if cxx.version >= 'clang-3.9' or cxx.version == 'clang-3.4' or cxx.version > 'apple-clang-6.0':
+       cxx.cxxflags += ['-Wno-expansion-to-defined']
+@@ -416,11 +424,10 @@ class SMConfig(object):
+     cxx.defines += ['LINUX', '_LINUX', 'POSIX', '_FILE_OFFSET_BITS=64']
+     cxx.linkflags += ['-lm']
+     if cxx.family == 'gcc':
+-      cxx.linkflags += ['-static-libgcc']
++      cxx.linkflags += ['-lgcc_s']  # css34: libgcc_s stays dynamic
+     elif cxx.family == 'clang':
+       cxx.linkflags += ['-lgcc_eh']
+-    cxx.linkflags += ['-static-libstdc++']
+-    cxx.linkflags += ['-Wl,--exclude-libs=libstdc++.a']
++    cxx.linkflags += ['-static-libstdc++', '-Wl,--exclude-libs=libstdc++.a:libsupc++.a']  # css34: hide static libstdc++
+ 
+   def configure_mac(self, cxx):
+     cxx.defines += ['OSX', '_OSX', 'POSIX', 'KE_ABSOLUTELY_NO_STL']
+@@ -543,6 +550,18 @@ class SMConfig(object):
+     binary = self.Library(context, compiler, name)
+     SetArchFlags(compiler)
+     self.ConfigureForExtension(context, binary.compiler)
++    # css34: pthread/rt DT_NEEDED on pre-2.34 glibc
++    if compiler.target.platform == 'linux':
++      for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt'):
++        if flag not in binary.compiler.linkflags:
++          binary.compiler.linkflags += [flag]
++      # css34: non-SDK extensions hide every static archive. Game extensions
++      # (HL2Library) keep tier1 exports.
++      _base = name[:-4] if name.endswith('.ext') else name
++      if (_base.startswith('dbi.') or _base in (
++          'bintools', 'clientprefs', 'geoip', 'regex', 'topmenus', 'updater', 'webternet')):
++        if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
++          binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
+     return binary
+ 
+   def AddCxxCompat(self, binary):
+@@ -565,6 +584,17 @@ class SMConfig(object):
+ 
+     SdkHelpers.configureCxx(context, binary, sdk)
+ 
++    # css34: episode1 -> sourcemod.2.ep1.so (Metamod 1.12)
++    if sdk.get('name') == 'episode1':
++      # Static tier1 BEFORE shared vstdlib so ConVar is embedded, not imported.
++      if compiler.target.platform == 'linux':
++        tier1 = os.path.join(sdk['path'], 'linux_sdk', 'tier1_i486.a')
++        if os.path.isfile(tier1):
++          compiler.linkflags[0:0] = [tier1]
++        for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):
++          if flag not in compiler.linkflags:
++            compiler.linkflags += [flag]
++
+     return binary
+ 
+   def AddCDetour(self, binary):
+diff --git a/core/logic/AMBuilder b/core/logic/AMBuilder
+index 8f5f49acd970d3d7e4953e8298f71f909f928766..498e475514f2200da70d08520091d02fdd07f7dc 100644
+--- a/core/logic/AMBuilder
++++ b/core/logic/AMBuilder
+@@ -2,7 +2,42 @@
+ import os
+ 
+ for cxx in builder.targets:
+-  binary = SM.Library(builder, cxx, 'sourcemod.logic')
++  if cxx.target.platform == 'linux':
++    # css34: host g++ logic toolchain.
++    import shutil as _shutil
++    import os as _os
++    logic_cxx = cxx.clone()
++    _cxx_bin = _shutil.which((_os.environ.get('CXX') or 'g++').split()[0]) or (_os.environ.get('CXX') or 'g++').split()[0]
++    _cc_bin = _shutil.which((_os.environ.get('CC') or 'gcc').split()[0]) or (_os.environ.get('CC') or 'gcc').split()[0]
++    logic_cxx.cxx_argv = [_cxx_bin]
++    logic_cxx.cc_argv = [_cc_bin]
++    logic_cxx.linker_argv = [_cxx_bin]
++    if logic_cxx.target.arch == 'x86':
++      if '-m32' not in logic_cxx.cflags:
++        logic_cxx.cflags += ['-m32']
++      if '-m32' not in logic_cxx.linkflags:
++        logic_cxx.linkflags += ['-m32']
++    _clang_only = [
++      '-Wno-nonportable-include-path', '-Wno-macro-redefined', '-Wno-writable-strings',
++      '-Wno-sometimes-uninitialized', '-Wno-inconsistent-missing-override',
++      '-Wno-implicit-exception-spec-mismatch', '-Wno-deprecated-register',
++      '-Wno-tautological-overlap-compare',
++    ]
++    for _attr in ('cflags', 'cxxflags'):
++      _flags = getattr(logic_cxx, _attr)
++      setattr(logic_cxx, _attr, [_f for _f in _flags if _f not in _clang_only])
++    for _flag in ('-lgcc_eh', '-static-libstdc++'):
++      if _flag in logic_cxx.linkflags:
++        logic_cxx.linkflags.remove(_flag)
++    if '-static-libgcc' not in logic_cxx.linkflags:
++      logic_cxx.linkflags += ['-static-libgcc']
++    logic_cxx.cxxflags += [
++      '-Wno-maybe-uninitialized', '-Wno-class-memaccess', '-Wno-packed-not-aligned',
++      '-Wno-stringop-truncation', '-Wno-unused-result',
++    ]
++    binary = SM.Library(builder, logic_cxx, 'sourcemod.logic')
++  else:
++    binary = SM.Library(builder, cxx, 'sourcemod.logic')
+   binary.compiler.cxxincludes += [
+     builder.sourcePath,
+     os.path.join(builder.sourcePath, 'core', 'logic'),
+@@ -16,23 +51,83 @@ for cxx in builder.targets:
+   ]
+   binary.compiler.defines += [
+     'SM_DEFAULT_THREADER',
+-    'SM_LOGIC'
++    'SM_LOGIC',
++    'NO_HOOK_MALLOC',
++    'NO_MALLOC_OVERRIDE',
+   ]
+   SP.AddVmFlags(binary)
+   
+   if binary.compiler.target.platform == 'linux':
+-    binary.compiler.postlink += ['-lpthread', '-lrt', '-lm']
++    # css34: host libstdc++ static.
++    import os as _os
++    for flag in ('-static-libstdc++', '-lgcc_eh', '-lstdc++', '-nodefaultlibs'):
++      if flag in binary.compiler.linkflags:
++        binary.compiler.linkflags.remove(flag)
++    for flag in list(binary.compiler.postlink):
++      if flag in ('-lpthread', '-lrt', '-Wl,--no-as-needed'):
++        binary.compiler.postlink.remove(flag)
++    _stdcxx = None
++    _sup = None
++    if _stdcxx is None:
++      import subprocess as _sp
++      _cxx = (_os.environ.get('CXX') or 'g++').split()[0]
++      _printed = _sp.check_output([_cxx, '-print-file-name=libstdc++.a'], universal_newlines=True).strip()
++      if _printed and _printed != 'libstdc++.a' and _os.path.isfile(_printed):
++        _stdcxx = _printed
++        _sup = _os.path.join(_os.path.dirname(_printed), 'libsupc++.a')
++        if not _os.path.isfile(_sup):
++          _sup_printed = _sp.check_output([_cxx, '-print-file-name=libsupc++.a'], universal_newlines=True).strip()
++          if _sup_printed and _os.path.isfile(_sup_printed):
++            _sup = _sup_printed
++    if _stdcxx is None:
++      raise Exception('logic libstdc++.a not found (%s -print-file-name=libstdc++.a)' % ((_os.environ.get('CXX') or 'g++').split()[0]))
++    _gcc = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc.a')
++    _gcc_eh = _os.path.join(_os.path.dirname(_stdcxx), 'libgcc_eh.a')
++    for flag in ('-static-libgcc',):
++      if flag in binary.compiler.linkflags:
++        binary.compiler.linkflags.remove(flag)
++    target = binary.compiler.target
++    # css34: static SP before libstdc++ for std::thread (libsourcepawn_static)
++    binary.compiler.linkflags += [
++      SP.static_libsp[target],
++      SP.libamtl[target],
++      SP.zlib[target],
++      SP.mimalloc[target],
++    ]
++    _static = ['-nodefaultlibs', '-Wl,-Bstatic', _stdcxx]
++    if _sup and _os.path.isfile(_sup):
++      _static.append(_sup)
++    if _os.path.isfile(_gcc_eh):
++      _static.append(_gcc_eh)
++    if _os.path.isfile(_gcc):
++      _static.append(_gcc)
++    binary.compiler.linkflags += _static + [
++      '-Wl,-Bdynamic',
++      '-lc', '-lm',
++      '-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s',
++    ]
++    # css34: hide static archive symbols from the dynamic export table
++    if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
++      binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
++    # css34: template instantiations in .o files ignore --exclude-libs; export only the C API.
++    _vs = _os.path.join(_os.environ.get('WDIR', ''), 'builder', 'patches', 'sourcemod-logic.version')
++    if not _os.path.isfile(_vs):
++      raise Exception('logic version script missing: ' + _vs)
++    if '-Wl,--version-script,' + _vs not in binary.compiler.linkflags:
++      binary.compiler.linkflags += ['-Wl,--version-script,' + _vs]
+   elif binary.compiler.target.platform == 'mac':
+     binary.compiler.cflags += ['-Wno-deprecated-declarations']
+     binary.compiler.postlink += ['-framework', 'CoreServices', '-lm']
+ 
+   target = binary.compiler.target
+-  binary.compiler.linkflags += [
+-    SP.static_libsp[target],
+-    SP.libamtl[target],
+-    SP.zlib[target],
+-    SP.mimalloc[target],
+-  ]
++  # css34: skip duplicate logic static SP on linux (linked inside linux block above)
++  if binary.compiler.target.platform != 'linux':
++    binary.compiler.linkflags += [
++      SP.static_libsp[target],
++      SP.libamtl[target],
++      SP.zlib[target],
++      SP.mimalloc[target],
++    ]
+ 
+   if binary.compiler.family == 'gcc' or binary.compiler.family == 'clang':
+     binary.compiler.cxxflags += ['-fno-rtti', '-Wno-invalid-offsetof']

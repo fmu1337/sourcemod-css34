@@ -30,7 +30,9 @@ fi
 # submodule commits named anywhere in the newly fetched history, and one that
 # upstream no longer has (sourcepawn's mimalloc) fails the whole update.
 # `submodule update --recursive` fetches each pinned nested commit itself.
-git_sm() { git -c fetch.recurseSubmodules=false -C "$dir" "$@"; }
+# core.autocrlf=false: files exactly as committed (Git for Windows defaults to
+# true), so the line's patch series applies on every platform.
+git_sm() { git -c fetch.recurseSubmodules=false -c core.autocrlf=false -C "$dir" "$@"; }
 
 git_sm submodule foreach --quiet --recursive "git reset -q --hard && git clean -fdxq" 2>/dev/null || true
 # Deep enough for the revision count AMBuild's Versioning reads.

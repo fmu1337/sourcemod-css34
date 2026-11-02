@@ -1,0 +1,9 @@
+{
+  "line": "sm13-latest",
+  "commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+  "trees": {
+    "hl2sdk-manifests": "faa0989e4e2db01454a4226b33d47a3672a947f3",
+    "sourcemod": "b1002e5af7207c330a71af991e24c95b891c9d93",
+    "sourcepawn": "69cea8db7609d12796a178b3dd79e372167691dd"
+  }
+}

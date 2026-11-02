@@ -31,6 +31,12 @@ Repository: fmu1337/sourcemod-css34
    with sm13-latest (moving it means redoing the KHook merge, see docs/MM20_KHOOK.md).
    sm13-mm20 still uses SM 7404 (SM_DEV_*) with MM 2.0; do not reintroduce sm13-dev.
 
+   If the sm13-latest SourceMod pin changed, rebase its patch series (T3.4):
+   builder/scripts/patch-series.sh refresh sm13-latest
+   It rewrites builder/patches/series/sm13-latest/ (patches + series.json). If a
+   patch no longer applies it stops with the conflict; do NOT open the PR then:
+   report which patch failed and the upstream commits that touched its files.
+
 4. Before opening PR, MUST pass locally:
    python3 builder/lines.py check
 

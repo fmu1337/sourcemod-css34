@@ -1,5 +1,34 @@
 # Compatibility patch inventory
 
+## sm13-latest patch series (T3.4)
+
+`builder/patches/series/sm13-latest/` replaces the scripted patcher for
+sm13-latest (`apply-sourcemod.sh` routes a line with a series to
+`apply-series.sh`). `series.json` names SourceMod `b34de51b` (1.13.0.7478) and the
+tree each repository must have after `git apply --index`; the build fails on any
+other result. The series was generated from `apply-sourcemod-v112.sh` on a clean
+checkout with each file's original line endings kept (the old patcher rewrote
+every source file to LF), and a full build from it matches the scripted build's
+files, exports, `NEEDED` and `SONAME` (`compare-package-abi.py`).
+
+| Patch | What | Why (failure without it) |
+|-------|------|--------------------------|
+| `sourcemod/0001-build-episode1-toolchain` | `AMBuildScript`: episode1 links static `tier1_i486.a` before `vstdlib`; `-lpthread -lrt -lgcc_s` kept `NEEDED`; link through the C++ driver; GCC 10 warning flags; `-static-libstdc++` with hidden symbols; dynamic `libgcc_s`. `core/logic/AMBuilder`: host static libstdc++, static SourcePawn before it, `--exclude-libs,ALL` + version script, css34 ABI defines. | ConVars imported from `vstdlib` instead of embedded (console commands break); pthread/rt missing on glibc 2.17; `ld` rejects driver flags; `-Werror` stops the build; `logic.so` exports `std::`/`__cxxabiv1` (srcds hang, `check-package.sh` fails). |
+| `sourcemod/0002-glibc217-database-imports` | `pgsql`: hidden `explicit_bzero`; `mysql`: zlib inside the static link group. | Unversioned `explicit_bzero` / `compress2` / `uncompress` imports; see the sections below. |
+| `sourcemod/0003-cstrike-episode1` | Build `game.cstrike` for episode1, extend its `SE_CSS` guards to `SE_EPISODEONE`, `FindDataMapInfo` in `GetPlayerVarAddressOrError`. | No cstrike extension on CS:S v34; EP1 `FindInDataMap` returns an incomplete `typedescription_t`. |
+| `sourcemod/0004-gameconfigs-rtld-noload` | `CacheGameBinaryInfo` / `@`-signatures open already-mapped modules with `RTLD_NOLOAD`. | `dlopen(engine_i486.so)` + `dlclose` leaves dangling ConVars in `vstdlib` (srcds loads `engine_i686.so`). |
+| `sourcemod/0005-sourcemm-api-safe-iface` | `GET_V_IFACE_*` check the factory for NULL before `VInterfaceMatch` and report which interface is missing. | A NULL factory on CS:S v34 dereferenced at load instead of a load error. |
+| `sourcemod/0006-gcc10-warnings` | curl `-Wno-stringop-truncation`; `MIN()` replaced in two units. | `-Werror` build failures with GCC 10. |
+| `sourcemod/0007-css34-versioning` | Build number from `SOURCEMOD_GIT_REV` (lines.json), detached/submodule HEAD in `Versioning`, `CSS34 pack:` line in `sm version`. | Shallow clones give a wrong build number; smoke checks the pack commit. |
+| `sourcepawn/0001-gcc10-link-flags` | `-Wno-sign-compare`; pthread/rt/`-lgcc_s` `NEEDED`. | GCC 10 sign-compare errors in the JIT/compiler; missing `NEEDED` on glibc 2.17. |
+| `hl2sdk-manifests/0001-episode1-defines` | episode1 Linux defines `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE`. | The SDK's malloc hooks/overrides in SourceMod modules on CS:S v34. |
+| `hl2sdk-manifests/0002-compiler-flag-guard` | Drop manifest compiler flags GCC 10 does not know (`manifest_flag_guard.py`). | Unknown-flag errors from newer manifests (hl2sdk-manifests `ebd6e10`). |
+
+After a pin bump: `builder/scripts/patch-series.sh refresh sm13-latest` rebases
+the series (`git apply --3way`) and rewrites `series.json`; `lines.py check`
+fails until it has run. `builder/scripts/patch-series.sh check <line>` applies
+the series to a fresh checkout of the pin.
+
 ## sm13 PostgreSQL explicit_bzero (temporary)
 
 `builder/patches/apply-sourcemod-v112.sh` invokes

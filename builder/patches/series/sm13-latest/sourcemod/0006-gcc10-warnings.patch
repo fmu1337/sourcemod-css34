@@ -1,0 +1,53 @@
+css34: GCC 10 -Werror: curl stringop-truncation, MIN macros
+
+diff --git a/core/MenuStyle_Base.cpp b/core/MenuStyle_Base.cpp
+index 303634778cb70b10bb01bfc3c1923c7884b4ff32..246811857e28c4a23503bfb13bbfc3ed76a13419 100644
+--- a/core/MenuStyle_Base.cpp
++++ b/core/MenuStyle_Base.cpp
+@@ -706,9 +706,9 @@ const char *CBaseMenu::GetItemInfo(unsigned int position, ItemDrawInfo *draw/* =
+ void CBaseMenu::ShufflePerClient(int start, int stop)
+ {
+ 	// limit map len to 255 items since it's using uint8
+-	int length = MIN(GetItemCount(), 255);
++	int length = (GetItemCount() < 255 ? GetItemCount() : 255);
+ 	if (stop >= 0)
+-		length = MIN(length, stop);
++		length = (length < stop ? length : stop);
+ 
+ 	for (int i = 1; i <= SM_MAXPLAYERS; i++)
+ 	{
+@@ -730,7 +730,7 @@ void CBaseMenu::ShufflePerClient(int start, int stop)
+ 
+ void CBaseMenu::SetClientMapping(int client, int *array, int length)
+ {
+-	length = MIN(length, 255);
++	length = (length < 255 ? length : 255);
+ 	m_RandomMaps[client].resize(length);
+ 	for (int i = 0; i < length; i++)
+ 	{
+diff --git a/extensions/curl/curl-src/lib/AMBuilder b/extensions/curl/curl-src/lib/AMBuilder
+index e4ea9907897cb140b0aac57d7e4a14d09f01e58b..44fdddf4ba8de0724f7ee17ee484f38c19c15eac 100644
+--- a/extensions/curl/curl-src/lib/AMBuilder
++++ b/extensions/curl/curl-src/lib/AMBuilder
+@@ -24,6 +24,8 @@ for cxx in builder.targets:
+     ]
+   elif binary.compiler.target.platform == 'linux':
+     binary.compiler.defines += ['_GNU_SOURCE']
++    if binary.compiler.family == 'gcc':
++      binary.compiler.cflags += ['-Wno-stringop-truncation', '-Wno-error=stringop-truncation']
+ 
+   if binary.compiler.family == 'clang':
+     # https://llvm.org/bugs/show_bug.cgi?id=16428
+diff --git a/extensions/sdktools/vstringtable.cpp b/extensions/sdktools/vstringtable.cpp
+index 8827bf43e828c1c5bd91ff1d5b610ccb64fecd70..891828be74750a3235a91d064a95b92851009990 100644
+--- a/extensions/sdktools/vstringtable.cpp
++++ b/extensions/sdktools/vstringtable.cpp
+@@ -203,7 +203,7 @@ static cell_t GetStringTableData(IPluginContext *pContext, const cell_t *params)
+ 	pContext->LocalToString(params[3], &addr);
+ 
+ 	int maxBytes = params[4];
+-	size_t numBytes = MIN(maxBytes, datalen);
++	size_t numBytes = (maxBytes < datalen ? maxBytes : datalen);
+ 
+ 	if (userdata)
+ 	{
