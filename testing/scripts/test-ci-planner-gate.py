@@ -97,7 +97,7 @@ class TestCIPlannerGate(unittest.TestCase):
             self.assertFalse(evaluate_gate(needs, plan)[0])
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         hygiene = workflow.split("\n  hygiene:", 1)[1].split("\n  build-linux:", 1)[0]
-        for script in ("test-release-build-entrypoints.py", "test-patch-fail-closed.py",
+        for script in ("test-release-build-entrypoints.py", "test-patch-series.py",
                        "test-mm-oldbridge-patch.py"):
             self.assertIn("python3 testing/scripts/" + script, hygiene)
         # Every regression script must run somewhere in ci.yml: a step lost while

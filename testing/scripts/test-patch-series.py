@@ -177,5 +177,41 @@ class PatchSeriesTest(unittest.TestCase):
         self.assertIn("has no metamod/ patches", res.stderr)
 
 
+class RouterTest(unittest.TestCase):
+    """apply-sourcemod.sh: a line's series or nothing (T3.4: no scripted fallback)."""
+
+    def route(self, version, line):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "product.version").write_text(version + "\n")
+            env = dict(GIT_ENV)
+            env.pop("CSS34_LINE", None)
+            if line is not None:
+                env["CSS34_LINE"] = line
+            return subprocess.run(["bash", str(ROOT / "builder/patches/apply-sourcemod.sh"), tmp],
+                                  capture_output=True, text=True, env=env)
+
+    def test_frozen_sourcemod_refused(self):
+        res = self.route("1.11.0", "sm11-oldstable")
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("master builds SourceMod 1.12+ only", res.stderr)
+
+    def test_line_without_series_refused(self):
+        res = self.route("1.13.0", "sm14-latest")
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("sm14-latest has no patch series", res.stderr)
+        res = self.route("1.13.0", None)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("CSS34_LINE is required", res.stderr)
+
+    def test_series_on_the_wrong_checkout_fails_closed(self):
+        res = self.route("1.13.0", "sm13-latest")
+        self.assertNotEqual(res.returncode, 0)
+        self.assertNotIn("applied", res.stdout)
+
+    def test_no_scripted_patcher_left(self):
+        for name in ("apply-sourcemod-v112.sh", "apply-mmsource-v112.sh"):
+            self.assertFalse((ROOT / "builder/patches" / name).exists(), name)
+
+
 if __name__ == "__main__":
     unittest.main()

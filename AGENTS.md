@@ -42,16 +42,19 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   SourceMod is no git submodule (T3.3): `builder/fetch-sourcemod.sh` checks out the
   line's pinned commit into `sourcemod/` (gitignored), resets and cleans it, and
   initializes its own submodules.
-- SourceMod patches (T3.4): a line with `builder/patches/series/<line>/`
-  (`sm12-latest`, `sm13-latest`) gets a git patch series: `<repo>/NNNN-*.patch` per repository
-  (`sourcemod`, or a SourceMod submodule path such as `sourcepawn`,
-  `hl2sdk-manifests`), applied by `builder/patches/apply-series.sh` with
-  `git apply --index`; `series.json` holds the SourceMod commit and the tree every
-  repository must have afterwards (`git write-tree`), and `lines.py check` requires
-  that commit to be the line's pin. After a pin bump run
-  `builder/scripts/patch-series.sh refresh <line>`; edit a patch by changing the
-  checked-out tree and regenerating it the same way. Other lines still use
-  `apply-sourcemod-v112.sh`.
+- Patches (T3.4): every buildable line has a git patch series in
+  `builder/patches/series/<line>/` (`sm12-latest`, `sm13-latest`), and the MM 1.12
+  pin has `builder/patches/series/MM_112/`; there is no scripted fallback. A
+  series is `<repo>/NNNN-*.patch` per repository (its root, `sourcemod` or
+  `metamod`, or a submodule path such as `sourcepawn`, `hl2sdk-manifests`),
+  applied by `builder/patches/apply-series.sh` with `git apply --index`;
+  `series.json` holds the upstream commit and the tree every repository must
+  have afterwards (`git write-tree`), and `lines.py check` requires that commit
+  to be the pin. After a pin bump run
+  `builder/scripts/patch-series.sh refresh <line or MM_112>`; edit a patch by changing the
+  checked-out tree and regenerating it the same way.
+  `builder/scripts/check-patch-drift.sh` dry-runs a series on another upstream
+  commit (`--sm-commit`, `--range`) with `git apply --3way`.
   Downloads come from github.com, bitbucket.org, cdn.mysql.com, www.openssl.org,
   snapshot.debian.org and archive.debian.org — all reachable. Tarball downloads
   are sha256-pinned.
