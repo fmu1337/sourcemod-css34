@@ -113,9 +113,14 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `bin/` directory, as rom4s's MM 1.12 git1159 does. Code:
   `builder/patches/mm-oldbridge/` applied by `apply-mmsource-oldbridge.sh`
   (fail-closed, from `apply-mmsource-css34.sh` and, for MM 1.12 only,
-  `apply-mmsource-v112.sh`). sm11's MM 1.12 package ships both cores; the
-  PLAPI 11 test plugin `css34_legacy_probe` lands in `packages/test-plugins/`
-  (never released). Matrix rows with `legacy_bridge=1` run
+  `apply-mmsource-v112.sh`). A line's MM 1.10 legacy core comes from
+  `bridge_metamod` in `lines.json` (`sm12-latest`, `sm13-latest`; role `bridge` in
+  `resolve-metamod-pins.py`: built first, its `metamod.1.ep1` copied into the MM 1.12
+  package, never packaged itself) or from sm11's MM 1.10 `secondary_metamod`.
+  `verify-line-metamod-packages.sh` requires that core inside the MM 1.12 package,
+  built from the bridge pin, with `legacy_bridge: true`. The PLAPI 11 test plugin
+  `css34_legacy_probe` lands in `packages/test-plugins/` (never released). Matrix
+  rows with `legacy_bridge=1` run
   `testing/scripts/legacy-bridge-test.sh` (Linux) and `LEGACY_PROBE` in
   `wine-smoke-test.sh` (Windows).
 

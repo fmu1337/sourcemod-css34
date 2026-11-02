@@ -305,7 +305,7 @@ for line in data["lines"].values():
     task = ("sm" + str(sm["major"]), sm["commit"])
     if task not in seen:
         print(*task); seen.add(task)
-    for key in ("metamod", "secondary_metamod"):
+    for key in ("metamod", "secondary_metamod", "bridge_metamod"):
         if key not in line:
             continue
         mm = data["pins"][line[key]]

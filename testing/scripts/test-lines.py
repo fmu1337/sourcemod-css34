@@ -201,6 +201,34 @@ class LinesTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("frozen.assets lacks mmsource-1.10.7-git976-css34-linux.tar.gz", result.stderr)
 
+    def test_bridge_lines_run_the_legacy_plugin_test(self):
+        data = json.loads((self.root / "builder/lines.json").read_text())
+        matrix = json.loads((self.root / "builder/generated/ci-matrix.json").read_text())
+        bridged = {name for name, line in data["lines"].items()
+                   if line["status"] == "active" and "bridge_metamod" in line}
+        self.assertEqual(bridged, {"sm12-latest", "sm13-latest"})
+        for key in ("debian", "botplay", "weekly", "windows_smoke"):
+            for row in matrix[key]:
+                self.assertEqual(row["legacy_bridge"], "1" if row["line"] in bridged else "0", (key, row["line"]))
+                # The MM 1.12 package is still the only Metamod package of the line.
+                self.assertTrue(row["mm_package"].startswith("mmsource-1.12.0-"), row)
+
+    def test_bridge_metamod_rules(self):
+        cases = (
+            (lambda d: d["lines"]["sm13-latest"].update(bridge_metamod="MM_112"), "must be an MM 1.10 pin"),
+            (lambda d: d["lines"]["sm13-latest"].update(bridge_metamod="MM_NOPE"), "invalid bridge_metamod reference"),
+            (lambda d: d["lines"]["sm13-mm20"].update(bridge_metamod="MM_110"), "needs an MM 1.12 metamod"),
+            (lambda d: d["lines"]["sm13-latest"].update(secondary_metamod="MM_110"), "bridges through its secondary_metamod"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                self.setUp()
+                target = self.root / "builder/lines.json"
+                data = json.loads(target.read_text())
+                change(data)
+                target.write_text(json.dumps(data))
+                self.assertIn(message, self.run_command("check", False).stderr)
+
     def test_duplicate_image_is_rejected(self):
         target = self.root / "builder/lines.json"
         data = json.loads(target.read_text())

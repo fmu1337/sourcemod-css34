@@ -128,11 +128,12 @@ Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary;
 
 ## Legacy-plugin bridge (T2.9)
 
-sm11's MM 1.12 package ships `metamod.2.ep1` and the MM 1.10 legacy core
-`metamod.1.ep1`. MM 1.12 refuses PLAPI 7-12 plugins upstream ("Older Metamod
+Every MM 1.12 package with the bridge (`sm11-oldstable`, and `sm12-latest` /
+`sm13-latest` through `bridge_metamod` in `builder/lines.json`) ships
+`metamod.2.ep1` and the MM 1.10 legacy core `metamod.1.ep1`. MM 1.12 refuses PLAPI 7-12 plugins upstream ("Older Metamod
 version required"); with the bridge it loads `metamod.1.ep1` on first use and
-lets it host them, so old MM 1.4-1.10 plugins run next to SourceMod 2.ep1
-without deleting any Metamod file. Each old plugin shows in `meta list` and
+lets it host them, so old MM 1.4-1.10 plugins run next to SourceMod (2.ep1
+core, any of 1.11 / 1.12 / 1.13) without deleting any Metamod file. Each old plugin shows in `meta list` and
 answers `meta unload` / `meta pause`.
 
 `testing/plugins/css34_legacy_probe` is a PLAPI 11 plugin built with the MM
