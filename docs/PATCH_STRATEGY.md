@@ -18,9 +18,8 @@ hl2sdk-ep1c удалены из `master`; `sm11-oldstable` пересобира�
 
 ```
 SourceMod:  apply-sourcemod.sh                    # роутер: SM < 1.12 → ошибка (sm11 заморожена)
-              ├─ apply-series.sh series/<line>/   # T3.4: git-серия патчей линии (sm12, sm13)
-              │     └─ apply-sm-boot-trace.sh
-              └─ exec apply-sourcemod-v112.sh     # линия без серии (уходит в конце T3.4)
+              └─ apply-series.sh series/<line>/   # T3.4: git-серия патчей линии (sm12, sm13); нет серии → ошибка
+                    └─ apply-sm-boot-trace.sh     # только CSS34_DEBUG_TRACE=1
 Metamod:    apply-series.sh series/MM_112/        # серия под pin MM 1.12 (checkout-deps.sh)
               └─ apply-mmsource-oldbridge.sh modern   # мост старых плагинов
             apply-mmsource-css34.sh (MM 1.10)     # legacy-ядро metamod.1.ep1 для моста (bridge_metamod)
@@ -67,7 +66,7 @@ Upstream SourceMod официально не поддерживает CS:S v34.
 |------|--------|
 | **common** (`apply-sourcemod-common.sh`) | Вечные v34/rom4s фиксы (pre-OB `SE_CSS`, ep1 SDK, gamedata) — «не трогать при апдейтах» |
 | **v1.11** | AMBuild 1.x / inline SDK под текущий golden |
-| **v1.12+** (`apply-sourcemod-v112.sh`) | AMBuild 2.2, `hl2sdk-manifests`, MMS 1.12 |
+| **v1.12+** (`apply-sourcemod-v112.sh`, с T3.4 — git-серии) | AMBuild 2.2, `hl2sdk-manifests`, MMS 1.12 |
 
 Роутер смотрит на `product.version` и выбирает version-specific слой.
 Несколько версий SM могут жить в **одной** кодовой базе патчей; апгрейд = тонкий version-specific слой поверх common.
@@ -277,7 +276,7 @@ sudo bash testing/scripts/run-built-mm-matrix.sh
 | Field report 2026-07-15 | SDKHooks `gEntList` + MM PLAPI 11 vs 1.11 mix — [SDKHOOKS_EP1_RELEASE_BLOCKERS.md](SDKHOOKS_EP1_RELEASE_BLOCKERS.md); sdkhooks vtables → #34 |
 | SlapPlayer / ForcePlayerSuicide on bots | SM 1.12/1.13 botplay CI segfault: Steam-CSS sdktools slots (`CommitSuicide` 447→**358**, `Teleport` 111→**99**) — [#60](https://github.com/fmu1337/sourcemod-css34/pull/60). EP1 `CommitSuicide()` is 0-arg (OB is 2-bool). API probe skips those natives on bots and uses `FakeClientCommand("kill")`. |
 | [PR #4](https://github.com/fmu1337/sourcemod-css34/pull/4), [PR #9](https://github.com/fmu1337/sourcemod-css34/pull/9) | Byte-identical vs rom4s — **не преследуем**; вердикт в [BYTE_MATCH.md](BYTE_MATCH.md) |
-| `builder/patches/apply-sourcemod.sh` | Патчсет SM 1.11 (6970); для 1.12+ роутит в `apply-sourcemod-v112.sh` |
+| `builder/patches/apply-sourcemod.sh` | Был патчсет SM 1.11 (6970) + роутер в `apply-sourcemod-v112.sh`; после T3.3/T3.4 — только роутер на серию линии |
 | Тег `1.11.0.6572-mm1.10.7` | Исторический (до матрицы линий); текущие сборки — см. README |
 | Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Superseded #23 (1.12 в master, линия `sm12-latest`) |
 | [PR #54](https://github.com/fmu1337/sourcemod-css34/pull/54), [PR #55](https://github.com/fmu1337/sourcemod-css34/pull/55) | SourceHook header-graft на MM 2.0 git1469 отвергнут (`g_SHPtr` = NULL на KHook MM); заменены `sm13-mm20-khook` (#59). Детали — [MM20_KHOOK.md](MM20_KHOOK.md), CI-покрытие `sm13-mm20` — [SM13_MM20.md](SM13_MM20.md) |

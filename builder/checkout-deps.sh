@@ -216,8 +216,13 @@ fetch_and_patch_mms() {
   local commit="$4"
 
   local series=""
-  [[ "$mode" != 1.12 ]] || series="$(mm_series_for "$commit")"
-  if [[ -n "$series" ]]; then
+  if [[ "$mode" == 1.12 ]]; then
+    series="$(mm_series_for "$commit")"
+    [[ -n "$series" ]] || {
+      echo "FAIL: no Metamod patch series for $commit (builder/patches/series/MM_*/);" \
+        "run builder/scripts/patch-series.sh refresh <MM pin> after a pin bump" >&2
+      exit 1
+    }
     # Exactly the pinned tree, LF as committed (also on Windows), even in a
     # reused deps directory: the series applies only to that.
     SOURCEMOD_URL="https://github.com/alliedmodders/metamod-source" \
@@ -232,14 +237,9 @@ fetch_and_patch_mms() {
       MMS_DIR="$DEPS/$dirname" bash "$BUILDER_DIR/patches/apply-mmsource-css34.sh" "$DEPS/$dirname"
       ;;
     1.12)
-      if [[ -n "$series" ]]; then
-        # T3.4: the pin's patch series, then the legacy-plugin bridge (our own code).
-        bash "$BUILDER_DIR/patches/apply-series.sh" "$series" "$DEPS/$dirname"
-        bash "$BUILDER_DIR/patches/apply-mmsource-oldbridge.sh" modern "$DEPS/$dirname"
-      else
-        git -C "$DEPS/$dirname" submodule update --init --recursive
-        bash "$BUILDER_DIR/patches/apply-mmsource-v112.sh" "$DEPS/$dirname"
-      fi
+      # T3.4: the pin's patch series, then the legacy-plugin bridge (our own code).
+      bash "$BUILDER_DIR/patches/apply-series.sh" "$series" "$DEPS/$dirname"
+      bash "$BUILDER_DIR/patches/apply-mmsource-oldbridge.sh" modern "$DEPS/$dirname"
       ;;
     *)
       echo "Unsupported MMS_MODE=$mode" >&2

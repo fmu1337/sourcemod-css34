@@ -33,7 +33,7 @@ MM 2.0 git1450+ (KHook) lives in its own line, `sm13-mm20-khook` ([MM20_KHOOK.md
 ## Patches for 7472 (this line)
 
 - `apply-sm-boot-trace.sh` — `InitializeSourceMod` traces `LoadBridge` + `InitializeBridge`
-- `apply-sourcemod-v112.sh` — `BuildStaticCoreLib` pthread/rt; upstream `-std=c++20` left in place, sourcepawn `-Wno-sign-compare` anchored on that line
+- `builder/patches/series/sm13-latest/` — `sourcepawn/0001-gcc10-link-flags` (`BuildStaticCoreLib` pthread/rt, `-Wno-sign-compare`); upstream `-std=c++20` left in place. See [PATCHES.md](PATCHES.md)
 - `db-configure-args.sh` / `checkout-deps.sh` — MariaDB vs mysql configure flags
 
 ## Release tag

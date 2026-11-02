@@ -7,7 +7,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECK = ROOT / 'testing/scripts/check-unversioned-imports.py'
-PATCH = ROOT / 'builder/patches/patch-pgsql-explicit-bzero.py'
+# The hidden explicit_bzero shim the sm13 series adds to dbi.pgsql.ext (T3.4).
+PATCH = ROOT / 'builder/patches/series/sm13-latest/sourcemod/0002-glibc217-database-imports.patch'
+SHIM = 'extensions/pgsql/css34_explicit_bzero.c'
 
 
 class Imports(unittest.TestCase):
@@ -63,38 +65,33 @@ class Imports(unittest.TestCase):
         self.assertEqual(self.check().returncode, 1)
 
 
+def shim_source():
+    """The new file css34_explicit_bzero.c, taken from the series patch."""
+    text = PATCH.read_text()
+    section = text.split('diff --git a/' + SHIM + ' b/' + SHIM + '\n', 1)[1]
+    section = section.split('\ndiff --git ', 1)[0]
+    body = section.split('\n@@ ', 1)[1].split('\n', 1)[1]
+    return ''.join(line[1:] + '\n' for line in body.splitlines() if line.startswith('+'))
+
+
 class Shim(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.pgsql = self.root / 'extensions/pgsql'
-        self.pgsql.mkdir(parents=True)
-        (self.root / 'product.version').write_text('1.13.0\n')
-        (self.pgsql / 'AMBuilder').write_text('  SM.extensions += [builder.Add(binary)]\n')
 
-    def patch(self):
-        return subprocess.run(['python3', str(PATCH), str(self.root)], capture_output=True)
-
-    def test_patch_idempotent_and_drift_rejected(self):
-        self.assertEqual(self.patch().returncode, 0)
-        self.assertEqual(self.patch().returncode, 0)
-        (self.pgsql / 'css34_explicit_bzero.c').write_text('/* corrupt */')
-        self.assertNotEqual(self.patch().returncode, 0)
-
-    def test_anchor_drift_rejected(self):
-        (self.pgsql / 'AMBuilder').write_text('changed upstream\n')
-        self.assertNotEqual(self.patch().returncode, 0)
-
-    def test_other_lines_untouched(self):
-        for version in ['1.11.0', '1.12.0']:
-            (self.root / 'product.version').write_text(version)
-            self.assertEqual(self.patch().returncode, 0)
-            self.assertFalse((self.pgsql / 'css34_explicit_bzero.c').exists())
+    def test_series_adds_the_shim_to_pgsql_only(self):
+        text = PATCH.read_text()
+        self.assertIn('new file mode', text.split(SHIM, 1)[1][:200])
+        pgsql = text.split('diff --git a/extensions/pgsql/AMBuilder', 1)[1].split('\ndiff --git ', 1)[0]
+        self.assertIn('css34_explicit_bzero.c', pgsql)
+        # SM 1.12's libpq does not import explicit_bzero: no shim there.
+        for patch in (ROOT / 'builder/patches/series/sm12-latest').rglob('*.patch'):
+            self.assertNotIn('css34_explicit_bzero', patch.read_text(), patch.name)
 
     def test_optimized_shim_hidden_and_erases(self):
-        self.assertEqual(self.patch().returncode, 0)
-        source = self.pgsql / 'css34_explicit_bzero.c'
+        source = self.root / 'css34_explicit_bzero.c'
+        source.write_text(shim_source())
         library = self.root / 'shim.so'
         subprocess.run(['gcc', '-O3', '-flto', '-shared', '-fPIC', str(source),
                         '-o', str(library)], check=True)

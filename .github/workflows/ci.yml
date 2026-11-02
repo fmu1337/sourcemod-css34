@@ -181,10 +181,7 @@ jobs:
       - name: Freeze tool tests (T2.7)
         run: python3 testing/scripts/test-freeze-tools.py
 
-      - name: Check patch failures and generated Versioning
-        run: python3 testing/scripts/test-patch-fail-closed.py
-
-      - name: Patch series apply and tree checks (T3.4)
+      - name: Patch series apply, tree checks and routing (T3.4)
         run: python3 testing/scripts/test-patch-series.py
 
       - name: Intentionally fail smoke with a missing server
