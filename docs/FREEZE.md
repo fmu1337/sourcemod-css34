@@ -45,11 +45,48 @@ file. `css34-package.json` must also match, apart from `build_date` and
 dates. `freeze-inputs.yml` runs the rebuild against both the online build and
 the line's published release, then probes the core PLAPI (1.ep1 = 11, 2.ep1 = 16).
 
+## A frozen line
+
+`builder/lines.json` marks the line `"status": "frozen"`, `"releasable": false`,
+with a `frozen` block:
+
+```json
+"frozen": {
+  "tag": "1.11.0.6970-mm1.12.0-dual-r3",
+  "freeze_tag": "sm11-freeze",
+  "inputs_release": "sm11-freeze-inputs",
+  "assets": { "<release asset>": "<sha256>", "...": "..." }
+}
+```
+
+- **CI** builds only active lines. The frozen line leaves every `ci.yml` matrix
+  (Linux, Windows, smoke, botplay), and a `css34_line` dispatch for it is refused.
+- **Releases**: a new tag of the line is refused on master (`css34_line_can_release`).
+  The published release, its sha256 values and the pointer `line-<line>` stay as
+  they are. `lines.py check` requires `frozen.tag` to be a build of the line's pins
+  and never a known-bad tag.
+- **Rebuilds** come only from `freeze_tag` and `inputs_release`
+  (`build-offline.sh`, `--network none`). Publishing inputs (`freeze-inputs.yml`
+  with `publish: true`) waits for approval in the protected `frozen-release`
+  environment.
+- **Weekly check**: `frozen-verify.yml` runs for every row of
+  `python3 builder/lines.py frozen-gha`, one row per line and smoke image.
+  - `testing/scripts/verify-frozen-line.py` checks the release assets and the
+    pointer files against `frozen.assets` and requires the pointer to serve
+    `frozen.tag` with `smoke: pass`.
+  - It also requires the input archive's `MANIFEST.json` to name the line and the
+    `freeze_tag` commit, and its listed assets to match `SHA256SUMS`.
+  - `release-smoke.sh` then boots srcds from the pointer URLs on every Metamod
+    build the pointer serves.
+- The 1.11 build code stays on master until T3.3 removes it. Its CI paths are
+  still exercised by tests that thaw sm11 in a temporary `lines.json`.
+
 ## Owner steps
 
 1. Push the freeze tag: `git tag sm11-freeze <commit> && git push origin sm11-freeze`.
-2. Run **Freeze inputs** on that tag with `publish: true`.
-3. Make the ghcr package `css34-build-ml2014` public. It is created private on the
+2. Create the `frozen-release` environment with required reviewers.
+3. Run **Freeze inputs** on that tag with `publish: true`, and approve it in
+   `frozen-release`.
+4. Make the ghcr package `css34-build-ml2014` public. It is created private on the
    first push.
-4. Create the `frozen-release` environment with required reviewers. The second
-   half of T2.7 makes frozen-line releases use it.
+5. Merge the freezing PR. `frozen-verify.yml` fails until steps 1–3 are done.

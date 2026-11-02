@@ -39,6 +39,20 @@ ci_gate_mod = load_module_from_path("ci_gate", ROOT / "builder/scripts/ci_gate.p
 evaluate_gate = ci_gate_mod.evaluate_gate
 
 
+def sm11_active_lines():
+    """lines.json with sm11-oldstable thawed (T2.7 froze it), so the dual-core
+    CI paths keep their coverage until the 1.11 code leaves master (T3.3)."""
+    data = json.loads((ROOT / "builder/lines.json").read_text(encoding="utf-8"))
+    line = data["lines"]["sm11-oldstable"]
+    line.pop("frozen", None)
+    line["status"] = "active"
+    line["releasable"] = True
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+    with tmp:
+        json.dump(data, tmp)
+    return tmp.name
+
+
 def simulate_paths_filter(changed_files):
     """Simulates dorny/paths-filter with predicate-quantifier: every:
     code: ['!docs/**', '!**/*.md', '!.github/workflows/cleanup-artifacts.yml']
@@ -59,10 +73,19 @@ def simulate_paths_filter(changed_files):
 
 class TestCIPlannerGate(unittest.TestCase):
 
+    def test_frozen_sm11_is_out_of_ci(self):
+        plan = plan_ci(event_name="pull_request", code_changed="true")
+        for key in ("build", "debian", "botplay", "windows", "windows_smoke"):
+            self.assertNotIn("sm11-oldstable", {row["line"] for row in plan["matrices"][key]}, key)
+        with self.assertRaisesRegex(ValueError, "inactive CSS34_LINE: 'sm11-oldstable'"):
+            plan_ci(event_name="workflow_dispatch", code_changed="true", inputs={"css34_line": "sm11-oldstable"})
+
     def test_plapi_runtime_is_required_for_code_and_selected_line(self):
+        lines = sm11_active_lines()
+        self.addCleanup(Path(lines).unlink, missing_ok=True)
         for event, inputs in (("pull_request", {}),
                               ("workflow_dispatch", {"css34_line": "sm11-oldstable"})):
-            plan = plan_ci(event, True, inputs)
+            plan = plan_ci(event, True, inputs, lines_path=lines)
             self.assertIn("plapi-runtime", plan["required_jobs"])
             for result in ("failure", "skipped", "cancelled"):
                 needs = {name: {"result": "success"} for name in plan["required_jobs"]}
@@ -220,11 +243,14 @@ class TestCIPlannerGate(unittest.TestCase):
         self.assertIn("test-botplay-bisect", plan_ref["required_jobs"])
 
     def test_windows_eligibility_and_matrices(self):
-        """Windows matrix in planner must only contain lines with windows: true."""
-        plan = plan_ci(event_name="pull_request", code_changed="true")
-        with open(ROOT / "builder/lines.json", "r", encoding="utf-8") as f:
+        """Windows matrix in planner must only contain active lines with windows: true."""
+        lines = sm11_active_lines()
+        self.addCleanup(Path(lines).unlink, missing_ok=True)
+        plan = plan_ci(event_name="pull_request", code_changed="true", lines_path=lines)
+        with open(lines, "r", encoding="utf-8") as f:
             data = json.load(f)
-        want = {name for name, line in data["lines"].items() if line.get("windows")}
+        want = {name for name, line in data["lines"].items()
+                if line.get("windows") and line["status"] == "active"}
         win_matrix = plan["matrices"]["windows"]
         win_lines = [entry["line"] for entry in win_matrix]
         # One Windows build per line, on its primary Metamod
@@ -276,10 +302,13 @@ class TestCIPlannerGate(unittest.TestCase):
 
     def test_css34_line_filtering_sm11_windows_and_run_reference_botplay(self):
         """Single-line dispatch for sm11-oldstable with run_reference_botplay=true omits host, keeps its Windows rows and runs reference botplay."""
+        lines = sm11_active_lines()
+        self.addCleanup(Path(lines).unlink, missing_ok=True)
         plan = plan_ci(
             event_name="workflow_dispatch",
             code_changed="true",
             inputs={"css34_line": "sm11-oldstable", "run_reference_botplay": "true"},
+            lines_path=lines,
         )
         self.assertEqual(len(plan["matrices"]["build"]), 1)
         self.assertEqual(plan["matrices"]["build"][0]["line"], "sm11-oldstable")
@@ -293,7 +322,7 @@ class TestCIPlannerGate(unittest.TestCase):
         self.assertNotIn("test-built-smoke", plan["required_jobs"])
         self.assertIn("test-rom4s-botplay", plan["required_jobs"])
         self.assertIn("test-release-botplay", plan["required_jobs"])
-        with open(ROOT / "builder/lines.json", "r", encoding="utf-8") as f:
+        with open(lines, "r", encoding="utf-8") as f:
             data = json.load(f)
         mm12 = [n for n, l in data["lines"].items() if l["status"] == "active"
                 and data["pins"][l["metamod"]]["mode"] == "1.12"]
@@ -327,12 +356,15 @@ class TestCIPlannerGate(unittest.TestCase):
         self.assertEqual(len(plan["matrices"]["botplay_extra_images"]), 3)
 
     def test_botplay_extra_runs_built_matrix_only_with_lines(self):
+        lines = sm11_active_lines()
+        self.addCleanup(Path(lines).unlink, missing_ok=True)
         for line, expected in (("sm13-latest", True), ("sm11-oldstable", False), ("", True)):
             with self.subTest(line=line):
                 inputs = {"botplay_extra_distros": "true"}
                 if line:
                     inputs["css34_line"] = line
-                plan = plan_ci(event_name="workflow_dispatch", code_changed="true", inputs=inputs)
+                plan = plan_ci(event_name="workflow_dispatch", code_changed="true", inputs=inputs,
+                               lines_path=lines)
                 self.assertEqual(plan["run_built_botplay_extra"], expected)
                 self.assertEqual("test-built-botplay-extra" in plan["required_jobs"], expected)
                 self.assertEqual(bool(plan["matrices"]["botplay_extra"].get("line")), expected)

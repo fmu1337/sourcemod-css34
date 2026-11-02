@@ -2,7 +2,7 @@ name: Release
 
 # Tag → CSS34_LINE comes from builder/generated/tag-map.sh (python3 builder/lines.py gen).
 # A packaging rebuild of the same pins uses a `-r<N>` suffix; the base tag selects the line.
-# Lines with releasable=false (archived MM 2.0 / KHook) are rejected.
+# Lines with releasable=false (archived MM 2.0 / KHook, frozen sm11: docs/FREEZE.md) are rejected.
 # known_bad tags can resolve to a line but can never publish a line pointer.
 #
 # Linux/Windows jobs attach packages directly to the GitHub Release.
@@ -243,7 +243,7 @@ jobs:
           fi
 
           if ! css34_line_can_release "${line}"; then
-            echo "Archived build line: use archive/khook; published pointers are unchanged" >&2
+            echo "Line ${line} takes no new release tags: archived (archive/khook) or frozen (rebuilt only from its freeze tag, docs/FREEZE.md); published pointers are unchanged" >&2
             exit 1
           fi
 

@@ -19,8 +19,12 @@ ROOT = Path(__file__).resolve().parent.parent
 LINE_FIELDS = {
     "sourcemod", "metamod", "secondary_metamod", "status", "pointer", "releasable", "role",
     "install_role", "extra_tags", "smoke", "host_smoke",
-    "windows", "botplay_extra_images", "sm_note", "mm_note",
+    "windows", "botplay_extra_images", "sm_note", "mm_note", "frozen",
 }
+# T2.7 (docs/FREEZE.md): a frozen line keeps its published release and pointer,
+# leaves CI, and is rebuilt only from its freeze tag and input archive.
+FROZEN_FIELDS = {"tag", "freeze_tag", "inputs_release", "assets"}
+SHA256_RE = re.compile(r"[0-9a-f]{64}")
 DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 GENERATED = (
     ("builder/versions.env", "versions"),
@@ -105,6 +109,21 @@ def load_manifest(path):
         if "secondary_metamod" in line:
             ref = line["secondary_metamod"]
             require(ref in pins and ref.startswith("MM_"), "invalid secondary_metamod reference for " + name)
+        if "frozen" in line:
+            frozen = line["frozen"]
+            require(line["status"] == "frozen", name + ".frozen needs status frozen")
+            require(isinstance(frozen, dict) and set(frozen) == FROZEN_FIELDS,
+                    name + ".frozen must have exactly " + ", ".join(sorted(FROZEN_FIELDS)))
+            for key in ("tag", "freeze_tag", "inputs_release"):
+                require(isinstance(frozen[key], str) and TAG_RE.fullmatch(frozen[key]),
+                        "invalid {}.frozen.{}".format(name, key))
+            require(not line.get("releasable", True),
+                    name + " is frozen: it is rebuilt only from " + frozen["freeze_tag"] + " (releasable false)")
+            require(isinstance(frozen["assets"], dict) and frozen["assets"], name + ".frozen.assets is empty")
+            for asset, digest in frozen["assets"].items():
+                require(isinstance(asset, str) and TAG_RE.fullmatch(asset), "invalid frozen asset name " + repr(asset))
+                require(isinstance(digest, str) and SHA256_RE.fullmatch(digest),
+                        "frozen asset " + asset + " needs a sha256")
     require(isinstance(data["known_bad"], dict), "known_bad must map release tags to reasons")
     for tag, reason in data["known_bad"].items():
         require(TAG_RE.fullmatch(tag), "invalid known_bad tag " + tag)
@@ -116,6 +135,11 @@ def load_manifest(path):
         for tag in [part["tag"]] + part["extra_tags"]:
             if tag in data["known_bad"] and part["pointer"]:
                 raise ValueError("known-bad tag " + tag + " is pinned on pointer line " + name)
+        if "frozen" in lines[name]:
+            tag = lines[name]["frozen"]["tag"]
+            require(re.fullmatch(re.escape(part["tag"]) + r"(-r[0-9]+)?", tag),
+                    "{}.frozen.tag {} is not a build of {}".format(name, tag, part["tag"]))
+            require(tag not in data["known_bad"], name + " is frozen on known-bad tag " + tag)
     validate_runtime_images(data)
     return data
 
@@ -360,7 +384,7 @@ def ci_matrix(data):
         part = line_parts(data, name)
         if line.get("host_smoke"):
             host.append(row_expect(part, True))
-        if line.get("windows"):
+        if line.get("windows") and line["status"] == "active":
             # One build per line (native smoke on the primary Metamod); Wine smoke
             # runs on every Metamod build the line ships.
             windows.append(windows_row(part, "primary"))
@@ -571,9 +595,42 @@ def emit_gha(data):
     print("default_line={}".format(data["default_line"]))
 
 
+def sm_package_name(part):
+    """Linux SourceMod archive name (builder/package-paths.sh)."""
+    _, major, _, rev = part["sm_expect"].split(".")
+    return "sourcemod-1.{}.0-git{}-css34-linux.tar.gz".format(major, rev)
+
+
+def frozen_rows(data):
+    """frozen-verify.yml matrix: one row per frozen line (with a frozen block) and smoke image."""
+    rows = []
+    for name, line in data["lines"].items():
+        if "frozen" not in line:
+            continue
+        part = line_parts(data, name)
+        frozen = line["frozen"]
+        # The pointer serves fixed names; each is a copy of one release asset.
+        pointer = {
+            "sourcemod-css34-linux.tar.gz": sm_package_name(part),
+            "mmsource-css34-linux.tar.gz": mm_package_name(part["mm_mode"], part["mm_rev"]),
+        }
+        if part.get("secondary_mm_mode") == "1.10":
+            pointer["mmsource-legacy-css34-linux.tar.gz"] = mm_package_name("1.10", part["secondary_mm_rev"])
+        for asset in pointer.values():
+            require(asset in frozen["assets"], "{}.frozen.assets lacks {}".format(name, asset))
+        for entry in line.get("smoke", []):
+            rows.append(attach_image({
+                "line": name, "tag": frozen["tag"], "freeze_tag": frozen["freeze_tag"],
+                "inputs_release": frozen["inputs_release"],
+                "assets": json.dumps(frozen["assets"], sort_keys=True),
+                "pointer_assets": json.dumps(pointer, sort_keys=True),
+            }, data, entry["image"]))
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("gen", "check", "gha", "legacy-mm-asset"))
+    parser.add_argument("command", choices=("gen", "check", "gha", "legacy-mm-asset", "frozen-gha"))
     parser.add_argument("line", nargs="?", help="line name (legacy-mm-asset)")
     args = parser.parse_args()
     try:
@@ -588,6 +645,11 @@ def main():
             return 0
         if args.command == "gha":
             emit_gha(data)
+            return 0
+        if args.command == "frozen-gha":
+            print("frozen<<EOF")
+            print(json.dumps(frozen_rows(data), separators=(",", ":")))
+            print("EOF")
             return 0
         planned = []
         for relative, kind in GENERATED:

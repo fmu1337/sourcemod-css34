@@ -47,6 +47,11 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   SM/MM archive paths (Linux tar.gz and Windows zip, both with `git<rev>`).
   Archived MM 2.0/KHook builds live in `archive/khook`;
   master rejects those build lines, while their published pointers stay intact.
+- sm11 is **frozen** (T2.7, `docs/FREEZE.md`): `status: frozen`, `releasable: false`, a `frozen`
+  block (tag, `sm11-freeze`, `sm11-freeze-inputs`, sha256 of every release asset). CI no longer
+  builds it, a new sm11 tag is refused, and `frozen-verify.yml` re-checks its published files weekly
+  (`lines.py frozen-gha`, `testing/scripts/verify-frozen-line.py`). Tests that cover the dual-core
+  CI paths thaw sm11 in a temporary `lines.json`.
 - sm11 (D7): primary Metamod is the frozen MM 1.12 (git1227), secondary MM 1.10.7;
   its tag is `1.11.0.6970-mm1.12.0-dual` and `line-sm11-oldstable` also serves MM 1.10.7 as
   `mmsource-legacy-css34-linux.tar.gz` (`lines.py legacy-mm-asset <line>`, `update-line-pointer.sh`
@@ -122,7 +127,8 @@ with `--network none` (`CSS34_INPUTS_DIR` in `builder/docker/build.sh`), and
 `testing/scripts/compare-package-abi.py` must find the same files, exports,
 NEEDED and SONAME. Every new download in the builder must go through
 `fetch_pinned` (`builder/fetch-pinned.sh`) with a sha256, or offline rebuilds
-break. Workflow `freeze-inputs.yml`; details in `docs/FREEZE.md`.
+break. Workflows `freeze-inputs.yml` (publishing waits for the `frozen-release` environment) and
+`frozen-verify.yml` (weekly); details in `docs/FREEZE.md`.
 
 ### Lint
 Run `actionlint` after workflow edits. The ABI export

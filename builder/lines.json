@@ -71,10 +71,10 @@
       "sourcemod": "SM_OLDSTABLE",
       "metamod": "MM_112_FROZEN",
       "secondary_metamod": "MM_110",
-      "status": "active",
+      "status": "frozen",
       "pointer": true,
-      "releasable": true,
-      "role": "OldStable, dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy",
+      "releasable": false,
+      "role": "OldStable, frozen ([docs](docs/FREEZE.md)): dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy",
       "windows": true,
       "smoke": [
         {
@@ -86,7 +86,21 @@
         {
           "image": "debian:13"
         }
-      ]
+      ],
+      "install_role": "OldStable, frozen: dual-core; MM 1.12 default, MM 1.10.7 as mmsource-legacy",
+      "frozen": {
+        "tag": "1.11.0.6970-mm1.12.0-dual-r3",
+        "freeze_tag": "sm11-freeze",
+        "inputs_release": "sm11-freeze-inputs",
+        "assets": {
+          "mmsource-1.10.7-git976-css34-linux.tar.gz": "96d3e5c3167180ede3037eeb2dbdb3e89c01bd66d194b88a25acd6efc506a4fd",
+          "mmsource-1.10.7-git976-css34-windows.zip": "573bc46b5688e27c3ab9cdfa9bc2613a0be6be239960a72f6fe49932204b63c1",
+          "mmsource-1.12.0-git1227-css34-linux.tar.gz": "5150d5059495329ee680cfbceb3ff9f2872bc92c39ca20fd98654c635fa2ee84",
+          "mmsource-1.12.0-git1227-css34-windows.zip": "6afe2e5a96166025cabddea7ab52d987e2e41995326091f4ec5fa96a7125f215",
+          "sourcemod-1.11.0-git6970-css34-linux.tar.gz": "6a953594ac489fd0c98bdc82f9a210febf1320220d6ee59b5957476343298e96",
+          "sourcemod-1.11.0-git6970-css34-windows.zip": "83ec075804e79a25ef4725744a2e3a2b79fdf301db5a1647229cbe89309a7351"
+        }
+      }
     },
     "sm12-latest": {
       "sourcemod": "SM_LATEST",

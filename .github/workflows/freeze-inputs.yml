@@ -40,7 +40,18 @@ env:
   CSS34_LINE: ${{ github.event.inputs.css34_line }}
 
 jobs:
+  # Publishing a frozen line's inputs waits for the protected environment
+  # frozen-release (required reviewers, set up by the owner); a dry run does not.
+  approve:
+    if: github.event.inputs.publish == 'true'
+    runs-on: ubuntu-22.04
+    environment: frozen-release
+    steps:
+      - run: echo "Publishing the inputs of ${CSS34_LINE} was approved in frozen-release"
+
   freeze:
+    needs: approve
+    if: always() && (needs.approve.result == 'success' || (needs.approve.result == 'skipped' && github.event.inputs.publish != 'true'))
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
