@@ -1,0 +1,252 @@
+name: Upstream bump
+
+# T4.4 (replaces the daily Jules task, docs/JULES_DAILY_VERSION_BUMP.md).
+#
+# Weekly (and on dispatch): for each tracked target of builder/scripts/upstream-bump.py
+# (sm12-latest, sm13-latest, MM_112) whose pin is behind its upstream branch, open or
+# update ONE PR from bump/<target>: pin moved in builder/lines.json, patch series
+# refreshed (git apply --3way), lines.py gen, gamedata source check, upstream log and
+# risky paths in the body. A re-run with no new upstream commit changes nothing.
+#
+# After such a PR is merged (any master push that moves a releasable pointer line's
+# SourceMod / Metamod / bridge pin), `release` pushes the line's new tag
+# (`-r<N>` when the base tag exists); release.yml then builds it as a prerelease,
+# smokes the public URLs, promotes it and switches line-<line>.
+#
+# Owner setup: a GitHub App with contents + pull-requests: write on this repository,
+# installed here; vars.BUMP_APP_ID and secrets.BUMP_APP_KEY. Its token is what makes
+# CI run on the bump PRs and release.yml run on the pushed tags (GITHUB_TOKEN events
+# trigger no workflows).
+on:
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Only this target (sm12-latest, sm13-latest, MM_112); empty = all"
+        required: false
+        default: ""
+  push:
+    branches: [master]
+    paths:
+      - 'builder/lines.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-bump-${{ github.event_name == 'push' && 'release' || 'bump' }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-22.04
+    outputs:
+      targets: ${{ steps.plan.outputs.targets }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upstream tips vs pins
+        id: plan
+        env:
+          ONLY: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          python3 builder/scripts/upstream-bump.py plan > plan.json
+          cat plan.json
+          python3 - <<'PY'
+          import json, os
+          plan = json.load(open("plan.json"))
+          only = os.environ.get("ONLY", "")
+          if only:
+              plan = [p for p in plan if p["target"] == only]
+          backwards = [p["target"] for p in plan if not p["fast_forward"]]
+          if backwards:
+              raise SystemExit("FAIL: upstream is not a descendant of the pin for " + ", ".join(backwards))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write("targets=" + json.dumps(plan, separators=(",", ":")) + "\n")
+          for p in plan:
+              print("::notice::{target}: {old_rev} -> {new_rev} ({new_commit})".format(**p))
+          PY
+
+  bump:
+    needs: plan
+    if: needs.plan.outputs.targets != '[]'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.targets) }}
+    steps:
+      - name: Require the bump GitHub App
+        env:
+          APP_ID: ${{ vars.BUMP_APP_ID }}
+          HAS_KEY: ${{ secrets.BUMP_APP_KEY != '' }}
+        run: |
+          if [[ -z "$APP_ID" || "$HAS_KEY" != true ]]; then
+            echo "::error::set vars.BUMP_APP_ID and secrets.BUMP_APP_KEY (a GitHub App with contents + pull-requests: write); a GITHUB_TOKEN PR would get no CI"
+            exit 1
+          fi
+
+      - name: App token
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.BUMP_APP_ID }}
+          private-key: ${{ secrets.BUMP_APP_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app.outputs.token }}
+          fetch-depth: 0
+
+      - name: Skip if bump/${{ matrix.target }} already carries this upstream commit
+        id: dedup
+        env:
+          BRANCH: bump/${{ matrix.target }}
+          PIN: ${{ matrix.pin }}
+          NEW: ${{ matrix.new_commit }}
+        run: |
+          set -euo pipefail
+          current=""
+          if git fetch --quiet origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" 2>/dev/null; then
+            current="$(git show "origin/${BRANCH}:builder/lines.json" |
+              python3 -c 'import json,sys; print(json.load(sys.stdin)["pins"][sys.argv[1]]["commit"])' "$PIN")"
+          fi
+          if [[ "$current" == "$NEW" ]] && git merge-base --is-ancestor origin/master "origin/${BRANCH}"; then
+            echo "::notice::${BRANCH} is already at ${NEW} on top of master; nothing to do"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Move the pin and refresh the patch series
+        if: steps.dedup.outputs.skip == '0'
+        env:
+          TARGET: ${{ matrix.target }}
+          NEW: ${{ matrix.new_commit }}
+          REV: ${{ matrix.new_rev }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "css34-bump[bot]"
+          git config --global user.email "css34-bump[bot]@users.noreply.github.com"
+          python3 builder/scripts/upstream-bump.py apply "$TARGET" "$NEW" "$REV" \
+            --workdir "$RUNNER_TEMP/series"
+          python3 builder/lines.py check
+
+      - name: Pre-PR checks (gamedata lookups, series on the new pin)
+        if: steps.dedup.outputs.skip == '0'
+        env:
+          TARGET: ${{ matrix.target }}
+          SERIES: ${{ join(matrix.series, ' ') }}
+        run: |
+          set -euo pipefail
+          {
+            for s in $SERIES; do
+              work="$RUNNER_TEMP/series/$s"
+              if [[ -d "$work/sourcemod" ]]; then
+                if out="$(python3 testing/scripts/check-css34-gamedata.py builder/assets/gamedata --source "$work/sourcemod" 2>&1)"; then
+                  echo "- gamedata: no new upstream lookups outside the CSS v34 contract (\`$s\`)."
+                else
+                  echo "- **gamedata: FAIL** (\`$s\`), CI will fail until \`builder/assets/gamedata\` covers it:"
+                  echo '```'; echo "$out"; echo '```'
+                fi
+              fi
+              echo "- patch series \`$s\` refreshed onto the new pin with \`git apply --3way\` (no conflicts)."
+            done
+          } > "$RUNNER_TEMP/checks.md"
+          cat "$RUNNER_TEMP/checks.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push bump/${{ matrix.target }} and open or update its PR
+        if: steps.dedup.outputs.skip == '0'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          TARGET: ${{ matrix.target }}
+          BRANCH: bump/${{ matrix.target }}
+          OLD: ${{ matrix.old_commit }}
+          NEW: ${{ matrix.new_commit }}
+          OLD_REV: ${{ matrix.old_rev }}
+          REV: ${{ matrix.new_rev }}
+        run: |
+          set -euo pipefail
+          python3 builder/scripts/upstream-bump.py body "$TARGET" "$OLD" "$NEW" \
+            --drift "$RUNNER_TEMP/checks.md" > "$RUNNER_TEMP/body.md"
+          title="Bump ${TARGET}: ${OLD_REV} -> ${REV} (${NEW:0:8})"
+          git checkout -B "$BRANCH"
+          git add -A
+          git commit -q -m "$title" -m "Generated by .github/workflows/upstream-bump.yml (T4.4)."
+          # bump/<target> belongs to this workflow: it is rebuilt from master every run.
+          git push --force origin "$BRANCH"
+          number="$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')"
+          if [[ -n "$number" ]]; then
+            gh pr edit "$number" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+            echo "::notice::updated PR #${number}"
+          else
+            gh pr create --base master --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+  # After a merge that moves a releasable pointer line's pins: push its next tag.
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tags for the lines this push moved
+        id: tags
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet --tags origin
+          git tag -l > "$RUNNER_TEMP/existing.txt"
+          if [[ "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "${BEFORE}:builder/lines.json" 2>/dev/null; then
+            echo "::notice::no previous lines.json to compare; nothing to release"
+            echo "tags=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git show "${BEFORE}:builder/lines.json" > "$RUNNER_TEMP/old-lines.json"
+          tags="$(python3 builder/scripts/upstream-bump.py release-tags \
+            "$RUNNER_TEMP/old-lines.json" builder/lines.json --existing "$RUNNER_TEMP/existing.txt" | xargs)"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          echo "Tags to push: ${tags:-none}"
+
+      - name: Require the bump GitHub App
+        if: steps.tags.outputs.tags != ''
+        env:
+          APP_ID: ${{ vars.BUMP_APP_ID }}
+          HAS_KEY: ${{ secrets.BUMP_APP_KEY != '' }}
+        run: |
+          if [[ -z "$APP_ID" || "$HAS_KEY" != true ]]; then
+            echo "::error::set vars.BUMP_APP_ID and secrets.BUMP_APP_KEY; push these tags by hand meanwhile: ${{ steps.tags.outputs.tags }}"
+            exit 1
+          fi
+
+      - name: App token
+        if: steps.tags.outputs.tags != ''
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.BUMP_APP_ID }}
+          private-key: ${{ secrets.BUMP_APP_KEY }}
+
+      - name: Push the release tags (release.yml takes over)
+        if: steps.tags.outputs.tags != ''
+        env:
+          TOKEN: ${{ steps.app.outputs.token }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+        run: |
+          set -euo pipefail
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          for tag in $TAGS; do
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "refs/tags/${tag}"
+            echo "::notice::pushed ${tag} at ${GITHUB_SHA:0:8}"
+          done

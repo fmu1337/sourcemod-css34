@@ -152,10 +152,18 @@ break. Workflows `freeze-inputs.yml` (publishing waits for the `frozen-release` 
 Run `actionlint` after workflow edits. The ABI export
 check (`check-package.sh`) is the closest static verification of build output.
 
-### Version pin bumps (Jules / agents)
-Daily SM/MM tip bumps: follow `docs/JULES_DAILY_VERSION_BUMP.md`. After editing
-pins in `builder/lines.json`, run `python3 builder/lines.py gen` then
-`python3 builder/lines.py check` (also enforced by
+### Version pin bumps (T4.4)
+`.github/workflows/upstream-bump.yml` does them: weekly (or on dispatch) it opens
+or updates one PR per lagging target (`bump/sm12-latest`, `bump/sm13-latest`,
+`bump/MM_112`) through `builder/scripts/upstream-bump.py` (`plan`, `apply`,
+`body`), and after such a PR is merged its `release` job pushes the moved lines'
+tags (`release-tags`; `-r<N>` when the base tag exists), which `release.yml`
+builds as prereleases and promotes. It needs the owner's GitHub App
+(`vars.BUMP_APP_ID`, `secrets.BUMP_APP_KEY`) so that CI and `release.yml` run.
+By hand: edit the pin in `builder/lines.json`, run
+`builder/scripts/patch-series.sh refresh <series>` (it reads the pin from
+`lines.json`; `gen` refuses to run until the series matches), then
+`python3 builder/lines.py gen` and `python3 builder/lines.py check` (also enforced by
 `.github/workflows/ci.yml` on PRs). `gen` rewrites `builder/versions.env`,
 `builder/generated/ci-matrix.json`, `builder/generated/tag-map.sh`, and the README pin
 tables. `ci.yml` builds its matrices in the `plan` job

@@ -3,7 +3,8 @@
 # builder/patches/series/<MM pin>/ (MM_112) for Metamod.
 #
 #   builder/scripts/patch-series.sh refresh <series> [workdir]
-#       Rebase the series onto its pinned commit (lines.json):
+#       Rebase the series onto its pinned commit (read from builder/lines.json,
+#       so it works right after a pin edit, before `lines.py gen`):
 #       fetch it, apply each patch with `git apply --3way`, rewrite every patch
 #       from the result (keeping its description) and series.json (commit and
 #       trees). A patch that no longer applies stops with the conflict left in
@@ -22,12 +23,26 @@ series="$root/builder/patches/series/$name"
 field() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2], sys.argv[3]))' "$series/series.json" "$@"; }
 top="$(field root sourcemod)"
 
+# The pin straight from builder/lines.json (not the generated versions.env):
+# after a pin bump, `lines.py gen` refuses to run until the series is
+# refreshed, so the order is edit lines.json -> refresh -> lines.py gen.
+pin_commit() { # <series name> <root>
+  python3 - "$root/builder/lines.json" "$1" "$2" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+name, top = sys.argv[2], sys.argv[3]
+if top == "sourcemod":
+    pin = data["pins"][data["lines"][name]["sourcemod"]]
+else:
+    pin = data["pins"][name]
+print(pin["commit"])
+PY
+}
+commit="$(pin_commit "$name" "$top" 2>/dev/null || true)"
 if [[ "$top" == sourcemod ]]; then
-  commit="$(CSS34_LINE="$name" bash -c 'source "$1/builder/resolve-version.sh" >/dev/null 2>&1 && echo "$SOURCEMOD_COMMIT"' _ "$root")"
   url="https://github.com/alliedmodders/sourcemod"
   label=SourceMod
 else
-  commit="$(bash -c 'source "$1/builder/versions.env" && v="$2_COMMIT" && echo "${!v:-}"' _ "$root" "$name")"
   url="https://github.com/alliedmodders/metamod-source"
   label=Metamod:Source
 fi
