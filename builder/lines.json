@@ -160,14 +160,6 @@
         }
       ]
     },
-    "sm13-dev": {
-      "sourcemod": "SM_DEV",
-      "metamod": "MM_112",
-      "status": "retired",
-      "pointer": false,
-      "releasable": true,
-      "role": "Retired alias of 7404 + MM 1.12"
-    },
     "sm13-mm20": {
       "sourcemod": "SM_DEV",
       "metamod": "MM_20",

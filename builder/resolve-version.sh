@@ -30,13 +30,6 @@ apply_sm_line() {
       SOURCEMOD_MAJOR="$SM_LATEST_13_MAJOR"
       use_mm_112
       ;;
-    # Retired CI line; kept for release tag 1.13.0.7404-mm1.12.0 retags.
-    sm13-dev|dev)
-      SOURCEMOD_COMMIT="$SM_DEV_COMMIT"
-      SOURCEMOD_GIT_REV="$SM_DEV_REV"
-      SOURCEMOD_MAJOR="$SM_DEV_MAJOR"
-      use_mm_112
-      ;;
     # Frozen (T2.7): resolved only for the expectations of its published
     # packages (smoke, package names). The builder refuses SourceMod < 1.12.
     sm11-oldstable|sm11|oldstable)

@@ -20,7 +20,6 @@ def resolve(data, name):
         "sm11": "sm11-oldstable", "oldstable": "sm11-oldstable",
         "sm12": "sm12-latest", "latest": "sm12-latest",
         "sm13": "sm13-latest", "bleeding": "sm13-latest",
-        "dev": "sm13-dev",
     }
     name = aliases.get(name, name)
     if name not in data["lines"]:
