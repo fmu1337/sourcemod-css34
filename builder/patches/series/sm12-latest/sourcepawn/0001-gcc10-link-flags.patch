@@ -1,0 +1,76 @@
+css34: sourcepawn: -Wno-sign-compare, pthread/rt/-lgcc_s NEEDED, shell.cpp sign-compare
+
+diff --git a/AMBuildScript b/AMBuildScript
+index 2e1855e4069c264c9274ffdcb1fe2202be6bfdb3..f62e35121fccf9f1d70fea70b7563a011f447a7e 100644
+--- a/AMBuildScript
++++ b/AMBuildScript
+@@ -111,7 +111,7 @@ class Config(object):
+         # Platform-specifics
+         if not cxx.like('emscripten'):
+             if cxx.target.platform == 'linux':
+-                cxx.postlink += ['-lpthread', '-lrt']
++                cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']
+             elif cxx.target.platform == 'mac':
+                 cxx.cflags += ['-mmacosx-version-min=10.15']
+                 cxx.linkflags += ['-mmacosx-version-min=10.15']
+@@ -144,9 +144,11 @@ class Config(object):
+             '-pipe',
+             '-Wall',
+             '-Werror',
++            '-Wno-sign-compare',  # CSS34 sign-compare
+             '-Wno-switch',
+         ]
+         cxx.cxxflags += ['-std=c++17']
++        cxx.cxxflags += ['-Wno-sign-compare']  # CSS34 sign-compare
+ 
+         if builder.options.debug == '1':
+             cxx.cflags += ['-gdwarf-4']
+@@ -389,6 +391,11 @@ class SourcePawn(object):
+         binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')
+ 
+         self.SetupBinForArch(binary, builder)
++        # css34: libsourcepawn pthread/rt DT_NEEDED
++        if binary.compiler.target.platform == 'linux':
++          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):
++            if flag not in binary.compiler.linkflags:
++              binary.compiler.linkflags += [flag]
+ 
+         vars = self.vars.copy()
+         vars['binary'] = binary
+@@ -405,6 +412,11 @@ class SourcePawn(object):
+         binary = self.root.Library(builder, 'libsourcepawn')
+ 
+         self.SetupBinForArch(binary, builder)
++        # css34: libsourcepawn pthread/rt DT_NEEDED
++        if binary.compiler.target.platform == 'linux':
++          for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):
++            if flag not in binary.compiler.linkflags:
++              binary.compiler.linkflags += [flag]
+ 
+         vars = self.vars.copy()
+         vars['binary'] = binary
+@@ -481,8 +493,9 @@ class SourcePawn(object):
+             self.static_libsp[arch],
+         ]
+ 
+-        if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
+-            binary.compiler.linkflags += ['-Wl,--end-group']
++        if binary.compiler.target.platform == 'linux':
++            # css34: AddStaticLibraries lgcc_s for 32-bit __mulodi4 in spcomp
++            binary.compiler.linkflags += ['-lgcc', '-lgcc_s', '-Wl,--end-group']
+ 
+     def BuildFatSpcomp(self, builder):
+         # Building fat binaries is currently only supported on macOS hosts
+diff --git a/vm/shell/shell.cpp b/vm/shell/shell.cpp
+index fce0e30b03f6a9ea43757f5e6f35bd677f848ed5..64057a3e7745eae880a3f2050330b5b529bb25b0 100644
+--- a/vm/shell/shell.cpp
++++ b/vm/shell/shell.cpp
+@@ -135,7 +135,7 @@ static cell_t Printf(IPluginContext* cx, const cell_t* params) {
+       char next = *(p + 1);
+       if (next == 's' || next == 'd' || next == 'f') {
+         index++;
+-        if (index > params[0])
++        if (index > (size_t)params[0])
+           return cx->ThrowNativeError("Wrong number of arguments");
+ 
+         cell_t* addr;

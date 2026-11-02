@@ -1,0 +1,20 @@
+css34: sourcemm_api: GET_V_IFACE macros check the factory for NULL
+
+diff --git a/core/sourcemm_api.cpp b/core/sourcemm_api.cpp
+index a8010799986bc814efad48bdc6a86bb6e56ae926..4626836aef0e632791b4b9995c91fb1946095745 100644
+--- a/core/sourcemm_api.cpp
++++ b/core/sourcemm_api.cpp
+@@ -65,6 +65,13 @@ PLUGIN_EXPOSE(SourceMod, g_SourceMod_Core);
+ 
+ ConVar sourcemod_version("sourcemod_version", SOURCEMOD_VERSION, FCVAR_SPONLY|FCVAR_NOTIFY, "SourceMod Version");
+ 
++/* CSS34_SAFE_GET_V_IFACE: null factory guard */
++#undef GET_V_IFACE_ANY
++#define GET_V_IFACE_ANY(v_factory, v_var, v_type, v_name) 	do { 		CreateInterfaceFn _fn = ismm->v_factory(); 		if (!_fn) 		{ 			if (error && maxlen) 				ke::SafeSprintf(error, maxlen, "Factory %s returned NULL for %s", #v_factory, v_name); 			return false; 		} 		v_var = (v_type *)ismm->VInterfaceMatch(_fn, v_name, 0); 		if (!v_var) 		{ 			if (error && maxlen) 				ke::SafeSprintf(error, maxlen, "Could not find interface: %s", v_name); 			return false; 		} 	} while (0)
++
++#undef GET_V_IFACE_CURRENT
++#define GET_V_IFACE_CURRENT(v_factory, v_var, v_type, v_name) 	do { 		CreateInterfaceFn _fn = ismm->v_factory(); 		if (!_fn) 		{ 			if (error && maxlen) 				ke::SafeSprintf(error, maxlen, "Factory %s returned NULL for %s", #v_factory, v_name); 			return false; 		} 		v_var = (v_type *)ismm->VInterfaceMatch(_fn, v_name); 		if (!v_var) 		{ 			if (error && maxlen) 				ke::SafeSprintf(error, maxlen, "Could not find interface: %s", v_name); 			return false; 		} 	} while (0)
++
+ bool SourceMod_Core::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
+ {
+ 	PLUGIN_SAVEVARS();
