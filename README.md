@@ -88,29 +88,33 @@ A tag pins one SM + MM pair; never mix Metamod from one tag with SourceMod from 
 A rebuild of the same pins gets a `-r<N>` suffix (tags are never moved); `release.yml` maps
 `<tag>-r<N>` to the same line as `<tag>`.
 
-**Current builds** (what the line pointers serve, built from `88713a7`, every asset in `SHA256SUMS`):
+**Current builds** (what the line pointers serve; every asset in `SHA256SUMS`):
 
-| Tag | Line | SourceMod | Metamod |
-|-----|------|-----------|---------|
-| [`1.13.0.7472-mm1.12.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0-r2) | `sm13-latest` | 1.13.0-git7472 | 1.12.0 git1226 |
-| [`1.12.0.7253-mm1.12.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7253-mm1.12.0-r2) | `sm12-latest` | 1.12.0-git7253 | 1.12.0 git1226 |
-| [`1.13.0.7565-mm2.0.0-khook-dhooks-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks-r2) | `sm13-mm20-khook` | 1.13.0-git7565 (KHook branch + master), + `dhooks.ext` | 2.0.0 git1472 (KHook) |
-| [`1.13.0.7404-mm2.0.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0-r2) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0 git1407 |
+| Tag | Line | Built from | SourceMod | Metamod |
+|-----|------|------------|-----------|---------|
+| [`1.13.0.7478-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7478-mm1.12.0) | `sm13-latest` | `e02b664` | 1.13.0-git7478 | 1.12.0 git1228 |
+| [`1.12.0.7257-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7257-mm1.12.0) | `sm12-latest` | `e02b664` | 1.12.0-git7257 | 1.12.0 git1228 |
+| [`1.11.0.6970-mm1.12.0-dual-r3`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.12.0-dual-r3) | `sm11-oldstable` (frozen) | `978ec55` | 1.11.0-git6970, both cores | 1.12.0 git1227 (+ legacy bridge); 1.10.7 git976 as `mmsource-legacy` |
+| [`1.13.0.7565-mm2.0.0-khook-dhooks-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks-r2) | `sm13-mm20-khook` | `88713a7` | 1.13.0-git7565 (KHook branch + master), + `dhooks.ext` | 2.0.0 git1472 (KHook) |
+| [`1.13.0.7404-mm2.0.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0-r2) | `sm13-mm20` | `88713a7` | 1.13.0-git7404 | 2.0.0 git1407 |
 
-**Earlier tags** (same pins, older packaging: no `SHA256SUMS`, no `css34-package.json`). The seven tags of the
-current lines were moved to `b1f5192` and rebuilt on 2026-10-12, before the `-r<N>` rule existed:
+**Earlier tags.** The linked ones stay published: installers keep them as pinned fallbacks
+(`v34_server_base` `manifest/sources.json`), or a retired line still maps to them. Plain names are superseded or
+known-bad and are not needed by any line, pointer or installer.
 
 | Tag | Line | SourceMod | Metamod | Notes |
 |-----|------|-----------|---------|-------|
-| [`1.11.0.6970-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.10.7) | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | Linux only; withheld (below) |
-| [`1.12.0.7253-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7253-mm1.12.0) | `sm12-latest` | 1.12.0-git7253 | 1.12.0-dev (git1226) | |
-| [`1.13.0.7472-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0) | `sm13-latest` | 1.13.0-git7472 | 1.12.0-dev (git1226) | |
-| [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev (git1407) | |
-| [`1.13.0.7565-mm2.0.0-khook`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook) | `sm13-mm20-khook` | 1.13.0-git7565 | 2.0.0-dev (git1472, `05c5c63`) | |
-| [`1.13.0.7565-mm2.0.0-khook-dhooks`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks) | `sm13-mm20-khook` | 1.13.0-git7565, + `dhooks.ext` | 2.0.0-dev (git1472, `05c5c63`) | |
-| [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` (retired) | 1.13.0-git7404 | 1.12.0-dev (git1226) | historical |
-| `1.11.0.6572-mm1.10.7`, `1.12.0.7245-mm1.12.0` | pre-matrix | 6572 / 7245 | 1.10.7-dev / 1.12.0-dev (git1224) | historical, superseded |
-| `1.12.0.7239-mm1.12.0`, `1.13.0.7394-mm1.12.0` | pre-matrix | 7239 / 7394 | 1.12.0-dev | **known-bad** (below) |
+| [`1.12.0.7253-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7253-mm1.12.0) | `sm12-latest` | 1.12.0-git7253 | 1.12.0-dev (git1226) | installer fallback; older packaging (no `SHA256SUMS`) |
+| [`1.13.0.7472-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0) | `sm13-latest` | 1.13.0-git7472 | 1.12.0-dev (git1226) | installer fallback; older packaging |
+| [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev (git1407) | installer fallback |
+| [`1.13.0.7565-mm2.0.0-khook-dhooks`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks) | `sm13-mm20-khook` | 1.13.0-git7565, + `dhooks.ext` | 2.0.0-dev (git1472, `05c5c63`) | installer fallback |
+| [`1.13.0.7565-mm2.0.0-khook`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook) | `sm13-mm20-khook` | 1.13.0-git7565 | 2.0.0-dev (git1472, `05c5c63`) | base tag of the line; Windows assets untested (below) |
+| [`1.13.0.7404-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm1.12.0) | `sm13-dev` (retired) | 1.13.0-git7404 | 1.12.0-dev (git1226) | historical; the `sm13-dev` alias exists only to rebuild it |
+| [`1.11.0.6970-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.10.7) | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | **known-bad** (below); the CI PLAPI negative test downloads it |
+| [`1.11.0.6572-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6572-mm1.10.7) | pre-matrix | 1.11.0-git6572 | 1.10.7-dev | **known-bad** SourceMod; its Windows MM 1.10.7 zip serves the installer's `--sm rom4s` on Windows |
+| `1.13.0.7472-mm1.12.0-r2`, `1.12.0.7253-mm1.12.0-r2` | `sm13-latest`, `sm12-latest` | 7472 / 7253 | 1.12.0 git1226 | superseded by 7478 / 7257 |
+| `1.11.0.6970-mm1.12.0-dual`, `-dual-r2` | `sm11-oldstable` | 1.11.0-git6970 | 1.12.0 git1227 | failed the release smoke (its expectations, fixed in [#147](https://github.com/fmu1337/sourcemod-css34/pull/147)); superseded by `-dual-r3` |
+| `1.12.0.7239-mm1.12.0`, `1.12.0.7245-mm1.12.0`, `1.13.0.7394-mm1.12.0` | pre-matrix | 7239 / 7245 / 7394 | 1.12.0-dev | **known-bad**: wrong or missing css34 gamedata |
 
 Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}` and
 `mmsource-<ver>-git<mmrev>-css34-{linux.tar.gz|windows.zip}` for packages built from this tree.
@@ -188,12 +192,12 @@ back: an update whose tagged commit is older than the one served is skipped.
 Line pointers (`line-<line>`) serve fixed URLs consumed by installers (such as `fmu1337/v34_server_base`).
 Each line pointer serves the latest smoke-passed release tag for that build line.
 
-If a published pointer needs to be repointed or rolled back to a specific tag (e.g. `1.12.0.7253-mm1.12.0` or `-r2`), perform a manual repoint dispatch:
+If a published pointer needs to be repointed or rolled back to a specific tag (e.g. `1.12.0.7253-mm1.12.0`), perform a manual repoint dispatch:
 
 1. Open **GitHub Actions** → **Release** workflow (`release.yml`).
 2. Click **Run workflow** (`workflow_dispatch`).
 3. Select the target branch (`master`).
-4. In **Target release tag to repoint line pointer to**, enter the target release tag (e.g. `1.12.0.7253-mm1.12.0-r2` or `1.13.0.7472-mm1.12.0-r2`).
+4. In **Target release tag to repoint line pointer to**, enter the target release tag (e.g. `1.12.0.7253-mm1.12.0` or `1.13.0.7472-mm1.12.0`).
 5. Run the workflow.
 
 **What happens during a repoint dispatch:**

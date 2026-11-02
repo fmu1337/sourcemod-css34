@@ -7,6 +7,9 @@ name: Release Maintenance
 #   mark-known-bad  — turn every release listed in builder/lines.json
 #                     `known_bad` into a prerelease with a banner (asset URLs keep
 #                     working), then make `latest_tag` the GitHub "Latest" release.
+# Empty inputs are worked out at run time, so no tag is hard-coded here: a
+# release named in this file could be deleted, and a stale default would make
+# an old build "Latest".
 on:
   workflow_dispatch:
     inputs:
@@ -16,13 +19,13 @@ on:
         options: [republish, mark-known-bad]
         default: republish
       latest_tag:
-        description: "mark-known-bad: release to mark as GitHub Latest"
+        description: "mark-known-bad: release to mark as GitHub Latest (empty = the tag line-<default_line> serves)"
         required: false
-        default: "1.13.0.7472-mm1.12.0-r2"
+        default: ""
       tags:
-        description: "republish: space-separated release tags to re-publish"
+        description: "republish: space-separated release tags to re-publish (empty = every draft release)"
         required: false
-        default: "1.12.0.7253-mm1.12.0 1.13.0.7472-mm1.12.0 1.13.0.7404-mm1.12.0 1.13.0.7404-mm2.0.0 1.13.0.7565-mm2.0.0-khook 1.13.0.7565-mm2.0.0-khook-dhooks"
+        default: ""
 
 permissions:
   contents: write
@@ -39,6 +42,12 @@ jobs:
         run: |
           set -euo pipefail
           rc=0
+          if [[ -z "${TAGS// /}" ]]; then
+            TAGS="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              -q '.[] | select(.draft) | .tag_name')"
+            [[ -n "${TAGS}" ]] || { echo "no draft releases"; exit 0; }
+            echo "drafts: ${TAGS//$'\n'/ }"
+          fi
           for tag in ${TAGS}; do
             if ! git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}" "refs/tags/${tag}" >/dev/null; then
               echo "::error::tag ${tag} does not exist; not publishing a tagless draft"
@@ -98,6 +107,13 @@ jobs:
             fi
           done < <(jq -r '.known_bad | to_entries[] | "\(.key)\t\(.value)"' builder/lines.json)
 
+          if [[ -z "${LATEST_TAG}" ]]; then
+            line="$(jq -r .default_line builder/lines.json)"
+            LATEST_TAG="$(curl -fsSL --retry 3 "https://github.com/${GITHUB_REPOSITORY}/releases/download/line-${line}/lines.json" \
+              | jq -r --arg l "${line}" '.[$l] | select(.smoke == "pass") | .tag // empty')"
+            [[ -n "${LATEST_TAG}" ]] || { echo "::error::line-${line} serves no smoke-passed tag"; exit 1; }
+            echo "Latest = what line-${line} serves: ${LATEST_TAG}"
+          fi
           if [[ -n "${LATEST_TAG}" ]]; then
             if jq -e --arg t "${LATEST_TAG}" '.known_bad | has($t)' builder/lines.json >/dev/null; then
               echo "::error::${LATEST_TAG} is listed as known bad"; exit 1
