@@ -82,6 +82,14 @@ A daily bump edits `lines.json` and regenerates — see [docs/JULES_DAILY_VERSIO
 | **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
 | **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
 
+**Old Metamod plugins** (PLAPI 7–12, built for MM 1.4–1.10) run on every MM 1.12 package we build
+(`sm11-oldstable`, and `sm12-latest` / `sm13-latest` from their next release): the package ships `metamod.2.ep1`
+**and** the MM 1.10.7 legacy core `metamod.1.ep1`, and MM 1.12 hands such a plugin to it (legacy-plugin bridge,
+#144; `bridge_metamod` in `builder/lines.json`). It loads the legacy core only when `metaplugins.ini` names an
+old plugin, lists that plugin in `meta list` like any other (`meta unload` / `meta pause` work), and nothing has
+to be deleted. SourceMod extensions that exist only as `*.ext.1.ep1` are a different matter: they need the
+`1.ep1` SourceMod core, which only `sm11-oldstable` on MM 1.10.7 runs.
+
 ## Releases
 
 A tag pins one SM + MM pair; never mix Metamod from one tag with SourceMod from another.
@@ -133,9 +141,8 @@ The rename consumer audit and installer migration are in [docs/WINDOWS_ASSETS.md
 | `mmsource-1.12.0-git1227-css34-*` (default, D7; pointer `mmsource-css34-*`) | `metamod.2.ep1` → `sourcemod.2.ep1` | **yes** (`dhooks.ext.2.ep1`) | **yes**, through the bundled `metamod.1.ep1` legacy core (legacy-plugin bridge, #144) | no |
 | `mmsource-1.10.7-git976-css34-*` (pointer `mmsource-legacy-css34-linux.tar.gz`) | `metamod.1.ep1` → `sourcemod.1.ep1` | no | yes, natively | yes |
 
-The MM 1.12 package of this line ships `metamod.2.ep1` **and** `metamod.1.ep1`: MM 1.12 loads the legacy core
-only when `metaplugins.ini` names an old plugin, and lists that plugin in `meta list` like any other
-(`meta unload` / `meta pause` work). Nothing has to be deleted to run old plugins.
+The MM 1.12 package of this line ships `metamod.2.ep1` **and** `metamod.1.ep1` for old Metamod plugins
+(see [What pairs with what](#what-pairs-with-what)).
 
 Switch Metamod without touching SourceMod (what `testing/scripts/switch-metamod.sh` does in CI):
 
@@ -151,7 +158,7 @@ Windows: the same with the `-windows.zip` packages (`bin\server.dll`, `bin\metam
 
 `css34-package.json` describes what a package carries: SourceMod lists its `cores`
 (`["1.ep1", "2.ep1"]` on this line); Metamod lists `metamod_binaries` and sets `legacy_bridge: true` when it
-ships both cores. `metamod_binary` names the Metamod build of the line's primary pin: `metamod.2.ep1` (MM 1.12)
+ships both cores (every MM 1.12 package with the bridge). `metamod_binary` names the Metamod build of the line's primary pin: `metamod.2.ep1` (MM 1.12)
 for `sm11-oldstable` since D7.
 
 ### Installer contract (fmu1337/v34_server_base)

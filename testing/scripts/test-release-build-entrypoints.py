@@ -45,6 +45,18 @@ class Entrypoints(unittest.TestCase):
         path.write_text("#!/usr/bin/env bash\nset -euo pipefail\n" + content)
         path.chmod(0o755)
 
+    def bridge_package(self, path, bridge):
+        """An MM 1.12 package that ships the bridge pin's MM 1.10 legacy core."""
+        staging = self.root / "staging"
+        mm = staging / "addons/metamod"
+        (mm / "bin").mkdir(parents=True)
+        (mm / "bin/metamod.2.ep1.so").touch()
+        (mm / "bin/metamod.1.ep1.so").write_text(
+            "1.10.7-dev+{} {}".format(bridge["rev"], bridge["commit"][:7]))
+        (mm / "css34-package.json").write_text(json.dumps({"legacy_bridge": True}))
+        subprocess.run(["tar", "-czf", str(path), "-C", str(staging), "addons"], check=True)
+        shutil.rmtree(staging)
+
     def release(self, line, missing_secondary=False, reject_secondary=False):
         self.env["CSS34_LINE"] = line
         self.executable("testing/scripts/check-package.sh", 'test -f "$SM_PACKAGE"\n')
@@ -73,7 +85,10 @@ printf '%s %s %s\n' "$MM_PACKAGE" "$EXPECTED_MM_REV" "$EXPECTED_MM_COMMIT" >> "$
                     continue
                 if reject_secondary:
                     self.env["REJECT_REV"] = str(pin["rev"])
-            (packages / name).touch()
+            if role == "metamod" and "bridge_metamod" in config:
+                self.bridge_package(packages / name, data["pins"][config["bridge_metamod"]])
+            else:
+                (packages / name).touch()
         # Older packages must not affect primary selection.
         (packages / "mmsource-1.12.0-git1-css34-linux.tar.gz").touch()
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
@@ -110,6 +125,8 @@ printf '%s %s %s\n' "$MM_PACKAGE" "$EXPECTED_MM_REV" "$EXPECTED_MM_COMMIT" >> "$
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.root / "outputs").read_text(),
                          f"sm_asset={sm}\nmm_asset={mm[0]}\n")
+        # One MM 1.12 package; the bridge's MM 1.10 core is inside it, not beside it.
+        self.assertIn("ships the MM 1.10.7 git976 legacy core", result.stdout)
 
     def test_docker_debug_default_and_opt_in(self):
         self.executable("bin/docker", """

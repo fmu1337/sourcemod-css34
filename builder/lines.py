@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 LINE_FIELDS = {
     "sourcemod", "metamod", "secondary_metamod", "status", "pointer", "releasable", "role",
     "install_role", "extra_tags", "smoke", "host_smoke",
-    "windows", "botplay_extra_images", "sm_note", "mm_note", "frozen",
+    "windows", "botplay_extra_images", "sm_note", "mm_note", "frozen", "bridge_metamod",
 }
 # T2.7 (docs/FREEZE.md): a frozen line keeps its published release and pointer,
 # leaves CI, and is rebuilt only from its freeze tag and input archive.
@@ -109,6 +109,15 @@ def load_manifest(path):
         if "secondary_metamod" in line:
             ref = line["secondary_metamod"]
             require(ref in pins and ref.startswith("MM_"), "invalid secondary_metamod reference for " + name)
+        if "bridge_metamod" in line:
+            # Legacy-plugin bridge (T2.9): the MM 1.10 build whose metamod.1.ep1
+            # goes into the line's MM 1.12 package; it is not packaged on its own.
+            ref = line["bridge_metamod"]
+            require(ref in pins and ref.startswith("MM_"), "invalid bridge_metamod reference for " + name)
+            require(pins[ref]["mode"] == "1.10", name + ".bridge_metamod must be an MM 1.10 pin")
+            require(pins[line["metamod"]]["mode"] == "1.12", name + ".bridge_metamod needs an MM 1.12 metamod")
+            require("secondary_metamod" not in line,
+                    name + ": a dual-Metamod line bridges through its secondary_metamod")
         if "frozen" in line:
             frozen = line["frozen"]
             require(line["status"] == "frozen", name + ".frozen needs status frozen")
@@ -233,6 +242,14 @@ def line_parts(data, name):
         res["secondary_mm_rev"] = s_mm["rev"]
         res["secondary_mm_mode"] = s_mm["mode"]
         res["secondary_mm_expect"] = mm_version(s_mm["mode"])
+    # The MM 1.10 legacy core the MM 1.12 package ships for PLAPI 7-12 plugins:
+    # bridge_metamod, or a dual line's MM 1.10 secondary (sm11).
+    bridge = line.get("bridge_metamod")
+    if bridge is None and "secondary_metamod" in line and mm["mode"] == "1.12":
+        bridge = line["secondary_metamod"] if data["pins"][line["secondary_metamod"]]["mode"] == "1.10" else None
+    if bridge is not None:
+        res["bridge_mm_commit"] = data["pins"][bridge]["commit"]
+        res["bridge_mm_rev"] = data["pins"][bridge]["rev"]
     return res
 
 
@@ -303,9 +320,9 @@ def mm_runtime(part, variant):
         "mm_package": mm_package_name(mode, rev),
         "expect_core": core,
         "dhooks_expect": "0" if core == "1.ep1" else "1",
-        # T2.9: the dual line's MM 1.12 package also ships its MM 1.10 legacy core,
-        # so a PLAPI 11 plugin must run on metamod.2.ep1 through the bridge.
-        "legacy_bridge": "1" if ("secondary_mm_commit" in part and mode == "1.12") else "0",
+        # T2.9: an MM 1.12 package with the MM 1.10 legacy core (bridge_metamod or
+        # sm11's secondary) must run a PLAPI 11 plugin on metamod.2.ep1 through it.
+        "legacy_bridge": "1" if ("bridge_mm_commit" in part and mode == "1.12") else "0",
     }
 
 

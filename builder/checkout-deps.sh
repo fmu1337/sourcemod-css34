@@ -242,14 +242,16 @@ fetch_and_patch_mms() {
   esac
 }
 
-if [[ "${SOURCEMOD_MAJOR:-11}" -eq 11 || "${CSS34_LINE:-}" == sm11* ]]; then
-  mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm11-oldstable}")"
-  while IFS=$'\t' read -r role dirname mode branch commit rev version; do
-    fetch_and_patch_mms "$dirname" "$mode" "$branch" "$commit"
-  done <<< "$mm_inputs"
-else
-  fetch_and_patch_mms "$MMS_DIRNAME" "$MMS_MODE" "$MMS_BRANCH" "$MMS_COMMIT"
-fi
+# The primary Metamod (MMS_*, resolve-version.sh), then the line's other inputs
+# from lines.json: secondary_metamod (dual-core sm11) and bridge_metamod (the
+# MM 1.10 legacy core of the MM 1.12 package, legacy-plugin bridge T2.9).
+fetch_and_patch_mms "$MMS_DIRNAME" "$MMS_MODE" "$MMS_BRANCH" "$MMS_COMMIT"
+mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm13-latest}")" ||
+  { echo "FAIL: cannot resolve the Metamod inputs of ${CSS34_LINE:-sm13-latest}" >&2; exit 1; }
+while IFS=$'\t' read -r role dirname mode branch commit rev version; do
+  [[ -n "$role" && "$role" != primary ]] || continue
+  fetch_and_patch_mms "$dirname" "$mode" "$branch" "$commit"
+done <<< "$mm_inputs"
 
 # Pinned 2026-10-20 (episode1 / ep1c tips). Override only to reproduce another tree.
 HL2SDK_EPISODE1_COMMIT="${HL2SDK_EPISODE1_COMMIT:-4b0cde271be6806b95842e78348009712a8b3fbe}"

@@ -105,6 +105,7 @@
     "sm12-latest": {
       "sourcemod": "SM_LATEST",
       "metamod": "MM_112",
+      "bridge_metamod": "MM_110",
       "status": "active",
       "pointer": true,
       "releasable": true,
@@ -125,6 +126,7 @@
     "sm13-latest": {
       "sourcemod": "SM_LATEST_13",
       "metamod": "MM_112",
+      "bridge_metamod": "MM_110",
       "status": "active",
       "pointer": true,
       "releasable": true,
