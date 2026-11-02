@@ -4,7 +4,7 @@
 #
 #   CSS34_LINE=<line> builder/freeze/collect-inputs.sh OUT_DIR   (sm11: at the sm11-freeze tag)
 #
-# Run it in a fresh checkout (no deps/, sourcemod submodule not initialized):
+# Run it in a fresh checkout (no deps/ or sourcemod/ yet):
 # cached deps skip their downloads, and those files would be missing.
 #
 # OUT_DIR/assets gets, each as its own file (release sm11-freeze-inputs):
@@ -49,16 +49,11 @@ CSS34_LINE="$LINE" ML2014_IMAGE="$IMAGE" PACKAGES_DIR="$work/packages" \
 # Every repository of the build: "<dir> <url> <commit>".
 list_repos() {
   local dir url
-  echo "$ROOT/sourcemod $(git -C "$ROOT" config -f .gitmodules submodule.sourcemod.url) $(git -C "$ROOT/sourcemod" rev-parse HEAD)"
-  # linux.sh first checks out the superproject's gitlink, then the pinned commit.
-  echo "- $(git -C "$ROOT" config -f .gitmodules submodule.sourcemod.url) $(git -C "$ROOT" ls-tree HEAD sourcemod | awk '{print $3}')"
   for dir in "$ROOT/sourcemod" "$ROOT"/deps/*/; do
     dir="${dir%/}"
     [[ -e "$dir/.git" ]] || continue
-    if [[ "$dir" != "$ROOT/sourcemod" ]]; then
-      url="$(git -C "$dir" config remote.origin.url)"
-      echo "$dir $url $(git -C "$dir" rev-parse HEAD)"
-    fi
+    url="$(git -C "$dir" config remote.origin.url)"
+    echo "$dir $url $(git -C "$dir" rev-parse HEAD)"
     git -C "$dir" submodule foreach --quiet --recursive \
       'echo "$toplevel/$sm_path $(git config remote.origin.url) $(git rev-parse HEAD)"'
   done
