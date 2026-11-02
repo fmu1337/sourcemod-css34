@@ -41,6 +41,7 @@ jobs:
           python3 builder/lines.py frozen-gha
 
   verify:
+    name: verify (${{ matrix.line }}, ${{ matrix.image_name }})
     needs: plan
     if: needs.plan.outputs.frozen != '[]'
     runs-on: ubuntu-22.04
