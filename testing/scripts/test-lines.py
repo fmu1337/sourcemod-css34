@@ -607,7 +607,9 @@ class RepointResolverTest(unittest.TestCase):
         # Ensure smoke-release and botplay-release do not depend on windows or checksums
         self.assertIn("smoke-release:\n    needs: [resolve-line, linux, release-pins]", workflow_content)
         self.assertIn("botplay-release:\n    needs: [resolve-line, linux, release-pins]", workflow_content)
-        self.assertIn("line-pointer:\n    needs: [resolve-line, linux, smoke-release, botplay-release]", workflow_content)
+        # T4.3: the pointer also waits for promote (prerelease → release), never for windows.
+        self.assertIn("line-pointer:\n    needs: [resolve-line, linux, smoke-release, botplay-release, promote]", workflow_content)
+        self.assertIn("promote:\n    needs: [resolve-line, linux, smoke-release, botplay-release]", workflow_content)
         # Verify repoint condition permits repoint=1 without linux/checksums requirement
         self.assertIn("needs.resolve-line.outputs.repoint == '1'", workflow_content)
 

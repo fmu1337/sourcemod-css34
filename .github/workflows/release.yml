@@ -9,9 +9,15 @@ name: Release
 # No Actions artifacts (those count against the 0.5 GB storage quota).
 #
 # Release invariants (consumed by fmu1337/v34_server_base):
-#   * A release is created published and is never turned back into a draft;
-#     re-runs only `gh release upload --clobber` into it (a draft found here is
-#     re-published). Draft asset URLs 404.
+#   * T4.3: a release is created as a published *prerelease* with notes from
+#     builder/scripts/release-notes.py (pins, toolchain, min_glibc, known-bad)
+#     and is never a draft (draft asset URLs 404; a draft found here is
+#     re-published). Re-runs only `gh release upload --clobber` into it.
+#   * promote turns it into a full release only after smoke-release and
+#     botplay-release pass on its public URLs; GitHub "Latest" is set
+#     explicitly, only for a tag of lines.json's default_line (never on a
+#     repoint). On red it stays a prerelease and line-<line> keeps serving the
+#     previous build. Windows assets never gate promotion; SHA256SUMS is last.
 #   * Asset names carry the revision (sourcemod-…-git7472-…, mmsource-…-git1226-…)
 #     and every release has SHA256SUMS.
 #   * smoke-release installs the *public* URLs with plain `tar -x` and boots
@@ -116,6 +122,16 @@ jobs:
           done < /tmp/tag-map-rows.tsv
           echo "Tag map checks passed (no release published)"
 
+      - name: Render release notes for every releasable tag (T4.3)
+        run: |
+          set -euo pipefail
+          while IFS=$'\t' read -r kind _ _ releasable; do
+            [[ "$kind" != known && "$releasable" == 1 ]] || continue
+            echo "=== release notes: $kind-r2 ==="
+            python3 builder/scripts/release-notes.py "$kind-r2" --commit "${GITHUB_SHA}"
+            echo
+          done < /tmp/tag-map-rows.tsv
+
   resolve-line:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
@@ -124,6 +140,8 @@ jobs:
       pointer: ${{ steps.map.outputs.pointer }}
       repoint: ${{ steps.map.outputs.repoint }}
       tag: ${{ steps.map.outputs.tag }}
+      known_bad: ${{ steps.map.outputs.known_bad }}
+      default_line: ${{ steps.map.outputs.default_line }}
       sm_asset: ${{ steps.map.outputs.sm_asset }}
       mm_asset: ${{ steps.map.outputs.mm_asset }}
       target_commit: ${{ steps.map.outputs.target_commit }}
@@ -249,6 +267,8 @@ jobs:
             echo "pointer=${pointer}"
             echo "repoint=${repoint}"
             echo "tag=${tag}"
+            echo "known_bad=${known_bad}"
+            echo "default_line=$(python3 -c 'import json; print(json.load(open("builder/lines.json"))["default_line"])')"
             echo "sm_asset=${sm_asset}"
             echo "mm_asset=${mm_asset}"
             echo "target_commit=${target_commit}"
@@ -301,20 +321,12 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          notes="$(cat <<EOF
-          CS:S v34 packages for tag \`${tag}\`.
-
-          **Assets**
-          - SourceMod Linux / Windows
-          - Metamod:Source Linux / Windows
-
-          Build line: \`${LINE}\` (built from source: manylinux2014 Linux, glibc 2.17).
-          Pins are resolved from \`builder/versions.env\` via \`builder/resolve-version.sh\`.
-          Packages are attached directly to this Release (no Actions artifacts).
-          EOF
-          )"
           if ! gh release view "${tag}" >/dev/null 2>&1; then
-            gh release create "${tag}" --title "${tag}" --notes "${notes}" --latest=false
+            # T4.3: a prerelease until promote; notes from this commit's pins.
+            python3 builder/scripts/release-notes.py "${tag}" \
+              --repo "${GITHUB_REPOSITORY}" --commit "${GITHUB_SHA}" > release-notes.md
+            gh release create "${tag}" --title "${tag}" --notes-file release-notes.md \
+              --prerelease --latest=false
           fi
           (cd packages && sha256sum -- *.tar.gz | sort -k2 > ../SHA256SUMS.linux)
           gh release upload "${tag}" \
@@ -371,18 +383,12 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          notes="$(cat <<EOF
-          CS:S v34 packages for tag \`${tag}\`.
-
-          **Assets**
-          - SourceMod Linux / Windows
-          - Metamod:Source Linux / Windows
-
-          Build line: \`${LINE}\` (built from source).
-          EOF
-          )"
           if ! gh release view "${tag}" >/dev/null 2>&1; then
-            gh release create "${tag}" --title "${tag}" --notes "${notes}" --latest=false
+            # T4.3: same prerelease and notes as the Linux job (whichever runs first).
+            python builder/scripts/release-notes.py "${tag}" \
+              --repo "${GITHUB_REPOSITORY}" --commit "${GITHUB_SHA}" > release-notes.md
+            gh release create "${tag}" --title "${tag}" --notes-file release-notes.md \
+              --prerelease --latest=false
           fi
           source builder/package-paths.sh
           [[ -f "$MM_WIN_PACKAGE" ]] || { echo "missing $MM_WIN_PACKAGE" >&2; exit 1; }
@@ -394,7 +400,7 @@ jobs:
 
   # SHA256SUMS over every asset of the tag release (Linux + Windows).
   checksums:
-    needs: [resolve-line, linux, windows]
+    needs: [resolve-line, linux, windows, promote]
     if: always() && github.ref_type == 'tag' && needs.resolve-line.outputs.repoint != '1' && needs.linux.result == 'success'
     runs-on: ubuntu-22.04
     steps:
@@ -626,15 +632,46 @@ jobs:
             .ci-server/botplay.log
             .ci-server/cstrike/addons/sourcemod/logs/*.log
 
+  # T4.3: prerelease → full release, only after both public-URL gates pass.
+  # Known-bad tags are never promoted. "Latest" is explicit: a new tag of the
+  # default line takes it; other lines and repoints never do.
+  promote:
+    needs: [resolve-line, linux, smoke-release, botplay-release]
+    if: >-
+      always() && needs.resolve-line.outputs.known_bad != '1' &&
+      needs.smoke-release.result == 'success' && needs.botplay-release.result == 'success' &&
+      ((github.ref_type == 'tag' && needs.linux.result == 'success') ||
+       needs.resolve-line.outputs.repoint == '1')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Promote ${{ needs.resolve-line.outputs.tag }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-line.outputs.tag }}
+          LATEST: >-
+            ${{ needs.resolve-line.outputs.repoint != '1' &&
+                needs.resolve-line.outputs.css34_line == needs.resolve-line.outputs.default_line &&
+                'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --draft=false --prerelease=false --latest="${LATEST}"
+          state="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --json isPrerelease,isDraft -q '"\(.isPrerelease) \(.isDraft)"')"
+          [[ "${state}" == "false false" ]] ||
+            { echo "::error::${TAG} is still a prerelease or draft (${state})"; exit 1; }
+          echo "::notice::${TAG} promoted (latest=${LATEST})"
+
   # Switch line-<line> only after a green public-URL smoke and centos:7 botplay.
   # On red, record the failed candidate and keep serving the previous build.
   line-pointer:
-    needs: [resolve-line, linux, smoke-release, botplay-release]
+    needs: [resolve-line, linux, smoke-release, botplay-release, promote]
     if: >-
       always() &&
       needs.resolve-line.outputs.pointer == '1' &&
       (needs.smoke-release.result == 'success' || needs.smoke-release.result == 'failure') &&
       (needs.botplay-release.result == 'success' || needs.botplay-release.result == 'failure') &&
+      needs.promote.result != 'cancelled' &&
       ((github.ref_type == 'tag' && needs.linux.result == 'success') || needs.resolve-line.outputs.repoint == '1')
     runs-on: ubuntu-22.04
     # One writer per line-<line>. Per line, not global: a concurrency group holds
@@ -669,7 +706,8 @@ jobs:
       - name: Update line-${{ needs.resolve-line.outputs.css34_line }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SMOKE: ${{ needs.smoke-release.result == 'success' && needs.botplay-release.result == 'success' && 'pass' || 'fail' }}
+          # Pass = both public-URL gates green and the release promoted.
+          SMOKE: ${{ needs.smoke-release.result == 'success' && needs.botplay-release.result == 'success' && needs.promote.result == 'success' && 'pass' || 'fail' }}
           LINE: ${{ needs.resolve-line.outputs.css34_line }}
           TAG: ${{ needs.resolve-line.outputs.tag }}
           SM_ASSET: ${{ needs.linux.outputs.sm_asset || needs.resolve-line.outputs.sm_asset }}
