@@ -10,9 +10,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228
     }
@@ -34,9 +34,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -62,9 +62,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -90,9 +90,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -119,7 +119,7 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
       "mm_rev": 1228,
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
@@ -148,9 +148,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -176,9 +176,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -204,9 +204,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -232,9 +232,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -260,9 +260,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -288,9 +288,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -316,9 +316,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -344,9 +344,9 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228,
       "mm_package": "mmsource-1.12.0-git1228-css34-linux.tar.gz",
@@ -373,7 +373,7 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
       "mm_rev": 1228,
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
@@ -388,9 +388,9 @@
   "host": [
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0",
-      "sm_commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+      "sm_commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
       "mm_rev": 1228
     }
@@ -411,7 +411,7 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0-dev+1228",
       "mm_rev": 1228,
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
@@ -439,7 +439,7 @@
     },
     {
       "line": "sm13-latest",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0-dev+1228",
       "mm_rev": 1228,
       "mm_commit": "cb47755826fad1483291e5dc00222aa64303d12f",
@@ -462,10 +462,10 @@
     },
     {
       "line": "sm13-latest",
-      "tag": "1.13.0.7478-mm1.12.0",
-      "sm_asset": "sourcemod-1.13.0-git7478-css34-linux.tar.gz",
+      "tag": "1.13.0.7484-mm1.12.0",
+      "sm_asset": "sourcemod-1.13.0-git7484-css34-linux.tar.gz",
       "mm_asset": "mmsource-1.12.0-dev-css34-linux.tar.gz",
-      "sm_expect": "1.13.0.7478",
+      "sm_expect": "1.13.0.7484",
       "mm_expect": "1.12.0"
     }
   ],
@@ -496,7 +496,7 @@
       },
       {
         "line": "sm13-latest",
-        "sm_expect": "1.13.0.7478",
+        "sm_expect": "1.13.0.7484",
         "mm_expect": "1.12.0"
       }
     ]

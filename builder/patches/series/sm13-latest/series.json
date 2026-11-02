@@ -1,9 +1,9 @@
 {
   "line": "sm13-latest",
-  "commit": "b34de51b8c7f92fc2a7242fc0195e2d64a69cefd",
+  "commit": "e47e196d81f0217a845fcf96f39742b3c19c67b8",
   "trees": {
-    "hl2sdk-manifests": "faa0989e4e2db01454a4226b33d47a3672a947f3",
-    "sourcemod": "b1002e5af7207c330a71af991e24c95b891c9d93",
-    "sourcepawn": "69cea8db7609d12796a178b3dd79e372167691dd"
+    "hl2sdk-manifests": "3e22522d59ceb2356f9b32083a642c531f6c5297",
+    "sourcemod": "32babd040d58b275ffc9d5a9a97e6b0540e8404c",
+    "sourcepawn": "b6f54f89179105de450ac6501b3920c99fcd5347"
   }
 }
