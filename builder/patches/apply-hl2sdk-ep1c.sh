@@ -152,13 +152,19 @@ apply_sed public/tier0/fasttimer.h \
 apply_sed public/icvar.h \
   's|"appframework/IAppSystem.h"|"appframework/iappsystem.h"|'
 
+# Two headers ep1c lacks, from alliedmodders/hl2sdk branch css pinned to a commit
+# (same bytes as the branch head on 2026-11-02); fail closed on any mismatch.
+# shellcheck source=../fetch-pinned.sh
+source "$script_dir/../fetch-pinned.sh"
+HL2SDK_CSS_COMMIT="${HL2SDK_CSS_COMMIT:-47f0ea659bc70718f9c41a7830b6ad943a68ba09}"
+hl2sdk_css_raw="https://raw.githubusercontent.com/alliedmodders/hl2sdk/${HL2SDK_CSS_COMMIT}/common"
 if [ ! -f "$sdk_dir/common/userid.h" ]; then
-  curl -sL "https://raw.githubusercontent.com/alliedmodders/hl2sdk/css/common/userid.h" \
-    -o "$sdk_dir/common/userid.h"
+  fetch_pinned "$hl2sdk_css_raw/userid.h" "$sdk_dir/common/userid.h" \
+    995ecc88c01c99d788a0b6e01a108547fe903d1e59a4c987f9013f8e899bde0e "hl2sdk-css-${HL2SDK_CSS_COMMIT:0:8}-userid.h"
 fi
 if [ ! -f "$sdk_dir/common/steamcommon.h" ]; then
-  curl -sL "https://raw.githubusercontent.com/alliedmodders/hl2sdk/css/common/steamcommon.h" \
-    -o "$sdk_dir/common/steamcommon.h"
+  fetch_pinned "$hl2sdk_css_raw/steamcommon.h" "$sdk_dir/common/steamcommon.h" \
+    7c82f85bb6c3db6e50fdb90a6d5a5e4dd8c7632a97aaeaded802aa682bbd2517 "hl2sdk-css-${HL2SDK_CSS_COMMIT:0:8}-steamcommon.h"
 fi
 if [ ! -e "$sdk_dir/public/userid.h" ]; then
   ln -sf ../common/userid.h "$sdk_dir/public/userid.h"

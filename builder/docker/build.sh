@@ -20,6 +20,27 @@ fi
 mkdir -p "$PACKAGES_DIR"
 PACKAGES_DIR="$(cd "$PACKAGES_DIR" && pwd)"
 
+# Frozen lines (T2.7):
+#   CSS34_INPUTS_DIR=DIR      rebuild from an unpacked input archive
+#                             (builder/freeze/build-offline.sh): DIR/git holds
+#                             bare mirrors of every repository, DIR/downloads the
+#                             pinned files; the container gets --network none.
+#   CSS34_SAVE_DOWNLOADS=DIR  copy every pinned download to DIR (collect-inputs.sh)
+extra_args=()
+if [[ -n "${CSS34_INPUTS_DIR:-}" ]]; then
+  CSS34_INPUTS_DIR="$(cd "$CSS34_INPUTS_DIR" && pwd)"
+  [[ -d "$CSS34_INPUTS_DIR/git" && -d "$CSS34_INPUTS_DIR/downloads" ]] ||
+    { echo "FAIL: $CSS34_INPUTS_DIR needs git/ and downloads/" >&2; exit 1; }
+  extra_args+=(--network none --pull never -v "$CSS34_INPUTS_DIR:/inputs:ro"
+    -e CSS34_OFFLINE=1 -e CSS34_DOWNLOADS=/inputs/downloads)
+  echo "==> Offline build from ${CSS34_INPUTS_DIR} (--network none)" >&2
+fi
+if [[ -n "${CSS34_SAVE_DOWNLOADS:-}" ]]; then
+  mkdir -p "$CSS34_SAVE_DOWNLOADS"
+  CSS34_SAVE_DOWNLOADS="$(cd "$CSS34_SAVE_DOWNLOADS" && pwd)"
+  extra_args+=(-v "$CSS34_SAVE_DOWNLOADS:/save-downloads" -e CSS34_SAVE_DOWNLOADS=/save-downloads)
+fi
+
 docker_cmd() {
   if docker info >/dev/null 2>&1; then
     docker "$@"
@@ -32,6 +53,7 @@ echo "==> Building SourceMod css34 in ${IMAGE} (line ${CSS34_LINE})" >&2
 
 docker_cmd run --rm -i --platform linux/386 \
   --entrypoint linux32 \
+  ${extra_args[@]+"${extra_args[@]}"} \
   -v "$ROOT:/workspace" \
   -v "$PACKAGES_DIR:/workspace/packages" \
   -w /workspace \
@@ -96,6 +118,12 @@ if ! command -v git >/dev/null 2>&1; then
   yum install -y git
 fi
 git config --global --add safe.directory '*' || true
+if [[ "${CSS34_OFFLINE:-0}" == 1 ]]; then
+  # Every clone, fetch and submodule URL is https://github.com/<owner>/<repo>:
+  # serve them from the input archive's bare mirrors.
+  git config --global url."file:///inputs/git/".insteadOf "https://github.com/"
+  git config --global protocol.file.allow always
+fi
 register_git_safe_dirs() {
   local gd repo
   while IFS= read -r -d "" gd; do
@@ -113,6 +141,7 @@ chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
 builder/run/linux.sh
 if [[ -n "${HOST_UID:-}" && -n "${HOST_GID:-}" ]]; then
   chown -R "${HOST_UID}:${HOST_GID}" /workspace/deps /workspace/packages /workspace/sourcemod 2>/dev/null || true
+  [[ -z "${CSS34_SAVE_DOWNLOADS:-}" ]] || chown -R "${HOST_UID}:${HOST_GID}" "${CSS34_SAVE_DOWNLOADS}" 2>/dev/null || true
 fi
 INNER
 

@@ -9,22 +9,10 @@ export BUILD_PLATFORM
 mkdir -p "$DEPS"
 
 # Fail closed if a downloaded tarball does not match the pinned digest.
-fetch_verified() {
-  local url="$1"
-  local dest="$2"
-  local expect="$3"
-  local got
-  curl -fsSL --retry 3 --retry-delay 2 -o "$dest" "$url"
-  got="$(sha256sum "$dest" | awk '{print $1}')"
-  if [[ "$got" != "$expect" ]]; then
-    echo "FAIL: sha256 mismatch for ${dest}" >&2
-    echo "  url:      ${url}" >&2
-    echo "  expected: ${expect}" >&2
-    echo "  got:      ${got}" >&2
-    rm -f "$dest"
-    exit 1
-  fi
-}
+# fetch_pinned also serves offline rebuilds from a frozen line's input archive.
+# shellcheck source=fetch-pinned.sh
+source "$BUILDER_DIR/fetch-pinned.sh"
+fetch_verified() { fetch_pinned "$@"; }
 
 # The sm13 MariaDB archive uses zlib. Embed a pinned PIC build so the
 # extension has no unversioned compression imports or additional runtime ABI.
@@ -301,12 +289,13 @@ fi
 if [ "$BUILD_PLATFORM" = "windows" ]; then
   python -m pip install --force-reinstall --no-cache-dir "$DEPS/ambuild"
 else
-  python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS/ambuild"
+  css34_fetch_build_wheels "$DEPS"
+  python3 -m pip install --force-reinstall --no-cache-dir --user --no-index --find-links "$DEPS/wheels" "$DEPS/ambuild"
 fi
 if ! python -c "import ambuild2" 2>/dev/null && ! python3 -c "import ambuild2" 2>/dev/null; then
   if [ "$BUILD_PLATFORM" = "windows" ]; then
     python -m pip install "$DEPS/ambuild"
   else
-    python3 -m pip install --user "$DEPS/ambuild"
+    python3 -m pip install --user --no-index --find-links "$DEPS/wheels" "$DEPS/ambuild"
   fi
 fi

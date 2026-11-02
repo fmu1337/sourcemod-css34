@@ -73,10 +73,13 @@ fi
 chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/package-metamod.sh" \
   "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
 
-python3 -m pip install --upgrade pip --user
+if [[ "${CSS34_OFFLINE:-0}" != 1 ]]; then
+  python3 -m pip install --upgrade pip --user
+fi
 chmod +x "$BUILDER_DIR/patches/patch-ambuild-py312.sh" 2>/dev/null || true
 bash "$BUILDER_DIR/patches/patch-ambuild-py312.sh" "$DEPS_DIR/ambuild"
-python3 -m pip install --force-reinstall --no-cache-dir --user "$DEPS_DIR/ambuild" 2>/dev/null || true
+# setuptools from the pinned wheel checkout-deps.sh fetched (no PyPI)
+python3 -m pip install --force-reinstall --no-cache-dir --user --no-index --find-links "$DEPS_DIR/wheels" "$DEPS_DIR/ambuild" 2>/dev/null || true
 # Ensure Python 3.12 site-packages stay patched after reinstall.
 bash "$BUILDER_DIR/patches/patch-ambuild-py312.sh" "$(python3 -c 'import ambuild2, pathlib; print(pathlib.Path(ambuild2.__file__).parent.parent)')" 2>/dev/null || true
 

@@ -114,6 +114,16 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `testing/scripts/legacy-bridge-test.sh` (Linux) and `LEGACY_PROBE` in
   `wine-smoke-test.sh` (Windows).
 
+### Frozen lines (T2.7)
+`builder/freeze/collect-inputs.sh` archives every input of an online build (git
+mirrors of each pinned commit, `fetch_pinned` downloads, the saved build image,
+`MANIFEST.json`); `builder/freeze/build-offline.sh` rebuilds from that archive
+with `--network none` (`CSS34_INPUTS_DIR` in `builder/docker/build.sh`), and
+`testing/scripts/compare-package-abi.py` must find the same files, exports,
+NEEDED and SONAME. Every new download in the builder must go through
+`fetch_pinned` (`builder/fetch-pinned.sh`) with a sha256, or offline rebuilds
+break. Workflow `freeze-inputs.yml`; details in `docs/FREEZE.md`.
+
 ### Lint
 Run `actionlint` after workflow edits. The ABI export
 check (`check-package.sh`) is the closest static verification of build output.
