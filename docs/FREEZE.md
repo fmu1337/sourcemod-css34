@@ -13,7 +13,7 @@ the release `<prefix>-freeze-inputs` (`sm11-freeze-inputs`):
 | Asset | Contents |
 |-------|----------|
 | `git-<owner>-<repo>.tar.zst` | a bare mirror holding the pinned commit(s) of each repository the build clones: SourceMod and its submodules (amtl, sourcepawn, googletest), the gitlink commit `git submodule update` checks out first, Metamod 1.10 and 1.12 (+ submodules), hl2sdk episode1, rom4s/hl2sdk-ep1c, AMBuild |
-| `dl-<name>` | every pinned download (`builder/fetch-pinned.sh`): zlib, OpenSSL 1.1.1w, the MySQL 5.6 SDK, GeoLite2-Country, two hl2sdk `css` headers, and the setuptools wheel AMBuild is built with |
+| `dl-<name>` | every pinned download (`builder/fetch-pinned.sh`): for sm11 zlib, OpenSSL 1.1.1w (as of its `sm11-freeze` tag), the MySQL 5.6 SDK, GeoLite2-Country, two hl2sdk `css` headers, and the setuptools wheel AMBuild is built with; a line with the MariaDB connector also has OpenSSL 3.5, its CentOS perl RPMs and the Connector/C source |
 | `build-image.tar.zst` | `docker save` of the manylinux2014_i686 build image, tagged `css34-build-ml2014:<line>-freeze`; the same image is pushed to `ghcr.io/fmu1337/css34-build-ml2014:<line>-freeze` |
 | `*.tar.gz` | the packages of that online build |
 | `MANIFEST.json` | line, builder commit, image id / source / ghcr digest, repository → commits, Windows toolchain (`builder/windows-toolchain.env`), package sha256 + `css34-package.json`, sha256 of every asset |

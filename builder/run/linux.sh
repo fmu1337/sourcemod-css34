@@ -55,11 +55,10 @@ bash "$BUILDER_DIR/fetch-sourcemod.sh" "$SOURCEMOD_DIR" "$SOURCEMOD_COMMIT"
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
-if [[ -f "$DEPS_DIR/openssl.env" ]]; then
-  # shellcheck disable=SC1091
-  source "$DEPS_DIR/openssl.env"
-  echo "==> OpenSSL: CPATH=${CPATH:-} LIBRARY_PATH=${LIBRARY_PATH:-}"
-fi
+# Static PIC zlib (every line) and OpenSSL (lines with the MariaDB connector).
+# shellcheck disable=SC1091
+source "$DEPS_DIR/static-deps.env"
+echo "==> Static deps: CPATH=${CPATH:-} LIBRARY_PATH=${LIBRARY_PATH:-}"
 chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/package-metamod.sh" \
   "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
 
@@ -173,6 +172,21 @@ python3 ../configure.py "${CONFIGURE_ARGS[@]}"
 
 echo "==> Building SourceMod"
 ambuild
+
+# The MariaDB connector links our static OpenSSL into dbi.mysql.ext. Build the
+# TLS probe (testing/tools/mysql-tls-probe.c, never released) from the same
+# archives and link group, for testing/scripts/mysql-tls-test.sh.
+for arg in "${DB_PATH_ARGS[@]}"; do
+  [[ "$arg" == --mariadb-path=* ]] || continue
+  mariadb_root="${arg#--mariadb-path=}"
+  echo "==> Building css34_mysql_tls_probe against ${mariadb_root}"
+  mkdir -p "$PACKAGES_DIR/test-plugins"
+  "$CC" -O2 -Wall -Werror -I"$mariadb_root/include/mariadb" \
+    -o "$PACKAGES_DIR/test-plugins/css34_mysql_tls_probe" \
+    "$WDIR/testing/tools/mysql-tls-probe.c" \
+    "$mariadb_root/lib/libmariadbclient.a" \
+    -Wl,-Bstatic -lssl -lcrypto -lz -Wl,-Bdynamic -lpthread -lm -lrt -ldl
+done
 
 PACKAGE_DIR="$SOURCEMOD_DIR/build/package"
 if [ ! -d "$PACKAGE_DIR/addons/sourcemod" ]; then

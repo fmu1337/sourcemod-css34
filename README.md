@@ -271,7 +271,7 @@ non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
 
 ## Build
 
-Needs Docker. The build runs in pinned `quay.io/pypa/manylinux2014_i686` (glibc 2.17, GCC 10.2.1). SDKs, AMBuild and static OpenSSL 1.1.1w are fetched into `deps/`.
+Needs Docker. The build runs in pinned `quay.io/pypa/manylinux2014_i686` (glibc 2.17, GCC 10.2.1). SDKs, AMBuild, PIC zlib and, for sm13's MySQL extension, static OpenSSL 3.5 LTS and MariaDB Connector/C (built from pinned sources) go into `deps/`.
 
 ```bash
 # Default line (pins: builder/lines.json):

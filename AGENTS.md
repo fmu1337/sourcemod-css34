@@ -38,7 +38,9 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   is bind-mounted and owned by uid 1000, git blocks submodule ops otherwise).
   `build.sh` does this itself.
 - The builder self-provisions deps into `deps/` (pinned hl2sdk episode1,
-  AMBuild, static OpenSSL 1.1.1w, PIC zlib 1.3.1, MySQL / MariaDB SDKs).
+  AMBuild, PIC zlib 1.3.1, MySQL / MariaDB SDKs; for sm13's Linux MySQL extension
+  static OpenSSL 3.5 LTS and MariaDB Connector/C built from source, see
+  `docs/PATCHES.md` "sm13 MySQL dependencies").
   SourceMod is no git submodule (T3.3): `builder/fetch-sourcemod.sh` checks out the
   line's pinned commit into `sourcemod/` (gitignored), resets and cleans it, and
   initializes its own submodules.
@@ -55,9 +57,9 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   checked-out tree and regenerating it the same way.
   `builder/scripts/check-patch-drift.sh` dry-runs a series on another upstream
   commit (`--sm-commit`, `--range`) with `git apply --3way`.
-  Downloads come from github.com, bitbucket.org, cdn.mysql.com, www.openssl.org,
-  snapshot.debian.org and archive.debian.org — all reachable. Tarball downloads
-  are sha256-pinned.
+  Downloads come from github.com, bitbucket.org, cdn.mysql.com, archive.mariadb.org,
+  vault.centos.org (build-time perl RPMs for OpenSSL), snapshot.debian.org and
+  archive.debian.org — all reachable. Tarball downloads are sha256-pinned.
 - Packages stay in `packages/` (or `PACKAGES_DIR`); the builder creates no root
   symlinks. Source `builder/package-paths.sh` with `CSS34_LINE` to resolve exact
   SM/MM archive paths (Linux tar.gz and Windows zip, both with `git<rev>`).

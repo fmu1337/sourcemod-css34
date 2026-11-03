@@ -149,6 +149,31 @@ SERVER_DIR=.ci-server LEGACY_PROBE=packages/test-plugins/css34_legacy_probe.so \
   testing/scripts/legacy-bridge-test.sh
 ```
 
+## MySQL/MariaDB TLS probe (T4.5)
+
+sm13's Linux `dbi.mysql.ext` statically links MariaDB Connector/C and OpenSSL
+3.5 (`docs/PATCHES.md`, "sm13 MySQL dependencies"). The PR and weekly smoke jobs
+start a MariaDB 11.8 container with a throwaway CA
+(`testing/scripts/mysql-tls-server.sh start DIR`, network `css34-db`) and run
+`testing/scripts/mysql-tls-test.sh` after `smoke-test.sh`. It is skipped when the
+installed extension embeds no OpenSSL (sm12). Otherwise
+`packages/test-plugins/css34_mysql_tls_probe` (built from the extension's own
+archives, never released) must connect with verified TLS to a `REQUIRE SSL`
+account, client and server must agree on the TLS version and cipher, and the TLS
+library must be the OpenSSL the build compiled against. A plaintext login with
+SourceMod's driver options and TLS against an unrelated CA must be refused.
+`testing/plugins/css34_mysql_probe/css34_mysql_probe.sp` then makes a
+`dbi.mysql.ext` connect and query round trip inside srcds. SourceMod 1.13's
+driver requests no TLS, so that session is plaintext.
+
+```bash
+testing/scripts/mysql-tls-server.sh start .ci-mysql-tls
+# inside the smoke container, on network css34-db:
+SERVER_DIR=.ci-server MYSQL_TLS_CERTS=.ci-mysql-tls \
+  MYSQL_TLS_PROBE=packages/test-plugins/css34_mysql_tls_probe testing/scripts/mysql-tls-test.sh
+testing/scripts/mysql-tls-server.sh stop
+```
+
 ## Windows packages (Wine and native Windows)
 
 `ci.yml` `wine-smoke` boots the Windows packages on the Windows v34 server:
