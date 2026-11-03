@@ -446,6 +446,30 @@ else
   echo "SKIP: dhooks.ext not shipped on this line (css34_dhooks_probe available=0)"
 fi
 
+# css34_gamedata_probe: "library" "engine" and "server" symbols must resolve
+# (SM 1.12+ finds engine_i486.so through CacheGameBinaryInfo, not the factory).
+gd_probe_line=""
+if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
+  gd_probe_line="$(grep -h '\[css34_gamedata_probe\] engine_sv=' "${sm_probe_sources[@]}" 2>/dev/null | tail -n1 || true)"
+  grep -h '\[css34_gamedata_probe\] \(maps\|path\): ' "${sm_probe_sources[@]}" 2>/dev/null | sort -u -t']' -k3 | head -n 12 || true
+  # The core's own trace (a module without its own CreateInterface) and
+  # gameconf errors (errors_*.log) for the probe's gamedata file.
+  grep -h 'css34: .*CreateInterface\|css34_gamedata_probe\.games' "${sm_probe_sources[@]}" 2>/dev/null | sort -u | head -n 20 || true
+fi
+if [[ -z "${gd_probe_line}" ]]; then
+  echo "FAIL: no [css34_gamedata_probe] engine_sv= line in SM logs" >&2
+  record_failed=1
+else
+  for field in engine_sv engine_cmd engine_dlgen server_maxspeed; do
+    if grep -Eq " ${field}=1([^0-9]|$)" <<<"${gd_probe_line}"; then
+      echo "OK: gamedata probe ${field} resolved"
+    else
+      echo "FAIL: gamedata probe ${field} did not resolve: ${gd_probe_line}" >&2
+      record_failed=1
+    fi
+  done
+fi
+
 # Sound Plugin_Changed (#2586), entity output cleanup (#2589), userid lookup (#2577).
 if [[ ${#sm_probe_sources[@]} -eq 0 ]]; then
   echo "FAIL: upstream probe has no SM logs" >&2
