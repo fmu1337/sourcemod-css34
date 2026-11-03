@@ -84,7 +84,7 @@ merge; by hand, see [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md#апгрей
 | **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
 
 **Old Metamod plugins** (PLAPI 7–12, built for MM 1.4–1.10) run on every MM 1.12 package we build
-(`sm11-oldstable`, and `sm12-latest` / `sm13-latest` from their next release): the package ships `metamod.2.ep1`
+(`sm11-oldstable`, `sm12-latest`, `sm13-latest`; since the `-r2` releases of 7257 / 7478): the package ships `metamod.2.ep1`
 **and** the MM 1.10.7 legacy core `metamod.1.ep1`, and MM 1.12 hands such a plugin to it (legacy-plugin bridge,
 #144; `bridge_metamod` in `builder/lines.json`). It loads the legacy core only when `metaplugins.ini` names an
 old plugin, lists that plugin in `meta list` like any other (`meta unload` / `meta pause` work), and nothing has
@@ -101,8 +101,8 @@ A rebuild of the same pins gets a `-r<N>` suffix (tags are never moved); `releas
 
 | Tag | Line | Built from | SourceMod | Metamod |
 |-----|------|------------|-----------|---------|
-| [`1.13.0.7478-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7478-mm1.12.0) | `sm13-latest` | `e02b664` | 1.13.0-git7478 | 1.12.0 git1228 |
-| [`1.12.0.7257-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7257-mm1.12.0) | `sm12-latest` | `e02b664` | 1.12.0-git7257 | 1.12.0 git1228 |
+| [`1.13.0.7478-mm1.12.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7478-mm1.12.0-r2) | `sm13-latest` (GitHub Latest) | `efa2ef6` | 1.13.0-git7478 | 1.12.0 git1228 (+ legacy bridge, 1.10.7 git976) |
+| [`1.12.0.7257-mm1.12.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7257-mm1.12.0-r2) | `sm12-latest` | `efa2ef6` | 1.12.0-git7257 | 1.12.0 git1228 (+ legacy bridge, 1.10.7 git976) |
 | [`1.11.0.6970-mm1.12.0-dual-r3`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.12.0-dual-r3) | `sm11-oldstable` (frozen) | `978ec55` | 1.11.0-git6970, both cores | 1.12.0 git1227 (+ legacy bridge); 1.10.7 git976 as `mmsource-legacy` |
 | [`1.13.0.7565-mm2.0.0-khook-dhooks-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks-r2) | `sm13-mm20-khook` | `88713a7` | 1.13.0-git7565 (KHook branch + master), + `dhooks.ext` | 2.0.0 git1472 (KHook) |
 | [`1.13.0.7404-mm2.0.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0-r2) | `sm13-mm20` | `88713a7` | 1.13.0-git7404 | 2.0.0 git1407 |
@@ -113,6 +113,8 @@ known-bad and are not needed by any line, pointer or installer.
 
 | Tag | Line | SourceMod | Metamod | Notes |
 |-----|------|-----------|---------|-------|
+| [`1.13.0.7478-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7478-mm1.12.0) | `sm13-latest` | 1.13.0-git7478 | 1.12.0 git1228 | installer fallback; same pins as `-r2`, without the legacy-plugin bridge |
+| [`1.12.0.7257-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7257-mm1.12.0) | `sm12-latest` | 1.12.0-git7257 | 1.12.0 git1228 | installer fallback; same pins as `-r2`, without the legacy-plugin bridge |
 | [`1.12.0.7253-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7253-mm1.12.0) | `sm12-latest` | 1.12.0-git7253 | 1.12.0-dev (git1226) | installer fallback; older packaging (no `SHA256SUMS`) |
 | [`1.13.0.7472-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0) | `sm13-latest` | 1.13.0-git7472 | 1.12.0-dev (git1226) | installer fallback; older packaging |
 | [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev (git1407) | installer fallback |
