@@ -160,6 +160,10 @@ or updates one PR per lagging target (`bump/sm12-latest`, `bump/sm13-latest`,
 tags (`release-tags`; `-r<N>` when the base tag exists), which `release.yml`
 builds as prereleases and promotes. It needs the owner's GitHub App
 (`vars.BUMP_APP_ID`, `secrets.BUMP_APP_KEY`) so that CI and `release.yml` run.
+With `secrets.JULES_API_KEY`, `builder/scripts/jules.py` adds a read-only Jules
+review to every new bump PR (posted as a comment), and when a bump cannot be
+applied asks Jules for a minimal fix in its own PR against master; Jules gets no
+token of this repository and nothing it produces merges automatically.
 By hand: edit the pin in `builder/lines.json`, run
 `builder/scripts/patch-series.sh refresh <series>` (it reads the pin from
 `lines.json`; `gen` refuses to run until the series matches), then

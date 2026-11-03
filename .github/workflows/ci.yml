@@ -177,6 +177,9 @@ jobs:
       - name: Upstream bump plan, PR body and release tags (T4.4)
         run: python3 testing/scripts/test-upstream-bump.py
 
+      - name: Jules review / fix sessions for bumps (fake API)
+        run: python3 testing/scripts/test-jules.py
+
       - name: Check patch drift acceptance ranges and failures
         timeout-minutes: 30
         run: python3 testing/scripts/test-check-patch-drift.py
