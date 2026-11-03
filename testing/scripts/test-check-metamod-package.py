@@ -202,8 +202,15 @@ class TestCheckMetamodPackage(unittest.TestCase):
             body = fh.read()
         self.assertIn('if [[ "$mm_role" == bridge ]]; then', body)
 
+    def _sm13_primary(self):
+        # The MM 1.12 pin sm13-latest builds, from lines.json: a Metamod bump
+        # must not need these tests edited.
+        data, _ = self.bridge_lines()
+        pin = data["pins"][data["lines"]["sm13-latest"]["metamod"]]
+        return dict(commit=pin["commit"], version="1.12.0-git{}".format(pin["rev"]))
+
     def _sm13_package(self, legacy_core, legacy_bridge=True):
-        return self._create_mock_pkg(commit="cb47755826fad1483291e5dc00222aa64303d12f", version="1.12.0-git1228",
+        return self._create_mock_pkg(**self._sm13_primary(),
                                      bins=["metamod.1.ep1.so", "metamod.2.ep1.so"],
                                      legacy_core=legacy_core, legacy_bridge=legacy_bridge)
 
@@ -231,14 +238,13 @@ class TestCheckMetamodPackage(unittest.TestCase):
                 self.assertIn(message, res.stdout + res.stderr)
         shutil.rmtree(self.tmp_dir)
         os.makedirs(self.tmp_dir)
-        self._create_mock_pkg(commit="cb47755826fad1483291e5dc00222aa64303d12f", version="1.12.0-git1228",
-                              bins=["metamod.2.ep1.so"])
+        self._create_mock_pkg(**self._sm13_primary(), bins=["metamod.2.ep1.so"])
         res = self._verify("sm13-latest")
         self.assertNotEqual(res.returncode, 0)
         self.assertIn("has no addons/metamod/bin/metamod.1.ep1.so", res.stderr)
 
     def test_verify_line_metamod_packages_sm13_latest_passes(self):
-        # sm13-latest: one MM 1.12 git1228 package carrying the bridge's MM 1.10 core
+        # sm13-latest: one MM 1.12 package carrying the bridge's MM 1.10 core
         _, bridge = self.bridge_lines()
         self._sm13_package("1.10.7-dev+{} {}".format(bridge["rev"], bridge["commit"][:7]).encode())
 
