@@ -10,8 +10,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SERIES = ROOT / 'builder/patches/series'
 CORE = SERIES / 'sm13-latest/sourcemod/0008-dbi-connect-options.patch'
 MYSQL = SERIES / 'sm13-latest/sourcemod/0009-mysql-tls-options.patch'
-# The values and default of fmu1337/sm-dbi-mysql (MysqlSslConfig.cpp), which
-# servers already use in databases.cfg.
+# The values of fmu1337/sm-dbi-mysql (MysqlSslConfig.cpp), which servers
+# already use in databases.cfg. Its default is preferred; ours is disabled
+# (stock SourceMod: no TLS unless the entry asks for it).
 SM_DBI_MYSQL_MODES = ['disabled', 'preferred', 'required', 'verify_ca', 'verify_identity']
 
 
@@ -47,9 +48,9 @@ int main(int argc, char **argv)
 	MySslSettings s;
 	MySslMode m;
 
-	/* Defaults and names */
-	CHECK(MySsl_ParseMode(NULL, &m) && m == MySsl_Preferred);
-	CHECK(MySsl_ParseMode("", &m) && m == MySsl_Preferred);
+	/* Defaults and names: no key or "" is disabled, as stock SourceMod */
+	CHECK(MySsl_ParseMode(NULL, &m) && m == MySsl_Disabled);
+	CHECK(MySsl_ParseMode("", &m) && m == MySsl_Disabled);
 	CHECK(MySsl_ParseMode("disabled", &m) && m == MySsl_Disabled);
 	CHECK(MySsl_ParseMode("preferred", &m) && m == MySsl_Preferred);
 	CHECK(MySsl_ParseMode("required", &m) && m == MySsl_Required);
@@ -60,7 +61,7 @@ int main(int argc, char **argv)
 	for (int i = MySsl_Disabled; i <= MySsl_VerifyIdentity; i++)
 		CHECK(MySsl_ParseMode(MySsl_ModeName((MySslMode)i), &m) && m == i);
 
-	/* Unknown values never downgrade */
+	/* Unknown values never fall back to the default */
 	const char *bad[] = {"verify_full", "true", "1", "on", " preferred", "preferred ", "verify-ca",
 		"VERIFY_IDENTITY_X", "disable", "require"};
 	for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
@@ -73,9 +74,11 @@ int main(int argc, char **argv)
 		CHECK(strstr(error, bad[i]));
 	}
 
-	/* No keys: preferred, no CA */
+	/* No keys: disabled, no CA; a CA alone does not turn TLS on */
 	CHECK(MySsl_Resolve(NULL, NULL, dir, &s, error, sizeof(error)));
-	CHECK(s.mode == MySsl_Preferred && s.ca[0] == '\0');
+	CHECK(s.mode == MySsl_Disabled && s.ca[0] == '\0');
+	CHECK(MySsl_Resolve("", "ca.pem", dir, &s, error, sizeof(error)));
+	CHECK(s.mode == MySsl_Disabled && s.ca[0] == '\0');
 
 	/* Only the verify modes read ssl_ca (as sm-dbi-mysql) */
 	CHECK(MySsl_Resolve("required", "missing.pem", dir, &s, error, sizeof(error)));
@@ -141,6 +144,11 @@ class SslOptions(unittest.TestCase):
         self.assertIn('"ssl_mode"', driver)
         self.assertIn('"ssl_ca"', driver)
         self.assertIn('MYSQL_SET_CHARSET_NAME, "utf8mb4"', driver)
+        # Default: disabled, also when core has no IDBConnectOptions.
+        self.assertRegex(source, r'if \(!value \|\| !value\[0\]\)\n\t\{\n\t\t\*mode = MySsl_Disabled;')
+        self.assertIn('out->mode = MySsl_Disabled;', source)
+        ext = section(MYSQL, 'extensions/mysql/extension.cpp')
+        self.assertIn('every connection uses ssl_mode disabled', ext)
 
     def test_dbi_abi_unchanged(self):
         # DatabaseInfo and the DBI interfaces stay as they are; the keys travel

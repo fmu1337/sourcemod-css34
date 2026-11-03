@@ -1,4 +1,4 @@
-css34: MySQL ssl_mode / ssl_ca (sm-dbi-mysql keys), TLS 1.2+, utf8mb4
+css34: MySQL ssl_mode / ssl_ca (sm-dbi-mysql keys, default disabled), TLS 1.2+, utf8mb4
 
 diff --git a/extensions/mysql/AMBuilder b/extensions/mysql/AMBuilder
 index 990588494b7f133cc2a8e533686d7522b41c6d85..e5f7450bf29c802fddd0ed0730ba5c6a8f1f5372 100644
@@ -13,7 +13,7 @@ index 990588494b7f133cc2a8e533686d7522b41c6d85..e5f7450bf29c802fddd0ed0730ba5c6a
        'extension.cpp'
      ]
 diff --git a/extensions/mysql/extension.cpp b/extensions/mysql/extension.cpp
-index 329df4fb1e71439ee3fd75a5c536da3384304177..2c4bdb39c4d84a041bb78713fb863309c667ee8c 100644
+index 329df4fb1e71439ee3fd75a5c536da3384304177..1c50c3782f42dcddfe77cc5ef433cef9b15c67d1 100644
 --- a/extensions/mysql/extension.cpp
 +++ b/extensions/mysql/extension.cpp
 @@ -51,6 +51,15 @@ bool DBI_MySQL::SDK_OnLoad(char *error, size_t maxlength, bool late)
@@ -26,7 +26,7 @@ index 329df4fb1e71439ee3fd75a5c536da3384304177..2c4bdb39c4d84a041bb78713fb863309
 +	{
 +		g_pDBConnectOptions = NULL;
 +		smutils->LogError(myself, "This SourceMod core has no %s: ssl_mode and ssl_ca are not read, "
-+			"every connection uses ssl_mode preferred", SMINTERFACE_DBCONNECTOPTIONS_NAME);
++			"every connection uses ssl_mode disabled (no TLS, as stock SourceMod)", SMINTERFACE_DBCONNECTOPTIONS_NAME);
 +	}
 +
  	dbi->AddDriver(&g_MyDriver);
@@ -101,7 +101,7 @@ index e25a2eaa30a12df2341a8a15ee6d7fd5085066e1..0477ced3b30659260d4398b997fb4f33
  };
  
 diff --git a/extensions/mysql/mysql/MyDriver.cpp b/extensions/mysql/mysql/MyDriver.cpp
-index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..bd28e69475c8c552dbb16ca796912f16d4d01fab 100644
+index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..828b43964e44acf26f99c93ceb9d4768c0960342 100644
 --- a/extensions/mysql/mysql/MyDriver.cpp
 +++ b/extensions/mysql/mysql/MyDriver.cpp
 @@ -31,10 +31,15 @@
@@ -120,7 +120,7 @@ index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..bd28e69475c8c552dbb16ca796912f16
  
  MyDriver::MyDriver()
  {
-@@ -92,7 +97,103 @@ const char *MyDriver::GetProductName()
+@@ -92,7 +97,104 @@ const char *MyDriver::GetProductName()
  	return "MySQL";
  }
  
@@ -174,7 +174,8 @@ index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..bd28e69475c8c552dbb16ca796912f16
 +	my_bool verify = (ssl.mode >= MySsl_Required);
 +
 +	/* MariaDB Connector/C 3.3.10 and newer verify by default, which needs TLS;
-+	 * disabled and preferred keep SourceMod's setting (verification off). */
++	 * disabled (the default: no ssl_mode key) and preferred keep SourceMod's
++	 * setting (verification off). */
 +	mysql_options(mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (const char *)&verify);
 +	if (!enforce)
 +		return;
@@ -225,7 +226,7 @@ index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..bd28e69475c8c552dbb16ca796912f16
  {
  	MYSQL *mysql = mysql_init(NULL);
  	const char *host = NULL, *socket = NULL;
-@@ -107,12 +208,13 @@ MYSQL *Connect(const DatabaseInfo *info, char *error, size_t maxlength)
+@@ -107,12 +209,13 @@ MYSQL *Connect(const DatabaseInfo *info, char *error, size_t maxlength)
  	mysql_options(mysql, MYSQL_OPT_READ_TIMEOUT, (const char *)&timeout);
  	mysql_options(mysql, MYSQL_OPT_WRITE_TIMEOUT, (const char *)&timeout);
  
@@ -245,7 +246,7 @@ index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..bd28e69475c8c552dbb16ca796912f16
  
  	/* Have MySQL automatically reconnect if it times out or loses connection.
  	 * This will prevent "MySQL server has gone away" errors after a while.
-@@ -146,6 +248,16 @@ MYSQL *Connect(const DatabaseInfo *info, char *error, size_t maxlength)
+@@ -146,6 +249,16 @@ MYSQL *Connect(const DatabaseInfo *info, char *error, size_t maxlength)
  		return NULL;
  	}
  
@@ -262,7 +263,7 @@ index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..bd28e69475c8c552dbb16ca796912f16
  	return mysql;
  }
  
-@@ -167,6 +279,13 @@ bool CompareField(const char *str1, const char *str2)
+@@ -167,6 +280,13 @@ bool CompareField(const char *str1, const char *str2)
  
  IDatabase *MyDriver::Connect(const DatabaseInfo *info, bool persistent, char *error, size_t maxlength)
  {
@@ -276,7 +277,7 @@ index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..bd28e69475c8c552dbb16ca796912f16
  	std::lock_guard<std::mutex> lock(m_Lock);
  
  	if (persistent)
-@@ -183,7 +302,8 @@ IDatabase *MyDriver::Connect(const DatabaseInfo *info, bool persistent, char *er
+@@ -183,7 +303,8 @@ IDatabase *MyDriver::Connect(const DatabaseInfo *info, bool persistent, char *er
  				&& CompareField(info->user, other.user)
  				&& CompareField(info->pass, other.pass)
  				&& CompareField(info->database, other.database)
@@ -286,7 +287,7 @@ index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..bd28e69475c8c552dbb16ca796912f16
  			{
  				db->IncReferenceCount();
  				return db;
-@@ -191,13 +311,13 @@ IDatabase *MyDriver::Connect(const DatabaseInfo *info, bool persistent, char *er
+@@ -191,13 +312,13 @@ IDatabase *MyDriver::Connect(const DatabaseInfo *info, bool persistent, char *er
  		}
  	}
  
@@ -326,7 +327,7 @@ index 4cc0d4c4e069f9022f2dbb23e7a9e7effff01a21..8013ad6ead481de0aa1d7faf53642973
  #endif //_INCLUDE_SM_MYSQL_DRIVER_H_
 diff --git a/extensions/mysql/mysql/MySslOptions.cpp b/extensions/mysql/mysql/MySslOptions.cpp
 new file mode 100644
-index 0000000000000000000000000000000000000000..74d95e62a2d8f192db6da701a51a959f37a96645
+index 0000000000000000000000000000000000000000..c581dc752969c03f3df11b62b8216dfc761bca59
 --- /dev/null
 +++ b/extensions/mysql/mysql/MySslOptions.cpp
 @@ -0,0 +1,142 @@
@@ -386,7 +387,7 @@ index 0000000000000000000000000000000000000000..74d95e62a2d8f192db6da701a51a959f
 +{
 +	if (!value || !value[0])
 +	{
-+		*mode = MySsl_Preferred;
++		*mode = MySsl_Disabled;
 +		return true;
 +	}
 +	for (size_t i = 0; i < sizeof(s_Modes) / sizeof(s_Modes[0]); i++)
@@ -426,7 +427,7 @@ index 0000000000000000000000000000000000000000..74d95e62a2d8f192db6da701a51a959f
 +	char *error,
 +	size_t maxlength)
 +{
-+	out->mode = MySsl_Preferred;
++	out->mode = MySsl_Disabled;
 +	out->ca[0] = '\0';
 +
 +	if (!MySsl_ParseMode(mode, &out->mode))
@@ -474,10 +475,10 @@ index 0000000000000000000000000000000000000000..74d95e62a2d8f192db6da701a51a959f
 +}
 diff --git a/extensions/mysql/mysql/MySslOptions.h b/extensions/mysql/mysql/MySslOptions.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..a13d749cfaed8f633aa6907dba8cce4518c12e6c
+index 0000000000000000000000000000000000000000..772d050a969087a54c9f2945792c631baf2a716b
 --- /dev/null
 +++ b/extensions/mysql/mysql/MySslOptions.h
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,77 @@
 +/**
 + * vim: set ts=4 sw=4 tw=99 noet :
 + * =============================================================================
@@ -503,11 +504,12 @@ index 0000000000000000000000000000000000000000..a13d749cfaed8f633aa6907dba8cce45
 +#include <stddef.h>
 +
 +/**
-+ * css34: the ssl_mode / ssl_ca keys of a database configuration. Same names,
-+ * values and default as fmu1337/sm-dbi-mysql, so a databases.cfg written for
-+ * that driver keeps working:
++ * css34: the ssl_mode / ssl_ca keys of a database configuration. Same names
++ * and values as fmu1337/sm-dbi-mysql. The default differs: without ssl_mode
++ * the driver behaves like stock SourceMod (disabled, no TLS), where
++ * sm-dbi-mysql uses preferred.
 + *
-+ *   ssl_mode  disabled | preferred (default) | required | verify_ca | verify_identity
++ *   ssl_mode  disabled (default) | preferred | required | verify_ca | verify_identity
 + *             (ASCII case-insensitive; an empty value is the default)
 + *   ssl_ca    CA certificate file (PEM), relative to addons/sourcemod/ unless
 + *             absolute; read by verify_ca and verify_identity only
@@ -518,7 +520,7 @@ index 0000000000000000000000000000000000000000..a13d749cfaed8f633aa6907dba8cce45
 +
 +enum MySslMode
 +{
-+	MySsl_Disabled = 0,		/**< no TLS (SourceMod 1.13's own behaviour) */
++	MySsl_Disabled = 0,		/**< no TLS (stock SourceMod 1.13; the default) */
 +	MySsl_Preferred,		/**< TLS when the server offers it, certificate not checked */
 +	MySsl_Required,			/**< TLS or no connection, certificate not checked */
 +	MySsl_VerifyCA,			/**< TLS, certificate chain checked against ssl_ca */
@@ -533,7 +535,7 @@ index 0000000000000000000000000000000000000000..a13d749cfaed8f633aa6907dba8cce45
 +	char ca[MYSSL_MAX_PATH];	/**< resolved ssl_ca, "" unless a verify mode */
 +};
 +
-+/** NULL or "" is the default (preferred). False for any other unknown value. */
++/** NULL or "" is the default (disabled). False for any other unknown value. */
 +bool MySsl_ParseMode(const char *value, MySslMode *mode);
 +
 +/** Canonical lower-case name of a mode. */
