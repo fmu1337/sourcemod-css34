@@ -1,7 +1,7 @@
 css34: GameConfigs: RTLD_NOLOAD for already-mapped engine binaries
 
 diff --git a/core/logic/GameConfigs.cpp b/core/logic/GameConfigs.cpp
-index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..4b9c6a418507b8fba61dfefbacbf588d68858b39 100644
+index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..498dc6ce172e5a3d9ee16b6bb041f2e309a4e8e4 100644
 --- a/core/logic/GameConfigs.cpp
 +++ b/core/logic/GameConfigs.cpp
 @@ -52,6 +52,9 @@
@@ -118,7 +118,7 @@ index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..4b9c6a418507b8fba61dfefbacbf588d
  		if (pHandle)
  		{
  			info.m_pAddr = dlsym(pHandle, "CreateInterface");
-@@ -1285,6 +1367,30 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+@@ -1285,6 +1367,34 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  			break;
  	}
  
@@ -143,6 +143,10 @@ index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..4b9c6a418507b8fba61dfefbacbf588d
 +			if (!info.m_pAddr)
 +				info.m_pAddr = addr;
 +		}
++		/* css34: one line per library that needed the fallback, so a 0
++		 * "library" signature can be traced in the SM log */
++		logger->LogMessage("[SM] css34: game binary \"%s\" (%s): mapped \"%s\" %p", pszName, name,
++			addr ? binary_path : "-", info.m_pAddr);
 +	}
 +#endif
 +
