@@ -1,12 +1,17 @@
 name: Release Maintenance
 
-# Two maintenance actions, picked with the `mode` input. Neither touches tags
-# or assets.
+# Three maintenance actions, picked with the `mode` input.
 #   republish       — flip drafts back to published (draft asset URLs 404 for
-#                     installers).
+#                     installers). Touches no tags or assets.
 #   mark-known-bad  — turn every release listed in builder/lines.json
 #                     `known_bad` into a prerelease with a banner (asset URLs keep
 #                     working), then make `latest_tag` the GitHub "Latest" release.
+#                     Touches no tags or assets.
+#   delete          — delete the releases named in `tags` together with their git
+#                     tags. Only build releases (`*-mm*`) can go; a tag that a
+#                     `line-*` pointer serves, the frozen tag of a line, or the
+#                     GitHub "Latest" release is refused. Without `confirm: DELETE`
+#                     it is a dry run that only prints what it would delete.
 # Empty inputs are worked out at run time, so no tag is hard-coded here: a
 # release named in this file could be deleted, and a stale default would make
 # an old build "Latest".
@@ -14,16 +19,20 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "republish | mark-known-bad"
+        description: "republish | mark-known-bad | delete"
         type: choice
-        options: [republish, mark-known-bad]
+        options: [republish, mark-known-bad, delete]
         default: republish
       latest_tag:
         description: "mark-known-bad: release to mark as GitHub Latest (empty = the tag line-<default_line> serves)"
         required: false
         default: ""
       tags:
-        description: "republish: space-separated release tags to re-publish (empty = every draft release)"
+        description: "republish: space-separated release tags to re-publish (empty = every draft release); delete: release tags to delete (required)"
+        required: false
+        default: ""
+      confirm:
+        description: "delete: type DELETE to really delete (anything else = dry run)"
         required: false
         default: ""
 
@@ -124,3 +133,56 @@ jobs:
           fi
           echo "GitHub Latest is now: $(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" -q .tag_name)"
           exit "${rc}"
+
+  delete:
+    if: github.event.inputs.mode == 'delete'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Delete releases and their tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAGS: ${{ github.event.inputs.tags }}
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          set -euo pipefail
+          [[ -n "${TAGS// /}" ]] || { echo "::error::delete needs the tags to delete"; exit 1; }
+          # Everything a line-* pointer serves, every frozen line tag, and GitHub Latest stay.
+          keep="$RUNNER_TEMP/keep.txt"
+          jq -r '.lines[] | .frozen.tag // empty' builder/lines.json > "$keep"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/latest" -q .tag_name >> "$keep"
+          while read -r pointer; do
+            if ! gh release download "$pointer" --pattern lines.json --output - > "$RUNNER_TEMP/pointer.json" 2>/dev/null; then
+              echo "::error::${pointer} has no lines.json; cannot tell what it serves"
+              exit 1
+            fi
+            jq -r '.[] | .tag? // empty' "$RUNNER_TEMP/pointer.json" | tee -a "$keep" | sed "s|^|${pointer} serves |"
+          done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            -q '.[] | select(.tag_name | startswith("line-")) | .tag_name')
+          rc=0
+          todo=()
+          for tag in ${TAGS}; do
+            if [[ ! "$tag" =~ ^[A-Za-z0-9._-]+-mm[A-Za-z0-9._-]+$ ]]; then
+              echo "::error::${tag} is not a build release tag; refused"; rc=1; continue
+            fi
+            if grep -qxF -- "$tag" "$keep"; then
+              echo "::error::${tag} is served by a line pointer, frozen, or GitHub Latest; refused"; rc=1; continue
+            fi
+            if ! gh release view "$tag" --json tagName >/dev/null 2>&1; then
+              echo "::error::no release for ${tag}"; rc=1; continue
+            fi
+            todo+=("$tag")
+          done
+          [[ "$rc" == 0 ]] || { echo "::error::nothing deleted: fix the refused tags first"; exit 1; }
+          for tag in "${todo[@]}"; do
+            if [[ "$CONFIRM" != DELETE ]]; then
+              echo "dry run: would delete release and tag ${tag}"
+              continue
+            fi
+            gh release delete "$tag" --cleanup-tag --yes
+            echo "::notice::deleted release and tag ${tag}"
+            echo "Deleted \`${tag}\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+          [[ "$CONFIRM" == DELETE ]] || echo "::notice::dry run; rerun with confirm=DELETE to delete ${#todo[@]} release(s)"
