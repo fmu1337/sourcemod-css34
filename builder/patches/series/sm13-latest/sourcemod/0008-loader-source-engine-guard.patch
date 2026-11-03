@@ -1,0 +1,17 @@
+css34: loader: guard SOURCE_ENGINE_OUTBREAK for Metamod 1.12 compatibility
+
+diff --git a/loader/loader.cpp b/loader/loader.cpp
+index 8235d880d3108b299fe0e501c6ee505b1f9e422c..3ea86b9b402479f1d0ef82ca3595ff1470373522 100644
+--- a/loader/loader.cpp
++++ b/loader/loader.cpp
+@@ -33,6 +33,10 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+
++#ifndef SOURCE_ENGINE_OUTBREAK
++#define SOURCE_ENGINE_OUTBREAK 30
++#endif
++
+ #if defined _MSC_VER
+	#define DLL_EXPORT				extern "C" __declspec(dllexport)
+	#define openlib(lib)			LoadLibrary(lib)

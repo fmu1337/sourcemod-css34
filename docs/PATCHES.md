@@ -21,6 +21,7 @@ files, exports, `NEEDED` and `SONAME` (`compare-package-abi.py`).
 | `sourcemod/0005-sourcemm-api-safe-iface` | `GET_V_IFACE_*` check the factory for NULL before `VInterfaceMatch` and report which interface is missing. | A NULL factory on CS:S v34 dereferenced at load instead of a load error. |
 | `sourcemod/0006-gcc10-warnings` | curl `-Wno-stringop-truncation`; `MIN()` replaced in two units. | `-Werror` build failures with GCC 10. |
 | `sourcemod/0007-css34-versioning` | Build number from `SOURCEMOD_GIT_REV` (lines.json), detached/submodule HEAD in `Versioning`, `CSS34 pack:` line in `sm version`. | Shallow clones give a wrong build number; smoke checks the pack commit. |
+| `sourcemod/0008-loader-source-engine-guard` | Guard `SOURCE_ENGINE_OUTBREAK` in `loader.cpp`. | Undeclared identifier `SOURCE_ENGINE_OUTBREAK` when building against Metamod 1.12 (`ISmmPluginExt.h`). |
 | `sourcepawn/0001-gcc10-link-flags` | `-Wno-sign-compare`; pthread/rt/`-lgcc_s` `NEEDED`. | GCC 10 sign-compare errors in the JIT/compiler; missing `NEEDED` on glibc 2.17. |
 | `hl2sdk-manifests/0001-episode1-defines` | episode1 Linux defines `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE`. | The SDK's malloc hooks/overrides in SourceMod modules on CS:S v34. |
 | `hl2sdk-manifests/0002-compiler-flag-guard` | Drop manifest compiler flags GCC 10 does not know (formerly `manifest_flag_guard.py`). | Unknown-flag errors from newer manifests (hl2sdk-manifests `ebd6e10`). |
