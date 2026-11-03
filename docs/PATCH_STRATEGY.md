@@ -43,6 +43,12 @@ Metamod:    apply-series.sh series/MM_112/        # checkout-deps.sh, по ко�
 линии, `release.yml` (T4.3) выпускает его prerelease'ом, промоутит после smoke/botplay публичных URL и
 переключает `line-<line>`.
 
+Jules (если задан `secrets.JULES_API_KEY`, `builder/scripts/jules.py`): на каждый новый bump-PR — ревью
+только на чтение (что поменялось в upstream для v34, что проверить, что доработать) комментарием в PR;
+если bump не применился (патч не лёг) — задача на минимальный фикс, который Jules оформляет своим PR в
+master. Jules не получает токен репозитория, ничего не пушит в master и `bump/*`, ничего не мёржится
+автоматически, сбой Jules API не ломает робота.
+
 Руками — тот же порядок:
 
 1. Pin в `builder/lines.json` (commit + rev).
