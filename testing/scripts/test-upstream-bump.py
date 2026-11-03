@@ -17,6 +17,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 BUMP = ROOT / "builder/scripts/upstream-bump.py"
 WORKFLOW = ROOT / ".github/workflows/upstream-bump.yml"
+TAG_WORKFLOW = ROOT / ".github/workflows/release-tag.yml"
 GIT_ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
                GIT_COMMITTER_EMAIL="t@t", GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
 
@@ -158,6 +159,61 @@ class UpstreamBumpTest(unittest.TestCase):
         old_sm["pins"]["SM_OLDSTABLE"]["commit"] = "2" * 40
         self.assertEqual(self.release_tags(data, khook, []), [])
         self.assertEqual(self.release_tags(data, old_sm, []), [])
+
+    def next_tag(self, data, line, existing, check=True):
+        (self.tmp / "next.json").write_text(json.dumps(data))
+        (self.tmp / "tags.txt").write_text("\n".join(existing) + "\n")
+        return self.bump("next-tag", line, "--lines", str(self.tmp / "next.json"),
+                         "--existing", str(self.tmp / "tags.txt"), check=check)
+
+    def test_next_tag_of_a_releasable_line(self):
+        data = json.loads((ROOT / "builder/lines.json").read_text())
+        sm13_tag = "1.13.0.{}-mm1.12.0".format(data["pins"]["SM_LATEST_13"]["rev"])
+        self.assertEqual(self.next_tag(data, "sm13-latest", []).stdout.split(), [sm13_tag])
+        self.assertEqual(self.next_tag(data, "sm13-latest", [sm13_tag]).stdout.split(), [sm13_tag + "-r2"])
+        taken = [sm13_tag, sm13_tag + "-r4", sm13_tag + "-r10", sm13_tag + "-rc1", "x" + sm13_tag + "-r99"]
+        self.assertEqual(self.next_tag(data, "sm13-latest", taken).stdout.split(), [sm13_tag + "-r11"])
+
+    def test_next_tag_refuses_lines_that_cannot_release(self):
+        data = json.loads((ROOT / "builder/lines.json").read_text())
+        for line, reason in (("sm11-oldstable", "not a releasable pointer line"),
+                             ("sm13-mm20-khook", "not a releasable pointer line"),
+                             ("no-such-line", "unknown line")):
+            res = self.next_tag(data, line, [], check=False)
+            self.assertNotEqual(res.returncode, 0, line)
+            self.assertIn(reason, res.stderr)
+        bad = json.loads(json.dumps(data))
+        sm13_tag = "1.13.0.{}-mm1.12.0".format(data["pins"]["SM_LATEST_13"]["rev"])
+        bad["known_bad"][sm13_tag] = "test"
+        res = self.next_tag(bad, "sm13-latest", [], check=False)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("known-bad", res.stderr)
+
+
+class TagWorkflowTest(unittest.TestCase):
+    def setUp(self):
+        self.text = TAG_WORKFLOW.read_text()
+
+    def test_dispatch_only_and_inputs_through_env(self):
+        self.assertRegex(self.text, r"\non:\n  workflow_dispatch:\n    inputs:\n")
+        self.assertNotIn("push:", self.text)
+        for name in ("line", "sha", "expected_tag"):
+            self.assertIn("      {}:\n".format(name), self.text)
+        # Inputs reach shell code only through env, never interpolated into run: blocks.
+        for block in self.text.split("run: |")[1:]:
+            self.assertNotIn("${{", block.split("\n      - name:", 1)[0])
+
+    def test_tag_is_computed_on_master_and_pushed_with_the_app(self):
+        self.assertIn("git merge-base --is-ancestor", self.text)
+        self.assertIn('git show "${commit}:builder/lines.json"', self.text)
+        self.assertIn("upstream-bump.py next-tag", self.text)
+        self.assertIn("git tag --points-at", self.text)
+        self.assertIn("persist-credentials: false", self.text)
+        self.assertIn("actions/create-github-app-token@v1", self.text)
+        self.assertIn("vars.BUMP_APP_ID", self.text)
+        self.assertIn("x-access-token:${TOKEN}", self.text)
+        self.assertNotIn("secrets.GITHUB_TOKEN", self.text)
+        self.assertIn("cancel-in-progress: false", self.text)
 
 
 class WorkflowTest(unittest.TestCase):
