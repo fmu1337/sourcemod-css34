@@ -43,6 +43,49 @@ tar -xzf sourcemod-css34-linux.tar.gz -C /path/to/cstrike
 Always install MM and SM **from the same line** (same pointer or same tag). Windows packages are only
 attached to the per-tag releases (pointers are Linux-only).
 
+## Connecting to MySQL HeatWave / MySQL 8.4
+
+`sm13-latest` connects to Oracle MySQL HeatWave and MySQL 8.4+ out of the box: `caching_sha2_password`,
+TLS 1.2/1.3 (static OpenSSL 3.5 on Linux) and `utf8mb4`, configured per entry in
+`addons/sourcemod/configs/databases.cfg`. No extra extension or ProxySQL is needed. The keys are those of
+[fmu1337/sm-dbi-mysql](https://github.com/fmu1337/sm-dbi-mysql), so its configurations keep working:
+
+```
+"Databases"
+{
+	"default"
+	{
+		"driver"	"mysql"
+		"host"		"10.0.0.10"
+		"database"	"sourcemod"
+		"user"		"sm"
+		"pass"		"..."
+		"port"		"3306"
+		"timeout"	"10"
+		"ssl_mode"	"verify_ca"			// disabled | preferred (default) | required | verify_ca | verify_identity
+		"ssl_ca"	"configs/mysql-ca.pem"	// CA certificate (PEM), relative to addons/sourcemod/
+	}
+}
+```
+
+- Without `ssl_mode` the driver uses **`preferred`**: TLS whenever the server offers it, plaintext otherwise,
+  and the server certificate is **not** checked (protects against eavesdropping, not against an active man in
+  the middle).
+- `required`: TLS or no connection; certificate not checked. `verify_ca`: the certificate must chain to
+  `ssl_ca`. `verify_identity`: additionally the `host` must match the certificate (connect by the name in the
+  certificate; for an IP address the certificate does not list, use `verify_ca`).
+- An unknown `ssl_mode`, or a verify mode without a readable `ssl_ca`, fails the connect with a message
+  (`[0]: ssl_mode ...`); nothing is silently downgraded. Plugins using `SQL_ConnectCustom` can pass the same
+  keys in their KeyValues.
+- A server that offers only TLS 1.0/1.1 (old MySQL 5.6/5.7 builds) now fails the default handshake: set
+  `"ssl_mode" "disabled"` for it.
+- `sm12-latest` cannot log in to MySQL 8.4 / HeatWave (its MySQL 5.6 client has no `caching_sha2_password`
+  and only TLS 1.0/1.1); it ignores these keys. Windows packages build the same code with Schannel; that path is
+  not tested by CI.
+
+Details, the mapping onto MariaDB Connector/C and the CI cases: [docs/PATCHES.md](docs/PATCHES.md)
+("sm13 MySQL TLS options").
+
 ## Version matrix (current pins)
 
 <!-- lines-versions:begin -->
