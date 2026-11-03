@@ -19,6 +19,8 @@
 #      verify_identity by IP address (the certificate names hosts only), an
 #      unknown ssl_mode, a verify mode without ssl_ca, required and verify modes
 #      against a server without TLS (while preferred falls back to plaintext).
+#      Without ssl_mode the session is plaintext (default disabled, as stock
+#      SourceMod), so a REQUIRE SSL account refuses it.
 #
 #   SERVER_DIR=... MYSQL_TLS_PROBE=packages/test-plugins/css34_mysql_tls_probe \
 #   MYSQL_TLS_CERTS=<mysql-tls-server.sh DIR> mysql-tls-test.sh
@@ -115,12 +117,14 @@ entry css34_my_ca_ip "${mysql_ip}" css34_tls ssl_mode VERIFY_CA ssl_ca "${ca}"
 entry css34_my_identity_ip "${mysql_ip}" css34_tls ssl_mode verify_identity ssl_ca "${ca}"
 entry css34_my_required "${mysql_host}" css34_tls ssl_mode required
 entry css34_my_default "${mysql_host}" css34_plain
+entry css34_my_default_tls_user "${mysql_host}" css34_tls
+entry css34_my_preferred "${mysql_host}" css34_plain ssl_mode preferred
 entry css34_my_disabled_plain "${mysql_host}" css34_plain ssl_mode disabled
 entry css34_my_disabled "${mysql_host}" css34_tls ssl_mode disabled
 entry css34_my_wrong_ca "${mysql_host}" css34_tls ssl_mode verify_identity ssl_ca "${wrong_ca}"
 entry css34_my_bad_mode "${mysql_host}" css34_tls ssl_mode verify_full ssl_ca "${ca}"
 entry css34_my_no_ca "${mysql_host}" css34_tls ssl_mode verify_ca
-entry css34_notls_default "${notls_host}" css34_plain
+entry css34_notls_preferred "${notls_host}" css34_plain ssl_mode preferred
 entry css34_notls_required "${notls_host}" css34_plain ssl_mode required
 entry css34_notls_verify "${notls_host}" css34_plain ssl_mode verify_ca ssl_ca "${ca}"
 entry css34_mdb_default "${MYSQL_TLS_HOST}" css34_plain
@@ -138,6 +142,7 @@ ENTRIES="${entries}" awk '
   }' "${databases}.mysql-tls" >"${databases}" || die "cannot add the probe entries to ${databases}"
 
 # label | server command | expected result (regex after "[css34_mysql_probe] <label> ")
+plain="ok driver=mysql result=css34-42 server=8\.4\.[0-9]+ charset=utf8mb4 ssl_version='' ssl_cipher=''"
 tls="ok driver=mysql result=css34-42 server=8\.4\.[0-9]+ charset=utf8mb4 ssl_version='TLSv1\.[23]' ssl_cipher='[^']+'"
 mdb_tls="ok driver=mysql result=css34-42 server=[^ ]*MariaDB[^ ]* charset=utf8mb4 ssl_version='TLSv1\.[23]' ssl_cipher='[^']+'"
 cases=(
@@ -145,8 +150,11 @@ cases=(
   "ca_ip|css34_mysql_probe ca_ip css34_my_ca_ip|${tls}"
   "identity_ip|css34_mysql_probe identity_ip css34_my_identity_ip|FAIL connect css34_my_identity_ip: \[2026\]: .*[Hh]ostname"
   "required|css34_mysql_probe required css34_my_required|${tls}"
-  "default|css34_mysql_probe default css34_my_default|${tls}"
-  "disabled_plain|css34_mysql_probe disabled_plain css34_my_disabled_plain|ok driver=mysql result=css34-42 server=8\.4\.[0-9]+ charset=utf8mb4 ssl_version='' ssl_cipher=''"
+  # No ssl_mode: disabled, as stock SourceMod; a REQUIRE SSL account refuses it.
+  "default|css34_mysql_probe default css34_my_default|${plain}"
+  "default_tls_user|css34_mysql_probe default_tls_user css34_my_default_tls_user|FAIL connect css34_my_default_tls_user: \[1045\]: Access denied"
+  "preferred|css34_mysql_probe preferred css34_my_preferred|${tls}"
+  "disabled_plain|css34_mysql_probe disabled_plain css34_my_disabled_plain|${plain}"
   "disabled|css34_mysql_probe disabled css34_my_disabled|FAIL connect css34_my_disabled: \[1045\]: Access denied"
   "wrong_ca|css34_mysql_probe wrong_ca css34_my_wrong_ca|FAIL connect css34_my_wrong_ca: \[2026\]: "
   "bad_mode|css34_mysql_probe bad_mode css34_my_bad_mode|FAIL connect css34_my_bad_mode: \[0\]: ssl_mode \"verify_full\" is not one of disabled, preferred, required, verify_ca, verify_identity"
@@ -154,14 +162,14 @@ cases=(
   "async|css34_mysql_probe_async async css34_my_identity|${tls}"
   # A persistent plaintext session must not be handed to a TLS configuration
   # with the same host, user, password, database and port.
-  "persist_plain|css34_mysql_probe_persistent persist_plain css34_my_disabled_plain|ok driver=mysql result=css34-42 server=8\.4\.[0-9]+ charset=utf8mb4 ssl_version='' ssl_cipher=''"
-  "persist_tls|css34_mysql_probe_persistent persist_tls css34_my_default|${tls}"
+  "persist_plain|css34_mysql_probe_persistent persist_plain css34_my_disabled_plain|${plain}"
+  "persist_tls|css34_mysql_probe_persistent persist_tls css34_my_preferred|${tls}"
   "custom|css34_mysql_probe_custom custom ${mysql_host} css34_tls css34-tls-probe verify_identity \"${ca}\"|${tls}"
   "custom_bad|css34_mysql_probe_custom custom_bad ${mysql_host} css34_tls css34-tls-probe sslmode_typo|FAIL connect \(custom\): \[0\]: ssl_mode \"sslmode_typo\" is not one of"
-  "notls_default|css34_mysql_probe notls_default css34_notls_default|ok driver=mysql result=css34-42 server=8\.4\.[0-9]+ charset=utf8mb4 ssl_version='' ssl_cipher=''"
+  "notls_preferred|css34_mysql_probe notls_preferred css34_notls_preferred|${plain}"
   "notls_required|css34_mysql_probe notls_required css34_notls_required|FAIL connect css34_notls_required: \[2026\]: .*SSL is required, but the server does not support it"
   "notls_verify|css34_mysql_probe notls_verify css34_notls_verify|FAIL connect css34_notls_verify: \[2026\]: .*SSL is required, but the server does not support it"
-  "mdb_default|css34_mysql_probe mdb_default css34_mdb_default|${mdb_tls}"
+  "mdb_default|css34_mysql_probe mdb_default css34_mdb_default|ok driver=mysql result=css34-42 server=[^ ]*MariaDB[^ ]* charset=utf8mb4 ssl_version='' ssl_cipher=''"
   "mdb_identity|css34_mysql_probe mdb_identity css34_mdb_identity|${mdb_tls}"
 )
 commands=()

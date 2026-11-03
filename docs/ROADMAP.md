@@ -39,7 +39,7 @@
 **Linux-тулчейн (проверено в исследовании):** `quay.io/pypa/manylinux2014_i686@sha256:30305867f278896ee117b0d162a8e4f9b7b16819e6590f6139e14c5ed5b23fdd` (CentOS 7.9 i686, glibc 2.17, devtoolset-10 GCC 10.2.1), Python для AMBuild — `/opt/python/cp311-cp311/bin/python`, AMBuild по SHA.
 - Все Linux-модули: `-static-libstdc++ -Wl,--exclude-libs=libstdc++.a:libsupc++.a`; `--exclude-libs=ALL` — только для `sourcemod.logic.so` и не-SDK расширений (dbi.*, общие); на ядрах, игровых расширениях и `metamod.*.ep1` экспорт tier1 (ConVar, `s_pConCommandBases`, `InterfaceReg`) остаётся. libgcc_s — динамически, как в проверенных сборках. `spcomp` — исключение (линкуется с libstdc++.so.6 динамически; гейт GLIBCXX ≤ 3.4.19).
 - Предупреждения GCC 10 как закоммиченные патчи AMBuildScript (не env-обёртка): `-Wno-volatile` (C++20), `-Wno-format-truncation -Wno-stringop-truncation` (MM 1.12 `-Werror`, metamod.cpp:852), `-Wno-sign-compare` (1.11).
-- MariaDB Connector/C (Linux): собирается из исходников 3.4.9 со статическим **OpenSSL 3.5 LTS** (T4.5), TLS-проба в CI (`mysql-tls-test.sh`). sm13: `ssl_mode` / `ssl_ca` в `databases.cfg` (патчи `0008`/`0009`, совместимо с sm-dbi-mysql), проба гоняет их в srcds против MySQL 8.4 и MariaDB 11.8.
+- MariaDB Connector/C (Linux): собирается из исходников 3.4.9 со статическим **OpenSSL 3.5 LTS** (T4.5), TLS-проба в CI (`mysql-tls-test.sh`). sm13: `ssl_mode` / `ssl_ca` в `databases.cfg` (патчи `0008`/`0009`, ключи sm-dbi-mysql, по умолчанию `disabled`), проба гоняет их в srcds против MySQL 8.4 и MariaDB 11.8.
 
 **Windows:** MSVC x86 на закреплённом `windows-2022` + зафиксированный toolset/SDK (версии пишутся в манифест), zip с прямыми слешами и `css34-package.json`.
 

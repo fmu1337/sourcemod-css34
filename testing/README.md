@@ -181,7 +181,9 @@ when the installed extension embeds no OpenSSL (sm12).
 | `ca_ip` | `VERIFY_CA` (any case), by IP address | TLS (no host name check) |
 | `identity_ip` | `verify_identity` by IP address | refused, `[2026]` host name |
 | `required` | `required`, no CA | TLS |
-| `default` | no `ssl_*` keys, `css34_plain` | TLS (`preferred`) |
+| `default` | no `ssl_*` keys, `css34_plain` | plaintext (default `disabled`) |
+| `default_tls_user` | no `ssl_*` keys, `REQUIRE SSL` account | refused, `[1045]` |
+| `preferred` | `preferred`, `css34_plain` | TLS |
 | `disabled_plain` | `disabled`, `css34_plain` | plaintext (`caching_sha2_password` over RSA) |
 | `disabled` | `disabled`, `REQUIRE SSL` account | refused, `[1045]` |
 | `wrong_ca` | `verify_identity`, unrelated CA | refused, `[2026]` |
@@ -190,9 +192,9 @@ when the installed extension embeds no OpenSSL (sm12).
 | `async` | `Database.Connect` (worker thread), `verify_identity` | TLS |
 | `persist_plain`, `persist_tls` | persistent `disabled`, then persistent `preferred` with the same host/user/password | plaintext, then TLS (no reuse) |
 | `custom`, `custom_bad` | `SQL_ConnectCustom` KeyValues with `ssl_mode` / `ssl_ca` | TLS; unknown mode refused |
-| `notls_default` | no keys, server without TLS | plaintext (`preferred` falls back) |
+| `notls_preferred` | `preferred`, server without TLS | plaintext (`preferred` falls back) |
 | `notls_required`, `notls_verify` | `required`, `verify_ca`, server without TLS | refused before login, `[2026]` |
-| `mdb_default`, `mdb_identity` | MariaDB, default and `verify_identity` | TLS |
+| `mdb_default`, `mdb_identity` | MariaDB, no keys and `verify_identity` | plaintext; TLS |
 
 ```bash
 testing/scripts/mysql-tls-server.sh start .ci-mysql-tls
