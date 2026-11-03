@@ -451,14 +451,14 @@ fi
 gd_probe_line=""
 if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
   gd_probe_line="$(grep -h '\[css34_gamedata_probe\] engine_sv=' "${sm_probe_sources[@]}" 2>/dev/null | tail -n1 || true)"
-  grep -h '\[css34_gamedata_probe\] path: ' "${sm_probe_sources[@]}" 2>/dev/null | tail -n 8 || true
+  grep -h '\[css34_gamedata_probe\] \(maps\|path\): ' "${sm_probe_sources[@]}" 2>/dev/null | sort -u -t']' -k3 | head -n 12 || true
 fi
 if [[ -z "${gd_probe_line}" ]]; then
   echo "FAIL: no [css34_gamedata_probe] engine_sv= line in SM logs" >&2
   record_failed=1
 else
   for field in engine_sv engine_cmd engine_dlgen server_maxspeed; do
-    if grep -Eq " ${field}=1( |$)" <<<"${gd_probe_line}"; then
+    if grep -Eq " ${field}=1([^0-9]|$)" <<<"${gd_probe_line}"; then
       echo "OK: gamedata probe ${field} resolved"
     else
       echo "FAIL: gamedata probe ${field} did not resolve: ${gd_probe_line}" >&2

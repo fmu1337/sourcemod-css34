@@ -1,10 +1,20 @@
 css34: GameConfigs: RTLD_NOLOAD for already-mapped engine binaries
 
 diff --git a/core/logic/GameConfigs.cpp b/core/logic/GameConfigs.cpp
-index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..082f08538e11922eaa25ed3e15c07274d3ecc9b5 100644
+index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..49ef1e2ad27765dd54af0b2c86bf201fef053238 100644
 --- a/core/logic/GameConfigs.cpp
 +++ b/core/logic/GameConfigs.cpp
-@@ -615,7 +615,8 @@ SMCResult CGameConfig::ReadSMC_LeavingSection(const SMCStates *states)
+@@ -52,6 +52,9 @@
+ #if defined PLATFORM_POSIX
+ #include <dlfcn.h>
+ #endif
++#if defined PLATFORM_LINUX
++#include <link.h>
++#endif
+ 
+ using namespace SourceHook;
+ 
+@@ -615,7 +618,8 @@ SMCResult CGameConfig::ReadSMC_LeavingSection(const SMCStates *states)
  					/* GNU only: returns 0 on error, inconsistent! >:[ */
  					if (dladdr(addrInBase, &info) != 0)
  					{
@@ -14,7 +24,64 @@ index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..082f08538e11922eaa25ed3e15c07274
  						if (handle)
  						{
  							if (bridge->SymbolsAreHidden())
-@@ -1273,7 +1274,27 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+@@ -1254,6 +1258,56 @@ void GameConfigManager::RemoveCachedConfig(CGameConfig *config)
+ 	m_Lookup.remove(config->m_File);
+ }
+ 
++#if defined PLATFORM_LINUX
++struct MappedGameBinarySearch
++{
++	char names[3][64];
++	char *path;
++	size_t maxlength;
++	bool found;
++};
++
++static int FindMappedGameBinaryCallback(struct dl_phdr_info *phdr, size_t size, void *data)
++{
++	MappedGameBinarySearch *search = (MappedGameBinarySearch *)data;
++	const char *base = strrchr(phdr->dlpi_name, '/');
++	base = base ? base + 1 : phdr->dlpi_name;
++	for (size_t i = 0; i < sizeof(search->names) / sizeof(search->names[0]); i++)
++	{
++		if (search->names[i][0] != '\0' && strcmp(base, search->names[i]) == 0)
++		{
++			ke::SafeStrcpy(search->path, search->maxlength, phdr->dlpi_name);
++			search->found = true;
++			return 1;
++		}
++	}
++	return 0;
++}
++
++/* css34: path of the mapped module named name; for name_i486.so also
++ * name_i686.so / name_amd.so (the engine srcds -binary picked). */
++static bool FindMappedGameBinary(const char *name, char *path, size_t maxlength)
++{
++	MappedGameBinarySearch search;
++	memset(&search, 0, sizeof(search));
++	search.path = path;
++	search.maxlength = maxlength;
++	ke::SafeStrcpy(search.names[0], sizeof(search.names[0]), name);
++
++	size_t len = strlen(name);
++	static const char kSuffix[] = "_i486.so";
++	if (len > sizeof(kSuffix) - 1 && strcmp(name + len - (sizeof(kSuffix) - 1), kSuffix) == 0)
++	{
++		int stem = (int)(len - (sizeof(kSuffix) - 1));
++		ke::SafeSprintf(search.names[1], sizeof(search.names[1]), "%.*s_i686.so", stem, name);
++		ke::SafeSprintf(search.names[2], sizeof(search.names[2]), "%.*s_amd.so", stem, name);
++	}
++
++	dl_iterate_phdr(FindMappedGameBinaryCallback, &search);
++	return search.found;
++}
++#endif
++
+ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+ {
+ 	GameBinaryInfo info;
+@@ -1273,7 +1327,27 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  			FreeLibrary(hModule);
  		}
  #else
@@ -43,3 +110,25 @@ index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..082f08538e11922eaa25ed3e15c07274
  		if (pHandle)
  		{
  			info.m_pAddr = dlsym(pHandle, "CreateInterface");
+@@ -1285,6 +1359,21 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+ 			break;
+ 	}
+ 
++#if defined PLATFORM_LINUX
++	/* css34: on CS:S v34 the search above finds no mapped engine, so every
++	 * "library" "engine" signature resolved to 0 (SM 1.11 used the engine
++	 * factory). Fall back to the module mapped as name / _i686 / _amd. */
++	if (!info.m_pAddr && FindMappedGameBinary(name, binary_path, sizeof(binary_path)))
++	{
++		void *pHandle = dlopen(binary_path, RTLD_NOW | RTLD_NOLOAD);
++		if (pHandle)
++		{
++			info.m_pAddr = dlsym(pHandle, "CreateInterface");
++			dlclose(pHandle);
++		}
++	}
++#endif
++
+ 	// Don't bother trying to get CRC if we couldn't find the bin loaded
+ 	if (info.m_pAddr)
+ 	{
