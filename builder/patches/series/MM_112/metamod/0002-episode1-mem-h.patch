@@ -1,7 +1,7 @@
 css34: provider_ep2: include tier0/mem.h for MemAllocScratch on episode1
 
 diff --git a/core/provider/provider_ep2.cpp b/core/provider/provider_ep2.cpp
-index db08ad90dbeddbe59a9f85c16440316d4f487569..c78b63a782ac8b6b6e12df2b208d706f72c7c3c7 100644
+index cd302ed79ac8e96aecbb79693057960889437da4..6806f80fd411c25e84167e5aacace5ced62e3007 100644
 --- a/core/provider/provider_ep2.cpp
 +++ b/core/provider/provider_ep2.cpp
 @@ -39,6 +39,7 @@
