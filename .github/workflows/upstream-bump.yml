@@ -268,6 +268,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # The persisted GITHUB_TOKEN header (contents: read) would override the
+          # App token set in the push URL below, and the tag push would get a 403.
+          persist-credentials: false
 
       - name: Tags for the lines this push moved
         id: tags
