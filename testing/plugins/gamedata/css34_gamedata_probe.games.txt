@@ -1,0 +1,66 @@
+"Games"
+{
+	// CS:S v34 Linux symbols, one gamedata entry per binary library.
+	// SM 1.12+ resolves "library" through GameConfigManager::CacheGameBinaryInfo
+	// (search paths), SM 1.11 through the engine / server factories.
+	"cstrike"
+	{
+		"Signatures"
+		{
+			// stock sdktools.games/engine.ep1.txt
+			"css34_probe_sv"
+			{
+				"library"	"engine"
+				"linux"		"@sv"
+			}
+			// stock core.games/engine.ep1.txt
+			"css34_probe_Cmd_ExecuteString"
+			{
+				"library"	"engine"
+				"linux"		"@_Z17Cmd_ExecuteStringPKc12cmd_source_t"
+			}
+			// navfile_blocker.ext detour
+			"css34_probe_OnResourcePrecachedFullPath"
+			{
+				"library"	"engine"
+				"linux"		"@_ZN22CDownloadListGenerator27OnResourcePrecachedFullPathEPc"
+			}
+			"css34_probe_GetMaxSpeed"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK13CWeaponCSBase11GetMaxSpeedEv"
+			}
+		}
+		"Addresses"
+		{
+			"engine_sv"
+			{
+				"linux"
+				{
+					"signature"	"css34_probe_sv"
+				}
+			}
+			"engine_cmd"
+			{
+				"linux"
+				{
+					"signature"	"css34_probe_Cmd_ExecuteString"
+				}
+			}
+			"engine_dlgen"
+			{
+				"linux"
+				{
+					"signature"	"css34_probe_OnResourcePrecachedFullPath"
+				}
+			}
+			"server_maxspeed"
+			{
+				"linux"
+				{
+					"signature"	"css34_probe_GetMaxSpeed"
+				}
+			}
+		}
+	}
+}
