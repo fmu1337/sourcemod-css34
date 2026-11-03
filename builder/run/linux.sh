@@ -55,11 +55,10 @@ bash "$BUILDER_DIR/fetch-sourcemod.sh" "$SOURCEMOD_DIR" "$SOURCEMOD_COMMIT"
 
 echo "==> Fetching build dependencies"
 bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
-if [[ -f "$DEPS_DIR/openssl.env" ]]; then
-  # shellcheck disable=SC1091
-  source "$DEPS_DIR/openssl.env"
-  echo "==> OpenSSL: CPATH=${CPATH:-} LIBRARY_PATH=${LIBRARY_PATH:-}"
-fi
+# Static PIC zlib (every line) and OpenSSL (lines with the MariaDB connector).
+# shellcheck disable=SC1091
+source "$DEPS_DIR/static-deps.env"
+echo "==> Static deps: CPATH=${CPATH:-} LIBRARY_PATH=${LIBRARY_PATH:-}"
 chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/package-metamod.sh" \
   "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
 

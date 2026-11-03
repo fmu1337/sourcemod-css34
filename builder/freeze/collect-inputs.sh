@@ -13,7 +13,9 @@
 #                                submodules, Metamod 1.10 / 1.12 + submodules,
 #                                hl2sdk episode1, AMBuild; sm11's also ep1c)
 #   dl-<name>                    every pinned download (zlib, OpenSSL, MySQL,
-#                                GeoLite2; sm11's also hl2sdk css headers)
+#                                GeoLite2; sm11's also hl2sdk css headers; a
+#                                MariaDB line's also the OpenSSL build's perl
+#                                RPMs and the Connector/C source)
 #   build-image.tar.zst          docker save of the build image, tagged
 #                                css34-build-ml2014:<line>-freeze
 #   <package>                    the packages of this online build

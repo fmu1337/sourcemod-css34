@@ -193,6 +193,9 @@ jobs:
       - name: Patch series apply, tree checks and routing (T3.4)
         run: python3 testing/scripts/test-patch-series.py
 
+      - name: OpenSSL entropy patch and drift refusals (T4.5)
+        run: python3 testing/scripts/test-openssl-entropy-patch.py
+
       - name: Intentionally fail smoke with a missing server
         id: negative-smoke
         continue-on-error: true
