@@ -107,14 +107,57 @@ zlib 1.3.1 with PIC and runs its tests; the same sm13 series patch moves zlib
 inside the extension's existing static-library link group. Compression therefore
 has no unversioned imports or new runtime dependency.
 
-OpenSSL 1.1.1w normally probes libc's `getentropy` through a weak symbol (glibc
-2.25+), then uses its Linux `getrandom` syscall path and existing random-device
-fallback. `patch-openssl-getentropy.py` omits only that libc probe on Linux.
-The upstream syscall path, kernel-seeding checks and device fallback remain
-intact. The build runs `openssl rand` to verify entropy acquisition and changes
-the build stamp so cached, unpatched libcrypto archives cannot be reused.
-The OpenSSL patcher fails on missing or inconsistent anchors. No new unsupported libc
-symbol is allowlisted. Revisit the OpenSSL patch when replacing OpenSSL 1.1.1w.
+### OpenSSL 3.5 LTS and the MariaDB connector (T4.5)
+
+Only sm13's Linux `dbi.mysql.ext` links our OpenSSL: sm12's MySQL 5.6.15 client
+bundles yaSSL, the vendored `libpq` is built without SSL, and the Windows
+MariaDB connector (AlliedModders' `v3.4.9-sm.5` zip) uses Schannel. The builder
+compiles OpenSSL 3.5.9 (LTS; `linux-elf no-shared no-tests no-dso -fPIC`) only
+for lines whose `configure.py` takes `--mariadb-path`. Its `Configure`
+(`IPC::Cmd`) and Makefile template (`Time::Piece`) need perl modules CentOS 7
+ships outside the image's perl: nine CentOS 7.9 i386 RPMs that match its
+`perl-5.16.3-299.el7_9` (sha256-pinned from vault.centos.org, signed by the
+CentOS 7 key) are unpacked under `deps/build-perl` and reach only the OpenSSL
+build through `PERL5LIB`. Nothing is installed into the image, and a different
+image perl fails the build.
+
+AlliedModders' Linux connector archive is compiled against Debian 11's OpenSSL
+1.1.1 headers. Linked with OpenSSL 3 it leaves `EVP_PKEY_size` and
+`SSL_get_peer_certificate` undefined (macros in 3.x) and passes a 32-bit
+`SSL_CTX_set_options` argument where 3.x takes `uint64_t`. The builder therefore
+compiles the same Connector/C 3.4.9 source from MariaDB's signed tarball
+(identical to the `v3.4.9` tag behind `v3.4.9-sm.5`). It uses that release's
+CMake options, adds PIC, and builds against the static OpenSSL and zlib in
+this image. The configure step fails unless CMake found `deps/openssl`. The
+static plugins are unchanged: native password, caching_sha2, zlib and
+pvio_socket.
+
+OpenSSL 3.5's `syscall_random()` still probes libc's `getentropy` through a weak
+symbol (glibc 2.25+) before its Linux `getrandom` syscall path; the random-device
+fallback follows in the caller. `patch-openssl-getentropy.py` compiles out only
+that libc probe on Linux. The upstream syscall path, kernel-seeding checks and
+device fallback remain intact. The patcher fails closed on missing or
+inconsistent anchors, a changed syscall line, or any other `getentropy()` call.
+The build runs `openssl rand`, fails if `libcrypto.a`/`libssl.a` still mention
+`getentropy`, and versions its stamps by OpenSSL release, so cached 1.1.1w or
+unpatched archives are rebuilt. `testing/scripts/test-openssl-entropy-patch.py`
+compiles the patched function and covers each refusal. No new libc symbol is
+allowlisted: any OpenSSL symbol the connector misses would be an unversioned
+undefined import, which `check-package.sh` rejects.
+
+SourceMod 1.13's MySQL driver never asks for TLS: `MyDriver.cpp` turns server
+certificate verification off and sets no TLS option, so Connector/C never sends
+the TLS request. In `dbi.mysql.ext`, OpenSSL therefore serves password hashing
+and caching_sha2 RSA. The CI probe (`testing/scripts/mysql-tls-test.sh`, every
+smoke image) checks both sides against a MariaDB 11.8 container
+(`mysql-tls-server.sh`, digest in `lines.json`). `css34_mysql_tls_probe` is
+linked from the extension's own archives and link group
+(`testing/tools/mysql-tls-probe.c`, `packages/test-plugins`, never released).
+Verified TLS (CA and host name) to a `REQUIRE SSL` account must succeed, client
+and server must report the same TLS version and cipher, and the TLS library
+must be the OpenSSL the build compiled against. SourceMod's options must be
+refused, and so must an unrelated CA. `css34_mysql_probe.sp` then makes a
+`dbi.mysql.ext` connect and query round trip inside srcds.
 
 ## SM 1.12: entity-output map-end cleanup list type
 

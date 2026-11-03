@@ -544,6 +544,10 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
+      - name: Start MariaDB with TLS for the MySQL probe (T4.5)
+        if: steps.select.outputs.skip != '1'
+        run: bash testing/scripts/mysql-tls-server.sh start .ci-mysql-tls
+
       - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
         if: steps.select.outputs.skip != '1'
         env:
@@ -571,12 +575,15 @@ jobs:
             test -f "packages/test-plugins/css34_legacy_probe.so"
           fi
           docker run --rm --platform linux/amd64 \
+            --network css34-db \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
             -e CACHE_DIR=/workspace/.ci-cache \
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
             -e LEGACY_PROBE="${legacy_probe}" \
+            -e MYSQL_TLS_CERTS=/workspace/.ci-mysql-tls \
+            -e MYSQL_TLS_PROBE=/workspace/packages/test-plugins/css34_mysql_tls_probe \
             -e MM_VERSION_EXPECT \
             -e MM_REV_EXPECT \
             -e SM_VERSION_EXPECT \
@@ -601,7 +608,14 @@ jobs:
               if [[ -n "${LEGACY_PROBE}" ]]; then
                 testing/scripts/legacy-bridge-test.sh
               fi
+              # T4.5: TLS through the static OpenSSL of dbi.mysql.ext (skipped
+              # when the extension links none) and a round trip from srcds.
+              testing/scripts/mysql-tls-test.sh
             '
+
+      - name: Stop MariaDB
+        if: always() && steps.select.outputs.skip != '1'
+        run: bash testing/scripts/mysql-tls-server.sh stop
 
       - name: Upload smoke logs on failure
         if: failure() && steps.select.outputs.skip != '1'
@@ -610,6 +624,7 @@ jobs:
           name: built-debian-smoke-logs-${{ matrix.line }}-${{ strategy.job-index }}
           path: |
             .ci-server/smoke.log
+            .ci-server/mysql-tls.log*
             .ci-server/console-probe.log
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
@@ -1265,6 +1280,10 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
+      - name: Start MariaDB with TLS for the MySQL probe (T4.5)
+        if: steps.select.outputs.skip != '1'
+        run: bash testing/scripts/mysql-tls-server.sh start .ci-mysql-tls
+
       - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
         if: steps.select.outputs.skip != '1'
         env:
@@ -1292,12 +1311,15 @@ jobs:
             test -f "packages/test-plugins/css34_legacy_probe.so"
           fi
           docker run --rm --platform linux/amd64 \
+            --network css34-db \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \
             -e CACHE_DIR=/workspace/.ci-cache \
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
             -e LEGACY_PROBE="${legacy_probe}" \
+            -e MYSQL_TLS_CERTS=/workspace/.ci-mysql-tls \
+            -e MYSQL_TLS_PROBE=/workspace/packages/test-plugins/css34_mysql_tls_probe \
             -e MM_VERSION_EXPECT \
             -e MM_REV_EXPECT \
             -e SM_VERSION_EXPECT \
@@ -1322,7 +1344,14 @@ jobs:
               if [[ -n "${LEGACY_PROBE}" ]]; then
                 testing/scripts/legacy-bridge-test.sh
               fi
+              # T4.5: TLS through the static OpenSSL of dbi.mysql.ext (skipped
+              # when the extension links none) and a round trip from srcds.
+              testing/scripts/mysql-tls-test.sh
             '
+
+      - name: Stop MariaDB
+        if: always() && steps.select.outputs.skip != '1'
+        run: bash testing/scripts/mysql-tls-server.sh stop
 
       - name: Upload smoke logs on failure
         if: failure() && steps.select.outputs.skip != '1'
@@ -1331,6 +1360,7 @@ jobs:
           name: built-weekly-smoke-logs-${{ matrix.line }}-${{ strategy.job-index }}
           path: |
             .ci-server/smoke.log
+            .ci-server/mysql-tls.log*
             .ci-server/console-probe.log
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log

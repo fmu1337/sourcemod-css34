@@ -173,6 +173,21 @@ python3 ../configure.py "${CONFIGURE_ARGS[@]}"
 echo "==> Building SourceMod"
 ambuild
 
+# The MariaDB connector links our static OpenSSL into dbi.mysql.ext. Build the
+# TLS probe (testing/tools/mysql-tls-probe.c, never released) from the same
+# archives and link group, for testing/scripts/mysql-tls-test.sh.
+for arg in "${DB_PATH_ARGS[@]}"; do
+  [[ "$arg" == --mariadb-path=* ]] || continue
+  mariadb_root="${arg#--mariadb-path=}"
+  echo "==> Building css34_mysql_tls_probe against ${mariadb_root}"
+  mkdir -p "$PACKAGES_DIR/test-plugins"
+  "$CC" -O2 -Wall -Werror -I"$mariadb_root/include/mariadb" \
+    -o "$PACKAGES_DIR/test-plugins/css34_mysql_tls_probe" \
+    "$WDIR/testing/tools/mysql-tls-probe.c" \
+    "$mariadb_root/lib/libmariadbclient.a" \
+    -Wl,-Bstatic -lssl -lcrypto -lz -Wl,-Bdynamic -lpthread -lm -lrt -ldl
+done
+
 PACKAGE_DIR="$SOURCEMOD_DIR/build/package"
 if [ ! -d "$PACKAGE_DIR/addons/sourcemod" ]; then
   echo "Build finished but package directory was not found." >&2
