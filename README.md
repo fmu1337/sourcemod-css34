@@ -378,7 +378,9 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
   with the same GitHub App, so `release.yml` starts; inputs `line`, `sha`, optional `expected_tag`.
 - `.github/workflows/frozen-verify.yml` — weekly check of the frozen `sm11-oldstable` release files and pointer;
   `freeze-inputs.yml` builds a freeze input archive ([docs/FREEZE.md](docs/FREEZE.md)).
-- `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts.
+- `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts, mark `known_bad`
+  releases, or delete build releases with their tags (`mode: delete`, `tags`, dry run unless `confirm: DELETE`;
+  refuses tags a `line-*` pointer serves, frozen tags and GitHub Latest).
 - `.github/workflows/cleanup-artifacts.yml` — weekly / manual purge of Actions artifacts.
 
 Failure logs remain downloadable for seven days after a run. Scheduled cleanup keeps other
