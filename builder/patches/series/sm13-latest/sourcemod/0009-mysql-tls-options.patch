@@ -1,0 +1,556 @@
+css34: MySQL ssl_mode / ssl_ca (sm-dbi-mysql keys), TLS 1.2+, utf8mb4
+
+diff --git a/extensions/mysql/AMBuilder b/extensions/mysql/AMBuilder
+index 990588494b7f133cc2a8e533686d7522b41c6d85..e5f7450bf29c802fddd0ed0730ba5c6a8f1f5372 100644
+--- a/extensions/mysql/AMBuilder
++++ b/extensions/mysql/AMBuilder
+@@ -57,6 +57,7 @@ if SM.mariadb_root:
+       'mysql/MyBoundResults.cpp',
+       'mysql/MyDatabase.cpp',
+       'mysql/MyDriver.cpp',
++      'mysql/MySslOptions.cpp',  # css34: ssl_mode / ssl_ca
+       'mysql/MyStatement.cpp',
+       'extension.cpp'
+     ]
+diff --git a/extensions/mysql/extension.cpp b/extensions/mysql/extension.cpp
+index 329df4fb1e71439ee3fd75a5c536da3384304177..2c4bdb39c4d84a041bb78713fb863309c667ee8c 100644
+--- a/extensions/mysql/extension.cpp
++++ b/extensions/mysql/extension.cpp
+@@ -51,6 +51,15 @@ bool DBI_MySQL::SDK_OnLoad(char *error, size_t maxlength, bool late)
+ 		return false;	
+ 	}
+ 	
++	/* css34: ssl_mode / ssl_ca live outside DatabaseInfo (IDBConnectOptions.h). */
++	if (!sharesys->RequestInterface(SMINTERFACE_DBCONNECTOPTIONS_NAME,
++		SMINTERFACE_DBCONNECTOPTIONS_VERSION, myself, (SMInterface **)&g_pDBConnectOptions))
++	{
++		g_pDBConnectOptions = NULL;
++		smutils->LogError(myself, "This SourceMod core has no %s: ssl_mode and ssl_ca are not read, "
++			"every connection uses ssl_mode preferred", SMINTERFACE_DBCONNECTOPTIONS_NAME);
++	}
++
+ 	dbi->AddDriver(&g_MyDriver);
+ 
+ 	return true;
+diff --git a/extensions/mysql/mysql/MyDatabase.cpp b/extensions/mysql/mysql/MyDatabase.cpp
+index 8681c79d1aaaab88a98646f3cb4e8e31c0af5e6e..062e80e1d37cf02ecbabb5e2c17472e8099b46f5 100644
+--- a/extensions/mysql/mysql/MyDatabase.cpp
++++ b/extensions/mysql/mysql/MyDatabase.cpp
+@@ -173,9 +173,10 @@ void MyDatabase::RefreshEscapeContext()
+ 	m_bCanEscapeLocally = IsByteWiseEscapable(cs);
+ }
+ 
+-MyDatabase::MyDatabase(MYSQL *mysql, const DatabaseInfo *info, bool persistent)
+-: m_mysql(mysql), m_bPersistent(persistent)
++MyDatabase::MyDatabase(MYSQL *mysql, const DatabaseInfo *info, const MySslSettings &ssl, bool persistent)
++: m_mysql(mysql), m_SslMode(ssl.mode), m_bPersistent(persistent)
+ {
++	m_SslCa.assign(ssl.ca);
+ 	m_Host.assign(info->host);
+ 	m_Database.assign(info->database);
+ 	m_User.assign(info->user);
+@@ -221,6 +222,11 @@ const DatabaseInfo &MyDatabase::GetInfo()
+ 	return m_Info;
+ }
+ 
++bool MyDatabase::HasSslSettings(const MySslSettings &ssl)
++{
++	return m_SslMode == ssl.mode && strcmp(m_SslCa.c_str(), ssl.ca) == 0;
++}
++
+ unsigned int MyDatabase::GetInsertID()
+ {
+ 	std::lock_guard<std::recursive_mutex> lock(m_FullLock);
+diff --git a/extensions/mysql/mysql/MyDatabase.h b/extensions/mysql/mysql/MyDatabase.h
+index e25a2eaa30a12df2341a8a15ee6d7fd5085066e1..0477ced3b30659260d4398b997fb4f33056d9209 100644
+--- a/extensions/mysql/mysql/MyDatabase.h
++++ b/extensions/mysql/mysql/MyDatabase.h
+@@ -36,6 +36,7 @@
+ #include <atomic>
+ #include <mutex>
+ #include "MyDriver.h"
++#include "MySslOptions.h"
+ 
+ class MyQuery;
+ class MyStatement;
+@@ -47,7 +48,7 @@ class MyDatabase
+ 	friend class MyQuery;
+ 	friend class MyStatement;
+ public:
+-	MyDatabase(MYSQL *mysql, const DatabaseInfo *info, bool persistent);
++	MyDatabase(MYSQL *mysql, const DatabaseInfo *info, const MySslSettings &ssl, bool persistent);
+ 	~MyDatabase();
+ public: //IDatabase
+ 	bool Close();
+@@ -69,6 +70,8 @@ public: //IDatabase
+ 	bool SetCharacterSet(const char *characterset);
+ public:
+ 	const DatabaseInfo &GetInfo();
++	/* css34: a persistent connection is shared only with the same TLS settings. */
++	bool HasSslSettings(const MySslSettings &ssl);
+ private:
+ 	void RefreshEscapeContext();
+ private:
+@@ -84,6 +87,8 @@ private:
+ 	String m_Database;
+ 	String m_User;
+ 	String m_Pass;
++	MySslMode m_SslMode;
++	String m_SslCa;
+ 	bool m_bPersistent;
+ };
+ 
+diff --git a/extensions/mysql/mysql/MyDriver.cpp b/extensions/mysql/mysql/MyDriver.cpp
+index 625ca2091eef4c821a37e6c4d9f45edae55fc30a..bd28e69475c8c552dbb16ca796912f16d4d01fab 100644
+--- a/extensions/mysql/mysql/MyDriver.cpp
++++ b/extensions/mysql/mysql/MyDriver.cpp
+@@ -31,10 +31,15 @@
+ 
+ #include "MyDriver.h"
+ #include "MyDatabase.h"
++#include "MySslOptions.h"
+ #include "smsdk_ext.h"
+ #include "am-string.h"
++#if !defined(_WIN32)
++#include <ma_pvio.h>
++#endif
+ 
+ MyDriver g_MyDriver;
++IDBConnectOptions *g_pDBConnectOptions = NULL;
+ 
+ MyDriver::MyDriver()
+ {
+@@ -92,7 +97,103 @@ const char *MyDriver::GetProductName()
+ 	return "MySQL";
+ }
+ 
+-MYSQL *Connect(const DatabaseInfo *info, char *error, size_t maxlength)
++/* css34: TLS for ssl_mode (MySslOptions.h).
++ *
++ * MariaDB Connector/C 3.4 has no ssl-mode option. MYSQL_OPT_SSL_ENFORCE asks for
++ * TLS; with server certificate verification off (SourceMod's setting) it falls
++ * back to plaintext when the server offers no TLS, which is "preferred". With
++ * verification on, a server without TLS is refused before authentication, and
++ * the verification callback decides what is checked: the library's own one
++ * (chain against ssl_ca and host name) for verify_identity, the same without
++ * the host name for verify_ca, and none for required.
++ */
++extern "C" int ma_pvio_tls_verify_server_cert(void *ctls, unsigned int flags);
++
++static int MySsl_VerifyChainOnly(void *ctls, unsigned int flags)
++{
++	return ma_pvio_tls_verify_server_cert(ctls, flags & ~MARIADB_TLS_VERIFY_HOST);
++}
++
++#if !defined(_WIN32)
++#if MARIADB_PACKAGE_VERSION_ID != 30409
++#error "css34: re-check MySsl_TlsHead against this MariaDB Connector/C's ma_tls.h (MARIADB_TLS)"
++#endif
++/* The leading members of MARIADB_TLS (ma_tls.h, which needs the uninstalled
++ * ma_hash.h). */
++struct MySsl_TlsHead
++{
++	void *data;
++	MARIADB_PVIO *pvio;
++};
++#endif
++
++static int MySsl_AcceptUnverified(void *ctls, unsigned int flags)
++{
++#if !defined(_WIN32)
++	/* OpenSSL records chain problems during the handshake; the connector fails
++	 * the login later unless they are cleared. "required" checks no chain. */
++	MySsl_TlsHead *tls = (MySsl_TlsHead *)ctls;
++	if (!tls || !tls->pvio || tls->pvio->ctls != ctls || !tls->pvio->mysql)
++		return 1;
++	tls->pvio->mysql->net.tls_verify_status = 0;
++#endif
++	return 0;
++}
++
++static void MySsl_Apply(MYSQL *mysql, const MySslSettings &ssl)
++{
++	my_bool enforce = (ssl.mode != MySsl_Disabled);
++	my_bool verify = (ssl.mode >= MySsl_Required);
++
++	/* MariaDB Connector/C 3.3.10 and newer verify by default, which needs TLS;
++	 * disabled and preferred keep SourceMod's setting (verification off). */
++	mysql_options(mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (const char *)&verify);
++	if (!enforce)
++		return;
++
++	mysql_options(mysql, MYSQL_OPT_SSL_ENFORCE, (const char *)&enforce);
++#if !defined(_WIN32)
++	/* OpenSSL: MySQL 8.4 / HeatWave speak TLS 1.2 and 1.3 only. Schannel keeps
++	 * the system's protocol set (TLS 1.3 needs Windows 11 / Server 2022). */
++	mysql_options(mysql, MARIADB_OPT_TLS_VERSION, "TLSv1.2,TLSv1.3");
++#endif
++	switch (ssl.mode)
++	{
++	case MySsl_Required:
++		mysql_options(mysql, MARIADB_OPT_TLS_VERIFICATION_CALLBACK, (const void *)MySsl_AcceptUnverified);
++		break;
++	case MySsl_VerifyCA:
++		mysql_options(mysql, MYSQL_OPT_SSL_CA, ssl.ca);
++		mysql_options(mysql, MARIADB_OPT_TLS_VERIFICATION_CALLBACK, (const void *)MySsl_VerifyChainOnly);
++		break;
++	case MySsl_VerifyIdentity:
++		mysql_options(mysql, MYSQL_OPT_SSL_CA, ssl.ca);
++		break;
++	default:
++		break;
++	}
++}
++
++static bool MySsl_FromConfig(const DatabaseInfo *info, MySslSettings *ssl, char *error, size_t maxlength)
++{
++	char mode[64], ca[MYSSL_MAX_PATH], why[MYSSL_MAX_PATH + 160];
++	bool hasMode = false, hasCa = false;
++
++	if (g_pDBConnectOptions)
++	{
++		hasMode = g_pDBConnectOptions->GetConnectOption(info, "ssl_mode", mode, sizeof(mode));
++		hasCa = g_pDBConnectOptions->GetConnectOption(info, "ssl_ca", ca, sizeof(ca));
++	}
++	if (!MySsl_Resolve(hasMode ? mode : NULL, hasCa ? ca : NULL, smutils->GetSourceModPath(),
++		ssl, why, sizeof(why)))
++	{
++		ke::SafeSprintf(error, maxlength, "[0]: %s", why);
++		return false;
++	}
++	return true;
++}
++
++MYSQL *Connect(const DatabaseInfo *info, const MySslSettings &ssl, char *error, size_t maxlength)
+ {
+ 	MYSQL *mysql = mysql_init(NULL);
+ 	const char *host = NULL, *socket = NULL;
+@@ -107,12 +208,13 @@ MYSQL *Connect(const DatabaseInfo *info, char *error, size_t maxlength)
+ 	mysql_options(mysql, MYSQL_OPT_READ_TIMEOUT, (const char *)&timeout);
+ 	mysql_options(mysql, MYSQL_OPT_WRITE_TIMEOUT, (const char *)&timeout);
+ 
+-	/* MariaDB Connector/C 3.3.10 and newer enable server certificate
+-	 * verification by default, which requires TLS. Disabling it keeps
+-	 * legacy behavior of allowing unencrypted connections.
+-	 */
+-	bool verify_server_cert = false;
+-	mysql_options(mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (const char *)&verify_server_cert);
++	/* css34: ssl_mode / ssl_ca (MySsl_Apply); disabled is SourceMod's own
++	 * setting, server certificate verification off and no TLS requested. */
++	MySsl_Apply(mysql, ssl);
++
++	/* css34: utf8mb4 in the handshake (the connector's default, made explicit);
++	 * plugins may still change it with SQL_SetCharset. */
++	mysql_options(mysql, MYSQL_SET_CHARSET_NAME, "utf8mb4");
+ 
+ 	/* Have MySQL automatically reconnect if it times out or loses connection.
+ 	 * This will prevent "MySQL server has gone away" errors after a while.
+@@ -146,6 +248,16 @@ MYSQL *Connect(const DatabaseInfo *info, char *error, size_t maxlength)
+ 		return NULL;
+ 	}
+ 
++	/* css34: belt and braces; the verification callback already refuses a
++	 * server without TLS for these modes. */
++	if (ssl.mode >= MySsl_Required && mysql_get_ssl_cipher(mysql) == NULL)
++	{
++		ke::SafeSprintf(error, maxlength, "[0]: ssl_mode %s: the session is not encrypted",
++			MySsl_ModeName(ssl.mode));
++		mysql_close(mysql);
++		return NULL;
++	}
++
+ 	return mysql;
+ }
+ 
+@@ -167,6 +279,13 @@ bool CompareField(const char *str1, const char *str2)
+ 
+ IDatabase *MyDriver::Connect(const DatabaseInfo *info, bool persistent, char *error, size_t maxlength)
+ {
++	/* css34: ssl_mode / ssl_ca first: a bad value fails every connect. */
++	MySslSettings ssl;
++	if (!MySsl_FromConfig(info, &ssl, error, maxlength))
++	{
++		return NULL;
++	}
++
+ 	std::lock_guard<std::mutex> lock(m_Lock);
+ 
+ 	if (persistent)
+@@ -183,7 +302,8 @@ IDatabase *MyDriver::Connect(const DatabaseInfo *info, bool persistent, char *er
+ 				&& CompareField(info->user, other.user)
+ 				&& CompareField(info->pass, other.pass)
+ 				&& CompareField(info->database, other.database)
+-				&& (info->port == other.port))
++				&& (info->port == other.port)
++				&& db->HasSslSettings(ssl))
+ 			{
+ 				db->IncReferenceCount();
+ 				return db;
+@@ -191,13 +311,13 @@ IDatabase *MyDriver::Connect(const DatabaseInfo *info, bool persistent, char *er
+ 		}
+ 	}
+ 
+-	MYSQL *mysql = ::Connect(info, error, maxlength);
++	MYSQL *mysql = ::Connect(info, ssl, error, maxlength);
+ 	if (!mysql)
+ 	{
+ 		return NULL;
+ 	}
+ 
+-	MyDatabase *db = new MyDatabase(mysql, info, persistent);
++	MyDatabase *db = new MyDatabase(mysql, info, ssl, persistent);
+ 
+ 	if (persistent)
+ 	{
+diff --git a/extensions/mysql/mysql/MyDriver.h b/extensions/mysql/mysql/MyDriver.h
+index 4cc0d4c4e069f9022f2dbb23e7a9e7effff01a21..8013ad6ead481de0aa1d7faf53642973bc3ce08f 100644
+--- a/extensions/mysql/mysql/MyDriver.h
++++ b/extensions/mysql/mysql/MyDriver.h
+@@ -34,6 +34,7 @@
+ 
+ #define SOURCEMOD_SQL_DRIVER_CODE
+ #include <IDBDriver.h>
++#include <IDBConnectOptions.h>
+ #include <sm_platform.h>
+ #if defined PLATFORM_WINDOWS
+ #include <WinSock2.h>
+@@ -86,6 +87,9 @@ private:
+ 
+ extern MyDriver g_MyDriver;
+ 
++/* css34: driver-specific keys from core (ssl_mode, ssl_ca); NULL without it. */
++extern IDBConnectOptions *g_pDBConnectOptions;
++
+ size_t strncopy(char *dest, const char *src, size_t count);
+ 
+ #endif //_INCLUDE_SM_MYSQL_DRIVER_H_
+diff --git a/extensions/mysql/mysql/MySslOptions.cpp b/extensions/mysql/mysql/MySslOptions.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..74d95e62a2d8f192db6da701a51a959f37a96645
+--- /dev/null
++++ b/extensions/mysql/mysql/MySslOptions.cpp
+@@ -0,0 +1,142 @@
++/**
++ * vim: set ts=4 sw=4 tw=99 noet :
++ * =============================================================================
++ * SourceMod MySQL Extension (CS:S v34 build)
++ * =============================================================================
++ *
++ * This program is free software; you can redistribute it and/or modify it under
++ * the terms of the GNU General Public License, version 3.0, as published by the
++ * Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License along with
++ * this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include "MySslOptions.h"
++#include <stdio.h>
++#include <string.h>
++
++static const struct
++{
++	const char *name;
++	MySslMode mode;
++} s_Modes[] =
++{
++	{"disabled", MySsl_Disabled},
++	{"preferred", MySsl_Preferred},
++	{"required", MySsl_Required},
++	{"verify_ca", MySsl_VerifyCA},
++	{"verify_identity", MySsl_VerifyIdentity},
++};
++
++static bool EqualsNoCase(const char *a, const char *b)
++{
++	for (;; a++, b++)
++	{
++		unsigned char x = (unsigned char)*a, y = (unsigned char)*b;
++		if (x >= 'A' && x <= 'Z')
++			x = x - 'A' + 'a';
++		if (y >= 'A' && y <= 'Z')
++			y = y - 'A' + 'a';
++		if (x != y)
++			return false;
++		if (!x)
++			return true;
++	}
++}
++
++bool MySsl_ParseMode(const char *value, MySslMode *mode)
++{
++	if (!value || !value[0])
++	{
++		*mode = MySsl_Preferred;
++		return true;
++	}
++	for (size_t i = 0; i < sizeof(s_Modes) / sizeof(s_Modes[0]); i++)
++	{
++		if (EqualsNoCase(value, s_Modes[i].name))
++		{
++			*mode = s_Modes[i].mode;
++			return true;
++		}
++	}
++	return false;
++}
++
++const char *MySsl_ModeName(MySslMode mode)
++{
++	for (size_t i = 0; i < sizeof(s_Modes) / sizeof(s_Modes[0]); i++)
++	{
++		if (s_Modes[i].mode == mode)
++			return s_Modes[i].name;
++	}
++	return "?";
++}
++
++static bool IsAbsolutePath(const char *path)
++{
++	if (path[0] == '/' || path[0] == '\\')
++		return true;
++	/* C:\... or C:/... */
++	return ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
++		&& path[1] == ':';
++}
++
++bool MySsl_Resolve(const char *mode,
++	const char *ca,
++	const char *sm_path,
++	MySslSettings *out,
++	char *error,
++	size_t maxlength)
++{
++	out->mode = MySsl_Preferred;
++	out->ca[0] = '\0';
++
++	if (!MySsl_ParseMode(mode, &out->mode))
++	{
++		snprintf(error, maxlength,
++			"ssl_mode \"%s\" is not one of disabled, preferred, required, verify_ca, verify_identity",
++			mode);
++		return false;
++	}
++	if (out->mode != MySsl_VerifyCA && out->mode != MySsl_VerifyIdentity)
++	{
++		/* Like sm-dbi-mysql: only the verify modes read ssl_ca. */
++		return true;
++	}
++
++	if (!ca || !ca[0])
++	{
++		snprintf(error, maxlength,
++			"ssl_mode %s needs ssl_ca (the server's CA certificate, PEM, relative to addons/sourcemod/)",
++			MySsl_ModeName(out->mode));
++		return false;
++	}
++
++	int written;
++	if (IsAbsolutePath(ca) || !sm_path || !sm_path[0])
++		written = snprintf(out->ca, sizeof(out->ca), "%s", ca);
++	else
++		written = snprintf(out->ca, sizeof(out->ca), "%s/%s", sm_path, ca);
++	if (written < 0 || (size_t)written >= sizeof(out->ca))
++	{
++		snprintf(error, maxlength, "ssl_ca path too long: \"%s\"", ca);
++		out->ca[0] = '\0';
++		return false;
++	}
++
++	FILE *fp = fopen(out->ca, "rb");
++	if (!fp)
++	{
++		snprintf(error, maxlength, "ssl_mode %s: cannot read ssl_ca \"%s\"",
++			MySsl_ModeName(out->mode), out->ca);
++		return false;
++	}
++	fclose(fp);
++	return true;
++}
+diff --git a/extensions/mysql/mysql/MySslOptions.h b/extensions/mysql/mysql/MySslOptions.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..a13d749cfaed8f633aa6907dba8cce4518c12e6c
+--- /dev/null
++++ b/extensions/mysql/mysql/MySslOptions.h
+@@ -0,0 +1,76 @@
++/**
++ * vim: set ts=4 sw=4 tw=99 noet :
++ * =============================================================================
++ * SourceMod MySQL Extension (CS:S v34 build)
++ * =============================================================================
++ *
++ * This program is free software; you can redistribute it and/or modify it under
++ * the terms of the GNU General Public License, version 3.0, as published by the
++ * Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License along with
++ * this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#ifndef _INCLUDE_SM_MYSQL_SSL_OPTIONS_H_
++#define _INCLUDE_SM_MYSQL_SSL_OPTIONS_H_
++
++#include <stddef.h>
++
++/**
++ * css34: the ssl_mode / ssl_ca keys of a database configuration. Same names,
++ * values and default as fmu1337/sm-dbi-mysql, so a databases.cfg written for
++ * that driver keeps working:
++ *
++ *   ssl_mode  disabled | preferred (default) | required | verify_ca | verify_identity
++ *             (ASCII case-insensitive; an empty value is the default)
++ *   ssl_ca    CA certificate file (PEM), relative to addons/sourcemod/ unless
++ *             absolute; read by verify_ca and verify_identity only
++ *
++ * Pure parsing and validation, without SourceMod or the MySQL client, so
++ * testing/scripts/test-mysql-ssl-options.py can compile it on its own.
++ */
++
++enum MySslMode
++{
++	MySsl_Disabled = 0,		/**< no TLS (SourceMod 1.13's own behaviour) */
++	MySsl_Preferred,		/**< TLS when the server offers it, certificate not checked */
++	MySsl_Required,			/**< TLS or no connection, certificate not checked */
++	MySsl_VerifyCA,			/**< TLS, certificate chain checked against ssl_ca */
++	MySsl_VerifyIdentity	/**< as verify_ca, and the host name must match the certificate */
++};
++
++#define MYSSL_MAX_PATH	1024
++
++struct MySslSettings
++{
++	MySslMode mode;
++	char ca[MYSSL_MAX_PATH];	/**< resolved ssl_ca, "" unless a verify mode */
++};
++
++/** NULL or "" is the default (preferred). False for any other unknown value. */
++bool MySsl_ParseMode(const char *value, MySslMode *mode);
++
++/** Canonical lower-case name of a mode. */
++const char *MySsl_ModeName(MySslMode mode);
++
++/**
++ * Settings from the raw keys (NULL when a key is absent). sm_path is the
++ * absolute addons/sourcemod path that a relative ssl_ca is joined to.
++ *
++ * Fails, with a message for the plugin, on an unknown ssl_mode, a verify mode
++ * without ssl_ca, or an ssl_ca file that cannot be opened. Never downgrades.
++ */
++bool MySsl_Resolve(const char *mode,
++	const char *ca,
++	const char *sm_path,
++	MySslSettings *out,
++	char *error,
++	size_t maxlength);
++
++#endif //_INCLUDE_SM_MYSQL_SSL_OPTIONS_H_
