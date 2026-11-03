@@ -1,0 +1,114 @@
+name: Release tag
+
+# Push the next release tag of a line on demand, for a packaging rebuild of the same
+# pins (`-r<N>`) or a base tag that was never pushed. release.yml takes over from the
+# tag. The tag is pushed with the owner's GitHub App token (vars.BUMP_APP_ID,
+# secrets.BUMP_APP_KEY): a tag pushed with GITHUB_TOKEN would not start release.yml.
+#
+# The tag is computed, never typed: `upstream-bump.py next-tag` reads lines.json of the
+# commit being tagged, refuses frozen / retired / non-pointer lines and known-bad tags,
+# and picks the next free `-r<N>`. `expected_tag`, when given, must match it, so a
+# repeated dispatch cannot silently push the following revision.
+on:
+  workflow_dispatch:
+    inputs:
+      line:
+        description: "CSS34_LINE to tag (a releasable pointer line in builder/lines.json)"
+        required: true
+        default: "sm13-latest"
+      sha:
+        description: "Commit on master to tag (full or abbreviated sha; empty = tip of master)"
+        required: false
+        default: ""
+      expected_tag:
+        description: "Tag you expect, e.g. 1.13.0.7478-mm1.12.0-r5 (empty = whatever is next)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          # The persisted GITHUB_TOKEN header (contents: read) would override the
+          # App token set in the push URL below, and the tag push would get a 403.
+          persist-credentials: false
+
+      - name: Compute the tag
+        id: plan
+        env:
+          LINE: ${{ inputs.line }}
+          SHA: ${{ inputs.sha }}
+          EXPECTED: ${{ inputs.expected_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$LINE" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::bad line: $LINE"; exit 1; }
+          [[ -z "$SHA" || "$SHA" =~ ^[0-9a-f]{7,40}$ ]] || { echo "::error::sha must be 7-40 lowercase hex: $SHA"; exit 1; }
+          [[ -z "$EXPECTED" || "$EXPECTED" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::bad expected_tag: $EXPECTED"; exit 1; }
+          git fetch --quiet --force --tags origin
+          commit="$(git rev-parse --verify --quiet "${SHA:-origin/master}^{commit}")" || {
+            echo "::error::no commit ${SHA}"; exit 1; }
+          git merge-base --is-ancestor "$commit" origin/master || {
+            echo "::error::${commit} is not on master"; exit 1; }
+          git show "${commit}:builder/lines.json" > "$RUNNER_TEMP/lines.json"
+          git tag -l > "$RUNNER_TEMP/existing.txt"
+          tag="$(python3 builder/scripts/upstream-bump.py next-tag "$LINE" \
+            --lines "$RUNNER_TEMP/lines.json" --existing "$RUNNER_TEMP/existing.txt")"
+          base="${tag%-r[0-9]*}"
+          # A second tag of the same line on the same commit only rebuilds the same thing.
+          while read -r other; do
+            if [[ "$other" == "$base" || "$other" =~ ^${base//./\\.}-r[0-9]+$ ]]; then
+              echo "::error::${commit:0:8} already carries ${other}; rerun that release instead"
+              exit 1
+            fi
+          done < <(git tag --points-at "$commit")
+          if [[ -n "$EXPECTED" && "$EXPECTED" != "$tag" ]]; then
+            echo "::error::next tag of ${LINE} at ${commit:0:8} is ${tag}, not ${EXPECTED}"
+            exit 1
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+          echo "Tag ${tag} at ${commit}"
+
+      - name: Require the bump GitHub App
+        env:
+          APP_ID: ${{ vars.BUMP_APP_ID }}
+          HAS_KEY: ${{ secrets.BUMP_APP_KEY != '' }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          COMMIT: ${{ steps.plan.outputs.commit }}
+        run: |
+          if [[ -z "$APP_ID" || "$HAS_KEY" != true ]]; then
+            echo "::error::set vars.BUMP_APP_ID and secrets.BUMP_APP_KEY; push this tag by hand meanwhile: git tag ${TAG} ${COMMIT} && git push origin ${TAG}"
+            exit 1
+          fi
+
+      - name: App token
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.BUMP_APP_ID }}
+          private-key: ${{ secrets.BUMP_APP_KEY }}
+
+      - name: Push the tag (release.yml takes over)
+        env:
+          TOKEN: ${{ steps.app.outputs.token }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          COMMIT: ${{ steps.plan.outputs.commit }}
+        run: |
+          set -euo pipefail
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git tag "$TAG" "$COMMIT"
+          git push origin "refs/tags/${TAG}"
+          echo "::notice::pushed ${TAG} at ${COMMIT:0:8}"
+          echo "Pushed \`${TAG}\` at \`${COMMIT}\`; release.yml builds it." >> "$GITHUB_STEP_SUMMARY"

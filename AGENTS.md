@@ -166,6 +166,12 @@ With `secrets.JULES_API_KEY`, `builder/scripts/jules.py` adds a read-only Jules
 review to every new bump PR (posted as a comment), and when a bump cannot be
 applied asks Jules for a minimal fix in its own PR against master; Jules gets no
 token of this repository and nothing it produces merges automatically.
+A packaging rebuild of the current pins (`-r<N>`) goes through
+`.github/workflows/release-tag.yml` (dispatch: `line`, `sha` on master, optional
+`expected_tag`; `upstream-bump.py next-tag` computes the tag from that commit's
+`lines.json`, refuses frozen/retired lines, known-bad tags and an already tagged
+commit, and the same GitHub App pushes it). Cloud agent sessions cannot push tags
+themselves; they dispatch this workflow.
 By hand: edit the pin in `builder/lines.json`, run
 `builder/scripts/patch-series.sh refresh <series>` (it reads the pin from
 `lines.json`; `gen` refuses to run until the series matches), then

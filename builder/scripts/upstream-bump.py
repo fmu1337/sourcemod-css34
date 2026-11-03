@@ -11,6 +11,10 @@
     upstream-bump.py release-tags <old lines.json> <new lines.json> --existing FILE
         Tags to push after a merge: one per releasable pointer line whose
         SourceMod/Metamod/bridge pins moved, `-r<N>` when the base tag exists.
+    upstream-bump.py next-tag <line> --lines FILE --existing FILE
+        The next release tag of one releasable pointer line for the lines.json in
+        FILE (a packaging rebuild: `-r<N>` when the base tag exists), for
+        .github/workflows/release-tag.yml.
 
 Tracked targets are TARGETS below (the lines' upstream branches). Upstream
 URLs can be redirected for tests with CSS34_UPSTREAM_<REPO> (REPO: SOURCEMOD,
@@ -229,13 +233,33 @@ def release_tags(root, old_json, new_json, existing):
         base = part["tag"]
         if base in new.get("known_bad", {}):
             raise SystemExit("FAIL: {} is known-bad".format(base))
-        taken = [t for t in existing if t == base or re.fullmatch(re.escape(base) + r"-r[0-9]+", t)]
-        if not taken:
-            tags.append(base)
-            continue
-        numbers = [int(t.rsplit("-r", 1)[1]) for t in taken if t != base]
-        tags.append("{}-r{}".format(base, max(numbers + [1]) + 1))
+        tags.append(next_free_tag(base, existing))
     return tags
+
+
+def next_free_tag(base, existing):
+    """<base> when no tag of it exists, else <base>-r<highest N + 1> (the base counts as r1)."""
+    taken = [t for t in existing if t == base or re.fullmatch(re.escape(base) + r"-r[0-9]+", t)]
+    if not taken:
+        return base
+    numbers = [int(t.rsplit("-r", 1)[1]) for t in taken if t != base]
+    return "{}-r{}".format(base, max(numbers + [1]) + 1)
+
+
+def next_tag(root, lines_json, name, existing):
+    """Next tag of <name> for a hand-requested release (release-tag.yml)."""
+    mod = lines_module(root)
+    data = json.loads(lines_json)
+    line = data.get("lines", {}).get(name)
+    if line is None:
+        raise SystemExit("FAIL: unknown line {!r}".format(name))
+    if line.get("status") != "active" or not line.get("releasable", True) or not line.get("pointer", False):
+        raise SystemExit("FAIL: {} is not a releasable pointer line (status {}, releasable {}, pointer {})".format(
+            name, line.get("status"), line.get("releasable", True), line.get("pointer", False)))
+    base = mod.line_parts(data, name)["tag"]
+    if base in data.get("known_bad", {}):
+        raise SystemExit("FAIL: {} is known-bad".format(base))
+    return next_free_tag(base, existing)
 
 
 def main():
@@ -259,6 +283,10 @@ def main():
     p.add_argument("old_json", type=Path)
     p.add_argument("new_json", type=Path)
     p.add_argument("--existing", type=Path, required=True)
+    p = sub.add_parser("next-tag")
+    p.add_argument("line")
+    p.add_argument("--lines", type=Path, required=True)
+    p.add_argument("--existing", type=Path, required=True)
     args = parser.parse_args()
     cache = getattr(args, "cache", None) or Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "css34-upstream"
     if args.cmd == "plan":
@@ -272,6 +300,8 @@ def main():
         old_text = args.old_json.read_text() if args.old_json.is_file() else "{}"
         for tag in release_tags(args.root, old_text, args.new_json.read_text(), existing):
             print(tag)
+    elif args.cmd == "next-tag":
+        print(next_tag(args.root, args.lines.read_text(), args.line, args.existing.read_text().split()))
 
 
 if __name__ == "__main__":

@@ -374,6 +374,8 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
   Latest for the default line), line pointer, pointer smoke, `SHA256SUMS` last.
 - `.github/workflows/upstream-bump.yml` — weekly bump PR per lagging line (`bump/<target>`), and after its merge
   the line's next tag (needs the owner's GitHub App: `vars.BUMP_APP_ID`, `secrets.BUMP_APP_KEY`).
+- `.github/workflows/release-tag.yml` — manual: pushes a line's next tag (`-r<N>` rebuild) on a master commit
+  with the same GitHub App, so `release.yml` starts; inputs `line`, `sha`, optional `expected_tag`.
 - `.github/workflows/frozen-verify.yml` — weekly check of the frozen `sm11-oldstable` release files and pointer;
   `freeze-inputs.yml` builds a freeze input archive ([docs/FREEZE.md](docs/FREEZE.md)).
 - `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts.
@@ -388,6 +390,8 @@ server crashes and API/ABI probes still fail the job.
 git tag 1.13.0.<rev>-mm1.12.0-r<N> && git push origin 1.13.0.<rev>-mm1.12.0-r<N>   # rebuild sm13-latest
 ```
 
+Or dispatch `release-tag.yml` (line, master commit, optional expected tag): it computes the next tag from
+that commit's `builder/lines.json` and pushes it with the GitHub App.
 New pins need a new base tag (`upstream-bump.yml` pushes it after a bump merge). `release.yml` reads the tag
 map generated from `builder/lines.json`.
 
