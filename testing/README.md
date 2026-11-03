@@ -152,19 +152,49 @@ SERVER_DIR=.ci-server LEGACY_PROBE=packages/test-plugins/css34_legacy_probe.so \
 ## MySQL/MariaDB TLS probe (T4.5)
 
 sm13's Linux `dbi.mysql.ext` statically links MariaDB Connector/C and OpenSSL
-3.5 (`docs/PATCHES.md`, "sm13 MySQL dependencies"). The PR and weekly smoke jobs
-start a MariaDB 11.8 container with a throwaway CA
-(`testing/scripts/mysql-tls-server.sh start DIR`, network `css34-db`) and run
-`testing/scripts/mysql-tls-test.sh` after `smoke-test.sh`. It is skipped when the
-installed extension embeds no OpenSSL (sm12). Otherwise
-`packages/test-plugins/css34_mysql_tls_probe` (built from the extension's own
-archives, never released) must connect with verified TLS to a `REQUIRE SSL`
-account, client and server must agree on the TLS version and cipher, and the TLS
-library must be the OpenSSL the build compiled against. A plaintext login with
-SourceMod's driver options and TLS against an unrelated CA must be refused.
-`testing/plugins/css34_mysql_probe/css34_mysql_probe.sp` then makes a
-`dbi.mysql.ext` connect and query round trip inside srcds. SourceMod 1.13's
-driver requests no TLS, so that session is plaintext.
+3.5 and reads `ssl_mode` / `ssl_ca` from `databases.cfg` (`docs/PATCHES.md`,
+"sm13 MySQL dependencies" and "sm13 MySQL TLS options"). The PR and weekly smoke
+jobs start three containers on network `css34-db` with one throwaway CA
+(`testing/scripts/mysql-tls-server.sh start DIR`; images pinned in
+`builder/lines.json`): `css34-mariadb` (MariaDB 11.8), `css34-mysql` (MySQL 8.4,
+`caching_sha2_password`) and `css34-mysql-notls` (MySQL 8.4 with TLS turned
+off). The server certificate names `css34-mariadb` and `css34-mysql`, no IP
+address. Each server has `css34_tls` (`REQUIRE SSL`) and `css34_plain`.
+`testing/scripts/mysql-tls-test.sh` runs after `smoke-test.sh`; it is skipped
+when the installed extension embeds no OpenSSL (sm12).
+
+1. `packages/test-plugins/css34_mysql_tls_probe` (built from the extension's own
+   archives, never released) must connect to MariaDB with verified TLS to the
+   `REQUIRE SSL` account, client and server must agree on the TLS version and
+   cipher, and the TLS library must be the OpenSSL the build compiled against.
+   A plaintext login and TLS against an unrelated CA must be refused.
+2. `testing/plugins/css34_mysql_probe/css34_mysql_probe.sp` runs in srcds: the
+   script adds `databases.cfg` entries (CA files under
+   `addons/sourcemod/configs/css34-mysql-probe/`, `ssl_ca` relative), boots the
+   server once and runs one RCON command per case. The server's view of each
+   session (`Ssl_version`, `Ssl_cipher`, `@@character_set_client`) is logged
+   and compared with the expectation:
+
+| Case | Configuration | Expected |
+|------|---------------|----------|
+| `identity` | `verify_identity`, `ssl_ca`, MySQL by name | TLS 1.2+, `utf8mb4` |
+| `ca_ip` | `VERIFY_CA` (any case), by IP address | TLS (no host name check) |
+| `identity_ip` | `verify_identity` by IP address | refused, `[2026]` host name |
+| `required` | `required`, no CA | TLS |
+| `default` | no `ssl_*` keys, `css34_plain` | plaintext (default `disabled`) |
+| `default_tls_user` | no `ssl_*` keys, `REQUIRE SSL` account | refused, `[1045]` |
+| `preferred` | `preferred`, `css34_plain` | TLS |
+| `disabled_plain` | `disabled`, `css34_plain` | plaintext (`caching_sha2_password` over RSA) |
+| `disabled` | `disabled`, `REQUIRE SSL` account | refused, `[1045]` |
+| `wrong_ca` | `verify_identity`, unrelated CA | refused, `[2026]` |
+| `bad_mode` | `ssl_mode verify_full` | refused, `[0]: ssl_mode "verify_full" is not one of ...` |
+| `no_ca` | `verify_ca` without `ssl_ca` | refused, `[0]: ... needs ssl_ca` |
+| `async` | `Database.Connect` (worker thread), `verify_identity` | TLS |
+| `persist_plain`, `persist_tls` | persistent `disabled`, then persistent `preferred` with the same host/user/password | plaintext, then TLS (no reuse) |
+| `custom`, `custom_bad` | `SQL_ConnectCustom` KeyValues with `ssl_mode` / `ssl_ca` | TLS; unknown mode refused |
+| `notls_preferred` | `preferred`, server without TLS | plaintext (`preferred` falls back) |
+| `notls_required`, `notls_verify` | `required`, `verify_ca`, server without TLS | refused before login, `[2026]` |
+| `mdb_default`, `mdb_identity` | MariaDB, no keys and `verify_identity` | plaintext; TLS |
 
 ```bash
 testing/scripts/mysql-tls-server.sh start .ci-mysql-tls

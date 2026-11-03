@@ -196,6 +196,9 @@ jobs:
       - name: OpenSSL entropy patch and drift refusals (T4.5)
         run: python3 testing/scripts/test-openssl-entropy-patch.py
 
+      - name: MySQL ssl_mode / ssl_ca parsing and sm13 series checks
+        run: python3 testing/scripts/test-mysql-ssl-options.py
+
       - name: Intentionally fail smoke with a missing server
         id: negative-smoke
         continue-on-error: true
@@ -544,7 +547,7 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Start MariaDB with TLS for the MySQL probe (T4.5)
+      - name: Start MariaDB and MySQL 8.4 with TLS for the MySQL probe (T4.5)
         if: steps.select.outputs.skip != '1'
         run: bash testing/scripts/mysql-tls-server.sh start .ci-mysql-tls
 
@@ -609,11 +612,11 @@ jobs:
                 testing/scripts/legacy-bridge-test.sh
               fi
               # T4.5: TLS through the static OpenSSL of dbi.mysql.ext (skipped
-              # when the extension links none) and a round trip from srcds.
+              # when the extension links none) and ssl_mode / ssl_ca from srcds.
               testing/scripts/mysql-tls-test.sh
             '
 
-      - name: Stop MariaDB
+      - name: Stop MariaDB and MySQL
         if: always() && steps.select.outputs.skip != '1'
         run: bash testing/scripts/mysql-tls-server.sh stop
 
@@ -1280,7 +1283,7 @@ jobs:
           key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
           fail-on-cache-miss: true
 
-      - name: Start MariaDB with TLS for the MySQL probe (T4.5)
+      - name: Start MariaDB and MySQL 8.4 with TLS for the MySQL probe (T4.5)
         if: steps.select.outputs.skip != '1'
         run: bash testing/scripts/mysql-tls-server.sh start .ci-mysql-tls
 
@@ -1345,11 +1348,11 @@ jobs:
                 testing/scripts/legacy-bridge-test.sh
               fi
               # T4.5: TLS through the static OpenSSL of dbi.mysql.ext (skipped
-              # when the extension links none) and a round trip from srcds.
+              # when the extension links none) and ssl_mode / ssl_ca from srcds.
               testing/scripts/mysql-tls-test.sh
             '
 
-      - name: Stop MariaDB
+      - name: Stop MariaDB and MySQL
         if: always() && steps.select.outputs.skip != '1'
         run: bash testing/scripts/mysql-tls-server.sh stop
 

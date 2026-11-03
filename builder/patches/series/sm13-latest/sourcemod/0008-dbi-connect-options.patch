@@ -1,0 +1,351 @@
+css34: IDBConnectOptions: drivers read their own databases.cfg / SQL_ConnectCustom keys
+
+diff --git a/bridge/include/BridgeAPI.h b/bridge/include/BridgeAPI.h
+index 800d140b4d66447abf9fa7809e10ec2cf7f0d146..63cb4b4f3e5c711c4c5b3f9f1fbb8482ac409486 100644
+--- a/bridge/include/BridgeAPI.h
++++ b/bridge/include/BridgeAPI.h
+@@ -35,7 +35,7 @@ namespace SourceMod {
+ 
+ // Add 1 to the RHS of this expression to bump the intercom file
+ // This is to prevent mismatching core/logic binaries
+-static const uint32_t SM_LOGIC_MAGIC = 0x0F47C0DE - 57;
++static const uint32_t SM_LOGIC_MAGIC = 0x0F47C0DE - 57 - 0x1000; /* css34: GetKeyValuesPairs */
+ 
+ } // namespace SourceMod
+ 
+diff --git a/bridge/include/CoreProvider.h b/bridge/include/CoreProvider.h
+index 276dd8aa9620f3b16e2e41b52cc99099148164cb..e1c7ff7ced5ccf21e018a219cb010eb5948f3777 100644
+--- a/bridge/include/CoreProvider.h
++++ b/bridge/include/CoreProvider.h
+@@ -128,6 +128,8 @@ public:
+ 	void			(*UpdateAdminCmdFlags)(const char *cmd, OverrideType type, FlagBits bits, bool remove);
+ 	bool			(*LookForCommandAdminFlags)(const char *cmd, FlagBits *pFlags);
+ 	int             (*GetGlobalTarget)();
++	/* css34: every key/value directly under kv (IDBConnectOptions). */
++	void			(*GetKeyValuesPairs)(KeyValues *kv, void (*cb)(void *data, const char *key, const char *value), void *data);
+ };
+ 
+ } // namespace SourceMod
+diff --git a/core/logic/Database.cpp b/core/logic/Database.cpp
+index e7a6e343878e1b23e541d2216e4e81a5c03a29f3..6d7dd018dfd87d548afc2f15b13d84403cfeaf60 100644
+--- a/core/logic/Database.cpp
++++ b/core/logic/Database.cpp
+@@ -73,6 +73,8 @@ void DBManager::OnSourceModAllInitialized()
+ 	m_DatabaseType = g_HandleSys.CreateType("IDatabase", this, 0, NULL, NULL, g_pCoreIdent, NULL);
+ 
+ 	g_ShareSys.AddInterface(NULL, this);
++	/* css34: driver-specific keys (ssl_mode, ...) without a DatabaseInfo change. */
++	g_ShareSys.AddInterface(NULL, &g_DBConnectOptions);
+ 
+ 	g_pSM->BuildPath(Path_SM, m_Filename, sizeof(m_Filename), "configs/databases.cfg");
+ 	m_Builder.SetPath(m_Filename);
+diff --git a/core/logic/DatabaseConfBuilder.cpp b/core/logic/DatabaseConfBuilder.cpp
+index 56f7ba4161e7f62d4e542ae41ebe73fa7efb404a..4c2a746e55b5a58a3e9bc04c838be9fd036f7de2 100644
+--- a/core/logic/DatabaseConfBuilder.cpp
++++ b/core/logic/DatabaseConfBuilder.cpp
+@@ -35,6 +35,59 @@
+ #define DBPARSE_LEVEL_MAIN		1
+ #define DBPARSE_LEVEL_DATABASE	2
+ 
++DBConnectOptions &g_DBConnectOptions = *new DBConnectOptions();
++
++static bool DBOptionKeyEquals(const std::string &a, const char *b)
++{
++	size_t i = 0;
++	for (; i < a.size() && b[i] != '\0'; i++)
++	{
++		unsigned char x = (unsigned char)a[i], y = (unsigned char)b[i];
++		if (x >= 'A' && x <= 'Z')
++			x = x - 'A' + 'a';
++		if (y >= 'A' && y <= 'Z')
++			y = y - 'A' + 'a';
++		if (x != y)
++			return false;
++	}
++	return i == a.size() && b[i] == '\0';
++}
++
++bool DBConnectOptions::GetConnectOption(const DatabaseInfo *info, const char *key, char *buffer, size_t maxlength)
++{
++	if (buffer && maxlength)
++		buffer[0] = '\0';
++	if (!info || !key)
++		return false;
++
++	std::lock_guard<std::mutex> lock(m_Lock);
++	auto iter = m_Options.find(info);
++	if (iter == m_Options.end())
++		return false;
++	const DBConnectOptionList &options = *iter->second;
++	for (size_t i = options.size(); i > 0; i--)
++	{
++		if (!DBOptionKeyEquals(options[i - 1].first, key))
++			continue;
++		if (buffer && maxlength)
++			ke::SafeStrcpy(buffer, maxlength, options[i - 1].second.c_str());
++		return true;
++	}
++	return false;
++}
++
++void DBConnectOptions::Add(const DatabaseInfo *info, const DBConnectOptionList *options)
++{
++	std::lock_guard<std::mutex> lock(m_Lock);
++	m_Options[info] = options;
++}
++
++void DBConnectOptions::Remove(const DatabaseInfo *info)
++{
++	std::lock_guard<std::mutex> lock(m_Lock);
++	m_Options.erase(info);
++}
++
+ DatabaseConfBuilder::DatabaseConfBuilder()
+ 	: m_ParseList(),
+ 	  m_InfoList()
+@@ -119,6 +172,8 @@ SMCResult DatabaseConfBuilder::ReadSMC_KeyValue(const SMCStates *states, const c
+ 			m_ParseList.SetDefaultDriver(value);
+ 		}
+ 	} else if (m_ParseState == DBPARSE_LEVEL_DATABASE) {
++		/* css34: keep every key for drivers (IDBConnectOptions). */
++		m_ParseCurrent->options.emplace_back(key, value);
+ 		if (strcmp(key, "driver") == 0)
+ 		{
+ 			if (strcmp(value, "default") != 0)
+@@ -161,6 +216,7 @@ SMCResult DatabaseConfBuilder::ReadSMC_LeavingSection(const SMCStates *states)
+ 		m_ParseCurrent->info.user = m_ParseCurrent->user.c_str();
+ 		m_ParseCurrent->info.pass = m_ParseCurrent->pass.c_str();
+ 		m_ParseCurrent->info.schemaName = m_ParseCurrent->schemaName.c_str();
++		g_DBConnectOptions.Add(&m_ParseCurrent->info, &m_ParseCurrent->options);
+ 		
+ 		/* Save it.. */
+ 		m_ParseCurrent->AddRef();
+diff --git a/core/logic/DatabaseConfBuilder.h b/core/logic/DatabaseConfBuilder.h
+index 376a123c3dfc35e74eb6ac3aace75eb7e8624b35..bd940723e5e66667045ede12926ef54099d7c643 100644
+--- a/core/logic/DatabaseConfBuilder.h
++++ b/core/logic/DatabaseConfBuilder.h
+@@ -33,6 +33,7 @@
+ #define _INCLUDE_DATABASE_CONF_BUILDER_H_
+ 
+ #include <IDBDriver.h>
++#include <IDBConnectOptions.h>
+ #include <ITextParsers.h>
+ #include "common_logic.h"
+ 
+@@ -40,6 +41,51 @@
+ #include <am-string.h>
+ #include <am-refcounting.h>
+ #include <am-refcounting-threadsafe.h>
++#include <mutex>
++#include <string>
++#include <unordered_map>
++#include <utility>
++#include <vector>
++
++/* css34: every key of one configuration, in file order. */
++typedef std::vector<std::pair<std::string, std::string>> DBConnectOptionList;
++
++/* css34: IDBConnectOptions. Maps the DatabaseInfo a driver receives to the
++ * keys of the configuration it was built from. Entries are added when a
++ * databases.cfg entry is complete and removed when the entry is destroyed
++ * (it is refcounted, so a pending threaded connect keeps it); SQL_ConnectCustom
++ * adds its KeyValues for the duration of the driver's Connect() call. */
++class DBConnectOptions : public IDBConnectOptions
++{
++public:
++	bool GetConnectOption(const DatabaseInfo *info, const char *key, char *buffer, size_t maxlength) override;
++	void Add(const DatabaseInfo *info, const DBConnectOptionList *options);
++	void Remove(const DatabaseInfo *info);
++private:
++	std::mutex m_Lock;
++	std::unordered_map<const DatabaseInfo *, const DBConnectOptionList *> m_Options;
++};
++
++/* Never destroyed: ConfDbInfo objects owned by other globals unregister from it
++ * during static destruction, in an order C++ does not define across files. */
++extern DBConnectOptions &g_DBConnectOptions;
++
++/* css34: registers a list for one scope (SQL_ConnectCustom). */
++class DBConnectOptionsScope
++{
++public:
++	DBConnectOptionsScope(const DatabaseInfo *info, const DBConnectOptionList *options)
++		: m_Info(info)
++	{
++		g_DBConnectOptions.Add(m_Info, options);
++	}
++	~DBConnectOptionsScope()
++	{
++		g_DBConnectOptions.Remove(m_Info);
++	}
++private:
++	const DatabaseInfo *m_Info;
++};
+ 
+ class ConfDbInfo : public ke::RefcountedThreadsafe<ConfDbInfo>
+ {
+@@ -47,6 +93,10 @@ public:
+ 	ConfDbInfo() : realDriver(NULL)
+ 	{
+ 	}
++	~ConfDbInfo()
++	{
++		g_DBConnectOptions.Remove(&info);
++	}
+ 	std::string name;
+ 	std::string driver;
+ 	std::string host;
+@@ -56,6 +106,7 @@ public:
+ 	std::string schemaName;
+ 	IDBDriver *realDriver;
+ 	DatabaseInfo info;
++	DBConnectOptionList options; /* css34: all keys, for IDBConnectOptions */
+ };
+ 
+ class ConfDbInfoList : public std::vector<ke::RefPtr<ConfDbInfo>>
+diff --git a/core/logic/smn_database.cpp b/core/logic/smn_database.cpp
+index dd49eb56fb9934bcf09954c2597eb8ab44d110ef..907b617df918819131a73a352c048d890d8e015a 100644
+--- a/core/logic/smn_database.cpp
++++ b/core/logic/smn_database.cpp
+@@ -1472,6 +1472,12 @@ static cell_t SQL_ConnectCustom(IPluginContext *pContext, const cell_t *params)
+ 	DatabaseInfo info;
+ 	bridge->GetDBInfoFromKeyValues(kv, &info);
+ 
++	/* css34: the handle's keys reach the driver through IDBConnectOptions. */
++	DBConnectOptionList options;
++	bridge->GetKeyValuesPairs(kv, [](void *list, const char *key, const char *value) {
++		static_cast<DBConnectOptionList *>(list)->emplace_back(key, value);
++	}, &options);
++
+ 	IDBDriver *driver;
+ 	if (info.driver[0] == '\0' || strcmp(info.driver, "default") == 0)
+ 	{
+@@ -1497,7 +1503,10 @@ static cell_t SQL_ConnectCustom(IPluginContext *pContext, const cell_t *params)
+ 
+ 	pContext->LocalToString(params[2], &buffer);
+ 	
+-	db = driver->Connect(&info, params[4] ? true : false, buffer, params[3]);
++	{
++		DBConnectOptionsScope scope(&info, &options);
++		db = driver->Connect(&info, params[4] ? true : false, buffer, params[3]);
++	}
+ 	if (db == NULL)
+ 	{
+ 		return BAD_HANDLE;
+diff --git a/core/logic_bridge.cpp b/core/logic_bridge.cpp
+index 4c86d592bcc042acafb04752d3a620bceb579b90..77c19579b4f7000f1fca6afa5aa13d882e7cc3f4 100644
+--- a/core/logic_bridge.cpp
++++ b/core/logic_bridge.cpp
+@@ -410,6 +410,15 @@ static void keyvalues_to_dbinfo(KeyValues *kv, DatabaseInfo *out)
+ 	out->user = kv->GetString("user", "");
+ }
+ 
++/* css34: SQL_ConnectCustom's keys for IDBConnectOptions. */
++static void keyvalues_pairs(KeyValues *kv, void (*cb)(void *data, const char *key, const char *value), void *data)
++{
++	for (KeyValues *value = kv->GetFirstValue(); value; value = value->GetNextValue())
++	{
++		cb(data, value->GetName(), value->GetString());
++	}
++}
++
+ static int get_activity_flags()
+ {
+ 	return sm_show_activity.GetInt();
+@@ -541,6 +550,7 @@ CoreProviderImpl::CoreProviderImpl()
+ 	this->UpdateAdminCmdFlags = update_admin_cmd_flags;
+ 	this->LookForCommandAdminFlags = look_for_cmd_admin_flags;
+ 	this->GetGlobalTarget = get_global_target;
++	this->GetKeyValuesPairs = keyvalues_pairs;
+ 	this->gamesuffix = GAMEFIX;
+ 	this->serverGlobals = &::serverGlobals;
+ 	this->listeners = nullptr;
+diff --git a/public/IDBConnectOptions.h b/public/IDBConnectOptions.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..78da31ab65d0bb99ad8cb2ee88bdaf4c353ac1a0
+--- /dev/null
++++ b/public/IDBConnectOptions.h
+@@ -0,0 +1,83 @@
++/**
++ * vim: set ts=4 sw=4 tw=99 noet :
++ * =============================================================================
++ * SourceMod (CS:S v34 build)
++ * =============================================================================
++ *
++ * This program is free software; you can redistribute it and/or modify it under
++ * the terms of the GNU General Public License, version 3.0, as published by the
++ * Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License along with
++ * this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#ifndef _INCLUDE_SOURCEMOD_INTERFACE_DBCONNECTOPTIONS_H_
++#define _INCLUDE_SOURCEMOD_INTERFACE_DBCONNECTOPTIONS_H_
++
++#include <IShareSys.h>
++#include <IDBDriver.h>
++#include <stddef.h>
++
++/**
++ * @file IDBConnectOptions.h
++ * @brief css34: driver-specific keys of a database configuration.
++ *
++ * DatabaseInfo only carries the keys every driver shares (driver, host,
++ * database, user, pass, port, timeout, schema), and its layout is part of the
++ * DBI ABI. Core keeps every key of a databases.cfg entry, and of the KeyValues
++ * passed to SQL_ConnectCustom, and serves them through this separate interface,
++ * so a driver can read its own keys (for example the MySQL driver's ssl_mode
++ * and ssl_ca) without any change to IDBDriver.h. Drivers that never ask are
++ * unaffected; a driver loaded by a core without this interface simply fails to
++ * request it.
++ */
++
++#define SMINTERFACE_DBCONNECTOPTIONS_NAME		"IDBConnectOptions"
++#define SMINTERFACE_DBCONNECTOPTIONS_VERSION	1
++
++namespace SourceMod
++{
++	class IDBConnectOptions : public SMInterface
++	{
++	public:
++		const char *GetInterfaceName()
++		{
++			return SMINTERFACE_DBCONNECTOPTIONS_NAME;
++		}
++		unsigned int GetInterfaceVersion()
++		{
++			return SMINTERFACE_DBCONNECTOPTIONS_VERSION;
++		}
++	public:
++		/**
++		 * @brief Reads one key of the configuration a DatabaseInfo came from.
++		 *
++		 * Known origins: a databases.cfg entry (SQL_Connect, SQL_TConnect,
++		 * Database.Connect, IDBManager::Connect and FindDatabaseConf, also
++		 * from the database worker thread) and, for the duration of the
++		 * driver's Connect() call, the KeyValues of SQL_ConnectCustom.
++		 * A DatabaseInfo built any other way (SQL_ConnectEx, an extension's
++		 * own struct) has no keys. Thread-safe.
++		 *
++		 * @param info			The pointer the driver's Connect() received.
++		 * @param key			Key name (ASCII case-insensitive; the last
++		 *						occurrence of a repeated key wins).
++		 * @param buffer		Receives the value (may be empty), truncated
++		 *						and always NUL-terminated.
++		 * @param maxlength		Size of buffer.
++		 * @return				True if the configuration has the key.
++		 */
++		virtual bool GetConnectOption(const DatabaseInfo *info,
++			const char *key,
++			char *buffer,
++			size_t maxlength) =0;
++	};
++}
++
++#endif //_INCLUDE_SOURCEMOD_INTERFACE_DBCONNECTOPTIONS_H_

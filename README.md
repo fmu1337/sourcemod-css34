@@ -43,6 +43,52 @@ tar -xzf sourcemod-css34-linux.tar.gz -C /path/to/cstrike
 Always install MM and SM **from the same line** (same pointer or same tag). Windows packages are only
 attached to the per-tag releases (pointers are Linux-only).
 
+## Connecting to MySQL HeatWave / MySQL 8.4
+
+`sm13-latest` connects to Oracle MySQL HeatWave and MySQL 8.4+ out of the box: `caching_sha2_password`,
+TLS 1.2/1.3 (static OpenSSL 3.5 on Linux) and `utf8mb4`, configured per entry in
+`addons/sourcemod/configs/databases.cfg`. No extra extension or ProxySQL is needed. The keys and values are
+those of [fmu1337/sm-dbi-mysql](https://github.com/fmu1337/sm-dbi-mysql); the **default differs** (see below):
+
+```
+"Databases"
+{
+	"default"
+	{
+		"driver"	"mysql"
+		"host"		"10.0.0.10"
+		"database"	"sourcemod"
+		"user"		"sm"
+		"pass"		"..."
+		"port"		"3306"
+		"timeout"	"10"
+		"ssl_mode"	"verify_ca"			// disabled (default) | preferred | required | verify_ca | verify_identity
+		"ssl_ca"	"configs/mysql-ca.pem"	// CA certificate (PEM), relative to addons/sourcemod/
+	}
+}
+```
+
+- Without `ssl_mode` (or with `""`) the driver uses **`disabled`**: no TLS, exactly like stock SourceMod. A
+  HeatWave / MySQL 8.4 account with `REQUIRE SSL` then refuses the login (`[1045]`).
+- **For HeatWave** use at least `"ssl_mode" "required"`, better `"verify_ca"` with the DB system's CA file in
+  `ssl_ca` (`verify_identity` if you connect by a host name the certificate lists).
+- **Coming from sm-dbi-mysql:** its default is `preferred`. Entries that relied on that default (no `ssl_mode`
+  key) must now say `"ssl_mode" "preferred"` or something stricter, otherwise they connect without TLS.
+- `preferred`: TLS whenever the server offers it, plaintext otherwise; the certificate is **not** checked
+  (protects against eavesdropping, not against an active man in the middle). `required`: TLS or no
+  connection; certificate not checked. `verify_ca`: the certificate must chain to `ssl_ca`.
+  `verify_identity`: additionally the `host` must match the certificate (for an IP address the certificate
+  does not list, use `verify_ca`).
+- An unknown `ssl_mode`, or a verify mode without a readable `ssl_ca`, fails the connect with a message
+  (`[0]: ssl_mode ...`); nothing is silently downgraded. Plugins using `SQL_ConnectCustom` can pass the same
+  keys in their KeyValues.
+- `sm12-latest` cannot log in to MySQL 8.4 / HeatWave (its MySQL 5.6 client has no `caching_sha2_password`
+  and only TLS 1.0/1.1); it ignores these keys. Windows packages build the same code with Schannel; that path is
+  not tested by CI.
+
+Details, the mapping onto MariaDB Connector/C and the CI cases: [docs/PATCHES.md](docs/PATCHES.md)
+("sm13 MySQL TLS options").
+
 ## Version matrix (current pins)
 
 <!-- lines-versions:begin -->

@@ -21,6 +21,8 @@ files, exports, `NEEDED` and `SONAME` (`compare-package-abi.py`).
 | `sourcemod/0005-sourcemm-api-safe-iface` | `GET_V_IFACE_*` check the factory for NULL before `VInterfaceMatch` and report which interface is missing. | A NULL factory on CS:S v34 dereferenced at load instead of a load error. |
 | `sourcemod/0006-gcc10-warnings` | curl `-Wno-stringop-truncation`; `MIN()` replaced in two units. | `-Werror` build failures with GCC 10. |
 | `sourcemod/0007-css34-versioning` | Build number from `SOURCEMOD_GIT_REV` (lines.json), detached/submodule HEAD in `Versioning`, `CSS34 pack:` line in `sm version`. | Shallow clones give a wrong build number; smoke checks the pack commit. |
+| `sourcemod/0008-dbi-connect-options` | New interface `IDBConnectOptions` (`public/IDBConnectOptions.h`): core keeps every key of a `databases.cfg` entry and of `SQL_ConnectCustom`'s KeyValues (bridge hook `GetKeyValuesPairs`, `SM_LOGIC_MAGIC` changed) and a driver reads them by the `DatabaseInfo` pointer it received. `DatabaseInfo` and the existing DBI interfaces are unchanged. | Core passes only driver/host/database/user/pass/port/timeout/schema to a driver; `ssl_mode` / `ssl_ca` never reach it. Section "sm13 MySQL TLS options" below. |
+| `sourcemod/0009-mysql-tls-options` | `dbi.mysql.ext`: `ssl_mode` / `ssl_ca` (keys and values of fmu1337/sm-dbi-mysql; default `disabled`, as stock SourceMod) mapped onto MariaDB Connector/C, TLS 1.2/1.3 with OpenSSL, `utf8mb4` in the handshake; unknown modes and verify modes without a readable CA fail the connect; persistent connections are shared only with equal TLS settings. | Upstream turns certificate verification off and requests no TLS: plaintext to every server, a `REQUIRE SSL` account (HeatWave's usual setup) is refused. |
 | `sourcepawn/0001-gcc10-link-flags` | `-Wno-sign-compare`; pthread/rt/`-lgcc_s` `NEEDED`. | GCC 10 sign-compare errors in the JIT/compiler; missing `NEEDED` on glibc 2.17. |
 | `hl2sdk-manifests/0001-episode1-defines` | episode1 Linux defines `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE`. | The SDK's malloc hooks/overrides in SourceMod modules on CS:S v34. |
 | `hl2sdk-manifests/0002-compiler-flag-guard` | Drop manifest compiler flags GCC 10 does not know (formerly `manifest_flag_guard.py`). | Unknown-flag errors from newer manifests (hl2sdk-manifests `ebd6e10`). |
@@ -32,6 +34,10 @@ files, exports, `NEEDED` and `SONAME` (`compare-package-abi.py`).
 sm13 ones above except:
 
 - no `glibc217-database-imports`: SM 1.12's database extensions need neither shim;
+- no `dbi-connect-options` / `mysql-tls-options`: SM 1.12 links the MySQL 5.6.15
+  client with bundled yaSSL (TLS 1.0/1.1 only, no `caching_sha2_password`), which
+  cannot log in to MySQL 8.4 / HeatWave at all. Use sm13 for those servers;
+  sm12 ignores `ssl_mode` / `ssl_ca` like stock SourceMod;
 - `sourcemod/0007-sdktools-onmapend-list`: `EntityOutputManager::OnMapEnd` uses
   `SourceHook::List<omg_hooks *>`, the type `OutputHookList` stores (section
   "SM 1.12: entity-output map-end cleanup list type" below);
@@ -145,19 +151,104 @@ compiles the patched function and covers each refusal. No new libc symbol is
 allowlisted: any OpenSSL symbol the connector misses would be an unversioned
 undefined import, which `check-package.sh` rejects.
 
-SourceMod 1.13's MySQL driver never asks for TLS: `MyDriver.cpp` turns server
-certificate verification off and sets no TLS option, so Connector/C never sends
-the TLS request. In `dbi.mysql.ext`, OpenSSL therefore serves password hashing
-and caching_sha2 RSA. The CI probe (`testing/scripts/mysql-tls-test.sh`, every
-smoke image) checks both sides against a MariaDB 11.8 container
-(`mysql-tls-server.sh`, digest in `lines.json`). `css34_mysql_tls_probe` is
-linked from the extension's own archives and link group
-(`testing/tools/mysql-tls-probe.c`, `packages/test-plugins`, never released).
-Verified TLS (CA and host name) to a `REQUIRE SSL` account must succeed, client
-and server must report the same TLS version and cipher, and the TLS library
-must be the OpenSSL the build compiled against. SourceMod's options must be
-refused, and so must an unrelated CA. `css34_mysql_probe.sp` then makes a
-`dbi.mysql.ext` connect and query round trip inside srcds.
+Upstream SourceMod 1.13's MySQL driver never asks for TLS: `MyDriver.cpp` turns
+server certificate verification off and sets no TLS option. The sm13 series
+adds TLS on request (next section). The CI probe
+(`testing/scripts/mysql-tls-test.sh`, every smoke image) runs against MariaDB
+11.8, MySQL 8.4 and MySQL 8.4 without TLS (`mysql-tls-server.sh`, digests in
+`lines.json`). `css34_mysql_tls_probe` is linked from the extension's own
+archives and link group (`testing/tools/mysql-tls-probe.c`,
+`packages/test-plugins`, never released): verified TLS (CA and host name) to a
+`REQUIRE SSL` MariaDB account must succeed, client and server must report the
+same TLS version and cipher, and the TLS library must be the OpenSSL the build
+compiled against; a plaintext login must be refused, and so must an unrelated
+CA. `css34_mysql_probe.sp` then exercises every `ssl_mode` through
+`dbi.mysql.ext` inside srcds (cases in `testing/README.md`).
+
+## sm13 MySQL TLS options (ssl_mode / ssl_ca)
+
+Patches `0008-dbi-connect-options` and `0009-mysql-tls-options` let a
+`databases.cfg` entry (or `SQL_ConnectCustom` KeyValues) ask `dbi.mysql.ext` for
+TLS, so Oracle MySQL HeatWave and MySQL 8.4+ (`caching_sha2_password`, `REQUIRE
+SSL` accounts) work without a custom extension or ProxySQL. Usage and an example
+are in the README section "Connecting to MySQL HeatWave / MySQL 8.4".
+
+| Key | Values | Default |
+|-----|--------|---------|
+| `ssl_mode` | `disabled`, `preferred`, `required`, `verify_ca`, `verify_identity` (ASCII case-insensitive) | `disabled` (also for an empty value): stock SourceMod behaviour |
+| `ssl_ca` | CA certificate (PEM), relative to `addons/sourcemod/` unless absolute; read by `verify_ca` / `verify_identity` only | none |
+
+The keys and values are those of fmu1337/sm-dbi-mysql, so an entry with an
+explicit `ssl_mode` written for that drop-in driver keeps working. Differences:
+the default is `disabled` (sm-dbi-mysql: `preferred`), so an entry that relied on
+that default must add `"ssl_mode" "preferred"` or stricter; for HeatWave
+(`REQUIRE SSL`, `caching_sha2_password`) use `required` at minimum and
+`verify_ca` with the DB system's CA file. An unknown `ssl_mode` fails the
+connect (`[0]: ssl_mode "..." is not one of ...`; sm-dbi-mysql falls back to
+`preferred`); `verify_ca` / `verify_identity`
+without `ssl_ca`, or with a file that cannot be opened, fail the connect (sm-dbi-
+mysql falls back to OpenSSL's built-in CA path); `verify_ca` really skips the
+host-name check (sm-dbi-mysql checks it in both verify modes, so `verify_ca` to
+an IP address only works here); entries are matched exactly, by the entry the
+plugin named, not by host+user+database(+port).
+
+How each mode maps onto MariaDB Connector/C 3.4.9 (`MySsl_Apply` in
+`MyDriver.cpp`), which has no ssl-mode option of its own:
+
+| `ssl_mode` | Connector/C options | Server without TLS | Certificate |
+|------------|---------------------|--------------------|-------------|
+| `disabled` (default) | verification off, no TLS requested (upstream's setting) | plaintext | — |
+| `preferred` | `MYSQL_OPT_SSL_ENFORCE`, verification off | plaintext (falls back) | not checked |
+| `required` | enforce, verification on, a callback that accepts any certificate | refused before login, `[2026]` | not checked |
+| `verify_ca` | enforce, verification on, `MYSQL_OPT_SSL_CA`, the library's check without `MARIADB_TLS_VERIFY_HOST` | refused before login | chain to `ssl_ca`, expiry |
+| `verify_identity` | enforce, verification on, `MYSQL_OPT_SSL_CA`, the library's own check | refused before login | chain, expiry, host name (DNS SAN / IP) |
+
+`preferred` therefore encrypts whenever the server offers TLS but does not
+authenticate the server: it protects against passive eavesdropping, not an
+active man in the middle, and it falls back to plaintext when the server offers
+no TLS. Use `verify_identity` (or `verify_ca` when connecting by an address the
+certificate does not name) where that matters. With OpenSSL (Linux) the protocol is pinned to
+TLS 1.2/1.3 (`MARIADB_OPT_TLS_VERSION`); `required` and the verify modes also
+check after login that the session is encrypted. All options are copied by the
+connector's automatic reconnect, so a reconnect cannot downgrade either. The
+handshake asks for `utf8mb4` (the connector's default, now explicit); plugins
+may still call `SQL_SetCharset`. A persistent connection is shared only between
+configurations with the same mode and CA.
+
+`required` needs the connector's TLS verification status cleared, which only
+`MARIADB_TLS` (`ma_tls.h`, not installable without `ma_hash.h`) reaches: the
+patch mirrors its two leading members and refuses to compile against any
+Connector/C other than 3.4.9 (`MARIADB_PACKAGE_VERSION_ID`), so a connector bump
+must re-check them; at run time the callback also checks the back pointers and
+fails closed. `verify_ca` calls the library's `ma_pvio_tls_verify_server_cert`
+(declared in the installed `ma_tls.h`, present in both the Linux and the
+Windows archive).
+
+Design: `DatabaseInfo` is part of the DBI ABI (third-party drivers and
+extensions build it), so it does not grow. Core instead keeps all keys of each
+configuration and registers `IDBConnectOptions` (version 1) next to `IDBI`;
+`dbi.mysql.ext` requests it in `SDK_OnLoad` and logs an error if the core has
+none (stock core: every connection then uses `disabled`, no TLS, whatever the
+entry says). The registry maps the
+`DatabaseInfo` pointer core hands to `IDBDriver::Connect` to its configuration:
+`databases.cfg` entries for their lifetime (refcounted, so a pending threaded
+connect keeps its entry across `sm_reload_databases`), `SQL_ConnectCustom`
+KeyValues for the duration of the call. This covers `SQL_Connect`,
+`SQL_TConnect`, `Database.Connect`, `IDBManager::Connect` and extensions that
+call `FindDatabaseConf` (clientprefs). `SQL_ConnectEx` and a `DatabaseInfo` an
+extension builds itself have no keys and use `disabled`. Re-parsing
+`databases.cfg` inside the extension (sm-dbi-mysql's approach) was not needed:
+it could not see `SQL_ConnectCustom` and matches entries only heuristically.
+
+Windows: the same patch builds against AlliedModders' Schannel connector
+(`v3.4.9-sm.5`). The modes map the same way; Schannel reads `ssl_ca` (PEM) and
+honours the verification flags, the protocol set is the system's (TLS 1.3 only
+on Windows 11 / Server 2022). Windows TLS is not exercised by CI (the Wine smoke
+has no database).
+
+Failure without the patches: no TLS from srcds at all; MySQL 8.4 / HeatWave
+`REQUIRE SSL` accounts refuse SourceMod (`[1045]`), and other accounts log in
+in plaintext.
 
 ## SM 1.12: entity-output map-end cleanup list type
 
