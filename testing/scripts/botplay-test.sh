@@ -452,9 +452,9 @@ gd_probe_line=""
 if [[ ${#sm_probe_sources[@]} -gt 0 ]]; then
   gd_probe_line="$(grep -h '\[css34_gamedata_probe\] engine_sv=' "${sm_probe_sources[@]}" 2>/dev/null | tail -n1 || true)"
   grep -h '\[css34_gamedata_probe\] \(maps\|path\): ' "${sm_probe_sources[@]}" 2>/dev/null | sort -u -t']' -k3 | head -n 12 || true
-  # The core's own trace: CacheGameBinaryInfo fallback and gameconf errors
-  # (errors_*.log) for the probe's gamedata file.
-  grep -h 'css34: game binary \|css34_gamedata_probe\.games' "${sm_probe_sources[@]}" 2>/dev/null | sort -u | head -n 20 || true
+  # The core's own trace (a module without its own CreateInterface) and
+  # gameconf errors (errors_*.log) for the probe's gamedata file.
+  grep -h 'css34: .*CreateInterface\|css34_gamedata_probe\.games' "${sm_probe_sources[@]}" 2>/dev/null | sort -u | head -n 20 || true
 fi
 if [[ -z "${gd_probe_line}" ]]; then
   echo "FAIL: no [css34_gamedata_probe] engine_sv= line in SM logs" >&2

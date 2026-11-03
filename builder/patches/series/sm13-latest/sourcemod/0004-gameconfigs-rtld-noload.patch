@@ -1,7 +1,7 @@
 css34: GameConfigs: RTLD_NOLOAD for already-mapped engine binaries
 
 diff --git a/core/logic/GameConfigs.cpp b/core/logic/GameConfigs.cpp
-index abe2407e1c03f08d4e78f99d76689045444ef4f8..13367d57f46d25e9e3c943d57af2312887145723 100644
+index abe2407e1c03f08d4e78f99d76689045444ef4f8..a91196ab7e2aa5160fd804d12a542d781ac397ea 100644
 --- a/core/logic/GameConfigs.cpp
 +++ b/core/logic/GameConfigs.cpp
 @@ -52,6 +52,9 @@
@@ -24,17 +24,38 @@ index abe2407e1c03f08d4e78f99d76689045444ef4f8..13367d57f46d25e9e3c943d57af23128
  						if (handle)
  						{
  							if (bridge->SymbolsAreHidden())
-@@ -1256,6 +1260,64 @@ void GameConfigManager::RemoveCachedConfig(CGameConfig *config)
+@@ -1256,6 +1260,77 @@ void GameConfigManager::RemoveCachedConfig(CGameConfig *config)
  	m_Lookup.remove(config->m_File);
  }
  
 +#if defined PLATFORM_LINUX
++/* css34: an address inside the module behind a dlopen handle (a link_map on
++ * glibc, as in MemoryUtils). dlsym(handle) also searches the module's
++ * dependencies: CS:S v34 engine_*.so exports no CreateInterface, so dlsym
++ * returned one from a library it links against and every "library" "engine"
++ * signature was looked up there (0). Keep CreateInterface only if it is the
++ * module's own, else take its _DYNAMIC (l_ld): gameconf only passes m_pAddr
++ * to dladdr and the signature scanner. */
++static void *GameBinaryAddress(void *handle)
++{
++	struct link_map *lm = (struct link_map *)handle;
++	void *addr = dlsym(handle, "CreateInterface");
++	Dl_info info;
++	if (addr && dladdr(addr, &info) != 0 && info.dli_fname && lm->l_name
++		&& strcmp(info.dli_fname, lm->l_name) == 0)
++	{
++		return addr;
++	}
++	logger->LogMessage("[SM] css34: \"%s\" has no CreateInterface of its own, using its _DYNAMIC", lm->l_name);
++	return (void *)lm->l_ld;
++}
++
 +struct MappedGameBinarySearch
 +{
 +	char names[3][64];
 +	char *path;
 +	size_t maxlength;
-+	void *addr;
++	bool found;
 +};
 +
 +static int FindMappedGameBinaryCallback(struct dl_phdr_info *phdr, size_t size, void *data)
@@ -44,27 +65,19 @@ index abe2407e1c03f08d4e78f99d76689045444ef4f8..13367d57f46d25e9e3c943d57af23128
 +	base = base ? base + 1 : phdr->dlpi_name;
 +	for (size_t i = 0; i < sizeof(search->names) / sizeof(search->names[0]); i++)
 +	{
-+		if (search->names[i][0] == '\0' || strcmp(base, search->names[i]) != 0)
-+			continue;
-+		/* Start of the first PT_LOAD segment: an address dladdr maps back
-+		 * to this module. */
-+		for (ElfW(Half) j = 0; j < phdr->dlpi_phnum; j++)
++		if (search->names[i][0] != '\0' && strcmp(base, search->names[i]) == 0)
 +		{
-+			if (phdr->dlpi_phdr[j].p_type == PT_LOAD)
-+			{
-+				search->addr = (void *)(phdr->dlpi_addr + phdr->dlpi_phdr[j].p_vaddr);
-+				ke::SafeStrcpy(search->path, search->maxlength, phdr->dlpi_name);
-+				return 1;
-+			}
++			ke::SafeStrcpy(search->path, search->maxlength, phdr->dlpi_name);
++			search->found = true;
++			return 1;
 +		}
 +	}
 +	return 0;
 +}
 +
-+/* css34: path of, and an address inside, the mapped module named name; for
-+ * name_i486.so also name_i686.so / name_amd.so (the engine srcds -binary
-+ * picked). nullptr if none is mapped. */
-+static void *FindMappedGameBinary(const char *name, char *path, size_t maxlength)
++/* css34: path of the mapped module named name; for name_i486.so also
++ * name_i686.so / name_amd.so (the engine srcds -binary picked). */
++static bool FindMappedGameBinary(const char *name, char *path, size_t maxlength)
 +{
 +	MappedGameBinarySearch search;
 +	memset(&search, 0, sizeof(search));
@@ -82,14 +95,14 @@ index abe2407e1c03f08d4e78f99d76689045444ef4f8..13367d57f46d25e9e3c943d57af23128
 +	}
 +
 +	dl_iterate_phdr(FindMappedGameBinaryCallback, &search);
-+	return search.addr;
++	return search.found;
 +}
 +#endif
 +
  void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  {
  	GameBinaryInfo info;
-@@ -1275,7 +1337,27 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+@@ -1275,10 +1350,34 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  			FreeLibrary(hModule);
  		}
  #else
@@ -117,36 +130,29 @@ index abe2407e1c03f08d4e78f99d76689045444ef4f8..13367d57f46d25e9e3c943d57af23128
 +		}
  		if (pHandle)
  		{
++#if defined PLATFORM_LINUX
++			info.m_pAddr = GameBinaryAddress(pHandle);
++#else
  			info.m_pAddr = dlsym(pHandle, "CreateInterface");
-@@ -1287,6 +1369,34 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
++#endif
+ 			dlclose(pHandle);
+ 		}
+ #endif
+@@ -1287,6 +1386,20 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  			break;
  	}
  
 +#if defined PLATFORM_LINUX
-+	/* css34: CS:S v34 engine_*.so exports no CreateInterface (its factory is
-+	 * not a dynamic symbol), so the search above leaves m_pAddr null and every
-+	 * "library" "engine" signature resolved to 0; SM 1.11 used the engine
-+	 * factory. Take the module mapped as name / _i686 / _amd and, without
-+	 * CreateInterface, an address inside it: gameconf only passes m_pAddr to
-+	 * dladdr and the signature scanner. */
-+	if (!info.m_pAddr)
++	/* css34: the search paths name no mapped module (SM 1.11 used the engine
++	 * factory instead): take the one mapped as name / _i686 / _amd. */
++	if (!info.m_pAddr && FindMappedGameBinary(name, binary_path, sizeof(binary_path)))
 +	{
-+		void *addr = FindMappedGameBinary(name, binary_path, sizeof(binary_path));
-+		if (addr)
++		void *pHandle = dlopen(binary_path, RTLD_NOW | RTLD_NOLOAD);
++		if (pHandle)
 +		{
-+			void *pHandle = dlopen(binary_path, RTLD_NOW | RTLD_NOLOAD);
-+			if (pHandle)
-+			{
-+				info.m_pAddr = dlsym(pHandle, "CreateInterface");
-+				dlclose(pHandle);
-+			}
-+			if (!info.m_pAddr)
-+				info.m_pAddr = addr;
++			info.m_pAddr = GameBinaryAddress(pHandle);
++			dlclose(pHandle);
 +		}
-+		/* css34: one line per library that needed the fallback, so a 0
-+		 * "library" signature can be traced in the SM log */
-+		logger->LogMessage("[SM] css34: game binary \"%s\" (%s): mapped \"%s\" %p", pszName, name,
-+			addr ? binary_path : "-", info.m_pAddr);
 +	}
 +#endif
 +
