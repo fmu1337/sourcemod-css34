@@ -180,8 +180,11 @@ jobs:
       - name: Jules review / fix sessions for bumps (fake API)
         run: python3 testing/scripts/test-jules.py
 
-      - name: Release maintenance delete mode (fake gh)
+      - name: Release retention, superseded notes, no delete mode (fake gh)
         run: python3 testing/scripts/test-release-maintenance.py
+
+      - name: Line pointer move, VERSIONS.txt and pointer notes (fake gh)
+        run: python3 testing/scripts/test-update-line-pointer.py
 
       - name: Check patch drift acceptance ranges and failures
         timeout-minutes: 30

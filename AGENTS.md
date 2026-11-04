@@ -150,6 +150,14 @@ NEEDED and SONAME. Every new download in the builder must go through
 break. Workflows `freeze-inputs.yml` (publishing waits for the `frozen-release` environment) and
 `frozen-verify.yml` (weekly); details in `docs/FREEZE.md`.
 
+### Releases are never deleted
+Other repositories pin release URLs, so a published release or tag is never deleted (README
+"Release retention"; 12 were deleted on 2026-11-03 and broke consumers). After a pointer move
+`release.yml` marks the line's older releases *superseded* (`builder/scripts/supersede-releases.py`);
+broken builds go to `known_bad`. `release-maintenance.yml` has no delete mode, and `gh release delete`
+is not a maintenance step. Every tag release also carries fixed-name copies of its packages and
+`VERSIONS.txt` (`release-versions.py`); pointer pages are rewritten on each move (`pointer-notes.py`).
+
 ### Lint
 Run `actionlint` after workflow edits. The ABI export
 check (`check-package.sh`) is the closest static verification of build output.
