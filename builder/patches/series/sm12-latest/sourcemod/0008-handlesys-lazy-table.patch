@@ -1,0 +1,42 @@
+css34: HandleSys: allocate the handle table with calloc, not new[] + memset
+
+SourceMod 1.11.0.6792 (cab60f73, "Bump handle limit to 1MB") made the
+handle table 2^20 entries. Zeroing it with memset made ~64 MB resident in
+every srcds at startup (sm12 r4: RSS 147 MB vs 82 MB on 1.11.0.6572, no plugins).
+calloc() gets fresh zero pages for a block this size, so only the handles
+in use become resident. The limit and the handle encoding are unchanged.
+
+diff --git a/core/logic/HandleSys.cpp b/core/logic/HandleSys.cpp
+index ef025eccfc290f4996594a895cf683cd042f6318..766cd1322a9ac9c5808ae617d360f02bfa56b59f 100644
+--- a/core/logic/HandleSys.cpp
++++ b/core/logic/HandleSys.cpp
+@@ -32,6 +32,7 @@
+ #include "HandleSys.h"
+ #include <time.h>
+ #include <assert.h>
++#include <stdlib.h>
+ #include <string.h>
+ #include "common_logic.h"
+ #include "ShareSys.h"
+@@ -66,8 +67,10 @@ inline HandleError IdentityHandle(IdentityToken_t *token, unsigned int *index)
+ 
+ HandleSystem::HandleSystem()
+ {
+-	m_Handles = new QHandle[HANDLESYS_MAX_HANDLES + 1];
+-	memset(m_Handles, 0, sizeof(QHandle) * (HANDLESYS_MAX_HANDLES + 1));
++	/* css34: the 2^20-entry table is ~64 MB. new[] + memset made all of it
++	 * resident at startup; calloc() of a block this large gets fresh zero pages
++	 * from the OS, so only the handles actually used become resident. */
++	m_Handles = static_cast<QHandle *>(calloc(HANDLESYS_MAX_HANDLES + 1, sizeof(QHandle)));
+ 
+ 	m_Types = new QHandleType[HANDLESYS_TYPEARRAY_SIZE];
+ 	memset((void *)m_Types, 0, sizeof(QHandleType) * HANDLESYS_TYPEARRAY_SIZE);
+@@ -77,7 +80,7 @@ HandleSystem::HandleSystem()
+ 
+ HandleSystem::~HandleSystem()
+ {
+-	delete [] m_Handles;
++	free(m_Handles);
+ 	delete [] m_Types;
+ }
+ 

@@ -23,6 +23,7 @@ files, exports, `NEEDED` and `SONAME` (`compare-package-abi.py`).
 | `sourcemod/0007-css34-versioning` | Build number from `SOURCEMOD_GIT_REV` (lines.json), detached/submodule HEAD in `Versioning`, `CSS34 pack:` line in `sm version`. | Shallow clones give a wrong build number; smoke checks the pack commit. |
 | `sourcemod/0008-dbi-connect-options` | New interface `IDBConnectOptions` (`public/IDBConnectOptions.h`): core keeps every key of a `databases.cfg` entry and of `SQL_ConnectCustom`'s KeyValues (bridge hook `GetKeyValuesPairs`, `SM_LOGIC_MAGIC` changed) and a driver reads them by the `DatabaseInfo` pointer it received. `DatabaseInfo` and the existing DBI interfaces are unchanged. | Core passes only driver/host/database/user/pass/port/timeout/schema to a driver; `ssl_mode` / `ssl_ca` never reach it. Section "sm13 MySQL TLS options" below. |
 | `sourcemod/0009-mysql-tls-options` | `dbi.mysql.ext`: `ssl_mode` / `ssl_ca` (keys and values of fmu1337/sm-dbi-mysql; default `disabled`, as stock SourceMod) mapped onto MariaDB Connector/C, TLS 1.2/1.3 with OpenSSL, `utf8mb4` in the handshake; unknown modes and verify modes without a readable CA fail the connect; persistent connections are shared only with equal TLS settings. | Upstream turns certificate verification off and requests no TLS: plaintext to every server, a `REQUIRE SSL` account (HeatWave's usual setup) is refused. |
+| `sourcemod/0010-handlesys-lazy-table` | `HandleSystem` allocates its 2^20-entry table with `calloc` instead of `new[]` + `memset` (and frees it with `free`). Limit and handle encoding unchanged. | Upstream `cab60f73` (1.11.0.6792, "Bump handle limit to 1MB") zeroes ~64 MB at startup, all of it resident: srcds RSS 156 MB with stock plugins vs 82 MB on rom4s 1.11.0.6572; 90 MB with the patch (README "Memory use"). |
 | `sourcepawn/0001-gcc10-link-flags` | `-Wno-sign-compare`; pthread/rt/`-lgcc_s` `NEEDED`. | GCC 10 sign-compare errors in the JIT/compiler; missing `NEEDED` on glibc 2.17. |
 | `hl2sdk-manifests/0001-episode1-defines` | episode1 Linux defines `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE`. | The SDK's malloc hooks/overrides in SourceMod modules on CS:S v34. |
 | `hl2sdk-manifests/0002-compiler-flag-guard` | Drop manifest compiler flags GCC 10 does not know (formerly `manifest_flag_guard.py`). | Unknown-flag errors from newer manifests (hl2sdk-manifests `ebd6e10`). |
@@ -41,7 +42,9 @@ sm13 ones above except:
 - `sourcemod/0007-sdktools-onmapend-list`: `EntityOutputManager::OnMapEnd` uses
   `SourceHook::List<omg_hooks *>`, the type `OutputHookList` stores (section
   "SM 1.12: entity-output map-end cleanup list type" below);
-- `sourcepawn/0001-gcc10-link-flags` also fixes a sign-compare in `vm/shell/shell.cpp`.
+- `sourcepawn/0001-gcc10-link-flags` also fixes a sign-compare in `vm/shell/shell.cpp`;
+- `sourcemod/0008-handlesys-lazy-table` is sm13's `0010-handlesys-lazy-table` (SM 1.12 has the same
+  2^20-entry table: RSS 147 MB with stock plugins on `1.12.0.7257-mm1.12.0-r4`).
 
 A full build from the series matches the scripted build's files, exports, `NEEDED`
 and `SONAME`.

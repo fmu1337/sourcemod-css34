@@ -7,6 +7,8 @@
 #   releases/download/line-<line>/sourcemod-css34-linux.tar.gz
 #   releases/download/line-<line>/mmsource-css34-linux.tar.gz
 #   releases/download/line-<line>/SHA256SUMS
+#   releases/download/line-<line>/VERSIONS.txt    key=value: versions, the original
+#     asset names of the served tag and their sha256 (builder/scripts/release-versions.py)
 #   releases/download/line-<line>/mmsource-legacy-css34-linux.tar.gz  (dual-core lines:
 #     the MM 1.10.7 package, optional 5th argument; T2.6)
 #   releases/download/line-<line>/lines.json      {"<line>": {...}} — this line only
@@ -21,6 +23,10 @@
 # rename to "<name>". The old file stays downloadable during the whole upload;
 # the only window is the two back-to-back API calls of the swap. GitHub cannot
 # replace an asset atomically, so this is the minimum.
+#
+# The release title and notes are rewritten on every run (builder/scripts/pointer-notes.py):
+# GitHub shows a pointer's first publication date, so the page itself says what it
+# serves now, since when, and the sha256 of each file.
 #
 # Requires: gh (GH_TOKEN), python3, GITHUB_REPOSITORY. SMOKE=pass|fail: with
 # fail, packages are left alone and only lines.json[line].candidate records it.
@@ -42,6 +48,7 @@ RUN_KEY="${GITHUB_RUN_ID:-$$}-${GITHUB_RUN_ATTEMPT:-0}"
 # order, the older one must not switch the pointer back.
 SRC_TIME="${SRC_TIME:-$(git show -s --format=%ct "$TARGET" 2>/dev/null || echo 0)}"
 FORCE_REPOINT="${FORCE_REPOINT:-0}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -270,8 +277,17 @@ if [[ "$SMOKE" == "pass" ]]; then
     swap_asset "$PTR_TAG" "${work}/mmsource-legacy-css34-linux.tar.gz" mmsource-legacy-css34-linux.tar.gz
   fi
   swap_asset "$PTR_TAG" "${work}/SHA256SUMS" SHA256SUMS
-  gh release edit "$PTR_TAG" --repo "$REPO" \
-    --notes "Stable pointer for line \`${LINE}\` → [\`${SRC_TAG}\`](https://github.com/${REPO}/releases/tag/${SRC_TAG}) (smoke: pass)."
+  python3 "$HERE/release-versions.py" --repo "$REPO" \
+    --tag "$SRC_TAG" --pointer "$PTR_TAG" --sm-linux "$SM_PKG" --mm-linux "$MM_PKG" \
+    ${LEGACY_MM_PKG:+--mm-legacy-linux "$LEGACY_MM_PKG"} > "${work}/VERSIONS.txt"
+  swap_asset "$PTR_TAG" "${work}/VERSIONS.txt" VERSIONS.txt
+elif has_asset "$PTR_TAG" SHA256SUMS; then
+  gh release download "$PTR_TAG" --repo "$REPO" -p SHA256SUMS -D "$work"
 fi
 swap_asset "$PTR_TAG" "$line_json" lines.json
+notes_args=(--repo "$REPO" --line "$LINE" --lines-json "$line_json")
+[[ ! -f "${work}/SHA256SUMS" ]] || notes_args+=(--sums "${work}/SHA256SUMS")
+python3 "$HERE/pointer-notes.py" "${notes_args[@]}" > "${work}/notes.md"
+ptr_title="$(python3 "$HERE/pointer-notes.py" "${notes_args[@]}" --title)"
+gh release edit "$PTR_TAG" --repo "$REPO" --title "$ptr_title" --notes-file "${work}/notes.md"
 publish_index

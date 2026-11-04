@@ -147,35 +147,46 @@ A rebuild of the same pins gets a `-r<N>` suffix (tags are never moved); `releas
 
 | Tag | Line | Built from | SourceMod | Metamod |
 |-----|------|------------|-----------|---------|
-| [`1.13.0.7478-mm1.12.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7478-mm1.12.0-r2) | `sm13-latest` (GitHub Latest) | `efa2ef6` | 1.13.0-git7478 | 1.12.0 git1228 (+ legacy bridge, 1.10.7 git976) |
-| [`1.12.0.7257-mm1.12.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7257-mm1.12.0-r2) | `sm12-latest` | `efa2ef6` | 1.12.0-git7257 | 1.12.0 git1228 (+ legacy bridge, 1.10.7 git976) |
+| [`1.13.0.7478-mm1.12.0-r5`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7478-mm1.12.0-r5) | `sm13-latest` (GitHub Latest) | `5d59959` | 1.13.0-git7478 | 1.12.0 git1229 (+ legacy bridge, 1.10.7 git976) |
+| [`1.12.0.7257-mm1.12.0-r4`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7257-mm1.12.0-r4) | `sm12-latest` | `5d59959` | 1.12.0-git7257 | 1.12.0 git1229 (+ legacy bridge, 1.10.7 git976) |
 | [`1.11.0.6970-mm1.12.0-dual-r3`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.12.0-dual-r3) | `sm11-oldstable` (frozen) | `978ec55` | 1.11.0-git6970, both cores | 1.12.0 git1227 (+ legacy bridge); 1.10.7 git976 as `mmsource-legacy` |
 | [`1.13.0.7565-mm2.0.0-khook-dhooks-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks-r2) | `sm13-mm20-khook` | `88713a7` | 1.13.0-git7565 (KHook branch + master), + `dhooks.ext` | 2.0.0 git1472 (KHook) |
 | [`1.13.0.7404-mm2.0.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0-r2) | `sm13-mm20` | `88713a7` | 1.13.0-git7404 | 2.0.0 git1407 |
 
-**Earlier tags.** The linked ones stay published: installers keep them as pinned fallbacks
-(`v34_server_base` `manifest/sources.json`), or a retired line still maps to them. Plain names are superseded or
-known-bad and are not needed by any line, pointer or installer.
+The release page of each `line-<line>` pointer says what it serves now, since when, and the sha256 of
+every file; GitHub's own date on that page is when the pointer was first created.
 
-| Tag | Line | SourceMod | Metamod | Notes |
-|-----|------|-----------|---------|-------|
-| [`1.13.0.7478-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7478-mm1.12.0) | `sm13-latest` | 1.13.0-git7478 | 1.12.0 git1228 | installer fallback; same pins as `-r2`, without the legacy-plugin bridge |
-| [`1.12.0.7257-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7257-mm1.12.0) | `sm12-latest` | 1.12.0-git7257 | 1.12.0 git1228 | installer fallback; same pins as `-r2`, without the legacy-plugin bridge |
-| [`1.12.0.7253-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7253-mm1.12.0) | `sm12-latest` | 1.12.0-git7253 | 1.12.0-dev (git1226) | installer fallback; older packaging (no `SHA256SUMS`) |
-| [`1.13.0.7472-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7472-mm1.12.0) | `sm13-latest` | 1.13.0-git7472 | 1.12.0-dev (git1226) | installer fallback; older packaging |
-| [`1.13.0.7404-mm2.0.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0) | `sm13-mm20` | 1.13.0-git7404 | 2.0.0-dev (git1407) | installer fallback |
-| [`1.13.0.7565-mm2.0.0-khook-dhooks`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks) | `sm13-mm20-khook` | 1.13.0-git7565, + `dhooks.ext` | 2.0.0-dev (git1472, `05c5c63`) | installer fallback |
-| [`1.13.0.7565-mm2.0.0-khook`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook) | `sm13-mm20-khook` | 1.13.0-git7565 | 2.0.0-dev (git1472, `05c5c63`) | base tag of the line; Windows assets untested (below) |
-| `1.13.0.7404-mm1.12.0` | `sm13-dev` (removed) | 1.13.0-git7404 | 1.12.0-dev (git1226) | superseded by `sm13-latest`; no line maps to it since T3.3 |
-| `1.11.0.6970-mm1.10.7` | `sm11-oldstable` | 1.11.0-git6970 | 1.10.7-dev (`metamod.1.ep1`) | **known-bad** (below); CI stopped downloading it with the 1.11 build code (T3.3) |
-| [`1.11.0.6572-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6572-mm1.10.7) | pre-matrix | 1.11.0-git6572 | 1.10.7-dev | **known-bad** SourceMod; its Windows MM 1.10.7 zip serves the installer's `--sm rom4s` on Windows |
-| `1.13.0.7472-mm1.12.0-r2`, `1.12.0.7253-mm1.12.0-r2` | `sm13-latest`, `sm12-latest` | 7472 / 7253 | 1.12.0 git1226 | superseded by 7478 / 7257 |
-| `1.11.0.6970-mm1.12.0-dual`, `-dual-r2` | `sm11-oldstable` | 1.11.0-git6970 | 1.12.0 git1227 | failed the release smoke (its expectations, fixed in [#147](https://github.com/fmu1337/sourcemod-css34/pull/147)); superseded by `-dual-r3` |
-| `1.12.0.7239-mm1.12.0`, `1.12.0.7245-mm1.12.0`, `1.13.0.7394-mm1.12.0` | pre-matrix | 7239 / 7245 / 7394 | 1.12.0-dev | **known-bad**: wrong or missing css34 gamedata |
+### Release retention
+
+**Published releases are never deleted.** Other repositories' CI and install scripts link to their assets, so a
+deleted release breaks them with a 404. When a line pointer moves to a new tag, `release.yml` puts a
+*superseded by `<tag>`* note at the top of the older releases of that line
+(`builder/scripts/supersede-releases.py`); their assets, tags and URLs stay. A broken build is marked with
+`known_bad` in `builder/lines.json` (*Release Maintenance* → `mark-known-bad`: prerelease plus a banner) and
+is not deleted either. *Release Maintenance* has no delete mode.
+
+For anything that should keep working across releases, use a `line-<line>` pointer. A script that pins one tag
+can use the fixed names every release since this change also carries (the same bytes as the revisioned
+assets): `releases/download/<tag>/sourcemod-css34-linux.tar.gz`, `mmsource-css34-linux.tar.gz`,
+`sourcemod-css34-windows.zip`, `mmsource-css34-windows.zip`, and `VERSIONS.txt`, a `key=value` file with the
+exact SourceMod / Metamod versions and commits, extension API range, the revisioned asset names and their
+sha256 (`builder/scripts/release-versions.py`). Each `line-<line>` pointer serves a `VERSIONS.txt` too.
+
+**Deleted on 2026-11-03** (Release Maintenance `delete` mode, before this policy; the releases and their git
+tags are gone and their URLs return 404): `1.13.0.7478-mm1.12.0`, `-r2`, `-r3`, `-r4`;
+`1.12.0.7257-mm1.12.0`, `-r2`, `-r3`; `1.13.0.7472-mm1.12.0`; `1.12.0.7253-mm1.12.0`;
+`1.13.0.7404-mm2.0.0`; `1.13.0.7565-mm2.0.0-khook`; `1.13.0.7565-mm2.0.0-khook-dhooks`. Use the tags above or
+the line pointers instead.
+
+**Known-bad** (`builder/lines.json` `known_bad`; never on a pointer):
+[`1.11.0.6572-mm1.10.7`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6572-mm1.10.7)
+(still published, a prerelease: its Windows MM 1.10.7 zip serves the installer's `--sm rom4s` on Windows),
+`1.11.0.6970-mm1.10.7`, `1.12.0.7239-mm1.12.0`, `1.12.0.7245-mm1.12.0`, `1.13.0.7394-mm1.12.0` (see
+[Known-bad releases](#known-bad-releases)).
 
 Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}` and
-`mmsource-<ver>-git<mmrev>-css34-{linux.tar.gz|windows.zip}` for packages built from this tree.
-Older Linux tags before `-r2` keep `mmsource-<ver>-dev-css34-linux.tar.gz`;
+`mmsource-<ver>-git<mmrev>-css34-{linux.tar.gz|windows.zip}` for packages built from this tree, plus the fixed
+names above. Older Linux tags before `-r2` keep `mmsource-<ver>-dev-css34-linux.tar.gz`;
 tags published before the Windows rename keep `mmsource-<ver>-dev-css34-windows.zip`.
 Historical URLs in `testing/versions/matrix.json` intentionally retain those names.
 The rename consumer audit and installer migration are in [docs/WINDOWS_ASSETS.md](docs/WINDOWS_ASSETS.md).
@@ -219,7 +230,12 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/mmsource-css34-linux.tar.gz
 https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/SHA256SUMS
 https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/lines.json
+https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/VERSIONS.txt
 ```
+
+`VERSIONS.txt` (`key=value`, sh-sourceable) names the tag the pointer serves, its versions and commits, the
+original revisioned asset names and their sha256; every tag release carries one as well. The pointer's release
+title and notes are rewritten on every move (`line-<line> → <tag>`, date, versions, sha256 table).
 
 `<line>` ∈ `sm11-oldstable`, `sm12-latest`, `sm13-latest`, `sm13-mm20`, `sm13-mm20-khook`. A dual-core line
 (`sm11-oldstable`) also serves `line-<line>/mmsource-legacy-css34-linux.tar.gz` (MM 1.10.7, the 1.ep1 core;
@@ -315,6 +331,28 @@ non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
   (`[CSTRIKE] Could not locate HandleCommand_Buy`); ours lives in `gamedata/sm-cstrike.games/`.
 - Historical community URLs (rom4s / myarena) for local compare: [`testing/versions/matrix.json`](testing/versions/matrix.json) (`reference` section).
 
+### Memory use
+
+SourceMod 1.11.0.6792 and newer (upstream `cab60f73`, "Bump handle limit to 1MB") size the handle table for
+2^20 handles and zero all of it at startup: about **64 MB resident in every srcds**, with or without plugins.
+Measured on CS:S v34 (`srcds_i686`, de_dust2, 32 slots, no players, `debian:13`), RSS after the map load:
+
+| Build | Stock plugins | 102 plugins (1.11-compiled) |
+|-------|---------------|-----------------------------|
+| srcds without addons | 71 MB | — |
+| rom4s 1.11.0.6572 + MM 1.10.6 | 82 MB | 91 MB |
+| `1.12.0.7257-mm1.12.0-r4` | 147 MB | — |
+| `1.13.0.7478-mm1.12.0-r5` | 156 MB | 158.5 MB |
+| sm13 with `0010-handlesys-lazy-table` | **90 MB** | **93 MB** |
+
+The sm13 / sm12 patch series allocate the table with `calloc` (`sourcemod/0010-handlesys-lazy-table`,
+sm12 `0008`): the limit stays 2^20, and only the part in use becomes resident (about 64 bytes per live handle
+plus its object; the table does not shrink after a peak). Builds tagged after that patch carry it.
+Smaller differences: SourcePawn 1.13 keeps plugin memory in a mimalloc arena (128 MB of address space
+reserved, not resident; about 0.25 MB resident per plugin compiled with the 1.13 `spcomp`, 0.01 MB per older
+plugin), and all SM/MM binaries together map about 1.5 MB more than rom4s 1.11. The binaries are already built
+with `--enable-optimize` and `strip --strip-unneeded`; there are no debug sections to strip.
+
 ## Build
 
 Needs Docker. The build runs in pinned `quay.io/pypa/manylinux2014_i686` (glibc 2.17, GCC 10.2.1). SDKs, AMBuild, PIC zlib and, for sm13's MySQL extension, static OpenSSL 3.5 LTS and MariaDB Connector/C (built from pinned sources) go into `deps/`.
@@ -379,8 +417,8 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 - `.github/workflows/frozen-verify.yml` — weekly check of the frozen `sm11-oldstable` release files and pointer;
   `freeze-inputs.yml` builds a freeze input archive ([docs/FREEZE.md](docs/FREEZE.md)).
 - `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts, mark `known_bad`
-  releases, or delete build releases with their tags (`mode: delete`, `tags`, dry run unless `confirm: DELETE`;
-  refuses tags a `line-*` pointer serves, frozen tags and GitHub Latest).
+  releases, or (`mode: supersede`, optional `dry_run`) put the *superseded* note on the older releases of every
+  line pointer. It deletes nothing ([Release retention](#release-retention)).
 - `.github/workflows/cleanup-artifacts.yml` — weekly / manual purge of Actions artifacts.
 
 Failure logs remain downloadable for seven days after a run. Scheduled cleanup keeps other

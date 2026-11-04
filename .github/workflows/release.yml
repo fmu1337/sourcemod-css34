@@ -18,8 +18,13 @@ name: Release
 #     explicitly, only for a tag of lines.json's default_line (never on a
 #     repoint). On red it stays a prerelease and line-<line> keeps serving the
 #     previous build. Windows assets never gate promotion; SHA256SUMS is last.
-#   * Asset names carry the revision (sourcemod-…-git7472-…, mmsource-…-git1226-…)
-#     and every release has SHA256SUMS.
+#   * Asset names carry the revision (sourcemod-…-git7472-…, mmsource-…-git1226-…),
+#     and every release also carries the same files under fixed names
+#     (sourcemod-css34-linux.tar.gz, mmsource-css34-linux.tar.gz, *-windows.zip; the
+#     names line-<line> serves), VERSIONS.txt (key=value: exact versions, asset names,
+#     sha256; builder/scripts/release-versions.py) and SHA256SUMS.
+#   * Published releases are never deleted: after a pointer move, the older
+#     releases of the line get a "superseded" banner (supersede-releases.py).
 #   * smoke-release installs the *public* URLs with plain `tar -x` and boots
 #     srcds; only on pass does line-pointer switch line-<line> (stable names,
 #     see builder/scripts/update-line-pointer.sh), then smoke-pointer re-checks
@@ -328,10 +333,18 @@ jobs:
             gh release create "${tag}" --title "${tag}" --notes-file release-notes.md \
               --prerelease --latest=false
           fi
-          (cd packages && sha256sum -- *.tar.gz | sort -k2 > ../SHA256SUMS.linux)
+          # The same files under fixed names (what line-<line> serves), so a script
+          # can pin a tag without knowing the git<rev> in the asset names.
+          mkdir -p stable
+          cp -f "packages/${{ steps.check.outputs.sm_asset }}" stable/sourcemod-css34-linux.tar.gz
+          cp -f "packages/${{ steps.check.outputs.mm_asset }}" stable/mmsource-css34-linux.tar.gz
+          (cd packages && sha256sum -- *.tar.gz; cd ../stable && sha256sum -- *.tar.gz) \
+            | sort -k2 > SHA256SUMS.linux
           gh release upload "${tag}" \
             packages/sourcemod-*-css34-linux.tar.gz \
             packages/mmsource-*-css34-linux.tar.gz \
+            stable/sourcemod-css34-linux.tar.gz \
+            stable/mmsource-css34-linux.tar.gz \
             SHA256SUMS.linux \
             --clobber
           # Never leave (or turn) a release as draft: its asset URLs would 404.
@@ -392,29 +405,52 @@ jobs:
           fi
           source builder/package-paths.sh
           [[ -f "$MM_WIN_PACKAGE" ]] || { echo "missing $MM_WIN_PACKAGE" >&2; exit 1; }
+          mkdir -p stable
+          cp -f "$SM_WIN_PACKAGE" stable/sourcemod-css34-windows.zip
+          cp -f "$MM_WIN_PACKAGE" stable/mmsource-css34-windows.zip
           gh release upload "${tag}" \
-            "$SM_WIN_PACKAGE" packages/mmsource-*-css34-windows.zip --clobber
+            "$SM_WIN_PACKAGE" packages/mmsource-*-css34-windows.zip \
+            stable/sourcemod-css34-windows.zip stable/mmsource-css34-windows.zip --clobber
           if [[ "$(gh release view "${tag}" --json isDraft -q .isDraft)" == "true" ]]; then
             gh release edit "${tag}" --draft=false --latest=false
           fi
 
-  # SHA256SUMS over every asset of the tag release (Linux + Windows).
+  # VERSIONS.txt and SHA256SUMS over every asset of the tag release (Linux + Windows).
   checksums:
     needs: [resolve-line, linux, windows, promote]
     if: always() && github.ref_type == 'tag' && needs.resolve-line.outputs.repoint != '1' && needs.linux.result == 'success'
     runs-on: ubuntu-22.04
     steps:
-      - name: Write SHA256SUMS
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write VERSIONS.txt and SHA256SUMS
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SM_ASSET: ${{ needs.linux.outputs.sm_asset }}
+          MM_ASSET: ${{ needs.linux.outputs.mm_asset }}
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          mkdir assets && cd assets
-          gh release download "${tag}" --repo "${GITHUB_REPOSITORY}" -p '*.tar.gz' -p '*.zip'
-          sha256sum -- * | sort -k2 > ../SHA256SUMS
-          cat ../SHA256SUMS
-          gh release upload "${tag}" --repo "${GITHUB_REPOSITORY}" ../SHA256SUMS --clobber
+          mkdir assets
+          gh release download "${tag}" --repo "${GITHUB_REPOSITORY}" -D assets -p '*.tar.gz' -p '*.zip'
+          win=()
+          for role in sm:sourcemod mm:mmsource; do
+            # Exactly one revisioned Windows zip per package, or none (Windows may have failed).
+            mapfile -t zips < <(compgen -G "assets/${role#*:}-*-css34-windows.zip" || true)
+            if [[ "${#zips[@]}" -eq 1 ]]; then
+              win+=("--${role%%:*}-windows" "${zips[0]}")
+            elif [[ "${#zips[@]}" -gt 1 ]]; then
+              echo "::error::several ${role#*:} Windows zips: ${zips[*]}"; exit 1
+            fi
+          done
+          python3 builder/scripts/release-versions.py --repo "${GITHUB_REPOSITORY}" --tag "${tag}" \
+            --sm-linux "assets/${SM_ASSET}" --mm-linux "assets/${MM_ASSET}" ${win[@]+"${win[@]}"} > VERSIONS.txt
+          cat VERSIONS.txt
+          (cd assets && sha256sum -- *) | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "${tag}" --repo "${GITHUB_REPOSITORY}" VERSIONS.txt --clobber
+          gh release upload "${tag}" --repo "${GITHUB_REPOSITORY}" SHA256SUMS --clobber
 
   # Weekly OS list for this line, generated from lines.json (no hand-written rows).
   release-pins:
@@ -727,6 +763,21 @@ jobs:
             echo "::error::smoke failed for ${TAG}; line-${LINE} not switched"
             exit 1
           fi
+
+      # Never delete a published release: mark the older ones of this line instead.
+      - name: Mark older releases of line-${{ needs.resolve-line.outputs.css34_line }} superseded
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINE: ${{ needs.resolve-line.outputs.css34_line }}
+        run: |
+          set -euo pipefail
+          # What the pointer serves now (a newer tag may have moved it already).
+          served="$(gh release download "line-${LINE}" --repo "${GITHUB_REPOSITORY}" -p lines.json -O - \
+            | jq -r --arg l "${LINE}" '.[$l] | select(.smoke == "pass") | .tag // empty')"
+          [[ -n "${served}" ]] || { echo "line-${LINE} serves no smoke-passed build"; exit 0; }
+          python3 builder/scripts/supersede-releases.py --repo "${GITHUB_REPOSITORY}" \
+            --line "${LINE}" --served "${served}"
 
   smoke-pointer:
     needs: [resolve-line, line-pointer]
