@@ -57,6 +57,15 @@ class ReleaseNotes(unittest.TestCase):
                         self.assertIn("`{}`".format(bad), text)
                     first = text.splitlines()[0]
                     self.assertEqual(first.count("default"), 1 if part["default"] else 0, first)
+                    # Consumers: fixed asset names, VERSIONS.txt, nothing is deleted.
+                    self.assertIn("`sourcemod-css34-linux.tar.gz`", text)
+                    self.assertIn("`VERSIONS.txt`", text)
+                    self.assertIn("never deleted", text)
+                    self.assertIn("docs/EXTENSIONS.md", text)
+                    if int(part["sm_expect"].split(".")[1]) >= 13:
+                        self.assertIn("**Extensions built for SourceMod 1.12 or older do not load.**", text)
+                    else:
+                        self.assertIn("extension API 8 and older", text)
 
     def test_tag_not_matching_the_pins_fails(self):
         for tag in ("1.13.0.9999-mm1.12.0", "1.12.0.7257-mm1.10.7", "line-sm13-latest", ""):

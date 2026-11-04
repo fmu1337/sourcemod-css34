@@ -125,9 +125,35 @@ def render(tag, repo, commit, root=ROOT):
                        ", ".join("`{}`".format(i) for i in weekly) or "-",
                        data.get("weekly_botplay_image", "-")))
         out.append("")
-    out.append("**Assets**: SourceMod and Metamod:Source for Linux (`.tar.gz`){}; "
-               "`SHA256SUMS` is uploaded last.".format(
-                   " and Windows (`.zip`, may follow the Linux packages)" if line.get("windows") else ""))
+    sm_minor = int(part["sm_expect"].split(".")[1])
+    if sm_minor >= 13:
+        out.append("**Extensions built for SourceMod 1.12 or older do not load.** SourceMod 1.13 loads only "
+                   "extensions built with 1.13 headers (extension API 9 or newer, `extension_api_min`–"
+                   "`extension_api` in `VERSIONS.txt`; older ones fail with `Extension version is too "
+                   "old to load`), and an extension rebuilt with them does not load on 1.12 either. Rebuild third-party "
+                   "extensions with this release's SourceMod, Metamod and hl2sdk episode1 trees in the "
+                   "same build image: [docs/EXTENSIONS.md]({0}{1}/blob/{2}/docs/EXTENSIONS.md) "
+                   "(recipe, flags, and `undefined symbol: Msg`: link `tier0_i486.so`).".format(
+                       gh, repo, commit or "master"))
+    else:
+        out.append("**Extensions**: SourceMod 1.{} loads extension API 8 and older; extensions "
+                   "rebuilt for 1.13 (API 9/11) do not load here. Recipe: "
+                   "[docs/EXTENSIONS.md]({}{}/blob/{}/docs/EXTENSIONS.md).".format(
+                       sm_minor, gh, repo, commit or "master"))
+    out.append("")
+    out.append("**Assets**: SourceMod and Metamod:Source for Linux (`.tar.gz`){}. The asset names "
+               "carry the revision (`git<rev>`), which changes with every pin bump; the same files "
+               "are also attached under fixed names (`sourcemod-css34-linux.tar.gz` and "
+               "`mmsource-css34-linux.tar.gz`, the names `line-{}` serves{}), and `VERSIONS.txt` "
+               "lists the exact versions, asset names and sha256 (`key=value`). `SHA256SUMS` is "
+               "uploaded last.".format(
+                   " and Windows (`.zip`, may follow the Linux packages)" if line.get("windows") else "",
+                   name, "; `sourcemod-css34-windows.zip`, `mmsource-css34-windows.zip`"
+                   if line.get("windows") else ""))
+    out.append("")
+    out.append("Published releases are never deleted. When `line-{}` moves on, this release gets a "
+               "*superseded* note and its asset URLs keep working; for the current build use the "
+               "`line-{}` pointer.".format(name, name))
     out.append("")
     if data["known_bad"]:
         out.append("**Known-bad tags** (do not install; kept as prereleases):")
