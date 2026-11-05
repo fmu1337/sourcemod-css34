@@ -28,12 +28,6 @@ cp -a "$BUILDER_DIR/assets/gamedata/." "$GAMEDATA_ROOT/"
 python3 "$BUILDER_DIR/../testing/scripts/check-css34-gamedata.py" \
   "$GAMEDATA_ROOT" --source "$SOURCEMOD_DIR"
 
-echo "==> Patching core.cfg for CS:S v34 release layout"
-core_cfg="$SM_ROOT/configs/core.cfg"
-if [ -f "$core_cfg" ]; then
-  sed -i 's/^\(\s*"DisableAutoUpdate"\s*\)"no"/\1"yes"/' "$core_cfg"
-fi
-
 # SM 1.12+ geoip.ext looks for any *.mmdb under configs/geoip (legacy GeoIP.dat
 # is not enough). Official SM also omits the DB; ship GeoLite2-Country for css34.
 geoip_cfg="$SM_ROOT/configs/geoip"

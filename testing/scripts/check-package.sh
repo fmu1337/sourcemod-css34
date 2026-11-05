@@ -90,10 +90,23 @@ else
   echo "FAIL: missing addons/metamod/sourcemod.vdf" >&2
   fail=1
 fi
-if grep -Eq '"DisableAutoUpdate"[[:space:]]+"yes"' "${SM_ROOT}/configs/core.cfg" 2>/dev/null; then
-  echo "OK: core.cfg DisableAutoUpdate=yes"
+# The gamedata auto-updater would write upstream gamedata over the css34 files.
+# Packages from the no-gamedata-updater patch (docs/PATCHES.md) ship neither
+# updater.ext nor webternet.ext and their core never loads updater.ext. Older
+# published packages (frozen sm11, a pointer moved back to an earlier tag) ship
+# both with "DisableAutoUpdate" "yes" in core.cfg.
+mapfile -t updater_exts < <(find "${SM_ROOT}/extensions" \( -name 'updater.ext*' -o -name 'webternet.ext*' \) | sort)
+if (( ${#updater_exts[@]} == 0 )); then
+  if grep -aFq 'updater.ext.' "${CORE_SO}"; then
+    echo "FAIL: ${CORE_SO#"${TMP}"/} still loads updater.ext (no-gamedata-updater patch missing)" >&2
+    fail=1
+  else
+    echo "OK: no gamedata auto-updater (no updater.ext / webternet.ext, core never loads updater.ext)"
+  fi
+elif grep -Eq '"DisableAutoUpdate"[[:space:]]+"yes"' "${SM_ROOT}/configs/core.cfg" 2>/dev/null; then
+  echo "OK: older package: updater.ext shipped, core.cfg DisableAutoUpdate=yes"
 else
-  echo "FAIL: core.cfg does not disable the auto updater" >&2
+  echo "FAIL: ${updater_exts[*]#"${TMP}"/} shipped and core.cfg does not disable the auto updater" >&2
   fail=1
 fi
 while IFS= read -r -d '' bin; do

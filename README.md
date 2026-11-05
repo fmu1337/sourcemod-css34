@@ -312,10 +312,16 @@ Windows packages also record `msvc_toolset` and `windows_sdk` (the pinned `windo
 (SM 1.11/1.12 have no `_MIN` → `1`; 1.12.0.7253: 8; 1.13.0.7404: 9–9; 1.13.0.7472 / 7565: 9–11).
 
 **Ready to run.** `tar -xzf mm.tgz -C cstrike && tar -xzf sm.tgz -C cstrike` is the whole install:
-`addons/metamod/sourcemod.vdf`, `"DisableAutoUpdate" "yes"` in `configs/core.cfg` (SourceMod's key for
-turning the updater off), executable `*.so` / `scripting/spcomp`, and on SM 1.12+
+`addons/metamod/sourcemod.vdf`, executable `*.so` / `scripting/spcomp`, and on SM 1.12+
 `configs/geoip/GeoLite2-Country.mmdb` (mode 0644 — older packages shipped it 0600, unreadable for a
 non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
+
+**No gamedata auto-updater.** SourceMod's `updater.ext` would download upstream gamedata (no CS:S v34
+entries) over the css34 files; `webternet.ext` (libcurl 7.19.2 without TLS, no natives) exists only
+for it. Neither is built, the core never loads `updater.ext`, and `core.cfg` has no
+`DisableAutoUpdate` / `AutoUpdateURL` keys (`no-gamedata-updater` patch, `docs/PATCHES.md`). Older
+packages ship both with `"DisableAutoUpdate" "yes"`; when you install a new package over one, the
+leftover `extensions/updater.ext.so` and `webternet.ext.so` are never loaded and can be deleted.
 
 ### Known-bad releases
 
