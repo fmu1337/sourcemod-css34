@@ -305,6 +305,7 @@ class LinesTest(unittest.TestCase):
             self.assertIn(message, self.run_command("check", False).stderr, entries)
 
     def test_test_images_plan_and_record(self):
+        self.set_test_images({})
         plan = json.loads(self.run_command("test-images-plan").stdout)
         names = [row["name"] for row in plan]
         for name in ("centos:7", "ubuntu:24.04", "debian:13", "debian:11", "debian:8", "rockylinux:9"):
