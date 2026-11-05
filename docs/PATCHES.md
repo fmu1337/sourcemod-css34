@@ -96,11 +96,15 @@ on v34 servers: rom4s SM 1.11.0.6522 and SM 1.7.3-stable+5265.
   gamedata check requires it, and `css34_sm_api_probe` (botplay) hooks `HintText`,
   sends a hint to a bot and requires the first byte to be 1 (`HintText_prebyte`).
 - **`HudTextMsg` "HudMsg"** (same section) is kept as in SM 1.7.3; rom4s 1.11
-  commented it out. The `HudMsg` usermessage exists in the v34 `server_i486.so`,
-  and with this key `ShowHudText` / `ShowSyncHudText` report support, so plugins do
-  not fall back to hint or center text. Whether the v34 client draws `HudMsg` is
-  **not verified in game yet**; if it does not, remove the key (and its `REQUIRED`
-  entry) so `ShowHudText` returns -1 again.
+  shipped it commented out, and its FAQ (hlmod.ru) has admins remove the `//`
+  when HUD text does not show. The `HudMsg` usermessage exists in the v34
+  `server_i486.so`. **ClientMod draws it; the stock v34 client does not, or not
+  always.** With the key `ShowHudText` / `ShowSyncHudText` report support for every
+  client, so plugins do not fall back to hint or center text on their own. HUD
+  plugins for v34 (Levels Ranks HUD / Hud Info, ClientMod Show Damage, Shower of
+  Damage) are written for ClientMod; for the stock client a plugin has to choose
+  hint or center text itself. Without the key HUD text works for nobody, so
+  it stays.
 - **No `GetMaxHealth` in `sdkhooks.games/game.cstrike.txt`** (forbidden by the
   check). `GetMaxHealth` is not virtual on v34: the `_ZTV9CCSPlayer` vtable of
   build 4044 `server_i486.so` has no `GetMaxHealth` slot, and slot 107 (the

@@ -67,9 +67,9 @@
 			"HintTextPreByte"	"yes"
 			/**
 			 * HudMsg exists in the v34 server_i486.so, as in SM 1.7.3;
-			 * rom4s 1.11 commented this key out. Whether the v34 client
-			 * draws it is not verified yet (docs/PATCHES.md, "CS:S v34
-			 * gamedata").
+			 * rom4s 1.11 commented it out. ClientMod draws it, the stock
+			 * v34 client does not, or not always (docs/PATCHES.md,
+			 * "CS:S v34 gamedata").
 			 */
 			"HudTextMsg"		"HudMsg"
 			"GameExtension"	"game.cstrike"
