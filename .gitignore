@@ -3,6 +3,7 @@
 /packages/
 /sourcemod-css34-linux.tar.gz
 /sourcemod-*-css34-linux.tar.gz
+/.ci-artifacts/
 /.ci-cache/
 /.ci-server/
 /*.log
