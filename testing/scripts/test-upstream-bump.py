@@ -209,7 +209,7 @@ class TagWorkflowTest(unittest.TestCase):
         self.assertIn("upstream-bump.py next-tag", self.text)
         self.assertIn("git tag --points-at", self.text)
         self.assertIn("persist-credentials: false", self.text)
-        self.assertIn("actions/create-github-app-token@v1", self.text)
+        self.assertIn("actions/create-github-app-token@v3", self.text)
         self.assertIn("vars.BUMP_APP_ID", self.text)
         self.assertIn("x-access-token:${TOKEN}", self.text)
         self.assertNotIn("secrets.GITHUB_TOKEN", self.text)
@@ -229,7 +229,7 @@ class WorkflowTest(unittest.TestCase):
         bump = self.text.split("\n  bump:\n", 1)[1].split("\n  release:\n", 1)[0]
         release = self.text.split("\n  release:\n", 1)[1]
         for block in (bump, release):
-            self.assertIn("actions/create-github-app-token@v1", block)
+            self.assertIn("actions/create-github-app-token@v3", block)
             self.assertIn("vars.BUMP_APP_ID", block)
         self.assertIn("token: ${{ steps.app.outputs.token }}", bump)
         self.assertIn("GH_TOKEN: ${{ steps.app.outputs.token }}", bump)

@@ -369,13 +369,21 @@ def self_test():
     prefix = "MSVC_TOOLSET_PREFIX=14.44"
     sdk = "WINDOWS_SDK_PIN=10.0.26100.0"
     if prefix not in pin or sdk not in pin:
-        fail("windows-toolchain.env pin changed; update the workflows with it")
+        fail("windows-toolchain.env pin changed; update this self-test and the docs with it")
+    # Both workflows build through .github/actions/build-windows, which passes the
+    # pins of windows-toolchain.env to ilammy/msvc-dev-cmd (-vcvars_ver, SDK).
+    action = (BUILDER.parent / ".github/actions/build-windows/action.yml").read_text(encoding="utf-8")
+    for needle in ("builder/windows-toolchain.env", "uses: ilammy/msvc-dev-cmd@",
+                   "arch: x86", "toolset: ${{ steps.toolchain.outputs.toolset }}",
+                   "sdk: ${{ steps.toolchain.outputs.sdk }}"):
+        if needle not in action:
+            fail(".github/actions/build-windows must pass the windows-toolchain.env pins: " + needle)
     for relative in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
         text = (BUILDER.parent / relative).read_text(encoding="utf-8")
         if "runs-on: windows-2022" not in text:
             fail(relative + " must run on windows-2022")
-        if 'toolset: "14.44"' not in text or "sdk: 10.0.26100.0" not in text:
-            fail(relative + " must pass -vcvars_ver=14.44 and Windows SDK 10.0.26100.0")
+        if "uses: ./.github/actions/build-windows" not in text:
+            fail(relative + " must build through .github/actions/build-windows")
     if mm_filename("1.12.0-dev", "1226") != "mmsource-1.12.0-git1226-css34-windows.zip":
         fail("mm filename")
     if sm_filename("1.13.0", "7472") != "sourcemod-1.13.0-git7472-css34-windows.zip":

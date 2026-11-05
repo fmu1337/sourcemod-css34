@@ -95,13 +95,15 @@ class LinesTest(unittest.TestCase):
             for image in weekly:
                 self.assertIn((line, image), weekly_pairs)
         # sm11-oldstable is frozen (T2.7): out of every CI matrix.
-        for key in ("build", "debian", "botplay", "weekly", "weekly_botplay", "windows", "windows_smoke"):
+        for key in ("build", "debian", "botplay", "weekly", "weekly_botplay", "windows"):
             self.assertNotIn("sm11-oldstable", {row["line"] for row in matrix[key]}, key)
         self.assertEqual([row["line"] for row in matrix["botplay"]], ["sm12-latest", "sm13-latest"])
         self.assertEqual({row["image_name"] for row in matrix["botplay"]}, {"debian:11"})
         self.assertEqual([row["image_name"] for row in matrix["weekly_botplay"]], ["centos:7"] * 2)
         self.assertTrue(all("@sha256:" in row["image"] for row in matrix["weekly"] + matrix["botplay"]))
-        self.assertEqual([row["line"] for row in matrix["host"]], ["sm13-latest"])
+        # Removed matrices: host-checks runs on `build`, Wine on `windows`.
+        for key in ("host", "windows_smoke", "release_botplay", "botplay_extra", "botplay_extra_images"):
+            self.assertNotIn(key, matrix)
         self.assertNotIn("rhel", matrix)
         for name in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
             self.assertNotIn("sha256:", (self.root / name).read_text(), name)
@@ -192,7 +194,7 @@ class LinesTest(unittest.TestCase):
         bridged = {name for name, line in data["lines"].items()
                    if line["status"] == "active" and "bridge_metamod" in line}
         self.assertEqual(bridged, {"sm12-latest", "sm13-latest"})
-        for key in ("debian", "botplay", "weekly", "windows_smoke"):
+        for key in ("debian", "botplay", "weekly", "weekly_botplay", "windows"):
             for row in matrix[key]:
                 self.assertEqual(row["legacy_bridge"], "1" if row["line"] in bridged else "0", (key, row["line"]))
                 # The MM 1.12 package is still the only Metamod package of the line.

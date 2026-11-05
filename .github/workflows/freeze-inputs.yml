@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Names
         id: names
@@ -117,7 +117,7 @@ jobs:
       # The archive is ~0.8 GB: no Actions artifact (0.5 GB quota). The rebuild
       # runs here, in a second fresh checkout, after the build image is deleted.
       - name: Fresh checkout for the offline rebuild
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: offline-checkout
 
@@ -157,28 +157,8 @@ jobs:
             python3 testing/scripts/compare-package-abi.py "$RUNNER_TEMP/published/$name" "$pkg"
           done
 
-      - name: Restore cached server tree
-        id: server-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-
-      - name: Prepare server tree (cache miss)
-        if: steps.server-cache.outputs.cache-hit != 'true'
-        env:
-          SERVER_DIR: ${{ github.workspace }}/.ci-server
-          CACHE_DIR: ${{ github.workspace }}/.ci-cache
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y curl unzip unrar
-          testing/scripts/fetch-server.sh
-          testing/scripts/apply-valve-rc-fix.sh
-          testing/scripts/apply-srcds-patch.sh
-          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
-          mkdir -p server-art
-          tar -C .ci-server -czf server-art/css34-server.tar.gz .
-          rm -rf .ci-server
+      - name: Restore or prepare the server tree
+        uses: ./.github/actions/server-tree
 
       - name: Core PLAPI of the rebuild
         env:

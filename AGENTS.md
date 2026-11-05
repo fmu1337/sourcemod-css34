@@ -85,12 +85,15 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `14.44` (`-vcvars_ver=14.44`) and Windows SDK `10.0.26100.0`
   (`builder/windows-toolchain.env`). `builder/package_windows.py` writes the zips
   (POSIX `/` paths, `css34-package.json` inside, full toolset and SDK versions
-  in the manifest). `sm12-latest` and `sm13-latest` have `"windows": true`; `wine-smoke`
-  runs one row per line.
+  in the manifest). `sm12-latest` and `sm13-latest` have `"windows": true`; `build-windows`
+  (native Windows smoke, every PR) and the weekly `wine-smoke` run one row per line. Both
+  workflows build through `.github/actions/build-windows`, which reads the pins from
+  `builder/windows-toolchain.env`.
 
 ### Verifying / testing
-- **Static ABI check** (the "ABI / export checks" step of `build-linux` in
-  `ci.yml`, "Static package checks" in `release.yml`): `SM_PACKAGE=<pkg>
+- **Static ABI check** (the "Static package checks" step of
+  `.github/actions/build-linux`, used by `build-linux` in `ci.yml` and `linux` in
+  `release.yml`): `SM_PACKAGE=<pkg>
   testing/scripts/check-package.sh` and `MM_PACKAGE=<pkg>
   testing/scripts/check-metamod-package.sh`. Uses host `binutils` (reads 32-bit
   ELF fine). The **manylinux2014** package must PASS with `GLIBC_FLOOR=2.17`
@@ -100,15 +103,18 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   imports in every SM/MM ELF are checked against `testing/unversioned-imports.txt`;
   verify additions against the pinned providers, never the host libc.
 - **Host regression tests** (GCC, binutils and Expect required):
+  `bash testing/scripts/run-host-tests.sh` runs every `testing/scripts/test-*.py` /
+  `test-*.sh` plus the negative smoke check (CI `hygiene`); name tests to run a subset, e.g.
   `python3 testing/scripts/test-glibc-imports.py` and
   `python3 testing/scripts/test-console-probe.py`. These test ABI rejection,
   optimized hidden erasure, patch drift and continued console diagnostics.
-- **Full smoke test** (CI primary gate `test-built-debian`): prepare the server
+- **Full smoke test** (CI job `smoke`; the server tree comes from
+  `.github/actions/server-tree`): prepare the server
   tree on the host (`fetch-server.sh` → `apply-valve-rc-fix.sh` →
   `apply-srcds-patch.sh` → `KEEP_MAPS=de_dust2,de_inferno,de_nuke trim-server-maps.sh`,
   needs `unrar`), then boot `srcds` inside a pinned image from `builder/lines.json`
   (`centos:7`, `ubuntu:24.04`, or `debian:13` on every PR; older images are the
-  weekly/release matrix) running `install-deps.sh` → `install-addons.sh` →
+  weekly suite and release matrix) running `install-deps.sh` → `install-addons.sh` →
   `smoke-test.sh` with `SM_PACKAGE` / `MM_PACKAGE` set (without them
   `install-addons.sh` falls back to downloading rom4s 6572 + MM 1.10.6). The
   559 MB server zip is cached under `.ci-cache/`. It boots a 32-bit `srcds_i686`
@@ -122,7 +128,8 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 - **Core gates**: each matrix row names the Metamod package it installs (`mm_package`)
   and the core that must run (`expect_core`, `2.ep1`). `smoke-test.sh` takes
   `SMOKE_EXPECT_CORE=1.ep1|2.ep1` (`1.ep1` only for the frozen sm11 pointer's
-  `mmsource-legacy`), and `plapi-runtime` probes the PLAPI of every built core.
+  `mmsource-legacy`), and `host-checks` probes the PLAPI of every built core
+  (`check-core-plapi.sh`) and smoke-tests on the runner host.
 - **Legacy-plugin bridge** (T2.9, #144): MM 1.12 (`metamod.2.ep1`) hands
   PLAPI 7-12 plugins to the MM 1.10 legacy core (`metamod.1.ep1`) from its own
   `bin/` directory, as rom4s's MM 1.12 git1159 does. Code:
@@ -159,7 +166,8 @@ is not a maintenance step. Every tag release also carries fixed-name copies of i
 `VERSIONS.txt` (`release-versions.py`); pointer pages are rewritten on each move (`pointer-notes.py`).
 
 ### Lint
-Run `actionlint` after workflow edits. The ABI export
+Run `actionlint` after workflow edits (`testing/scripts/install-actionlint.sh` installs
+the pinned, sha256-checked version CI uses). The ABI export
 check (`check-package.sh`) is the closest static verification of build output.
 
 ### Version pin bumps (T4.4)
@@ -188,7 +196,9 @@ By hand: edit the pin in `builder/lines.json`, run
 `builder/generated/ci-matrix.json`, `builder/generated/tag-map.sh`, and the README pin
 tables. `ci.yml` builds its matrices in the `plan` job
 (`builder/scripts/ci_planner.py`, which also lists the jobs the run requires) and
-ends in one `gate` job (`builder/scripts/ci_gate.py`); `release.yml` still loads its
-matrices from `python3 builder/lines.py gha`. Planner and gate are covered by
+ends in one `gate` job (`builder/scripts/ci_gate.py`). Suites: `pr` (PRs, master pushes)
+and `weekly` (Monday schedule or dispatch `suite=weekly`: old OS smoke, centos:7 botplay,
+Wine smoke); dispatch also takes `css34_line`. `release.yml` takes its OS rows from
+`lines.py` `ci_matrix` (`release-pins`). Planner and gate are covered by
 `python3 testing/scripts/test-ci-planner-gate.py`. Upstream tip probe:
 `builder/scripts/resolve-upstream-tips.sh`.

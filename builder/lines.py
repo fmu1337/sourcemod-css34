@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 LINE_FIELDS = {
     "sourcemod", "metamod", "secondary_metamod", "status", "pointer", "releasable", "role",
-    "install_role", "extra_tags", "smoke", "host_smoke",
-    "windows", "botplay_extra_images", "sm_note", "mm_note", "frozen", "bridge_metamod",
+    "install_role", "extra_tags", "smoke",
+    "windows", "sm_note", "mm_note", "frozen", "bridge_metamod",
 }
 # T2.7 (docs/FREEZE.md): a frozen line keeps its published release and pointer,
 # leaves CI, and is rebuilt only from its freeze tag and input archive.
@@ -76,7 +76,6 @@ def load_manifest(path):
         require(set(line) <= LINE_FIELDS, "unknown fields on line " + name)
         require(isinstance(line.get("pointer", False), bool), name + ".pointer must be a bool")
         require(isinstance(line.get("releasable", True), bool), name + ".releasable must be a bool")
-        require(isinstance(line.get("host_smoke", False), bool), name + ".host_smoke must be a bool")
         require(isinstance(line.get("windows", False), bool), name + ".windows must be a bool")
         for key in ("role", "install_role", "sm_note", "mm_note"):
             if key in line:
@@ -95,12 +94,6 @@ def load_manifest(path):
                     name + " must not list debian:latest (it duplicates debian:13)")
             require(image not in images, name + " lists image " + image + " twice")
             images.append(image)
-        for entry in line.get("botplay_extra_images", []):
-            require(isinstance(entry, dict) and set(entry) == {"image", "image_id"},
-                    "invalid botplay_extra image on " + name)
-            require(IMAGE_RE.fullmatch(entry["image"]), "invalid botplay_extra image on " + name)
-            require(re.fullmatch(r"[a-z0-9]+", entry["image_id"]),
-                    "invalid botplay_extra image_id on " + name)
         if line["status"] == "active":
             require(line.get("smoke"), "active line " + name + " needs smoke images")
         for component, prefix in (("sourcemod", "SM_"), ("metamod", "MM_")):
@@ -225,9 +218,6 @@ def validate_runtime_images(data):
         for entry in line.get("smoke") or []:
             require(entry["image"] in images,
                     lname + " smoke image is not pinned: " + entry["image"])
-        for entry in line.get("botplay_extra_images") or []:
-            require(entry["image"] in images,
-                    lname + " botplay_extra image is not pinned: " + entry["image"])
 
 
 def mm_version(mode):
@@ -392,73 +382,27 @@ def image_rows(data, image_name, with_commits):
 
 
 def ci_matrix(data):
+    """CI matrices (builder/generated/ci-matrix.json; ci_planner.py picks the suite's).
+
+    build    one row per active line (build-linux, host-checks)
+    debian   per-PR smoke: each line's `smoke` images
+    botplay  per-PR botplay on `botplay_image`
+    weekly / weekly_botplay  the weekly suite (also release.yml's public-URL gates)
+    windows  one row per active line with "windows": native smoke, weekly Wine smoke
+    """
     rows = active_rows(data)
-    host = []
     windows = []
-    windows_smoke = []
     for name, line in data["lines"].items():
-        part = line_parts(data, name)
-        if line.get("host_smoke"):
-            host.append(row_expect(part, True))
         if line.get("windows") and line["status"] == "active":
-            # One build per line (native smoke there), then a Wine smoke.
-            windows.append(windows_row(part))
-            windows_smoke.append(windows_row(part))
-    require(host, "host matrix must be non-empty")
-    release = []
-    for row in rows:
-        if row["mm_mode"] != "1.12":
-            continue
-        base, rev = row["sm_expect"].rsplit(".", 1)
-        release.append({
-            "line": row["line"],
-            "tag": row["tag"],
-            "sm_asset": "sourcemod-{}-git{}-css34-linux.tar.gz".format(base, rev),
-            "mm_asset": "mmsource-{}-dev-css34-linux.tar.gz".format(row["mm_expect"]),
-            "sm_expect": row["sm_expect"],
-            "mm_expect": row["mm_expect"],
-        })
-    require(release, "release botplay matrix must be non-empty")
-    extra = botplay_extra_matrix(data)
+            windows.append(windows_row(line_parts(data, name)))
     return {
         "build": [row_expect(row, True) for row in rows],
         "debian": debian_rows(data),
         "botplay": image_rows(data, data["botplay_image"], False),
         "weekly": weekly_rows(data),
         "weekly_botplay": image_rows(data, data["weekly_botplay_image"], False),
-        "host": host,
         "windows": windows,
-        "windows_smoke": windows_smoke,
-        "release_botplay": release,
-        "botplay_extra": extra,
-        "botplay_extra_images": extra["include"][:len(extra["image"])],
         "images": {name: image_ref(data, name) for name in data["images"]},
-    }
-
-
-def botplay_extra_matrix(data):
-    chosen = []
-    images = None
-    for name, line in data["lines"].items():
-        extra = line.get("botplay_extra_images")
-        if not extra:
-            continue
-        if images is None:
-            images = extra
-        elif extra != images:
-            raise ValueError("botplay_extra_images must match across lines")
-        chosen.append(name)
-    require(chosen, "botplay_extra matrix is empty")
-    include = [
-        attach_image({"image_id": item["image_id"]}, data, item["image"])
-        for item in images
-    ]
-    for name in chosen:
-        include.append(row_expect(line_parts(data, name), False))
-    return {
-        "image": [image_ref(data, item["image"]) for item in images],
-        "line": chosen,
-        "include": include,
     }
 
 
@@ -597,8 +541,7 @@ def generated_text(data, kind, current=""):
 
 def emit_gha(data):
     matrix = ci_matrix(data)
-    for key in ("build", "debian", "botplay", "weekly", "weekly_botplay", "host", "windows", "windows_smoke",
-                "release_botplay", "botplay_extra", "botplay_extra_images", "images"):
+    for key in ("build", "debian", "botplay", "weekly", "weekly_botplay", "windows", "images"):
         print("{}<<EOF".format(key))
         print(json.dumps(matrix[key], separators=(",", ":")))
         print("EOF")

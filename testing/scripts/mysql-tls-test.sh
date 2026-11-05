@@ -129,12 +129,14 @@ entry css34_notls_required "${notls_host}" css34_plain ssl_mode required
 entry css34_notls_verify "${notls_host}" css34_plain ssl_mode verify_ca ssl_ca "${ca}"
 entry css34_mdb_default "${MYSQL_TLS_HOST}" css34_plain
 entry css34_mdb_identity "${MYSQL_TLS_HOST}" css34_tls ssl_mode verify_identity ssl_ca "${ca}"
-# Add the entries before the closing brace of "Databases".
+# Add the entries before the closing brace of "Databases". SourceMod ships
+# databases.cfg with CRLF line ends, and mawk 1.3.3 (debian:8, ubuntu:14.04) has
+# no [[:space:]]: spell the blanks out, \r included.
 ENTRIES="${entries}" awk '
   { lines[NR] = $0 }
   END {
     last = 0
-    for (i = NR; i > 0; i--) if (lines[i] ~ /^[[:space:]]*}[[:space:]]*$/) { last = i; break }
+    for (i = NR; i > 0; i--) if (lines[i] ~ /^[ \t\r]*}[ \t\r]*$/) { last = i; break }
     if (!last) exit 1
     for (i = 1; i < last; i++) print lines[i]
     printf "%s", ENVIRON["ENTRIES"]

@@ -143,22 +143,7 @@
           "image": "debian:13"
         }
       ],
-      "host_smoke": true,
-      "windows": true,
-      "botplay_extra_images": [
-        {
-          "image": "debian:11",
-          "image_id": "debian11"
-        },
-        {
-          "image": "debian:12",
-          "image_id": "debian12"
-        },
-        {
-          "image": "rockylinux:9",
-          "image_id": "rocky9"
-        }
-      ]
+      "windows": true
     },
     "sm13-mm20": {
       "sourcemod": "SM_DEV",
@@ -202,7 +187,6 @@
     "debian:9": "sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
     "debian:10": "sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
     "debian:11": "sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
-    "debian:12": "sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61",
     "debian:13": "sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
     "debian:latest": "sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
     "rockylinux:9": "sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",

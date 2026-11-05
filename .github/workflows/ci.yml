@@ -5,56 +5,34 @@ permissions:
   actions: read
   pull-requests: read
 
+# plan (builder/scripts/ci_planner.py) picks the suite, the matrices and the
+# jobs the run requires; gate (builder/scripts/ci_gate.py) is the one check
+# that must pass.
+#   pr     (PRs, master pushes, dispatch suite=pr): smoke on centos:7 /
+#          ubuntu:24.04 / debian:13, botplay on debian:11, native Windows smoke
+#   weekly (Monday schedule, dispatch suite=weekly): smoke on the old OS images,
+#          botplay on centos:7, native Windows smoke and the Wine smoke
 on:
   push:
     branches:
       - master
-      - 'cursor/**'
   pull_request:
   schedule:
     - cron: '17 6 * * 1'
   workflow_dispatch:
     inputs:
       suite:
-        description: "pr = centos:7 + ubuntu:24.04 + debian:13; weekly = old OS matrix"
+        description: "pr = centos:7 + ubuntu:24.04 + debian:13 smoke, debian:11 botplay; weekly = old OS smoke, centos:7 botplay, Wine smoke"
         type: choice
         options:
           - pr
           - weekly
         required: false
         default: pr
-      apply_srcds_patch:
-        description: "Apply BufferFix ELF rewrite memcpy→memmove (1/0)"
-        required: false
-        default: "1"
       css34_line:
-        description: "Optional single CSS34_LINE (an active line: sm12-latest|sm13-latest; frozen sm11-oldstable is refused); empty = matrix"
+        description: "Optional single CSS34_LINE (an active line: sm12-latest|sm13-latest; frozen sm11-oldstable is refused); empty = every active line"
         required: false
         default: ""
-      record_secs:
-        description: "Botplay recording length in seconds (full matrix uses botplay-stress.cfg)"
-        required: false
-        default: "600"
-      run_full_botplay_matrix:
-        description: "Run botplay-stress matrix for all CSS34_LINE builds (master gate)"
-        type: boolean
-        required: false
-        default: true
-      run_reference_botplay:
-        description: "Run rom4s / GitHub Release reference botplay jobs (published binaries, not this build)"
-        type: boolean
-        required: false
-        default: false
-      botplay_extra_distros:
-        description: "Also run botplay on debian:11, debian:12, rockylinux:9"
-        type: boolean
-        required: false
-        default: false
-      run_botplay_bisect:
-        description: "Run slow botplay bisect matrix (diagnostics)"
-        type: boolean
-        required: false
-        default: false
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -64,44 +42,30 @@ jobs:
   plan:
     runs-on: ubuntu-22.04
     outputs:
-      code_changed: ${{ steps.planner.outputs.code_changed }}
       run_code_jobs: ${{ steps.planner.outputs.run_code_jobs }}
-      run_pr_smoke: ${{ steps.planner.outputs.run_pr_smoke }}
-      run_weekly_smoke: ${{ steps.planner.outputs.run_weekly_smoke }}
-      run_windows: ${{ steps.planner.outputs.run_windows }}
-      run_host: ${{ steps.planner.outputs.run_host }}
-      run_release_botplay: ${{ steps.planner.outputs.run_release_botplay }}
       run_check_pins: ${{ steps.planner.outputs.run_check_pins }}
-      run_built_botplay_extra: ${{ steps.planner.outputs.run_built_botplay_extra }}
-      default_line: ${{ steps.planner.outputs.default_line }}
+      run_windows: ${{ steps.planner.outputs.run_windows }}
+      run_wine: ${{ steps.planner.outputs.run_wine }}
+      suite: ${{ steps.planner.outputs.suite }}
       required_jobs: ${{ steps.planner.outputs.required_jobs }}
       build: ${{ steps.planner.outputs.build }}
-      debian: ${{ steps.planner.outputs.debian }}
+      smoke: ${{ steps.planner.outputs.smoke }}
       botplay: ${{ steps.planner.outputs.botplay }}
-      weekly: ${{ steps.planner.outputs.weekly }}
-      weekly_botplay: ${{ steps.planner.outputs.weekly_botplay }}
-      host: ${{ steps.planner.outputs.host }}
       windows: ${{ steps.planner.outputs.windows }}
-      windows_smoke: ${{ steps.planner.outputs.windows_smoke }}
-      release_botplay: ${{ steps.planner.outputs.release_botplay }}
-      botplay_extra: ${{ steps.planner.outputs.botplay_extra }}
-      botplay_extra_images: ${{ steps.planner.outputs.botplay_extra_images }}
-      images: ${{ steps.planner.outputs.images }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Detect non-doc changes
         id: filter
         if: github.event_name == 'pull_request' || github.event_name == 'push'
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           predicate-quantifier: every
           filters: |
             code:
               - '!docs/**'
               - '!**/*.md'
-              - '!.github/workflows/cleanup-artifacts.yml'
             pins:
               - 'README.md'
 
@@ -126,13 +90,16 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Verify version pin consistency
         run: python3 builder/lines.py check
 
       - name: Test pin generation
         run: python3 testing/scripts/test-lines.py
+
+      - name: Release tag map and release notes for every releasable tag
+        run: bash builder/scripts/check-tag-map.sh
 
       - name: Windows zip layout self-test
         run: python3 builder/package_windows.py self-test
@@ -143,95 +110,27 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install regression test tools and actionlint
         run: |
-          sudo apt-get update && sudo apt-get install -y gcc binutils expect shellcheck
-          curl -sL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /tmp && sudo mv /tmp/actionlint /usr/local/bin/
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gcc binutils expect shellcheck
+          # Pinned version, sha256-checked
+          bash testing/scripts/install-actionlint.sh
 
       - name: Lint GitHub Action workflows
         run: actionlint
 
-      - name: Test CI planner and gate logic
-        run: python3 testing/scripts/test-ci-planner-gate.py
-
-      - name: Check unversioned imports and PostgreSQL shim
-        run: python3 testing/scripts/test-glibc-imports.py
-
-      - name: Check console probe recovery
-        run: python3 testing/scripts/test-console-probe.py
-
-      - name: Check exact package selection
-        run: bash testing/scripts/check-package-paths.sh
-
-      - name: Check Metamod metadata and required packages
-        run: python3 testing/scripts/test-check-metamod-package.py
-
-      - name: Check release selection and Docker debug opt-in
-        run: python3 testing/scripts/test-release-build-entrypoints.py
-
-      - name: Release notes and prerelease → promote flow (T4.3)
-        run: python3 testing/scripts/test-release-notes.py
-
-      - name: Upstream bump plan, PR body and release tags (T4.4)
-        run: python3 testing/scripts/test-upstream-bump.py
-
-      - name: Jules review / fix sessions for bumps (fake API)
-        run: python3 testing/scripts/test-jules.py
-
-      - name: Release retention, superseded notes, no delete mode (fake gh)
-        run: python3 testing/scripts/test-release-maintenance.py
-
-      - name: Line pointer move, VERSIONS.txt and pointer notes (fake gh)
-        run: python3 testing/scripts/test-update-line-pointer.py
-
-      - name: Check patch drift acceptance ranges and failures
+      # Every testing/scripts/test-*.py and test-*.sh, then the negative smoke
+      # check (smoke-test.sh must fail without a server); summary in the job summary.
+      - name: Host regression tests
         timeout-minutes: 30
-        run: python3 testing/scripts/test-check-patch-drift.py
-
-      - name: Legacy-plugin bridge patch tests (T2.9)
-        run: python3 testing/scripts/test-mm-oldbridge-patch.py
-
-      - name: Freeze tool tests (T2.7)
-        run: python3 testing/scripts/test-freeze-tools.py
-
-      - name: Patch series apply, tree checks and routing (T3.4)
-        run: python3 testing/scripts/test-patch-series.py
-
-      - name: OpenSSL entropy patch and drift refusals (T4.5)
-        run: python3 testing/scripts/test-openssl-entropy-patch.py
-
-      - name: MySQL ssl_mode / ssl_ca parsing and sm13 series checks
-        run: python3 testing/scripts/test-mysql-ssl-options.py
-
-      - name: Intentionally fail smoke with a missing server
-        id: negative-smoke
-        continue-on-error: true
-        shell: bash
-        env:
-          SERVER_DIR: ${{ runner.temp }}/absent-css34-server
-        run: |
-          mkdir -p "$SERVER_DIR"
-          bash testing/scripts/smoke-test.sh 2>&1 | tee negative-smoke.log
-
-      - name: Require the expected failure
-        env:
-          OUTCOME: ${{ steps.negative-smoke.outcome }}
-        run: |
-          test "$OUTCOME" = failure
-          grep -q 'No srcds_i686/i486 binary found' negative-smoke.log
-
-      - name: Preserve negative smoke diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: negative-smoke-logs
-          path: negative-smoke.log
-          if-no-files-found: error
-          retention-days: 7
+        run: bash testing/scripts/run-host-tests.sh
 
   build-linux:
+    name: build-linux (${{ matrix.line }})
     needs: plan
     if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
@@ -241,52 +140,21 @@ jobs:
         include: ${{ fromJSON(needs.plan.outputs.build) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Maybe skip non-selected lines
-        id: select
-        run: |
-          want="${{ github.event.inputs.css34_line }}"
-          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build SourceMod+Metamod (${{ matrix.line }})
-        if: steps.select.outputs.skip != '1'
-        env:
-          CSS34_LINE: ${{ matrix.line }}
-        run: |
-          chmod +x builder/docker/build.sh builder/run/linux.sh \
-            builder/checkout-deps.sh builder/package.sh builder/package-metamod.sh \
-            builder/build-metamod.sh builder/prepare-package.sh builder/write-build-stamps.sh \
-            builder/resolve-version.sh builder/py.sh builder/patches/*.sh
-          set -o pipefail
-          builder/docker/build.sh 2>&1 | tee build.log
-
-      - name: ABI / export checks
-        if: steps.select.outputs.skip != '1'
-        run: |
-          chmod +x testing/scripts/*.sh
-          sudo apt-get update
-          sudo apt-get install -y binutils
-          CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
-          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          export SM_PACKAGE MM_PACKAGE
-          echo "Checking ${SM_PACKAGE}"
-          testing/scripts/check-package.sh
-
-          testing/scripts/verify-line-metamod-packages.sh "${{ matrix.line }}"
+      - name: Build and check packages
+        uses: ./.github/actions/build-linux
+        with:
+          line: ${{ matrix.line }}
 
       - name: Cache packages for later jobs
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: packages
           key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
 
   build-windows:
+    name: build-windows (${{ matrix.line }})
     needs: plan
     if: needs.plan.outputs.run_windows == 'true'
     runs-on: windows-2022
@@ -296,44 +164,12 @@ jobs:
         include: ${{ fromJSON(needs.plan.outputs.windows) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Build and check packages
+        uses: ./.github/actions/build-windows
         with:
-          python-version: '3.11'
-
-      - name: Set up MSVC (x86, toolset 14.44, SDK 10.0.26100.0)
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x86
-          toolset: "14.44"
-          sdk: 10.0.26100.0
-
-      - name: Build SourceMod + Metamod for CS:S v34 (${{ matrix.line }})
-        shell: bash
-        env:
-          CSS34_LINE: ${{ matrix.line }}
-        run: |
-          export WDIR="$PWD"
-          chmod +x builder/run/windows.sh builder/checkout-deps.sh builder/prepare-package.sh \
-            builder/build-metamod.sh builder/write-build-stamps.sh builder/resolve-version.sh \
-            builder/py.sh builder/patches/*.sh
-          builder/run/windows.sh
-
-      - name: Confirm Windows packages exist
-        shell: bash
-        run: |
-          ls -lh packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip
-          python builder/package_windows.py check \
-            packages/sourcemod-*-css34-windows.zip \
-            packages/mmsource-*-css34-windows.zip
-          if command -v unzip >/dev/null 2>&1; then
-            # One archive per call: unzip -l a.zip b.zip reads b.zip as a member name
-            for z in packages/sourcemod-*-css34-windows.zip packages/mmsource-*-css34-windows.zip; do
-              unzip -l "$z"
-            done
-          fi
+          line: ${{ matrix.line }}
 
       - name: Collect packages and PDBs
         shell: bash
@@ -346,14 +182,15 @@ jobs:
           ls -la win-art win-art/pdb
 
       - name: Cache packages for wine-smoke
-        uses: actions/cache/save@v4
+        if: needs.plan.outputs.run_wine == 'true'
+        uses: actions/cache/save@v6
         with:
           path: win-art
           key: css34-win-${{ github.run_id }}-${{ matrix.line }}
           enableCrossOsArchive: true
 
       - name: Cache CS:S v34 server zips (Windows)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             .ci-cache/srcds_css34_4044.zip
@@ -371,12 +208,20 @@ jobs:
           LOAD_EXTS: ${{ matrix.load_exts }}
           DHOOKS_EXPECT: ${{ matrix.dhooks_expect }}
           DHOOKS_PROBE_SECS: "150"
+          LEGACY_BRIDGE: ${{ matrix.legacy_bridge }}
         run: |
+          set -euo pipefail
           SM_WIN_PACKAGE="$(ls "$PWD"/win-art/sourcemod-*-css34-windows.zip)"
           # Native smoke runs on the line's primary Metamod build
           MM_WIN_PACKAGE="$PWD/win-art/${{ matrix.mm_package }}"
           PDB_DIR="$PWD/win-art/pdb"
-          export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR
+          # T2.9: a PLAPI 11 plugin must run on metamod.2.ep1 through the nested
+          # metamod.1.ep1 legacy core of the MM 1.12 zip.
+          LEGACY_PROBE=""
+          if [[ "${LEGACY_BRIDGE}" == 1 ]]; then
+            LEGACY_PROBE="$PWD/win-art/test-plugins/css34_legacy_probe.dll"
+          fi
+          export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR LEGACY_PROBE
           bash testing/scripts/wine-smoke-test.sh
 
       # PE check on the installed server: every sourcemod.<core>.dll reports its
@@ -389,8 +234,10 @@ jobs:
 
       - name: Upload Windows smoke logs and crash dumps
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
           name: windows-smoke-${{ matrix.line }}
           path: |
             .ci-winserver/cstrike/console.log
@@ -403,62 +250,30 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
+    outputs:
+      server_key: ${{ steps.server.outputs.key }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Restore cached server tree
-        id: server-cache
-        uses: actions/cache/restore@v4
+      - name: Restore or prepare the server tree
+        id: server
+        uses: ./.github/actions/server-tree
         with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          save: "true"
 
-      - name: Install extract tools
-        if: steps.server-cache.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl unzip unrar
-
-      - name: Fetch CS:S v34 server
-        if: steps.server-cache.outputs.cache-hit != 'true'
-        env:
-          SERVER_DIR: ${{ github.workspace }}/.ci-server
-          CACHE_DIR: ${{ github.workspace }}/.ci-cache
-          APPLY_SRCDS_PATCH: ${{ github.event.inputs.apply_srcds_patch || '1' }}
-          APPLY_VALVE_RC: ${{ github.event.inputs.apply_srcds_patch || '1' }}
-        run: |
-          chmod +x testing/scripts/*.sh
-          testing/scripts/fetch-server.sh
-          if [[ "${APPLY_SRCDS_PATCH}" == "1" ]]; then
-            testing/scripts/apply-valve-rc-fix.sh
-            testing/scripts/apply-srcds-patch.sh
-          fi
-          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
-
-      - name: Pack server tree
-        if: steps.server-cache.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p server-art
-          tar -C .ci-server -czf server-art/css34-server.tar.gz .
-          ls -lh server-art/css34-server.tar.gz
-
-      - name: Save server tree cache
-        if: steps.server-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: ${{ steps.server-cache.outputs.cache-primary-key }}
-
+  # Weekly only: the same Windows zips under Wine on Linux (native Windows
+  # smoke in build-windows is the per-PR gate).
   wine-smoke:
+    name: wine-smoke (${{ matrix.line }})
     needs: [plan, build-windows, prepare-server]
-    if: needs.plan.outputs.run_windows == 'true' && !cancelled()
+    if: needs.plan.outputs.run_wine == 'true' && !cancelled()
     runs-on: ubuntu-22.04
     container: ubuntu:22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.plan.outputs.windows_smoke) }}
+        include: ${{ fromJSON(needs.plan.outputs.windows) }}
     steps:
       - name: Install Wine
         run: |
@@ -469,10 +284,10 @@ jobs:
           ln -sf /usr/bin/llvm-symbolizer-14 /usr/local/bin/llvm-symbolizer
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Restore Windows packages
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: win-art
           key: css34-win-${{ github.run_id }}-${{ matrix.line }}
@@ -480,10 +295,10 @@ jobs:
           enableCrossOsArchive: true
 
       - name: Restore server tree
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          key: ${{ needs.prepare-server.outputs.server_key }}
           fail-on-cache-miss: true
 
       - name: Wine smoke test (${{ matrix.line }}, MM ${{ matrix.mm_expect }})
@@ -497,68 +312,68 @@ jobs:
           LOAD_EXTS: ${{ matrix.load_exts }}
           DHOOKS_EXPECT: ${{ matrix.dhooks_expect }}
           DHOOKS_PROBE_SECS: "150"
+          LEGACY_BRIDGE: ${{ matrix.legacy_bridge }}
         run: |
+          set -euo pipefail
           SM_WIN_PACKAGE="$(ls win-art/sourcemod-*-css34-windows.zip)"
           MM_WIN_PACKAGE="win-art/${{ matrix.mm_package }}"
           LEGACY_PROBE=""
-          if [[ "${{ matrix.legacy_bridge }}" == 1 ]]; then
+          if [[ "${LEGACY_BRIDGE}" == 1 ]]; then
             LEGACY_PROBE="$PWD/win-art/test-plugins/css34_legacy_probe.dll"
           fi
-          export LEGACY_PROBE
           PDB_DIR="$PWD/win-art/pdb"
-          export SM_WIN_PACKAGE MM_WIN_PACKAGE PDB_DIR
-          [[ -f server-art/css34-server.tar.gz ]] && export SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"
-          echo "==== unzip -l ${SM_WIN_PACKAGE} ===="
-          unzip -l "${SM_WIN_PACKAGE}"
-          echo "==== unzip -l ${MM_WIN_PACKAGE} ===="
-          unzip -l "${MM_WIN_PACKAGE}"
+          SERVER_TGZ="$PWD/server-art/css34-server.tar.gz"
+          export SM_WIN_PACKAGE MM_WIN_PACKAGE LEGACY_PROBE PDB_DIR SERVER_TGZ
           python3 builder/package_windows.py check "${SM_WIN_PACKAGE}" "${MM_WIN_PACKAGE}"
           bash testing/scripts/wine-smoke-test.sh
 
-  test-built-debian:
+      - name: Upload Wine smoke logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
+          name: wine-smoke-${{ matrix.line }}
+          path: |
+            .ci-winserver/wine.log
+            .ci-winserver/cstrike/console.log
+            .ci-winserver/cstrike/addons/sourcemod/logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Built packages in pinned containers: install-deps.sh, install-addons.sh,
+  # smoke-test.sh, the legacy-plugin bridge probe and the MySQL TLS probe.
+  smoke:
+    name: smoke (${{ matrix.line }}, ${{ matrix.image_name }})
     needs: [plan, build-linux, prepare-server]
-    if: needs.plan.outputs.run_pr_smoke == 'true'
+    if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.plan.outputs.debian) }}
+        include: ${{ fromJSON(needs.plan.outputs.smoke) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Maybe skip
-        id: select
-        run: |
-          want="${{ github.event.inputs.css34_line }}"
-          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
+        uses: actions/checkout@v7
 
       - name: Restore packages from cache
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: packages
           key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          key: ${{ needs.prepare-server.outputs.server_key }}
           fail-on-cache-miss: true
 
       - name: Start MariaDB and MySQL 8.4 with TLS for the MySQL probe (T4.5)
-        if: steps.select.outputs.skip != '1'
         run: bash testing/scripts/mysql-tls-server.sh start .ci-mysql-tls
 
       - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
-        if: steps.select.outputs.skip != '1'
         env:
           IMAGE: ${{ matrix.image }}
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
@@ -572,7 +387,6 @@ jobs:
           CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
         run: |
           set -euo pipefail
-          chmod +x testing/scripts/*.sh
           CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
           MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
@@ -623,17 +437,20 @@ jobs:
             '
 
       - name: Stop MariaDB and MySQL
-        if: always() && steps.select.outputs.skip != '1'
+        if: always()
         run: bash testing/scripts/mysql-tls-server.sh stop
 
       - name: Upload smoke logs on failure
-        if: failure() && steps.select.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
+        if: failure()
+        uses: actions/upload-artifact@v7
         with:
-          name: built-debian-smoke-logs-${{ matrix.line }}-${{ strategy.job-index }}
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
+          name: smoke-logs-${{ matrix.line }}-${{ strategy.job-index }}
           path: |
             .ci-server/smoke.log
             .ci-server/mysql-tls.log*
+            .ci-server/legacy-bridge.log*
             .ci-server/console-probe.log
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
@@ -644,9 +461,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  test-built-botplay-matrix:
+  # botplay-stress.cfg with bots on three maps: SDKTools, SDKHooks, OnTakeDamage,
+  # DHooks and the gamedata probe on the built packages.
+  botplay:
+    name: botplay (${{ matrix.line }}, ${{ matrix.image_name }})
     needs: [plan, build-linux, prepare-server]
-    if: needs.plan.outputs.run_pr_smoke == 'true' && (github.event_name != 'workflow_dispatch' || github.event.inputs.run_full_botplay_matrix == 'true')
+    if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     strategy:
@@ -655,39 +475,26 @@ jobs:
         include: ${{ fromJSON(needs.plan.outputs.botplay) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Maybe skip
-        id: select
-        run: |
-          want="${{ github.event.inputs.css34_line }}"
-          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
+        uses: actions/checkout@v7
 
       - name: Restore packages from cache
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: packages
           key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          key: ${{ needs.prepare-server.outputs.server_key }}
           fail-on-cache-miss: true
 
-      - name: Botplay stress ${{ matrix.line }} (SDKTools + SDKHooks + OnTakeDamage)
-        if: steps.select.outputs.skip != '1'
+      - name: Botplay stress ${{ matrix.line }} on ${{ matrix.image_name }}
         env:
           IMAGE: ${{ matrix.image }}
-          RECORD_SECS: ${{ github.event.inputs.record_secs || '300' }}
+          RECORD_SECS: "300"
           BOTPLAY_PROFILE: built
           BOTPLAY_CFG: botplay-stress.cfg
           BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
@@ -697,7 +504,6 @@ jobs:
           MM_PACKAGE_NAME: ${{ matrix.mm_package }}
         run: |
           set -euo pipefail
-          chmod +x testing/scripts/*.sh
           CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
           MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
@@ -729,32 +535,43 @@ jobs:
               testing/scripts/botplay-test.sh
             '
 
+      # Informational: the counters next to the rom4s 6572 baseline, in the job
+      # summary. The botplay step above is the gate.
       - name: Compare botplay vs rom4s baseline
-        continue-on-error: true
-        if: always() && steps.select.outputs.skip != '1'
+        if: always()
+        env:
+          LINE: ${{ matrix.line }}
+          IMAGE_NAME: ${{ matrix.image_name }}
         run: |
-          set -euo pipefail
-          chmod +x testing/scripts/compare-botplay-reports.sh
-          if [[ -f .ci-server/botplay-report.json ]]; then
-            testing/scripts/compare-botplay-reports.sh \
-              testing/botplay/rom4s-baseline.json \
-              .ci-server/botplay-report.json \
-              .ci-server/botplay-compare-${{ matrix.line }}.txt
-            cat .ci-server/botplay-compare-${{ matrix.line }}.txt
-          else
-            echo "No botplay-report.json for ${{ matrix.line }}" >&2
-            exit 1
-          fi
+          report=.ci-server/botplay-report.json
+          out=.ci-server/botplay-compare.txt
+          {
+            echo "### Botplay ${LINE} on ${IMAGE_NAME} vs rom4s baseline"
+            echo
+            if [[ -f "$report" ]]; then
+              rc=0
+              bash testing/scripts/compare-botplay-reports.sh \
+                testing/botplay/rom4s-baseline.json "$report" "$out" >/dev/null 2>&1 || rc=$?
+              echo '```'
+              cat "$out" 2>/dev/null || echo "(no comparison output, exit ${rc})"
+              echo '```'
+              [[ "$rc" == 0 ]] || echo "Below the baseline in at least one counter (exit ${rc})."
+            else
+              echo "No botplay-report.json (the botplay step failed before writing it)."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload botplay report on failure
-        if: failure() && steps.select.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
+        if: failure()
+        uses: actions/upload-artifact@v7
         with:
-          name: botplay-matrix-${{ matrix.line }}-logs
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
+          name: botplay-logs-${{ matrix.line }}-${{ strategy.job-index }}
           path: |
             .ci-server/botplay-report.json
             .ci-server/botplay-report.txt
-            .ci-server/botplay-compare-${{ matrix.line }}.txt
+            .ci-server/botplay-compare.txt
             .ci-server/botplay.log
             .ci-server/botplay-run.log
             .ci-server/cstrike/console.log
@@ -762,56 +579,60 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  test-built-smoke:
+  # On the runner itself (Ubuntu 22.04, no container): install the packages,
+  # check every core's PLAPI against the real server providers, smoke test.
+  host-checks:
+    name: host-checks (${{ matrix.line }})
     needs: [plan, build-linux, prepare-server]
-    if: needs.plan.outputs.run_host == 'true'
+    if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.plan.outputs.host) }}
+        include: ${{ fromJSON(needs.plan.outputs.build) }}
+    env:
+      CSS34_LINE: ${{ matrix.line }}
+      SERVER_DIR: ${{ github.workspace }}/.ci-server
+      CACHE_DIR: ${{ github.workspace }}/.ci-cache
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Maybe skip
-        id: select
-        run: |
-          want="${{ github.event.inputs.css34_line }}"
-          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Restore packages from cache (${{ matrix.line }})
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
+      - name: Restore packages from cache
+        uses: actions/cache/restore@v6
         with:
           path: packages
           key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+          key: ${{ needs.prepare-server.outputs.server_key }}
           fail-on-cache-miss: true
 
-      - name: Install host 32-bit runtime
-        if: steps.select.outputs.skip != '1'
+      - name: Install host 32-bit runtime and compiler
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y expect lib32gcc-s1 lib32stdc++6 lib32z1 libc6-i386 libstdc++6:i386 zlib1g:i386
+          sudo apt-get install -y expect gcc-multilib lib32gcc-s1 lib32stdc++6 lib32z1 \
+            libc6-i386 libstdc++6:i386 zlib1g:i386
+
+      - name: Install the packages into the server tree
+        run: |
+          set -euo pipefail
+          mkdir -p "$SERVER_DIR" "$CACHE_DIR"
+          tar -xzf server-art/css34-server.tar.gz -C "$SERVER_DIR"
+          source builder/package-paths.sh
+          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
+          testing/scripts/install-addons.sh
+
+      - name: Check actual core PLAPI
+        run: bash testing/scripts/check-core-plapi.sh
 
       - name: Smoke test built Metamod + built SourceMod (${{ matrix.line }})
-        if: steps.select.outputs.skip != '1'
         env:
-          SERVER_DIR: ${{ github.workspace }}/.ci-server
-          CACHE_DIR: ${{ github.workspace }}/.ci-cache
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
           MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
@@ -821,21 +642,17 @@ jobs:
           SMOKE_CONDEBUG: "1"
           SMOKE_VERBOSE: "1"
         run: |
-          chmod +x testing/scripts/*.sh
-          mkdir -p .ci-server .ci-cache
-          tar -xzf server-art/css34-server.tar.gz -C .ci-server
-          export CSS34_LINE="${{ matrix.line }}"
+          set -euo pipefail
           source builder/package-paths.sh
-          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          export SM_PACKAGE MM_PACKAGE
-          testing/scripts/install-addons.sh
           testing/scripts/smoke-test.sh
 
       - name: Upload smoke logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: built-smoke-logs-${{ matrix.line }}
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
+          name: host-checks-logs-${{ matrix.line }}
           path: |
             .ci-server/smoke.log
             .ci-server/console-probe.log
@@ -847,685 +664,6 @@ jobs:
             .ci-server/cstrike/addons/sourcemod/logs/L*.log
           if-no-files-found: ignore
           retention-days: 7
-
-  test-rom4s-botplay:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_reference_botplay == 'true'
-    needs: [plan, prepare-server]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Restore cached server tree
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-
-      - name: Rom4s botplay stress
-        env:
-          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
-          BOTPLAY_PROFILE: rom4s
-          BOTPLAY_CFG: botplay-stress.cfg
-          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
-          MM_VERSION_EXPECT: "1.10.6"
-          SM_VERSION_EXPECT: "1.11.0.6572"
-          IMAGE: ${{ fromJSON(needs.plan.outputs.images)['debian:latest'] }}
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD:/workspace" \
-            -e SERVER_DIR=/workspace/.ci-server \
-            -e CACHE_DIR=/workspace/.ci-cache \
-            -e RECORD_SECS \
-            -e BOTPLAY_PROFILE \
-            -e BOTPLAY_CFG \
-            -e BOTPLAY_MAPS \
-            -e MM_VERSION_EXPECT \
-            -e SM_VERSION_EXPECT \
-            -e SMOKE_CONDEBUG=1 \
-            -e SMOKE_VERBOSE=1 \
-            -e CSS34_CI=1 \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
-              testing/scripts/install-deps.sh
-              testing/scripts/botplay-test.sh
-            '
-
-      - name: Upload botplay report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rom4s-botplay-report-debianlatest
-          path: |
-            .ci-server/botplay-report.json
-            .ci-server/botplay-report.txt
-            .ci-server/botplay.log
-            .ci-server/botplay-run.log
-            .ci-server/cstrike/console.log
-            .ci-server/cstrike/addons/sourcemod/logs/L*.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  test-rom4s-botplay-extra:
-    if: github.event_name == 'workflow_dispatch' && inputs.botplay_extra_distros == true
-    needs: [plan, prepare-server]
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.botplay_extra_images) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Restore cached server tree
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-
-      - name: Rom4s botplay stress (${{ matrix.image_name }})
-        env:
-          IMAGE: ${{ matrix.image }}
-          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
-          BOTPLAY_PROFILE: rom4s
-          BOTPLAY_CFG: botplay-stress.cfg
-          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
-          MM_VERSION_EXPECT: "1.10.6"
-          SM_VERSION_EXPECT: "1.11.0.6572"
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD:/workspace" \
-            -e SERVER_DIR=/workspace/.ci-server \
-            -e CACHE_DIR=/workspace/.ci-cache \
-            -e RECORD_SECS \
-            -e BOTPLAY_PROFILE \
-            -e BOTPLAY_CFG \
-            -e BOTPLAY_MAPS \
-            -e MM_VERSION_EXPECT \
-            -e SM_VERSION_EXPECT \
-            -e SMOKE_CONDEBUG=1 \
-            -e SMOKE_VERBOSE=1 \
-            -e CSS34_CI=1 \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
-              testing/scripts/install-deps.sh
-              testing/scripts/botplay-test.sh
-            '
-
-      - name: Upload botplay report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rom4s-botplay-report-${{ matrix.image_id }}
-          path: |
-            .ci-server/botplay-report.json
-            .ci-server/botplay-report.txt
-            .ci-server/botplay.log
-            .ci-server/botplay-run.log
-            .ci-server/cstrike/console.log
-            .ci-server/cstrike/addons/sourcemod/logs/L*.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  test-built-botplay-extra:
-    if: needs.plan.outputs.run_built_botplay_extra == 'true'
-    needs: [plan, build-linux, prepare-server]
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.botplay_extra) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Restore packages from cache (${{ matrix.line }})
-        uses: actions/cache/restore@v4
-        with:
-          path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
-          fail-on-cache-miss: true
-
-      - name: Restore cached server tree
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-
-      - name: Built botplay stress + compare (${{ matrix.line }}, ${{ matrix.image }})
-        env:
-          IMAGE: ${{ matrix.image }}
-          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
-          BOTPLAY_PROFILE: built
-          BOTPLAY_CFG: botplay-stress.cfg
-          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
-          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
-          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
-          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD:/workspace" \
-            -e SERVER_DIR=/workspace/.ci-server \
-            -e CACHE_DIR=/workspace/.ci-cache \
-            -e RECORD_SECS \
-            -e BOTPLAY_PROFILE \
-            -e BOTPLAY_CFG \
-            -e BOTPLAY_MAPS \
-            -e MM_VERSION_EXPECT \
-            -e SM_VERSION_EXPECT \
-            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
-            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
-            -e REPORT_JSON=/workspace/.ci-server/built-botplay-report.json \
-            -e REPORT_TXT=/workspace/.ci-server/built-botplay-report.txt \
-            -e SMOKE_CONDEBUG=1 \
-            -e SMOKE_VERBOSE=1 \
-            -e CSS34_CI=1 \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
-              testing/scripts/install-deps.sh
-              testing/scripts/botplay-test.sh
-            '
-
-      - name: Compare built botplay vs rom4s baseline
-        continue-on-error: true
-        if: always()
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/compare-botplay-reports.sh
-          if [[ -f .ci-server/built-botplay-report.json ]]; then
-            testing/scripts/compare-botplay-reports.sh \
-              testing/botplay/rom4s-baseline.json \
-              .ci-server/built-botplay-report.json \
-              .ci-server/botplay-compare.txt || true
-            cat .ci-server/botplay-compare.txt || true
-          else
-            echo "No built-botplay-report.json to compare" >&2
-          fi
-
-      - name: Upload built botplay report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: built-botplay-report-${{ matrix.line }}-${{ matrix.image_id }}
-          path: |
-            .ci-server/built-botplay-report.json
-            .ci-server/built-botplay-report.txt
-            .ci-server/botplay-compare.txt
-            .ci-server/botplay.log
-            .ci-server/botplay-run.log
-            .ci-server/cstrike/console.log
-            .ci-server/cstrike/addons/sourcemod/logs/L*.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  test-release-botplay:
-    if: needs.plan.outputs.run_release_botplay == 'true'
-    needs: [plan, prepare-server]
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.release_botplay) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Restore cached server tree
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-
-      - name: Download release packages (${{ matrix.tag }})
-        env:
-          TAG: ${{ matrix.tag }}
-          SM_ASSET: ${{ matrix.sm_asset }}
-          MM_ASSET: ${{ matrix.mm_asset }}
-        run: |
-          set -euo pipefail
-          mkdir -p packages
-          base="https://github.com/${{ github.repository }}/releases/download/${TAG}"
-          curl -fL --retry 5 --retry-delay 3 -o "packages/${SM_ASSET}" "${base}/${SM_ASSET}"
-          curl -fL --retry 5 --retry-delay 3 -o "packages/${MM_ASSET}" "${base}/${MM_ASSET}"
-          ls -la packages/
-
-      - name: Release botplay stress (${{ matrix.line }})
-        env:
-          RECORD_SECS: ${{ github.event.inputs.record_secs || '600' }}
-          BOTPLAY_PROFILE: release
-          BOTPLAY_CFG: botplay-stress.cfg
-          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
-          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
-          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
-          SM_ASSET: ${{ matrix.sm_asset }}
-          MM_ASSET: ${{ matrix.mm_asset }}
-          LINE: ${{ matrix.line }}
-          IMAGE: ${{ fromJSON(needs.plan.outputs.images)['debian:latest'] }}
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          SM_PACKAGE="packages/${SM_ASSET}"
-          MM_PACKAGE="packages/${MM_ASSET}"
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD:/workspace" \
-            -e SERVER_DIR=/workspace/.ci-server \
-            -e CACHE_DIR=/workspace/.ci-cache \
-            -e RECORD_SECS \
-            -e BOTPLAY_PROFILE \
-            -e BOTPLAY_CFG \
-            -e BOTPLAY_MAPS \
-            -e MM_VERSION_EXPECT \
-            -e SM_VERSION_EXPECT \
-            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
-            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
-            -e REPORT_JSON=/workspace/.ci-server/release-botplay-report.json \
-            -e REPORT_TXT=/workspace/.ci-server/release-botplay-report.txt \
-            -e SMOKE_CONDEBUG=1 \
-            -e SMOKE_VERBOSE=1 \
-            -e CSS34_CI=1 \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
-              testing/scripts/install-deps.sh
-              testing/scripts/botplay-test.sh
-            '
-
-      - name: Compare release botplay vs rom4s baseline
-        continue-on-error: true
-        if: always()
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/compare-botplay-reports.sh
-          if [[ -f .ci-server/release-botplay-report.json ]]; then
-            testing/scripts/compare-botplay-reports.sh \
-              testing/botplay/rom4s-baseline.json \
-              .ci-server/release-botplay-report.json \
-              .ci-server/botplay-compare.txt || true
-            cat .ci-server/botplay-compare.txt || true
-          else
-            echo "No release-botplay-report.json to compare" >&2
-          fi
-
-      - name: Upload release botplay report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-botplay-report-${{ matrix.line }}
-          path: |
-            .ci-server/release-botplay-report.json
-            .ci-server/release-botplay-report.txt
-            .ci-server/botplay-compare.txt
-            .ci-server/botplay.log
-            .ci-server/botplay-run.log
-            .ci-server/cstrike/console.log
-            .ci-server/cstrike/addons/sourcemod/logs/L*.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  test-botplay-bisect:
-    if: github.event_name == 'workflow_dispatch' && inputs.run_botplay_bisect == true
-    needs: [plan, build-linux, prepare-server]
-    runs-on: ubuntu-22.04
-    timeout-minutes: 120
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Restore packages from cache (sm13-latest)
-        uses: actions/cache/restore@v4
-        with:
-          path: packages
-          key: css34-pkg-${{ github.run_id }}-sm13-latest
-          fail-on-cache-miss: true
-
-      - name: Restore cached server tree
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-
-      - name: Botplay bisect quick matrix (90s/case)
-        env:
-          RECORD_SECS: "90"
-          BISECT_SET: quick
-          IMAGE: ${{ fromJSON(needs.plan.outputs.images)['debian:latest'] }}
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          CSS34_LINE="sm13-latest" source builder/package-paths.sh
-          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD:/workspace" \
-            -e RECORD_SECS \
-            -e BISECT_SET \
-            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
-            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
-            -e BISECT_OUT=/workspace/.ci-bisect/results.tsv \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server-seed /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server-seed
-              testing/scripts/install-deps.sh
-              testing/scripts/botplay-bisect.sh
-              cat /workspace/.ci-bisect/results.tsv
-            '
-
-      - name: Upload bisect results on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: botplay-bisect-results
-          path: |
-            .ci-bisect/results.tsv
-            .ci-bisect/*/botplay-report.txt
-            .ci-bisect/*/cstrike/console.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  test-built-weekly:
-    needs: [plan, build-linux, prepare-server]
-    if: needs.plan.outputs.run_weekly_smoke == 'true'
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.weekly) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Maybe skip
-        id: select
-        run: |
-          want="${{ github.event.inputs.css34_line }}"
-          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Restore packages from cache
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
-          fail-on-cache-miss: true
-
-      - name: Restore cached server tree
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-
-      - name: Start MariaDB and MySQL 8.4 with TLS for the MySQL probe (T4.5)
-        if: steps.select.outputs.skip != '1'
-        run: bash testing/scripts/mysql-tls-server.sh start .ci-mysql-tls
-
-      - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
-        if: steps.select.outputs.skip != '1'
-        env:
-          IMAGE: ${{ matrix.image }}
-          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
-          MM_REV_EXPECT: ${{ matrix.mm_rev }}
-          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
-          MM_COMMIT_EXPECT: ${{ matrix.mm_commit }}
-          SM_COMMIT_EXPECT: ${{ matrix.sm_commit }}
-          SMOKE_EXPECT_CORE: ${{ matrix.expect_core }}
-          MM_PACKAGE_NAME: ${{ matrix.mm_package }}
-          LEGACY_BRIDGE: ${{ matrix.legacy_bridge }}
-          CSS34_PACK_COMMIT_EXPECT: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
-          MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
-          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          # T2.9: a PLAPI 11 plugin must run through the nested legacy core that
-          # the MM 1.12 package ships next to metamod.2.ep1.
-          legacy_probe=""
-          if [[ "${LEGACY_BRIDGE}" == 1 ]]; then
-            legacy_probe="/workspace/packages/test-plugins/css34_legacy_probe.so"
-            test -f "packages/test-plugins/css34_legacy_probe.so"
-          fi
-          docker run --rm --platform linux/amd64 \
-            --network css34-db \
-            -v "$PWD:/workspace" \
-            -e SERVER_DIR=/workspace/.ci-server \
-            -e CACHE_DIR=/workspace/.ci-cache \
-            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
-            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
-            -e LEGACY_PROBE="${legacy_probe}" \
-            -e MYSQL_TLS_CERTS=/workspace/.ci-mysql-tls \
-            -e MYSQL_TLS_PROBE=/workspace/packages/test-plugins/css34_mysql_tls_probe \
-            -e MM_VERSION_EXPECT \
-            -e MM_REV_EXPECT \
-            -e SM_VERSION_EXPECT \
-            -e MM_COMMIT_EXPECT \
-            -e SM_COMMIT_EXPECT \
-            -e SMOKE_EXPECT_CORE \
-            -e CSS34_PACK_COMMIT_EXPECT \
-            -e CSS34_LINE="${{ matrix.line }}" \
-            -e TIMEOUT_SECS=120 \
-            -e SMOKE_CONDEBUG=1 \
-            -e SMOKE_VERBOSE=1 \
-            -e CSS34_CI=1 \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
-              testing/scripts/install-deps.sh
-              testing/scripts/install-addons.sh
-              testing/scripts/smoke-test.sh
-              if [[ -n "${LEGACY_PROBE}" ]]; then
-                testing/scripts/legacy-bridge-test.sh
-              fi
-              # T4.5: TLS through the static OpenSSL of dbi.mysql.ext (skipped
-              # when the extension links none) and ssl_mode / ssl_ca from srcds.
-              testing/scripts/mysql-tls-test.sh
-            '
-
-      - name: Stop MariaDB and MySQL
-        if: always() && steps.select.outputs.skip != '1'
-        run: bash testing/scripts/mysql-tls-server.sh stop
-
-      - name: Upload smoke logs on failure
-        if: failure() && steps.select.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
-        with:
-          name: built-weekly-smoke-logs-${{ matrix.line }}-${{ strategy.job-index }}
-          path: |
-            .ci-server/smoke.log
-            .ci-server/mysql-tls.log*
-            .ci-server/console-probe.log
-            .ci-server/cstrike/console.log
-            .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
-            .ci-server/addons/metamod/bin/metamod-fatal.log
-            .ci-server/metamod-fatal.log
-            .ci-server/cstrike/metamod-fatal.log
-            .ci-server/cstrike/addons/sourcemod/logs/L*.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  test-built-weekly-botplay:
-    needs: [plan, build-linux, prepare-server]
-    if: needs.plan.outputs.run_weekly_smoke == 'true'
-    runs-on: ubuntu-22.04
-    timeout-minutes: 50
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.weekly_botplay) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Maybe skip
-        id: select
-        run: |
-          want="${{ github.event.inputs.css34_line }}"
-          if [[ -n "$want" && "$want" != "${{ matrix.line }}" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Restore packages from cache
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
-          fail-on-cache-miss: true
-
-      - name: Restore cached server tree
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-
-      - name: Botplay stress ${{ matrix.line }} on ${{ matrix.image_name }}
-        if: steps.select.outputs.skip != '1'
-        env:
-          IMAGE: ${{ matrix.image }}
-          RECORD_SECS: ${{ github.event.inputs.record_secs || '300' }}
-          BOTPLAY_PROFILE: built
-          BOTPLAY_CFG: botplay-stress.cfg
-          BOTPLAY_MAPS: de_dust2,de_inferno,de_nuke
-          MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
-          SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
-        run: |
-          set -euo pipefail
-          chmod +x testing/scripts/*.sh
-          CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
-          test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD:/workspace" \
-            -e SERVER_DIR=/workspace/.ci-server \
-            -e CACHE_DIR=/workspace/.ci-cache \
-            -e RECORD_SECS \
-            -e BOTPLAY_PROFILE \
-            -e BOTPLAY_CFG \
-            -e BOTPLAY_MAPS \
-            -e MM_VERSION_EXPECT \
-            -e SM_VERSION_EXPECT \
-            -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
-            -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
-            -e REPORT_JSON=/workspace/.ci-server/botplay-report.json \
-            -e REPORT_TXT=/workspace/.ci-server/botplay-report.txt \
-            -e SMOKE_CONDEBUG=1 \
-            -e SMOKE_VERBOSE=1 \
-            -e CSS34_CI=1 \
-            -w /workspace \
-            "${IMAGE}" \
-            bash -lc '
-              set -euo pipefail
-              mkdir -p /workspace/.ci-server /workspace/.ci-cache
-              tar -xzf /workspace/server-art/css34-server.tar.gz -C /workspace/.ci-server
-              testing/scripts/install-deps.sh
-              testing/scripts/botplay-test.sh
-            '
-
-      - name: Upload botplay report on failure
-        if: failure() && steps.select.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
-        with:
-          name: weekly-botplay-${{ matrix.line }}-logs
-          path: |
-            .ci-server/botplay-report.json
-            .ci-server/botplay-report.txt
-            .ci-server/botplay.log
-            .ci-server/botplay-run.log
-            .ci-server/cstrike/console.log
-            .ci-server/cstrike/addons/sourcemod/logs/L*.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  plapi-runtime:
-    needs: [plan, build-linux, prepare-server]
-    if: needs.plan.outputs.run_code_jobs == 'true'
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.build) }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Select requested line
-        id: select
-        env:
-          WANT: ${{ github.event.inputs.css34_line }}
-          LINE: ${{ matrix.line }}
-        run: |
-          if [[ -n "$WANT" && "$WANT" != "$LINE" ]]; then
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Restore packages
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
-          fail-on-cache-miss: true
-      - name: Restore server providers
-        if: steps.select.outputs.skip != '1'
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-${{ github.event.inputs.apply_srcds_patch || '1' }}-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-          fail-on-cache-miss: true
-      - name: Check actual core PLAPI
-        if: steps.select.outputs.skip != '1'
-        env:
-          CSS34_LINE: ${{ matrix.line }}
-          SERVER_DIR: ${{ github.workspace }}/.ci-plapi-server
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y gcc-multilib lib32stdc++6 lib32z1
-          source builder/package-paths.sh
-          export SM_PACKAGE MM_PACKAGE
-          mkdir -p "$SERVER_DIR"
-          tar -xzf server-art/css34-server.tar.gz -C "$SERVER_DIR"
-          bash testing/scripts/install-addons.sh
-          bash testing/scripts/check-core-plapi.sh
 
   gate:
     name: gate
@@ -1538,21 +676,13 @@ jobs:
       - build-windows
       - wine-smoke
       - prepare-server
-      - test-built-debian
-      - plapi-runtime
-      - test-built-botplay-matrix
-      - test-built-smoke
-      - test-built-weekly
-      - test-built-weekly-botplay
-      - test-rom4s-botplay
-      - test-rom4s-botplay-extra
-      - test-built-botplay-extra
-      - test-release-botplay
-      - test-botplay-bisect
+      - smoke
+      - botplay
+      - host-checks
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Evaluate Unified Gate
         env:

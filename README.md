@@ -394,8 +394,9 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 
 ## CI
 
-- `.github/workflows/ci.yml` — the main CI workflow and unified gate (push to `master` / `cursor/**`, PRs, and a weekly schedule).
-  Includes Linux builds, static ABI/import/Metamod checks, Windows builds on `windows-2022` (MSVC 14.44, SDK 10.0.26100.0), native and Wine smoke (`wine-smoke`), version-pin consistency, hygiene regression checks, and server smoke and botplay stress suites.
+- `.github/workflows/ci.yml` — the main CI workflow and unified gate (push to `master`, PRs, and a weekly schedule).
+  Includes Linux builds, static ABI/import/Metamod checks, Windows builds on `windows-2022` (MSVC 14.44, SDK 10.0.26100.0) with a native Windows smoke, version-pin and tag-map consistency, host regression tests, server smoke, host checks and botplay stress. The weekly suite runs the old OS images and the Wine smoke (`wine-smoke`).
+  Shared steps live in `.github/actions/` (`build-linux`, `build-windows`, `server-tree`), used by `ci.yml` and `release.yml`.
   Doc-only changes skip the build and server jobs; the unified `gate` job always evaluates and reports the result.
   Builds the **active** lines (`sm12-latest`, `sm13-latest`; frozen `sm11-oldstable` is checked by `frozen-verify.yml`) with `builder/docker/build.sh` + `check-package.sh` / `check-metamod-package.sh`;
   every PR smokes `centos:7`, `ubuntu:24.04` and `debian:13` for every active line, plus the ubuntu-22.04 host for
@@ -419,10 +420,9 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 - `.github/workflows/release-maintenance.yml` — re-publish releases that ended up as drafts, mark `known_bad`
   releases, or (`mode: supersede`, optional `dry_run`) put the *superseded* note on the older releases of every
   line pointer. It deletes nothing ([Release retention](#release-retention)).
-- `.github/workflows/cleanup-artifacts.yml` — weekly / manual purge of Actions artifacts.
 
-Failure logs remain downloadable for seven days after a run. Scheduled cleanup keeps other
-artifacts for at least 72 hours and preserves failure logs for seven days. Only PR runs
+Failure logs remain downloadable for seven days after a run (`retention-days: 7`; CI uploads
+no other artifacts, packages move between jobs through the Actions cache). Only PR runs
 cancel an older run of the same workflow/ref. Botplay baseline comparisons are informational;
 server crashes and API/ABI probes still fail the job.
 
