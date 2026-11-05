@@ -145,8 +145,10 @@ def render(tag, repo, commit, root=ROOT):
                "carry the revision (`git<rev>`), which changes with every pin bump; the same files "
                "are also attached under fixed names (`sourcemod-css34-linux.tar.gz` and "
                "`mmsource-css34-linux.tar.gz`, the names `line-{}` serves{}), and `VERSIONS.txt` "
-               "lists the exact versions, asset names and sha256 (`key=value`). `SHA256SUMS` is "
-               "uploaded last.".format(
+               "lists the exact versions, asset names and sha256 (`key=value`). `SHA256SUMS` "
+               "(every asset) is uploaded last; it and `SHA256SUMS.linux` list both the "
+               "revisioned and the fixed names, so check the files you downloaded with "
+               "`sha256sum -c --ignore-missing SHA256SUMS`.".format(
                    " and Windows (`.zip`, may follow the Linux packages)" if line.get("windows") else "",
                    name, "; `sourcemod-css34-windows.zip`, `mmsource-css34-windows.zip`"
                    if line.get("windows") else ""))
