@@ -19,11 +19,12 @@ files, exports, `NEEDED` and `SONAME` (`compare-package-abi.py`).
 | `sourcemod/0003-cstrike-episode1` | Build `game.cstrike` for episode1, extend its `SE_CSS` guards to `SE_EPISODEONE`, `FindDataMapInfo` in `GetPlayerVarAddressOrError`. | No cstrike extension on CS:S v34; EP1 `FindInDataMap` returns an incomplete `typedescription_t`. |
 | `sourcemod/0004-gameconfigs-rtld-noload` | `CacheGameBinaryInfo` / `@`-signatures open already-mapped modules with `RTLD_NOLOAD`. On Linux a library's address is its own `CreateInterface` only if `dladdr` puts it in that module, else the module's `_DYNAMIC` (`link_map::l_ld`); when the `GAMEBIN` / `EXECUTABLE_PATH` search finds no mapped module, the module mapped as `<name>_i486.so`, `_i686.so` or `_amd.so` (`dl_iterate_phdr`). | `dlopen(engine_i486.so)` + `dlclose` leaves dangling ConVars in `vstdlib` (srcds loads `engine_i686.so`). CS:S v34 `engine_*.so` exports no `CreateInterface`, and `dlsym(handle)` also searches the module's dependencies, so SM 1.12+ took a dependency's `CreateInterface` and looked every `"library" "engine"` signature (`@sv`, `Cmd_ExecuteString`, navfile_blocker's `OnResourcePrecachedFullPath`) up in that library: 0, native x86 as well. SM 1.11 used the engine factory (`css34_gamedata_probe` in botplay). |
 | `sourcemod/0005-sourcemm-api-safe-iface` | `GET_V_IFACE_*` check the factory for NULL before `VInterfaceMatch` and report which interface is missing. | A NULL factory on CS:S v34 dereferenced at load instead of a load error. |
-| `sourcemod/0006-gcc10-warnings` | curl `-Wno-stringop-truncation`; `MIN()` replaced in two units. | `-Werror` build failures with GCC 10. |
+| `sourcemod/0006-gcc10-warnings` | `MIN()` replaced in two units. | `-Werror` build failures with GCC 10. |
 | `sourcemod/0007-css34-versioning` | Build number from `SOURCEMOD_GIT_REV` (lines.json), detached/submodule HEAD in `Versioning`, `CSS34 pack:` line in `sm version`. | Shallow clones give a wrong build number; smoke checks the pack commit. |
 | `sourcemod/0008-dbi-connect-options` | New interface `IDBConnectOptions` (`public/IDBConnectOptions.h`): core keeps every key of a `databases.cfg` entry and of `SQL_ConnectCustom`'s KeyValues (bridge hook `GetKeyValuesPairs`, `SM_LOGIC_MAGIC` changed) and a driver reads them by the `DatabaseInfo` pointer it received. `DatabaseInfo` and the existing DBI interfaces are unchanged. | Core passes only driver/host/database/user/pass/port/timeout/schema to a driver; `ssl_mode` / `ssl_ca` never reach it. Section "sm13 MySQL TLS options" below. |
 | `sourcemod/0009-mysql-tls-options` | `dbi.mysql.ext`: `ssl_mode` / `ssl_ca` (keys and values of fmu1337/sm-dbi-mysql; default `disabled`, as stock SourceMod) mapped onto MariaDB Connector/C, TLS 1.2/1.3 with OpenSSL, `utf8mb4` in the handshake; unknown modes and verify modes without a readable CA fail the connect; persistent connections are shared only with equal TLS settings. | Upstream turns certificate verification off and requests no TLS: plaintext to every server, a `REQUIRE SSL` account (HeatWave's usual setup) is refused. |
 | `sourcemod/0010-handlesys-lazy-table` | `HandleSystem` allocates its 2^20-entry table with `calloc` instead of `new[]` + `memset` (and frees it with `free`). Limit and handle encoding unchanged. | Upstream `cab60f73` (1.11.0.6792, "Bump handle limit to 1MB") zeroes ~64 MB at startup, all of it resident: srcds RSS 156 MB with stock plugins vs 82 MB on rom4s 1.11.0.6572; 90 MB with the patch (README "Memory use"). |
+| `sourcemod/0011-no-gamedata-updater` | `AMBuildScript` builds neither `extensions/updater` nor `extensions/curl` (`webternet.ext`); `StartSourceMod` no longer loads `updater.ext`; `configs/core.cfg` loses `DisableAutoUpdate`, `ForceRestartAfterUpdate`, `AutoUpdateURL` and `DebugSpew` (it only described updater logging; an old `core.cfg` with these keys still loads). The sources stay in the tree, unbuilt. | `updater.ext` posts the md5 of every `gamedata/` file to `update.sourcemod.net` over plain HTTP and writes what comes back over them: upstream gamedata without CS:S v34 entries. Packages only switched it off with `"DisableAutoUpdate" "yes"`. `webternet.ext` (libcurl 7.19.2 without TLS) has no natives and no user besides the updater. `check-package.sh` and `package_windows.py` refuse a package that ships either or whose core still loads `updater.ext`. |
 | `sourcepawn/0001-gcc10-link-flags` | `-Wno-sign-compare`; pthread/rt/`-lgcc_s` `NEEDED`. | GCC 10 sign-compare errors in the JIT/compiler; missing `NEEDED` on glibc 2.17. |
 | `hl2sdk-manifests/0001-episode1-defines` | episode1 Linux defines `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE`. | The SDK's malloc hooks/overrides in SourceMod modules on CS:S v34. |
 | `hl2sdk-manifests/0002-compiler-flag-guard` | Drop manifest compiler flags GCC 10 does not know (formerly `manifest_flag_guard.py`). | Unknown-flag errors from newer manifests (hl2sdk-manifests `ebd6e10`). |
@@ -45,6 +46,7 @@ sm13 ones above except:
 - `sourcepawn/0001-gcc10-link-flags` also fixes a sign-compare in `vm/shell/shell.cpp`;
 - `sourcemod/0008-handlesys-lazy-table` is sm13's `0010-handlesys-lazy-table` (SM 1.12 has the same
   2^20-entry table: RSS 147 MB with stock plugins on `1.12.0.7257-mm1.12.0-r4`).
+- `sourcemod/0009-no-gamedata-updater` is sm13's `0011-no-gamedata-updater`.
 
 A full build from the series matches the scripted build's files, exports, `NEEDED`
 and `SONAME`.
@@ -81,6 +83,47 @@ checkout of the pin. Before a bump, `builder/scripts/check-patch-drift.sh
 the series on the candidate with `git apply --3way` and names the first patch
 that no longer applies; `--check-pins` checks every series on its own pin and
 the MM 1.10 bridge patcher on the bridge pin.
+
+## CS:S v34 gamedata
+
+The package ships its own gamedata (`builder/assets/gamedata/`, checked by
+`testing/scripts/check-css34-gamedata.py`); it is compared with the sets that run
+on v34 servers: rom4s SM 1.11.0.6522 and SM 1.7.3-stable+5265.
+
+- **`HintTextPreByte` "yes"** (`core.games/common.games.txt`, `cstrike` Keys).
+  `CHalfLife2::HintTextMsg` writes a leading `0x01` before the string only with
+  this key. The v34 client expects it: without it `PrintHintText`,
+  `PrintHintTextToAll` and `sm_hsay` show nothing (missing from
+  `1.13.0.7478-mm1.12.0-r6`, confirmed in game; 1.7.3 and rom4s 1.11 have it). The
+  gamedata check requires it, and `css34_sm_api_probe` (botplay) hooks `HintText`,
+  sends a hint to a bot and requires the first byte to be 1 (`HintText_prebyte`).
+  The frozen `sm11-oldstable` packages (r3) lack it too. They get it from the
+  override `hotfixes/sm11-oldstable/addons/sourcemod/gamedata/core.games/custom/css34-hinttext-prebyte.txt`
+  (`docs/FREEZE.md` "Fixing a frozen line").
+- **`HudTextMsg` "HudMsg"** (same section) is kept as in SM 1.7.3; rom4s 1.11
+  shipped it commented out, and its FAQ (hlmod.ru) has admins remove the `//`
+  when HUD text does not show. The `HudMsg` usermessage exists in the v34
+  `server_i486.so`. **ClientMod draws it; the stock v34 client does not, or not
+  always.** With the key `ShowHudText` / `ShowSyncHudText` report support for every
+  client, so plugins do not fall back to hint or center text on their own. HUD
+  plugins for v34 (Levels Ranks HUD / Hud Info, ClientMod Show Damage, Shower of
+  Damage) are written for ClientMod; for the stock client a plugin has to choose
+  hint or center text itself. Without the key HUD text works for nobody, so
+  it stays.
+- **No `GetMaxHealth` in `sdkhooks.games/game.cstrike.txt`** (forbidden by the
+  check). `GetMaxHealth` is not virtual on v34: the `_ZTV9CCSPlayer` vtable of
+  build 4044 `server_i486.so` has no `GetMaxHealth` slot, and slot 107 (the
+  offset in 1.7.3 and rom4s 1.11) is
+  `CBaseEntity::NetworkStateChanged_m_iMaxHealth()`, a void network-state stub;
+  only `CPlayerInfo::GetMaxHealth()` exists. A hook there fires on `m_iMaxHealth`
+  writes, not on max health queries, with a garbage `maxhealth` argument. So `SDKHook(client, SDKHook_GetMaxHealth, ...)`
+  now fails with `Hook type not supported on this game` and `SDKHookEx` returns
+  false (`SDKHookEx_GetMaxHealth_unsupported` in botplay). Plugins that need max
+  health read the `m_iMaxHealth` datamap field. Check with
+  `testing/scripts/check-css34-vtables.py <server_i486.so> --dump _ZTV9CCSPlayer`.
+- `VPhysicsUpdate.linux` is 143 (as in 1.11; 131 in 1.7.3 is
+  `GetAttackDamageScale`), and `UseInvalidUniverseInSteam2IDs` 1 gives
+  `STEAM_0:` SteamIDs as in 1.11.
 
 ## sm13 PostgreSQL explicit_bzero (temporary)
 

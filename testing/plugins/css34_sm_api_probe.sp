@@ -28,6 +28,9 @@ new bool:g_Hooked[MAXPLAYERS + 1];
 new bool:g_PlayerHurtSeen;
 new bool:g_ProbeRunning;
 new bool:g_ProbeSuiteFinished;
+new g_HintSeen;
+new g_HintPreByte;
+new String:g_HintText[64];
 
 public Plugin:myinfo =
 {
@@ -406,6 +409,7 @@ RunFullProbeSuite(bot)
 
     ProbeSection("usermessages");
     RunUserMessageProbes();
+    RunHintTextProbe(bot);
 
     ProbeSection("regex");
     RunRegexProbes();
@@ -905,6 +909,42 @@ RunUserMessageProbes()
     }
 }
 
+// The v34 client reads a leading byte in HintText before the string;
+// core.games "HintTextPreByte" "yes" (cstrike) makes PrintHintText write 0x01.
+// A listen hook sees SourceMod's own message as it ends.
+RunHintTextProbe(bot)
+{
+    new UserMsg:hintId = GetUserMessageId("HintText");
+    ProbeResult(hintId != INVALID_MESSAGE_ID, "usermessages", "GetUserMessageId_HintText");
+    if (hintId == INVALID_MESSAGE_ID || bot < 1 || !IsClientInGame(bot))
+    {
+        return;
+    }
+
+    g_HintSeen = 0;
+    g_HintPreByte = -1;
+    g_HintText[0] = '\0';
+    HookUserMessage(hintId, UserMsg_HintProbe, false);
+    PrintHintText(bot, "css34_hint_probe");
+    UnhookUserMessage(hintId, UserMsg_HintProbe, false);
+
+    LogMessage("%s hinttext seen=%d prebyte=%d text=%s", PLUGIN_TAG, g_HintSeen, g_HintPreByte, g_HintText);
+    ProbeResult(g_HintSeen == 1, "usermessages", "HintText_sent");
+    ProbeResult(g_HintPreByte == 1, "usermessages", "HintText_prebyte");
+    ProbeResult(StrEqual(g_HintText, "css34_hint_probe"), "usermessages", "HintText_string");
+}
+
+public Action:UserMsg_HintProbe(UserMsg:msg_id, Handle:bf, const players[], playersNum, bool:reliable, bool:init)
+{
+    g_HintSeen++;
+    if (BfGetNumBytesLeft(bf) > 0)
+    {
+        g_HintPreByte = BfReadByte(bf);
+        BfReadString(bf, g_HintText, sizeof(g_HintText));
+    }
+    return Plugin_Continue;
+}
+
 RunRegexProbes()
 {
     if (!NativeAvailable("CompileRegex"))
@@ -1047,6 +1087,15 @@ RunSmacHookTypeProbes(bot)
     ProbeHookType(bot, SDKHook_WeaponEquipPost, "WeaponEquipPost");
     ProbeHookType(bot, SDKHook_WeaponDropPost, "WeaponDropPost");
 
+    // GetMaxHealth is not virtual on v34 (no gamedata offset): the hook type
+    // must be reported unsupported instead of hooking an unrelated slot.
+    new bool:maxHealth = SDKHookEx(bot, SDKHook_GetMaxHealth, Hook_ProbeMaxHealth);
+    if (maxHealth)
+    {
+        SDKUnhook(bot, SDKHook_GetMaxHealth, Hook_ProbeMaxHealth);
+    }
+    ProbeResult(!maxHealth, "sdkhooks", "SDKHookEx_GetMaxHealth_unsupported");
+
     new manager = FindEntityByClassname(-1, "cs_player_manager");
     if (manager == -1)
     {
@@ -1070,6 +1119,11 @@ ProbeHookType(entity, SDKHookType:type, const String:name[])
 
 public Hook_ProbeGeneric(entity)
 {
+}
+
+public Action:Hook_ProbeMaxHealth(entity, &maxhealth)
+{
+    return Plugin_Continue;
 }
 
 AttachHooksOnce(client)

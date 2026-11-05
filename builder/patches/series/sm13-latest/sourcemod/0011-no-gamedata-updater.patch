@@ -1,0 +1,95 @@
+css34: no gamedata auto-updater (updater.ext, webternet.ext)
+
+updater.ext posts the md5 of every file under gamedata/ to
+update.sourcemod.net (plain HTTP through webternet.ext's bundled libcurl
+7.19.2, built without TLS) and writes the files the server sends back over
+them. Upstream gamedata has no CS:S v34 entries, so an update would undo the
+css34 gamedata. Packages turned it off with "DisableAutoUpdate" "yes"; now it
+is not built at all. webternet.ext has no natives and no other user, so it
+goes with it.
+
+- AMBuildScript: extensions/curl and extensions/updater are not built.
+- core: StartSourceMod no longer loads updater.ext, whatever core.cfg says
+  (a leftover updater.ext from an older install stays unloaded).
+- configs/core.cfg: DisableAutoUpdate, ForceRestartAfterUpdate, AutoUpdateURL
+  and DebugSpew (it only described updater logging) are gone; an old core.cfg
+  that still has them loads unchanged.
+
+diff --git a/AMBuildScript b/AMBuildScript
+index fc340280dfbb188c4083a2e32dc165cfd095488c..3203bd468a18c4fb999c7be8aa364b819d0c2cce 100644
+--- a/AMBuildScript
++++ b/AMBuildScript
+@@ -734,7 +734,6 @@ else:
+     'core/logic/AMBuilder',
+     'extensions/bintools/AMBuilder',
+     'extensions/clientprefs/AMBuilder',
+-    'extensions/curl/AMBuilder',
+     'extensions/cstrike/AMBuilder',
+     'extensions/dhooks/AMBuilder',
+     'extensions/geoip/AMBuilder',
+@@ -746,7 +745,8 @@ else:
+     'extensions/sqlite/AMBuilder',
+     'extensions/tf2/AMBuilder',
+     'extensions/topmenus/AMBuilder',
+-    'extensions/updater/AMBuilder',
++    # css34: no extensions/curl (webternet.ext) and no extensions/updater. The
++    # gamedata updater would replace the CS:S v34 gamedata with upstream's.
+   ]
+ 
+   if builder.backend == 'amb2':
+diff --git a/configs/core.cfg b/configs/core.cfg
+index b86dc76182484f4e4620952f6bbd086e4cc61ed2..43c3c04fa76277628e5c90f1d0a356bdf97d4f89 100644
+--- a/configs/core.cfg
++++ b/configs/core.cfg
+@@ -72,33 +72,6 @@
+ 	 */
+ 	"AllowClLanguageVar"		"On"
+ 
+-	/**
+-	 * Enables or Disables SourceMod's automatic gamedata updating.
+-	 *
+-	 * The default value is "no". A value of "yes" will block the Auto Updater.
+-	 */
+-	"DisableAutoUpdate"			"no"
+-
+-	/**
+-	 * If set to yes, a successful gamedata update will attempt to restart SourceMod.
+-	 * SourceMod is unloaded and reloaded, and the map is changed to the current map.
+-	 * Since gamedata updates occur when the server loads, impact should be minimal.
+-	 * But to be safe, this option is disabled by default.
+-	 */
+-	"ForceRestartAfterUpdate"	"no"
+-
+-	/**
+-	 * URL to use for retrieving update information.
+-	 * SSL is not yet supported.
+-	 */
+-	"AutoUpdateURL"				"http://update.sourcemod.net/update/"
+-
+-	/**
+-	 * Whether to show debug spew.  
+-	 * Currently this will log details about the gamedata updating process.
+-	 */
+-	"DebugSpew"					"no"
+-	
+ 	/**
+ 	 * If set to yes, SourceMod will validate steamid auth strings with the Steam backend before giving out admin access.
+ 	 * This can prevent malicious users from impersonating admins with stolen Steam apptickets.
+diff --git a/core/sourcemod.cpp b/core/sourcemod.cpp
+index 8d5c6bf0b4c698c792a21949abde2a4c27c453f4..7a7b1a84a01372866364ff821174214d41490a26 100644
+--- a/core/sourcemod.cpp
++++ b/core/sourcemod.cpp
+@@ -265,12 +265,7 @@ void SourceModBase::StartSourceMod(bool late)
+ 		AllPluginsLoaded();
+ 	}
+ 
+-	/* If we want to autoload, do that now */
+-	const char *disabled = GetCoreConfigValue("DisableAutoUpdate");
+-	if (disabled == NULL || strcasecmp(disabled, "yes") != 0)
+-	{
+-		extsys->LoadAutoExtension("updater.ext." PLATFORM_LIB_EXT);
+-	}
++	/* css34: no gamedata auto-updater; updater.ext is never loaded. */
+ 
+ 	SH_ADD_HOOK(IServerGameDLL, Think, gamedll, SH_MEMBER(logicore.callbacks, &IProviderCallbacks::OnThink), false);
+ }

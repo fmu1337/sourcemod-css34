@@ -79,11 +79,17 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 - sm11 is **frozen** (T2.7, `docs/FREEZE.md`): `status: frozen`, `releasable: false`, a `frozen`
   block (tag, `sm11-freeze`, `sm11-freeze-inputs`, sha256 of every release asset). CI no longer
   builds it, a new sm11 tag is refused, and `frozen-verify.yml` re-checks its published files weekly
-  (`lines.py frozen-gha`, `testing/scripts/verify-frozen-line.py`). Its dual-core build code (SM 1.11
+  (`lines.py frozen-gha`, `testing/scripts/verify-frozen-line.py`), with the line's text-only
+  hotfix from `hotfixes/<line>/` installed over them (`HOTFIX_DIR`, `check-css34-gamedata.py
+  --allow-custom` for `custom/*.txt` gamedata overrides). Its dual-core build code (SM 1.11
   patcher, `secondary_metamod` builds, the rom4s hl2sdk-ep1c SDK) left master with T3.3: rebuild it
   only from the `sm11-freeze` tag. The builder (`css34_require_buildable` in `resolve-version.sh`:
   SourceMod 1.12+ only) and `resolve-metamod-pins.py` refuse it; `resolve-version.sh` still resolves its
   pins for smoke expectations. `lines.py check` allows `secondary_metamod` only on a frozen line.
+  A bug in a frozen line does not unfreeze it (`docs/FREEZE.md` "Fixing a frozen line"): a text-only
+  fix (gamedata) ships in `hotfixes/<line>/` as a SourceMod `gamedata/<name>.games/custom/*.txt`
+  override, the packages stay as published (`testing/scripts/test-frozen-hotfixes.py`); a fix in the
+  binaries needs a refreeze (new `-rN` build, freeze tag and input archive).
 - sm11 (D7): primary Metamod is the frozen MM 1.12 (git1227), secondary MM 1.10.7;
   its tag is `1.11.0.6970-mm1.12.0-dual` and `line-sm11-oldstable` also serves MM 1.10.7 as
   `mmsource-legacy-css34-linux.tar.gz` (`lines.py legacy-mm-asset <line>`, `update-line-pointer.sh`
@@ -136,6 +142,15 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `Build ID: <MM_REV>:<sha prefix>`; `sm version` must be `<major>.<SM_REV>`
   (the revs come from `builder/lines.json`). Image digests live only in
   `builder/lines.json`; `python3 builder/lines.py gen` writes the matrix.
+- **Prebuilt test images**: `test-images.yml` bakes `install-deps.sh` into each smoke/botplay
+  image (`ghcr.io/fmu1337/css34-test`, `testing/docker/test-image.Dockerfile`);
+  `lines.json` `test_images` records `ref` / `base` / `deps_hash`, and matrix rows carry
+  `image` (prebuilt when current) and `base_image` (fallback,
+  `testing/scripts/pull-test-image.sh`). In such an image `install-deps.sh` is a no-op
+  (marker `/etc/css34-install-deps.sha256`). Editing `install-deps.sh` makes the entries
+  stale: `lines.py check` fails until `python3 builder/lines.py test-images-prune` and `gen`;
+  after the merge the workflow rebuilds and opens the `test-images/update` PR.
+  Details: `testing/README.md` "Prebuilt test images".
 - **Core gates**: each matrix row names the Metamod package it installs (`mm_package`)
   and the core that must run (`expect_core`, `2.ep1`). `smoke-test.sh` takes
   `SMOKE_EXPECT_CORE=1.ep1|2.ep1` (`1.ep1` only for the frozen sm11 pointer's

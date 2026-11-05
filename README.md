@@ -32,6 +32,22 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 records the sha256 of every file of that release, CI no longer builds it, and it is rebuilt only from the tag
 `sm11-freeze` and the input archive `sm11-freeze-inputs` (`--network none`). `frozen-verify.yml` re-checks the
 published files and smokes the pointer every week.
+
+**sm11 hotfix (install it with the packages).** The frozen SourceMod 1.11 package lacks the gamedata key
+`HintTextPreByte`, so the v34 client shows no `PrintHintText` / `sm_hsay` text (#175). The fix is a SourceMod
+gamedata override in [`hotfixes/sm11-oldstable/`](hotfixes/sm11-oldstable), outside the frozen package:
+
+```bash
+cd /path/to/cstrike
+mkdir -p addons/sourcemod/gamedata/core.games/custom
+curl -fL -o addons/sourcemod/gamedata/core.games/custom/css34-hinttext-prebyte.txt \
+  https://raw.githubusercontent.com/fmu1337/sourcemod-css34/master/hotfixes/sm11-oldstable/addons/sourcemod/gamedata/core.games/custom/css34-hinttext-prebyte.txt
+```
+
+Restart the server. The console then prints
+`[SM] Parsed custom gamedata override file: core.games/custom/css34-hinttext-prebyte.txt`. The override works on both
+Metamod packages of the line, and the other lines ship the key in their packages
+([docs/FREEZE.md](docs/FREEZE.md#fixing-a-frozen-line)).
 What each pointer serves right now (tag, commits, smoke result) is in
 [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json).
 
@@ -296,10 +312,16 @@ Windows packages also record `msvc_toolset` and `windows_sdk` (the pinned `windo
 (SM 1.11/1.12 have no `_MIN` → `1`; 1.12.0.7253: 8; 1.13.0.7404: 9–9; 1.13.0.7472 / 7565: 9–11).
 
 **Ready to run.** `tar -xzf mm.tgz -C cstrike && tar -xzf sm.tgz -C cstrike` is the whole install:
-`addons/metamod/sourcemod.vdf`, `"DisableAutoUpdate" "yes"` in `configs/core.cfg` (SourceMod's key for
-turning the updater off), executable `*.so` / `scripting/spcomp`, and on SM 1.12+
+`addons/metamod/sourcemod.vdf`, executable `*.so` / `scripting/spcomp`, and on SM 1.12+
 `configs/geoip/GeoLite2-Country.mmdb` (mode 0644 — older packages shipped it 0600, unreadable for a
 non-root srcds). `testing/scripts/check-package.sh` enforces all of it.
+
+**No gamedata auto-updater.** SourceMod's `updater.ext` would download upstream gamedata (no CS:S v34
+entries) over the css34 files; `webternet.ext` (libcurl 7.19.2 without TLS, no natives) exists only
+for it. Neither is built, the core never loads `updater.ext`, and `core.cfg` has no
+`DisableAutoUpdate` / `AutoUpdateURL` keys (`no-gamedata-updater` patch, `docs/PATCHES.md`). Older
+packages ship both with `"DisableAutoUpdate" "yes"`; when you install a new package over one, the
+leftover `extensions/updater.ext.so` and `webternet.ext.so` are never loaded and can be deleted.
 
 ### Known-bad releases
 

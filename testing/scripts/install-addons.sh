@@ -99,9 +99,10 @@ if [[ ! -f "${SERVER_DIR}/cstrike/addons/metamod/sourcemod.vdf" ]]; then
 EOF
 fi
 
-# Disable SM auto-updater noise in CI
+# Third-party packages (the rom4s fallback) still ship SourceMod's gamedata
+# updater: turn it off. Ours have no updater.ext and no such key.
 if [[ -f "${SERVER_DIR}/cstrike/addons/sourcemod/configs/core.cfg" ]]; then
-  sed -i 's/"AutoUpdate"[[:space:]]*"yes"/"AutoUpdate"\t\t"no"/' \
+  sed -i 's/^\([[:space:]]*"DisableAutoUpdate"[[:space:]]*\)"no"/\1"yes"/' \
     "${SERVER_DIR}/cstrike/addons/sourcemod/configs/core.cfg" || true
 fi
 
