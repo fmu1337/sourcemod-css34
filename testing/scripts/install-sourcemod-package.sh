@@ -39,8 +39,10 @@ cat >"${SERVER_DIR}/cstrike/addons/metamod/sourcemod.vdf" <<'EOF'
 }
 EOF
 
+# Third-party packages (myarena trees) still ship SourceMod's gamedata updater:
+# turn it off. Ours have no updater.ext and no such key.
 if [[ -f "${SERVER_DIR}/cstrike/addons/sourcemod/configs/core.cfg" ]]; then
-  sed -i 's/"AutoUpdate"[[:space:]]*"yes"/"AutoUpdate"\t\t"no"/' \
+  sed -i 's/^\([[:space:]]*"DisableAutoUpdate"[[:space:]]*\)"no"/\1"yes"/' \
     "${SERVER_DIR}/cstrike/addons/sourcemod/configs/core.cfg" || true
 fi
 

@@ -1,7 +1,7 @@
 css34: episode1 build: tier1 before vstdlib, pthread/rt NEEDED, C++ link driver, GCC 10 flags, static hidden libstdc++, dynamic libgcc_s
 
 diff --git a/AMBuildScript b/AMBuildScript
-index 1953defab13b7f271e0a102907d8e5f4348c42b6..d31c273cd67b7aa2641ea53111c8af4963b90245 100644
+index 1953defab13b7f271e0a102907d8e5f4348c42b6..fc340280dfbb188c4083a2e32dc165cfd095488c 100644
 --- a/AMBuildScript
 +++ b/AMBuildScript
 @@ -78,6 +78,10 @@ class SMConfig(object):
@@ -53,7 +53,7 @@ index 1953defab13b7f271e0a102907d8e5f4348c42b6..d31c273cd67b7aa2641ea53111c8af49
 +      # (HL2Library) keep tier1 exports.
 +      _base = name[:-4] if name.endswith('.ext') else name
 +      if (_base.startswith('dbi.') or _base in (
-+          'bintools', 'clientprefs', 'geoip', 'regex', 'topmenus', 'updater', 'webternet')):
++          'bintools', 'clientprefs', 'geoip', 'regex', 'topmenus')):
 +        if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
 +          binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
      return binary

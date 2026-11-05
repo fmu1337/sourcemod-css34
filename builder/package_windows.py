@@ -276,6 +276,7 @@ def package_sourcemod(package_dir, output_dir, sourcemod_dir):
     ]
     mm_binary = "metamod.2.ep1"
     require_files(package_dir, required)
+    refuse_gamedata_updater(package_dir)
     product = read_product(Path(sourcemod_dir) / "product.version")
     rev = require_rev("SOURCEMOD_GIT_REV")
     archive = output_dir / sm_filename(product, rev)
@@ -288,6 +289,21 @@ def package_sourcemod(package_dir, output_dir, sourcemod_dir):
         shutil.rmtree(staging, ignore_errors=True)
     print(archive.resolve().as_posix())
     return archive
+
+
+UPDATER_EXTENSIONS = ("updater.ext.dll", "webternet.ext.dll")
+
+
+def refuse_gamedata_updater(package_dir):
+    """No gamedata auto-updater: it would write upstream gamedata over css34's
+    (series patch no-gamedata-updater, docs/PATCHES.md)."""
+    extensions = package_dir / "addons/sourcemod/extensions"
+    shipped = [name for name in UPDATER_EXTENSIONS if (extensions / name).is_file()]
+    if shipped:
+        fail("unexpected " + ", ".join(shipped) + ": the gamedata updater is not built for css34")
+    core = package_dir / "addons/sourcemod/bin/sourcemod.2.ep1.dll"
+    if b"updater.ext." in core.read_bytes():
+        fail("sourcemod.2.ep1.dll still loads updater.ext (no-gamedata-updater patch missing)")
 
 
 def archive_names(path):
@@ -362,6 +378,34 @@ def legacy_core_test(sm_pkg, out, sm_src):
             fail("1.ep1 refusal does not name the core: " + buf.getvalue())
     finally:
         core.unlink()
+
+
+def updater_test(sm_pkg, out, sm_src):
+    """updater.ext / webternet.ext, or a core that loads updater.ext, are refused."""
+    core = sm_pkg / "addons/sourcemod/bin/sourcemod.2.ep1.dll"
+    cases = [(sm_pkg / "addons/sourcemod/extensions" / name, b"x", name)
+             for name in UPDATER_EXTENSIONS]
+    cases.append((core, b"MZ\0updater.ext.dll\0", "updater.ext"))
+    for path, data, needle in cases:
+        saved = path.read_bytes() if path.is_file() else None
+        path.write_bytes(data)
+        buf = io.StringIO()
+        try:
+            refused = False
+            with redirect_stderr(buf):
+                try:
+                    package_sourcemod(sm_pkg, out, sm_src)
+                except SystemExit:
+                    refused = True
+            if not refused:
+                fail("a package with " + needle + " was accepted")
+            if needle not in buf.getvalue():
+                fail("updater refusal does not name " + needle + ": " + buf.getvalue())
+        finally:
+            if saved is None:
+                path.unlink()
+            else:
+                path.write_bytes(saved)
 
 
 def self_test():
@@ -469,6 +513,7 @@ def self_test():
                     if "css34-package.json" not in listing:
                         fail("unzip -l missing css34-package.json in " + archive.name)
             legacy_core_test(sm_pkg, out, sm_src)
+            updater_test(sm_pkg, out, sm_src)
         finally:
             os.environ.clear()
             os.environ.update(old)
