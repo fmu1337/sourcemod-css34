@@ -1,0 +1,48 @@
+name: Build Windows packages
+description: >-
+  Build a line's SourceMod + Metamod Windows zips on windows-2022 with the MSVC
+  x86 toolset and Windows SDK pinned in builder/windows-toolchain.env, then
+  check the zip layout (package_windows.py check). The MSVC environment stays
+  set for the job's later steps (the PLAPI probe compiles with cl). Used by
+  ci.yml and release.yml.
+inputs:
+  line:
+    description: CSS34_LINE to build (an active line of builder/lines.json with "windows" true)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.11'
+
+    - name: Read the pinned MSVC toolset and Windows SDK
+      id: toolchain
+      shell: bash
+      run: |
+        set -euo pipefail
+        pin() { sed -n "s/^$1=//p" builder/windows-toolchain.env | tr -d '\r'; }
+        toolset="$(pin MSVC_TOOLSET_PREFIX)"
+        sdk="$(pin WINDOWS_SDK_PIN)"
+        [[ -n "$toolset" && -n "$sdk" ]] || { echo "builder/windows-toolchain.env lacks a pin" >&2; exit 1; }
+        echo "toolset=$toolset" >> "$GITHUB_OUTPUT"
+        echo "sdk=$sdk" >> "$GITHUB_OUTPUT"
+
+    - name: Set up MSVC (x86, toolset ${{ steps.toolchain.outputs.toolset }}, SDK ${{ steps.toolchain.outputs.sdk }})
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x86
+        toolset: ${{ steps.toolchain.outputs.toolset }}
+        sdk: ${{ steps.toolchain.outputs.sdk }}
+
+    - name: Build SourceMod + Metamod for CS:S v34 (${{ inputs.line }})
+      shell: bash
+      env:
+        CSS34_LINE: ${{ inputs.line }}
+      run: |
+        set -euo pipefail
+        export WDIR="$PWD"
+        builder/run/windows.sh
+        source builder/package-paths.sh
+        python builder/package_windows.py check "$SM_WIN_PACKAGE" "$MM_WIN_PACKAGE"

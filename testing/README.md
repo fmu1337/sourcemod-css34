@@ -6,13 +6,19 @@ Scripts and workflows that boot a Counter-Strike: Source **v34** dedicated serve
 
 | Job | Images | Lines |
 |---|---|---|
-| `build-linux` (+ "ABI / export checks") | `builder/docker/build.sh` (manylinux2014) on ubuntu-22.04 | all three active lines |
-| `test-built-debian` (every PR) | `centos:7`, `ubuntu:24.04`, `debian:13` | all three active lines |
-| `test-built-smoke` | ubuntu-22.04 host | `sm13-latest` |
-| `test-built-botplay-matrix` (every PR, one run per line) | `debian:11` | all three active lines |
-| `test-built-weekly` (schedule, `suite=weekly`, release) | `debian:8`, `debian:9`, `debian:10`, `debian:11`, `ubuntu:14.04`, `ubuntu:16.04`, `ubuntu:18.04`, `rockylinux:9` | all three active lines |
-| `test-built-weekly-botplay` | `centos:7` | all three active lines |
+| `build-linux` (`.github/actions/build-linux`: build + ABI / export checks) | `builder/docker/build.sh` (manylinux2014) on ubuntu-22.04 | every active line |
+| `smoke`, suite `pr` (PRs, `master` pushes) | `centos:7`, `ubuntu:24.04`, `debian:13` | every active line |
+| `smoke`, suite `weekly` (Monday schedule, dispatch `suite=weekly`; also release.yml `smoke-release`) | `debian:8`, `debian:9`, `debian:10`, `debian:11`, `ubuntu:14.04`, `ubuntu:16.04`, `ubuntu:18.04`, `rockylinux:9` | every active line |
+| `botplay`, suite `pr` | `debian:11` | every active line |
+| `botplay`, suite `weekly` (also release.yml `botplay-release`) | `centos:7` | every active line |
+| `host-checks` (install, core PLAPI probe, smoke) | ubuntu-22.04 host | every active line |
+| `build-windows` (build + native Windows smoke + PLAPI probe) | windows-2022 | lines with `"windows": true` |
+| `wine-smoke` (weekly suite only) | `ubuntu:22.04` + Wine | lines with `"windows": true` |
 | `gate` | — | always, including doc-only PRs |
+
+`builder/scripts/ci_planner.py` picks the suite and the matrices; `ci_gate.py` checks that every
+job the plan requires succeeded. Dispatch inputs: `suite` (`pr` / `weekly`) and `css34_line`
+(one active line).
 
 `debian:11` is no longer a per-PR smoke image. The single per-PR botplay run still uses it. Every image above is pinned by digest in `builder/lines.json` (`python3 builder/lines.py gen`).
 
@@ -61,22 +67,15 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 
 ## Botplay baseline (rom4s + SMAC)
 
-`test-rom4s-botplay` boots the css34 server with **rom4s** Metamod 1.10.6 + SourceMod 6572, compiles [smac_v34](https://github.com/fmu1337/smac_v34), spawns 4 bots (`botplay-server.cfg`), records **600s** by default, then parses `cstrike/console.log` for `round_start`, `round_end`, and kills.
+`testing/botplay/rom4s-baseline.json` holds the counters of a session with **rom4s** Metamod 1.10.6 + SourceMod 6572: compile [smac_v34](https://github.com/fmu1337/smac_v34), spawn bots (`botplay-server.cfg`), record, then parse `cstrike/console.log` for `round_start`, `round_end`, and kills. To re-record it, run `testing/scripts/botplay-test.sh` locally with `BOTPLAY_PROFILE=rom4s` (the CI job for it was removed: it never ran).
 
-`test-built-botplay-matrix` runs the same session with the **built** MM + SM packages of every line and compares against `testing/botplay/rom4s-baseline.json` for information only. Event-count differences do not fail CI; the botplay crash, extension and API/ABI checks remain required. The redundant single-line job has been removed.
-
-`test-release-botplay` downloads published GitHub Release packages and runs the same stress session for:
-
-| Line | Tag | Packages |
-|------|-----|----------|
-| sm12 | `1.12.0.7257-mm1.12.0` | SM 1.12.0.7257 + MM 1.12.0-dev (git1228) |
-| sm13 | `1.13.0.7478-mm1.12.0` | SM 1.13.0.7478 + MM 1.12.0-dev (git1228) |
+`ci.yml` `botplay` runs the same session with the **built** MM + SM packages of every line and compares against `testing/botplay/rom4s-baseline.json` for information only (the comparison goes to the job summary). Event-count differences do not fail CI; the botplay crash, extension, gamedata and API/ABI checks remain required. Published releases get the same session in release.yml `botplay-release` (`BOTPLAY_PROFILE=release`).
 
 SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/`. Our packages ship `GeoLite2-Country.mmdb` (`prepare-package.sh`, enforced by `check-package.sh`); `botplay-test.sh` also installs one via `install-geoip2-db.sh` when it is missing (e.g. for rom4s packages).
 
 **Stress profile (default):** `botplay-stress.cfg` execs `botplay-server.cfg` (fast 1‑minute rounds) then raises `bot_quota` to 8. Plugin `css34_botplay_stress.smx` rotates maps every 3 rounds (`de_dust2` → `de_inferno` → `de_nuke`) and logs sdkhooks/sdktools ABI probe results each round.
 
-**When they run:** `test-built-botplay-matrix` (`debian:11`, 300 s per line) runs on every push / PR. `test-built-weekly-botplay` runs the same session on `centos:7` for the weekly suite and on release. `test-rom4s-botplay` and `test-release-botplay` (pinned `debian:latest`) only on `workflow_dispatch` with `run_reference_botplay=true`; extra images (`debian:11`, `debian:12`, `rockylinux:9`) for rom4s / built (`sm13-latest`) only with `botplay_extra_distros=true`.
+**When they run:** `botplay` (300 s per line) runs on `debian:11` on every push / PR and on `centos:7` in the weekly suite; release.yml `botplay-release` runs it on `centos:7` against the published URLs.
 
 | File | Role |
 |------|------|
@@ -120,7 +119,7 @@ Artifacts: `botplay-report.json`, `built-botplay-report.json`, `botplay-compare.
 
 ### Botplay bisect (built crash)
 
-`test-botplay-bisect` is **off by default** (workflow_dispatch + `run_botplay_bisect`). It runs short (90s) cases via `testing/scripts/botplay-bisect.sh` on `debian:latest`. Set `BISECT_SET=quick` (5 cases, ~15 min) or `BISECT_SET=full` (19 cases, ~50 min).
+`testing/scripts/botplay-bisect.sh` runs short (90s) cases locally (the CI job for it was removed: it never ran). Set `BISECT_SET=quick` (5 cases, ~15 min) or `BISECT_SET=full` (19 cases, ~50 min).
 
 **Root cause (2026-07):** built SM binaries are fine on CS:S v34; the crash (`Bad entity in IndexOfEdict()`) comes from **upstream `sdkhooks.games` gamedata** shipped in the package (wrong vtable offsets for ep1/CSS). Overlaying rom4s `gamedata/sdkhooks.games` onto a built install fixes botplay; `prepare-package.sh` now copies css34-specific sdkhooks gamedata from `builder/assets/gamedata/sdkhooks.games/`.
 
@@ -206,7 +205,8 @@ testing/scripts/mysql-tls-server.sh stop
 
 ## Windows packages (Wine and native Windows)
 
-`ci.yml` `wine-smoke` boots the Windows packages on the Windows v34 server:
+`testing/scripts/wine-smoke-test.sh` boots the Windows packages on the Windows v34 server,
+natively in `build-windows` (every PR) and under Wine in `wine-smoke` (weekly suite):
 game content from the Linux server tree (or `srcds_css34_4044.zip`), Windows
 binaries from rom4s `srcds_css34_w_a.zip` (`srcds.exe`, `bin/*.dll`,
 `cstrike/bin/server.dll`), run with 32-bit Wine under Xvfb.
@@ -217,8 +217,8 @@ requires **SDK Hooks**). When the package contains `dhooks.ext.dll` the script
 also loads it and requires **DHooks**. `DHOOKS_EXPECT` (from the matrix
 `dhooks_expect`) overrides that. Then a `changelevel`.
 
-`wine-smoke` runs one row per line (`windows_smoke` matrix) on the line's MM 1.12
-zip. `build-windows` smokes it natively and then runs
+Both run one row per line (`windows` matrix) on the line's MM 1.12 zip, with
+`LEGACY_PROBE` on lines with a `bridge_metamod`. `build-windows` then runs
 `check-core-plapi.sh` on the installed server: the probe is built with `cl`
 and requires PLAPI 11 from `sourcemod.1.ep1.dll` and 16 from `sourcemod.2.ep1.dll`. On a failure
 `testing/scripts/wine-crash-report.py` maps every access violation in the
@@ -275,11 +275,12 @@ Published release pairs of the five `CSS34_LINE`s, mix PASS/FAIL notes, and hist
 
 ## CI hygiene regression checks
 
-Run `bash testing/scripts/check-package-paths.sh` and `actionlint` after workflow changes.
-With GCC, binutils and Expect installed, run
-`python3 testing/scripts/test-glibc-imports.py` and
-`python3 testing/scripts/test-console-probe.py` for the unversioned-import gate,
-PostgreSQL shim and console recovery regressions. CI Hygiene runs both.
+Run `actionlint` (`testing/scripts/install-actionlint.sh` installs the pinned version) and
+`bash testing/scripts/run-host-tests.sh` after workflow changes. The runner runs every
+`testing/scripts/test-*.py` / `test-*.sh` and the negative smoke check (needs GCC, binutils
+and Expect); pass test names to run only those, e.g.
+`bash testing/scripts/run-host-tests.sh test-glibc-imports.py test-console-probe.py`.
+CI `hygiene` runs the whole set, so a new `test-*` script is picked up without a workflow edit.
 The `hygiene` job in `ci.yml` deliberately runs smoke against an empty server directory, requires
 the expected missing-server failure, and uploads `negative-smoke-logs` for seven days.
 After that workflow completes, verify the artifact is still downloadable. This

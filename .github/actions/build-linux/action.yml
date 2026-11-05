@@ -1,0 +1,43 @@
+name: Build Linux packages
+description: >-
+  Build a line's SourceMod + Metamod Linux packages in the pinned manylinux2014
+  image (builder/docker/build.sh), then run the static package checks: ABI and
+  exports (check-package.sh) and the line's MM 1.12 package with the bridge's
+  metamod.1.ep1 legacy core (verify-line-metamod-packages.sh). Used by ci.yml
+  and release.yml.
+inputs:
+  line:
+    description: CSS34_LINE to build (an active line of builder/lines.json)
+    required: true
+outputs:
+  sm_asset:
+    description: File name of the SourceMod package in packages/
+    value: ${{ steps.check.outputs.sm_asset }}
+  mm_asset:
+    description: File name of the Metamod package in packages/
+    value: ${{ steps.check.outputs.mm_asset }}
+runs:
+  using: composite
+  steps:
+    - name: Build SourceMod + Metamod (manylinux2014, ${{ inputs.line }})
+      shell: bash
+      env:
+        CSS34_LINE: ${{ inputs.line }}
+      run: builder/docker/build.sh
+
+    - name: Static package checks
+      id: check
+      shell: bash
+      env:
+        CSS34_LINE: ${{ inputs.line }}
+      run: |
+        set -euo pipefail
+        source builder/package-paths.sh
+        test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
+        echo "Checking ${SM_PACKAGE}"
+        testing/scripts/check-package.sh
+        # One MM package (MM 1.12, with the bridge's metamod.1.ep1 legacy core).
+        testing/scripts/verify-line-metamod-packages.sh "$CSS34_LINE"
+        # Exact names of what this run built: later jobs never glob.
+        echo "sm_asset=$(basename "$SM_PACKAGE")" >> "$GITHUB_OUTPUT"
+        echo "mm_asset=$(basename "$MM_PACKAGE")" >> "$GITHUB_OUTPUT"

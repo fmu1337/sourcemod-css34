@@ -31,7 +31,7 @@ jobs:
     outputs:
       frozen: ${{ steps.m.outputs.frozen }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Frozen lines
         id: m
         run: |
@@ -50,7 +50,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.frozen) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Published files of ${{ matrix.line }} match lines.json
         env:
@@ -69,30 +69,8 @@ jobs:
             --base "https://github.com/${GITHUB_REPOSITORY}/releases/download" \
             --repo-git "https://github.com/${GITHUB_REPOSITORY}" "${args[@]}"
 
-      - name: Restore cached server tree
-        id: server-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: server-art/css34-server.tar.gz
-          key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
-
-      - name: Prepare server tree (cache miss)
-        if: steps.server-cache.outputs.cache-hit != 'true'
-        env:
-          SERVER_DIR: ${{ github.workspace }}/.ci-server
-          CACHE_DIR: ${{ github.workspace }}/.ci-cache
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y curl unzip unrar
-          chmod +x testing/scripts/*.sh
-          testing/scripts/fetch-server.sh
-          testing/scripts/apply-valve-rc-fix.sh
-          testing/scripts/apply-srcds-patch.sh
-          KEEP_MAPS=de_dust2,de_inferno,de_nuke testing/scripts/trim-server-maps.sh
-          mkdir -p server-art
-          tar -C .ci-server -czf server-art/css34-server.tar.gz .
-          rm -rf .ci-server
+      - name: Restore or prepare the server tree
+        uses: ./.github/actions/server-tree
 
       - name: Smoke the pointer of ${{ matrix.line }} in ${{ matrix.image_name }}
         env:
@@ -102,7 +80,6 @@ jobs:
           POINTER_ASSETS: ${{ matrix.pointer_assets }}
         run: |
           set -euo pipefail
-          chmod +x testing/scripts/*.sh
           MM_ASSET=mmsource-css34-linux.tar.gz testing/scripts/release-smoke.sh
           if python3 -c 'import json,os,sys; sys.exit("mmsource-legacy-css34-linux.tar.gz" not in json.loads(os.environ["POINTER_ASSETS"]))'; then
             MM_ASSET=mmsource-legacy-css34-linux.tar.gz SMOKE_EXPECT_CORE=1.ep1 testing/scripts/release-smoke.sh

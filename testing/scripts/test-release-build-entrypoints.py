@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise release orchestration and the Docker wrapper without full builds.
 
-The release step uses real pin/path resolution and package-set verification;
+The static package checks of .github/actions/build-linux use real pin/path resolution and package-set verification;
 ELF checks are stubbed (covered separately by package regression tests).
 Docker is replaced at the process boundary to inspect the actual run arguments.
 """
@@ -83,11 +83,16 @@ printf '%s %s %s\n' "$MM_PACKAGE" "$EXPECTED_MM_REV" "$EXPECTED_MM_COMMIT" >> "$
             (packages / mm_names[0]).touch()
         # Older packages must not affect primary selection.
         (packages / "mmsource-1.12.0-git1-css34-linux.tar.gz").touch()
+        # release.yml (and ci.yml) build through the build-linux action with the
+        # line they resolved; its "Static package checks" step writes the outputs.
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
-        step = workflow.split("      - name: Static package checks\n", 1)[1]
-        step = step.split("      - name:", 1)[0]
-        self.assertIn("CSS34_LINE: ${{ needs.resolve-line.outputs.css34_line }}", step)
-        script = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        self.assertIn("uses: ./.github/actions/build-linux\n        with:\n"
+                      "          line: ${{ needs.resolve-line.outputs.css34_line }}\n", workflow)
+        action = (ROOT / ".github/actions/build-linux/action.yml").read_text()
+        step = action.split("    - name: Static package checks\n", 1)[1]
+        step = step.split("    - name:", 1)[0]
+        self.assertIn("CSS34_LINE: ${{ inputs.line }}", step)
+        script = textwrap.dedent(step.split("      run: |\n", 1)[1])
         result = subprocess.run(["bash", "-c", script], cwd=self.root,
                                 env=self.env, capture_output=True, text=True)
         return result, sm_name, mm_names
