@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 # Install 32-bit runtime deps for CS:S v34 srcds on Debian-family or RHEL-family.
+#
+# The one package list of every smoke/botplay container. test-images.yml runs it
+# at image build time with CSS34_DEPS_MARKER=1, which records this script's
+# sha256 in /etc/css34-install-deps.sha256; in such an image a later run of the
+# same script is a no-op (no apt/yum traffic). An image built from another
+# version of this script installs as usual. CSS34_DEPS_FORCE=1 always installs;
+# CSS34_DEPS_MARKER_FILE moves the marker (tests).
 set -euo pipefail
+
+DEPS_MARKER="${CSS34_DEPS_MARKER_FILE:-/etc/css34-install-deps.sha256}"
+
+self_hash() {
+  command -v sha256sum >/dev/null 2>&1 || return 0
+  sha256sum "${BASH_SOURCE[0]}" | cut -d' ' -f1
+}
 
 detect_family() {
   if [[ -f /etc/os-release ]]; then
@@ -229,7 +243,15 @@ install_rhel() {
 }
 
 main() {
-  local family
+  local family hash
+  hash="$(self_hash)"
+  if [[ "${CSS34_DEPS_FORCE:-0}" != 1 && -n "${hash}" && -f "${DEPS_MARKER}" ]]; then
+    if [[ "$(cat "${DEPS_MARKER}")" == "${hash}" ]]; then
+      echo "Dependencies prebuilt in this image (install-deps.sh ${hash:0:12}); nothing to install."
+      return 0
+    fi
+    echo "Image was prebuilt by another install-deps.sh ($(cut -c1-12 "${DEPS_MARKER}")); installing ${hash:0:12}"
+  fi
   family="$(detect_family)"
   echo "Detected package family: ${family}"
   case "${family}" in
@@ -240,6 +262,11 @@ main() {
       exit 1
       ;;
   esac
+  if [[ "${CSS34_DEPS_MARKER:-0}" == 1 ]]; then
+    [[ -n "${hash}" ]] || { echo "CSS34_DEPS_MARKER=1 needs sha256sum" >&2; exit 1; }
+    printf '%s\n' "${hash}" >"${DEPS_MARKER}"
+    echo "Recorded ${DEPS_MARKER} (${hash:0:12})"
+  fi
   echo "Dependencies installed."
 }
 

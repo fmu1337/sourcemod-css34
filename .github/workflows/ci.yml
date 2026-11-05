@@ -4,6 +4,8 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+  # Pull the prebuilt smoke/botplay images (test-images.yml) from ghcr.io.
+  packages: read
 
 # plan (builder/scripts/ci_planner.py) picks the suite, the matrices and the
 # jobs the run requires; gate (builder/scripts/ci_gate.py) is the one check
@@ -376,6 +378,8 @@ jobs:
       - name: Smoke test ${{ matrix.line }} in ${{ matrix.image_name }}
         env:
           IMAGE: ${{ matrix.image }}
+          BASE_IMAGE: ${{ matrix.base_image }}
+          GHCR_TOKEN: ${{ github.token }}
           MM_VERSION_EXPECT: ${{ matrix.mm_expect }}
           MM_REV_EXPECT: ${{ matrix.mm_rev }}
           SM_VERSION_EXPECT: ${{ matrix.sm_expect }}
@@ -397,6 +401,9 @@ jobs:
             legacy_probe="/workspace/packages/test-plugins/css34_legacy_probe.so"
             test -f "packages/test-plugins/css34_legacy_probe.so"
           fi
+          # Prebuilt runtime image (test-images.yml), or the base image when it
+          # cannot be pulled; install-deps.sh in the container is then a no-op.
+          IMAGE="$(testing/scripts/pull-test-image.sh "$IMAGE" "$BASE_IMAGE")"
           docker run --rm --platform linux/amd64 \
             --network css34-db \
             -v "$PWD:/workspace" \
@@ -494,6 +501,8 @@ jobs:
       - name: Botplay stress ${{ matrix.line }} on ${{ matrix.image_name }}
         env:
           IMAGE: ${{ matrix.image }}
+          BASE_IMAGE: ${{ matrix.base_image }}
+          GHCR_TOKEN: ${{ github.token }}
           RECORD_SECS: "300"
           BOTPLAY_PROFILE: built
           BOTPLAY_CFG: botplay-stress.cfg
@@ -507,6 +516,9 @@ jobs:
           CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
           MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
+          # Prebuilt runtime image (test-images.yml), or the base image when it
+          # cannot be pulled; install-deps.sh in the container is then a no-op.
+          IMAGE="$(testing/scripts/pull-test-image.sh "$IMAGE" "$BASE_IMAGE")"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \

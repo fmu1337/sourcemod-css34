@@ -125,6 +125,15 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `Build ID: <MM_REV>:<sha prefix>`; `sm version` must be `<major>.<SM_REV>`
   (the revs come from `builder/lines.json`). Image digests live only in
   `builder/lines.json`; `python3 builder/lines.py gen` writes the matrix.
+- **Prebuilt test images**: `test-images.yml` bakes `install-deps.sh` into each smoke/botplay
+  image (`ghcr.io/fmu1337/css34-test`, `testing/docker/test-image.Dockerfile`);
+  `lines.json` `test_images` records `ref` / `base` / `deps_hash`, and matrix rows carry
+  `image` (prebuilt when current) and `base_image` (fallback,
+  `testing/scripts/pull-test-image.sh`). In such an image `install-deps.sh` is a no-op
+  (marker `/etc/css34-install-deps.sha256`). Editing `install-deps.sh` makes the entries
+  stale: `lines.py check` fails until `python3 builder/lines.py test-images-prune` and `gen`;
+  after the merge the workflow rebuilds and opens the `test-images/update` PR.
+  Details: `testing/README.md` "Prebuilt test images".
 - **Core gates**: each matrix row names the Metamod package it installs (`mm_package`)
   and the core that must run (`expect_core`, `2.ep1`). `smoke-test.sh` takes
   `SMOKE_EXPECT_CORE=1.ep1|2.ep1` (`1.ep1` only for the frozen sm11 pointer's

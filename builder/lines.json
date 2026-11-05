@@ -204,5 +204,6 @@
     "rockylinux:9"
   ],
   "botplay_image": "debian:11",
-  "weekly_botplay_image": "centos:7"
+  "weekly_botplay_image": "centos:7",
+  "test_images": {}
 }

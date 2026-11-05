@@ -23,6 +23,7 @@ class LinesTest(unittest.TestCase):
                      "builder/generated/ci-matrix.json", "builder/generated/tag-map.sh",
                      "README.md",
                      "testing/scripts/check-version-copies.sh",
+                     "testing/scripts/install-deps.sh",
                      ".github/workflows/ci.yml",
                      ".github/workflows/release.yml"):
             target = self.root / name
@@ -89,7 +90,7 @@ class LinesTest(unittest.TestCase):
             for image in weekly:
                 self.assertNotIn((line, image), pairs)
         self.assertTrue(all("allow_failure" not in row for row in matrix["debian"]))
-        self.assertTrue(all(row["image"] == matrix["images"][row["image_name"]] for row in matrix["debian"]))
+        self.assertTrue(all(row["base_image"] == matrix["images"][row["image_name"]] for row in matrix["debian"]))
         weekly_pairs = [(row["line"], row["image_name"]) for row in matrix["weekly"]]
         for line in lines:
             for image in weekly:
@@ -215,6 +216,141 @@ class LinesTest(unittest.TestCase):
                 change(data)
                 target.write_text(json.dumps(data))
                 self.assertIn(message, self.run_command("check", False).stderr)
+
+    TEST_REF = "ghcr.io/fmu1337/css34-test@sha256:" + "ab" * 32
+
+    def deps_hash(self):
+        import hashlib
+        return hashlib.sha256((self.root / "testing/scripts/install-deps.sh").read_bytes()).hexdigest()
+
+    def set_test_images(self, entries):
+        target = self.root / "builder/lines.json"
+        data = json.loads(target.read_text())
+        data["test_images"] = entries
+        target.write_text(json.dumps(data, indent=2) + "\n")
+        return data
+
+    def image_entry(self, data, name, **override):
+        entry = {"ref": self.TEST_REF, "base": data["images"][name], "deps_hash": self.deps_hash()}
+        entry.update(override)
+        return entry
+
+    def gha_matrix(self, key):
+        out = self.run_command("gha").stdout
+        match = re.search(key + r"<<EOF\n(.*?)\nEOF", out, re.S)
+        return json.loads(match.group(1))
+
+    def test_current_test_image_goes_into_matrix_rows(self):
+        data = json.loads((self.root / "builder/lines.json").read_text())
+        self.set_test_images({"debian:11": self.image_entry(data, "debian:11")})
+        self.assertIn("stale builder/generated/ci-matrix.json", self.run_command("check", False).stderr)
+        self.run_command("gen")
+        self.run_command("check")
+        matrix = json.loads((self.root / "builder/generated/ci-matrix.json").read_text())
+        base = "debian:11@" + data["images"]["debian:11"]
+        rows = [r for key in ("botplay", "weekly") for r in matrix[key] if r["image_name"] == "debian:11"]
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertEqual((row["image"], row["base_image"], row["prebuilt"]), (self.TEST_REF, base, "1"))
+        for row in matrix["debian"] + matrix["weekly_botplay"]:
+            self.assertEqual((row["image"], row["prebuilt"]), (row["base_image"], "0"))
+        # The image list stays the base digests.
+        self.assertEqual(matrix["images"]["debian:11"], base)
+
+    def test_stale_test_image_falls_back_and_fails_check(self):
+        data = json.loads((self.root / "builder/lines.json").read_text())
+        self.set_test_images({
+            "debian:11": self.image_entry(data, "debian:11", deps_hash="0" * 64),
+            "centos:7": self.image_entry(data, "centos:7", base="sha256:" + "1" * 64),
+            "debian:13": self.image_entry(data, "debian:13"),
+        })
+        err = self.run_command("check", False).stderr
+        self.assertIn("test_images debian:11, centos:7 do not match", err)
+        self.assertIn("test-images-prune", err)
+        # Matrices never use a stale entry: base image + install-deps.sh at run time.
+        botplay = self.gha_matrix("botplay")
+        self.assertTrue(all(r["image"] == r["base_image"] and r["prebuilt"] == "0" for r in botplay))
+        smoke = self.gha_matrix("debian")
+        self.assertEqual({r["image_name"] for r in smoke if r["prebuilt"] == "1"}, {"debian:13"})
+        self.run_command("test-images-prune")
+        kept = json.loads((self.root / "builder/lines.json").read_text())["test_images"]
+        self.assertEqual(set(kept), {"debian:13"})
+        self.run_command("gen")
+        self.run_command("check")
+
+    def test_install_deps_change_makes_entries_stale(self):
+        data = json.loads((self.root / "builder/lines.json").read_text())
+        self.set_test_images({"debian:11": self.image_entry(data, "debian:11")})
+        self.run_command("gen")
+        self.run_command("check")
+        script = self.root / "testing/scripts/install-deps.sh"
+        script.write_text(script.read_text() + "\n# changed\n")
+        self.assertIn("test_images debian:11 do not match", self.run_command("check", False).stderr)
+
+    def test_test_image_entry_rules(self):
+        data = json.loads((self.root / "builder/lines.json").read_text())
+        cases = (
+            ({"mysql:8.4": self.image_entry(data, "mysql:8.4")}, "not a smoke/botplay image"),
+            ({"debian:12": self.image_entry(data, "debian:11")}, "not a smoke/botplay image"),
+            ({"debian:11": self.image_entry(data, "debian:11", ref="ghcr.io/fmu1337/css34-test:debian-11")},
+             "ref must be"),
+            ({"debian:11": self.image_entry(data, "debian:11", ref="docker.io/x/y@sha256:" + "ab" * 32)},
+             "ref must be"),
+            ({"debian:11": self.image_entry(data, "debian:11", base="4c25")}, "base must be a sha256 digest"),
+            ({"debian:11": self.image_entry(data, "debian:11", deps_hash="abc")}, "deps_hash must be a sha256"),
+            ({"debian:11": dict(self.image_entry(data, "debian:11"), tag="x")}, "must have exactly"),
+        )
+        for entries, message in cases:
+            self.set_test_images(entries)
+            self.assertIn(message, self.run_command("check", False).stderr, entries)
+
+    def test_test_images_plan_and_record(self):
+        plan = json.loads(self.run_command("test-images-plan").stdout)
+        names = [row["name"] for row in plan]
+        for name in ("centos:7", "ubuntu:24.04", "debian:13", "debian:11", "debian:8", "rockylinux:9"):
+            self.assertIn(name, names)
+        self.assertNotIn("mariadb:11.8", names)
+        self.assertNotIn("debian:latest", names)
+        self.assertEqual(len(names), len(set(names)))
+        deps = self.deps_hash()
+        for row in plan:
+            self.assertTrue(row["build"])
+            self.assertEqual(row["deps_hash"], deps)
+            self.assertRegex(row["tag"], r"^[a-z0-9.]+-[a-z0-9.]+-[0-9a-f]{12}$")
+            self.assertEqual(row["repo"], "ghcr.io/fmu1337/css34-test")
+            self.assertTrue(row["base"].startswith(row["name"] + "@sha256:"))
+        self.assertEqual(len({row["tag"] for row in plan}), len(plan))
+        debian11 = next(row for row in plan if row["name"] == "debian:11")
+        results = self.root / "results.json"
+        results.write_text(json.dumps([{"name": "debian:11", "ref": self.TEST_REF,
+                                        "base": debian11["base_digest"], "deps_hash": deps}]))
+        self.run_command_args(["test-images-record", str(results)])
+        self.run_command("gen")
+        self.run_command("check")
+        plan = {row["name"]: row for row in json.loads(self.run_command("test-images-plan").stdout)}
+        self.assertEqual((plan["debian:11"]["build"], plan["debian:11"]["current"]), (False, self.TEST_REF))
+        self.assertTrue(plan["centos:7"]["build"])
+        rebuild = json.loads(self.run_command_args(["test-images-plan", "--rebuild-all"]).stdout)
+        self.assertTrue(all(row["build"] for row in rebuild))
+        image, base = self.run_command_args(["test-image-ref", "debian:11"]).stdout.split()
+        self.assertEqual((image, base), (self.TEST_REF, "debian:11@" + debian11["base_digest"]))
+        # A result from another install-deps.sh is refused.
+        results.write_text(json.dumps([{"name": "centos:7", "ref": self.TEST_REF,
+                                        "base": plan["centos:7"]["base_digest"], "deps_hash": "0" * 64}]))
+        self.assertIn("another install-deps.sh", self.run_command_args(["test-images-record", str(results)], False).stderr)
+
+    def test_workflows_take_images_from_the_matrix(self):
+        for name in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
+            text = (self.root / name).read_text()
+            self.assertIn("pull-test-image.sh", text, name)
+            self.assertIn("BASE_IMAGE: ${{ matrix.base_image }}", text, name)
+            self.assertIn("packages: read", text, name)
+
+    def run_command_args(self, args, success=True):
+        result = subprocess.run([sys.executable, str(self.root / "builder/lines.py")] + args,
+                                cwd=self.temp.name, capture_output=True, text=True)
+        self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+        return result
 
     def test_duplicate_image_is_rejected(self):
         target = self.root / "builder/lines.json"

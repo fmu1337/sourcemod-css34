@@ -7,6 +7,7 @@ fails when they drift, and `gha` prints GitHub Actions outputs.
 
 import argparse
 import difflib
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -37,6 +38,13 @@ GENERATED = (
 WINDOWS_EXTS = "CS Tools,SDK Tools,BinTools,SDK Hooks"
 WINDOWS_LOAD_EXTS = "sdkhooks"
 IMAGE_RE = re.compile(r"[a-z0-9][a-z0-9._:/-]*")
+# Prebuilt smoke/botplay images (test-images.yml): <base>@<digest> with
+# install-deps.sh already run. The tag carries a hash of both inputs; lines.json
+# records the pushed digest, never the tag.
+DEPS_SCRIPT = "testing/scripts/install-deps.sh"
+TEST_IMAGE_REPO = "ghcr.io/fmu1337/css34-test"
+TEST_IMAGE_REF_RE = re.compile(re.escape(TEST_IMAGE_REPO) + r"@sha256:[0-9a-f]{64}")
+TEST_IMAGE_FIELDS = {"ref", "base", "deps_hash"}
 TAG_RE = re.compile(r"[A-Za-z0-9._-]+")
 
 
@@ -189,9 +197,72 @@ def image_ref(data, name):
     return "{}@{}".format(name, data["images"][name])
 
 
+def deps_hash(root=None):
+    """sha256 of install-deps.sh: the marker a prebuilt test image carries."""
+    path = (ROOT if root is None else root) / DEPS_SCRIPT
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_image_names(data):
+    """Every image a smoke/botplay/frozen-verify container starts from, in first-use order."""
+    names = []
+
+    def add(name):
+        if name not in names:
+            names.append(name)
+
+    for line in data["lines"].values():
+        if line["status"] == "active" or "frozen" in line:
+            for entry in line.get("smoke") or []:
+                add(entry["image"])
+    for name in data["weekly_smoke"]:
+        add(name)
+    add(data["botplay_image"])
+    add(data["weekly_botplay_image"])
+    return names
+
+
+def test_image_slug(name):
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", name).strip("-")
+
+
+def test_image_tag(data, name, deps):
+    """<slug>-<12 hex of sha256(install-deps.sh hash, base digest)>."""
+    key = hashlib.sha256("{}\n{}\n".format(deps, data["images"][name]).encode()).hexdigest()
+    return "{}-{}".format(test_image_slug(name), key[:12])
+
+
+def current_test_image(data, name, deps):
+    """The prebuilt image of `name` if lines.json has one for this install-deps.sh and base."""
+    entry = data.get("test_images", {}).get(name)
+    if entry and deps is not None and entry["deps_hash"] == deps and entry["base"] == data["images"][name]:
+        return entry["ref"]
+    return None
+
+
+def stale_test_images(data, deps):
+    return [name for name in data.get("test_images", {}) if current_test_image(data, name, deps) is None]
+
+
+def data_deps_hash(data):
+    """install-deps.sh hash for the matrix: None (fallback everywhere) when the script is absent."""
+    if "_deps_hash" not in data:
+        try:
+            data["_deps_hash"] = deps_hash()
+        except OSError:
+            data["_deps_hash"] = None
+    return data["_deps_hash"]
+
+
 def attach_image(item, data, name):
-    item["image"] = image_ref(data, name)
+    """`image` is the prebuilt test image when current, else the base image (install-deps.sh
+    then installs at run time); `base_image` is the fallback if the pull fails."""
+    base = image_ref(data, name)
+    prebuilt = current_test_image(data, name, data_deps_hash(data))
+    item["image"] = prebuilt or base
+    item["base_image"] = base
     item["image_name"] = name
+    item["prebuilt"] = "1" if prebuilt else "0"
     return item
 
 
@@ -218,6 +289,19 @@ def validate_runtime_images(data):
         for entry in line.get("smoke") or []:
             require(entry["image"] in images,
                     lname + " smoke image is not pinned: " + entry["image"])
+    test_images = data.get("test_images", {})
+    require(isinstance(test_images, dict), "test_images must map pinned images to prebuilt refs")
+    wanted = test_image_names(data)
+    for name, entry in test_images.items():
+        require(name in wanted, "test_images." + str(name) + " is not a smoke/botplay image")
+        require(isinstance(entry, dict) and set(entry) == TEST_IMAGE_FIELDS,
+                "test_images." + name + " must have exactly " + ", ".join(sorted(TEST_IMAGE_FIELDS)))
+        require(isinstance(entry["ref"], str) and TEST_IMAGE_REF_RE.fullmatch(entry["ref"]),
+                "test_images." + name + ".ref must be " + TEST_IMAGE_REPO + "@sha256:<64 hex>")
+        require(isinstance(entry["base"], str) and DIGEST_RE.fullmatch(entry["base"]),
+                "test_images." + name + ".base must be a sha256 digest")
+        require(isinstance(entry["deps_hash"], str) and SHA256_RE.fullmatch(entry["deps_hash"]),
+                "test_images." + name + ".deps_hash must be a sha256")
 
 
 def mm_version(mode):
@@ -581,13 +665,100 @@ def frozen_rows(data):
     return rows
 
 
+def test_images_plan(data, rebuild_all=False):
+    """test-images.yml matrix: what to build, and whether lines.json already has it."""
+    deps = deps_hash()
+    rows = []
+    for name in test_image_names(data):
+        current = current_test_image(data, name, deps)
+        rows.append({
+            "name": name,
+            "repo": TEST_IMAGE_REPO,
+            "base": image_ref(data, name),
+            "base_digest": data["images"][name],
+            "tag": test_image_tag(data, name, deps),
+            "deps_hash": deps,
+            "current": current or "",
+            "build": rebuild_all or current is None,
+        })
+    return rows
+
+
+def write_manifest_json(path, data):
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def raw_manifest(path):
+    text = path.read_text(encoding="utf-8")
+    data = json.loads(text)
+    require(json.dumps(data, indent=2, ensure_ascii=False) + "\n" == text,
+            "builder/lines.json is not in its canonical format (json indent 2)")
+    return data
+
+
+def test_images_record(path, results):
+    """Merge test-images.yml results ([{name, ref, base, deps_hash}]) into lines.json."""
+    data = raw_manifest(path)
+    entries = data.setdefault("test_images", {})
+    deps = deps_hash()
+    for result in results:
+        name = result["name"]
+        require(name in data["images"], "unknown image " + repr(name))
+        require(result["deps_hash"] == deps,
+                "{} was built from another install-deps.sh ({}, now {})".format(name, result["deps_hash"][:12], deps[:12]))
+        require(result["base"] == data["images"][name],
+                "{} was built from another base digest".format(name))
+        entries[name] = {"ref": result["ref"], "base": result["base"], "deps_hash": result["deps_hash"]}
+    data["test_images"] = {name: entries[name] for name in sorted(entries)}
+    write_manifest_json(path, data)
+
+
+def test_images_prune(path):
+    """Drop entries that no longer match install-deps.sh, their base digest or the image list."""
+    data = raw_manifest(path)
+    entries = data.get("test_images", {})
+    deps = deps_hash()
+    wanted = test_image_names(data)
+    keep = {name: entry for name, entry in entries.items()
+            if name in wanted and name in data["images"] and entry.get("deps_hash") == deps
+            and entry.get("base") == data["images"][name]}
+    for name in sorted(set(entries) - set(keep)):
+        print("Dropped stale test_images." + name)
+    data["test_images"] = keep
+    write_manifest_json(path, data)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("gen", "check", "gha", "legacy-mm-asset", "frozen-gha"))
-    parser.add_argument("line", nargs="?", help="line name (legacy-mm-asset)")
+    parser.add_argument("command", choices=(
+        "gen", "check", "gha", "legacy-mm-asset", "frozen-gha",
+        "test-images-plan", "test-images-record", "test-images-prune", "test-image-ref"))
+    parser.add_argument("line", nargs="?",
+                        help="line name (legacy-mm-asset), results JSON file (test-images-record), "
+                             "image name (test-image-ref)")
+    parser.add_argument("--rebuild-all", action="store_true", help="test-images-plan: build every image")
     args = parser.parse_args()
     try:
-        data = load_manifest(ROOT / "builder/lines.json")
+        manifest_path = ROOT / "builder/lines.json"
+        if args.command == "test-images-prune":
+            test_images_prune(manifest_path)
+            load_manifest(manifest_path)
+            return 0
+        if args.command == "test-images-record":
+            require(args.line, "test-images-record needs a results JSON file")
+            test_images_record(manifest_path, json.loads(Path(args.line).read_text(encoding="utf-8")))
+            load_manifest(manifest_path)
+            return 0
+        data = load_manifest(manifest_path)
+        if args.command == "test-images-plan":
+            print(json.dumps(test_images_plan(data, args.rebuild_all), indent=2))
+            return 0
+        if args.command == "test-image-ref":
+            # release-smoke.sh: "<image> <base image>" for one pinned image name.
+            require(args.line in data["images"], "unknown image " + repr(args.line))
+            row = attach_image({}, data, args.line)
+            print(row["image"], row["base_image"])
+            return 0
         if args.command == "legacy-mm-asset":
             # T2.6: the dual line's MM 1.10.7 Linux package, served by its pointer
             # as mmsource-legacy-css34-linux.tar.gz; prints nothing for other lines.
@@ -625,6 +796,13 @@ def main():
                     fromfile=relative, tofile="generated " + relative))
                 print("FAIL: stale {}; run python3 builder/lines.py gen".format(relative),
                       file=sys.stderr)
+        stale_images = stale_test_images(data, data_deps_hash(data))
+        if stale_images:
+            stale = True
+            print("FAIL: test_images {} do not match {} or their base digest; run "
+                  "python3 builder/lines.py test-images-prune && python3 builder/lines.py gen "
+                  "(test-images.yml rebuilds them)".format(", ".join(stale_images), DEPS_SCRIPT),
+                  file=sys.stderr)
         if stale:
             return 1
         print("OK: generated files match builder/lines.json", flush=True)

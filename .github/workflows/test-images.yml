@@ -1,0 +1,297 @@
+name: Test images
+
+# Prebuilt smoke/botplay runtimes. Every container image a smoke, botplay or
+# frozen-verify job starts from (builder/lines.json: each line's `smoke`,
+# `weekly_smoke`, `botplay_image`, `weekly_botplay_image`) is built FROM its
+# pinned <name>@<digest> with testing/scripts/install-deps.sh run at build time
+# (testing/docker/test-image.Dockerfile) and pushed as
+# ghcr.io/fmu1337/css34-test:<slug>-<12 hex of sha256(install-deps.sh, base digest)>.
+# builder/lines.json "test_images" records each pushed digest; lines.py puts it in
+# the matrix rows (`image`, with `base_image` as fallback). Without a current
+# entry, or when the pull fails, jobs run on the base image and install-deps.sh
+# installs at run time as before.
+#
+# Builds only what lines.json lacks (new install-deps.sh, new base digest, new
+# image), every image with rebuild_all, and on the weekly run also any recorded
+# image that can no longer be pulled. The new digests then go into lines.json:
+#   push / schedule / dispatch on master: a PR from test-images/update, opened
+#     with the bump GitHub App (vars.BUMP_APP_ID, secrets.BUMP_APP_KEY) so CI runs on it;
+#   pull_request (same repository): images are pushed and the `record` job prints
+#     the lines.json entries; commit them to the PR with
+#     `python3 builder/lines.py test-images-record results.json && python3 builder/lines.py gen`.
+# Changing only test-image.Dockerfile does not change the tag: dispatch with rebuild_all.
+on:
+  workflow_dispatch:
+    inputs:
+      rebuild_all:
+        description: "Rebuild every image, even those lines.json already records"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: '17 4 * * 0'
+  push:
+    branches: [master]
+    paths:
+      - 'testing/scripts/install-deps.sh'
+      - 'testing/docker/test-image.Dockerfile'
+      - 'builder/lines.json'
+      - '.github/workflows/test-images.yml'
+  pull_request:
+    paths:
+      - 'testing/scripts/install-deps.sh'
+      - 'testing/docker/test-image.Dockerfile'
+      - '.github/workflows/test-images.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: test-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-22.04
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      count: ${{ steps.plan.outputs.count }}
+      push: ${{ steps.plan.outputs.push }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Images to build
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REBUILD_ALL: ${{ inputs.rebuild_all && '1' || '0' }}
+          EVENT: ${{ github.event_name }}
+          SAME_REPO: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          set -euo pipefail
+          args=()
+          [[ "$REBUILD_ALL" == 1 ]] && args+=(--rebuild-all)
+          python3 builder/lines.py test-images-plan "${args[@]}" > plan.json
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin >/dev/null
+          # A recorded image that is gone (deleted package version) is rebuilt.
+          python3 - <<'PY' > build.json
+          import json, subprocess, sys
+          rows = json.load(open("plan.json"))
+          for row in rows:
+              if not row["build"]:
+                  ok = subprocess.run(["docker", "manifest", "inspect", row["current"]],
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+                  if not ok:
+                      print("::warning::{} is recorded but cannot be pulled; rebuilding".format(row["current"]), file=sys.stderr)
+                      row["build"] = True
+          print(json.dumps([r for r in rows if r["build"]], separators=(",", ":")))
+          PY
+          count="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' build.json)"
+          {
+            echo "build=$(cat build.json)"
+            echo "count=${count}"
+            echo "push=${SAME_REPO}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Test images"
+            echo
+            echo "| image | tag | recorded | build |"
+            echo "|---|---|---|---|"
+            python3 - <<'PY'
+          import json
+          build = {r["name"] for r in json.load(open("build.json"))}
+          for r in json.load(open("plan.json")):
+              print("| `{}` | `{}` | {} | {} |".format(r["name"], r["tag"], "yes" if r["current"] else "no",
+                                                    "yes" if r["name"] in build else "no"))
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "${count} image(s) to build"
+
+  build:
+    name: build (${{ matrix.name }})
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.build) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build ${{ matrix.tag }} from ${{ matrix.name }}
+        env:
+          BASE: ${{ matrix.base }}
+          DEST: ${{ matrix.repo }}:${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/ctx"
+          mkdir -p "$ctx"
+          cp testing/scripts/install-deps.sh "$ctx/install-deps.sh"
+          # install-deps.sh retries flaky mirrors itself; retry the whole build once more.
+          for attempt in 1 2; do
+            if docker build --pull --platform linux/amd64 --build-arg "BASE=${BASE}" \
+                -f testing/docker/test-image.Dockerfile -t "$DEST" "$ctx"; then
+              break
+            fi
+            [[ "$attempt" == 2 ]] && exit 1
+            echo "::warning::build attempt ${attempt} failed; retrying"
+            sleep 30
+          done
+
+      - name: The image needs no install at run time
+        env:
+          DEST: ${{ matrix.repo }}:${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          # The checked-out install-deps.sh, without network: must be a no-op.
+          docker run --rm --platform linux/amd64 --network none -v "$PWD:/workspace" -w /workspace "$DEST" \
+            bash -c 'testing/scripts/install-deps.sh | tee /tmp/deps.log
+                     grep -q "nothing to install" /tmp/deps.log
+                     ls -l /lib/ld-linux.so.2 2>/dev/null || ls -l /usr/lib/ld-linux.so.2 2>/dev/null || ls -l /lib32/ld-linux.so.2
+                     for tool in expect tar gzip python3 file; do command -v "$tool"; done'
+
+      - name: Push
+        id: push
+        if: needs.plan.outputs.push == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEST: ${{ matrix.repo }}:${{ matrix.tag }}
+          NAME: ${{ matrix.name }}
+          BASE_DIGEST: ${{ matrix.base_digest }}
+          DEPS_HASH: ${{ matrix.deps_hash }}
+          REPO: ${{ matrix.repo }}
+        run: |
+          set -euo pipefail
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          docker push "$DEST"
+          ref="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$DEST" | grep "^${REPO}@" | head -n1)"
+          [[ -n "$ref" ]] || { echo "FAIL: no ghcr digest for $DEST" >&2; exit 1; }
+          echo "==> $ref"
+          mkdir -p result
+          python3 - "$ref" > "result/$(echo "$NAME" | tr ':/' '--').json" <<'PY'
+          import json, os, sys
+          print(json.dumps({"name": os.environ["NAME"], "ref": sys.argv[1],
+                            "base": os.environ["BASE_DIGEST"], "deps_hash": os.environ["DEPS_HASH"]}))
+          PY
+          size="$(docker image inspect --format '{{.Size}}' "$DEST")"
+          echo "- \`${NAME}\` -> \`${ref}\` ($((size / 1048576)) MiB)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload result
+        if: steps.push.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-image-${{ strategy.job-index }}
+          path: result/
+          retention-days: 7
+
+  record:
+    needs: [plan, build]
+    if: >-
+      always() && needs.plan.outputs.count != '0' && needs.plan.outputs.push == 'true' &&
+      needs.build.result != 'cancelled' && needs.build.result != 'skipped'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # The PR is pushed with the App token, not GITHUB_TOKEN.
+          persist-credentials: false
+
+      - name: Collect results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: test-image-*
+          path: results
+          merge-multiple: true
+
+      - name: Record the digests in builder/lines.json
+        id: record
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(results/*.json)
+          if [[ "${#files[@]}" == 0 ]]; then
+            echo "::warning::no image was pushed"
+            echo "changed=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python3 -c 'import json,sys; print(json.dumps([json.load(open(f)) for f in sys.argv[1:]], indent=2))' \
+            "${files[@]}" > "$RUNNER_TEMP/results.json"
+          echo "Results (python3 builder/lines.py test-images-record results.json):"
+          cat "$RUNNER_TEMP/results.json"
+          python3 builder/lines.py test-images-prune
+          python3 builder/lines.py test-images-record "$RUNNER_TEMP/results.json"
+          python3 builder/lines.py gen
+          python3 builder/lines.py check
+          {
+            echo "### results.json"
+            echo '```json'
+            cat "$RUNNER_TEMP/results.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if git diff --quiet; then
+            echo "changed=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=1" >> "$GITHUB_OUTPUT"
+          fi
+          git diff --stat
+
+      - name: Require the bump GitHub App
+        if: github.event_name != 'pull_request' && steps.record.outputs.changed == '1'
+        env:
+          APP_ID: ${{ vars.BUMP_APP_ID }}
+          HAS_KEY: ${{ secrets.BUMP_APP_KEY != '' }}
+        run: |
+          if [[ -z "$APP_ID" || "$HAS_KEY" != true ]]; then
+            echo "::error::set vars.BUMP_APP_ID and secrets.BUMP_APP_KEY; meanwhile commit the results.json from the job summary with python3 builder/lines.py test-images-record"
+            exit 1
+          fi
+
+      - name: App token
+        id: app
+        if: github.event_name != 'pull_request' && steps.record.outputs.changed == '1'
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.BUMP_APP_ID }}
+          private-key: ${{ secrets.BUMP_APP_KEY }}
+
+      - name: Open or update the test-images/update PR
+        if: github.event_name != 'pull_request' && steps.record.outputs.changed == '1'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BRANCH: test-images/update
+        run: |
+          set -euo pipefail
+          git config --global user.name "css34-bump[bot]"
+          git config --global user.email "css34-bump[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          title="Test images: record prebuilt smoke/botplay runtimes"
+          {
+            echo "Generated by \`.github/workflows/test-images.yml\` (run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+            echo
+            echo "Records the pushed images in \`builder/lines.json\` \`test_images\` and regenerates the matrix:"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/results.json"
+            echo '```'
+            echo
+            echo "CI on this PR runs smoke/botplay on these images; their install-deps.sh step must report \"nothing to install\"."
+          } > "$RUNNER_TEMP/body.md"
+          git checkout -B "$BRANCH"
+          git add -A builder
+          git commit -q -m "$title" -m "Generated by .github/workflows/test-images.yml."
+          # test-images/update belongs to this workflow: it is rebuilt from master every run.
+          git push --force origin "$BRANCH"
+          number="$(gh pr list --head "$BRANCH" --state open --json number -q '.[0].number')"
+          if [[ -n "$number" ]]; then
+            gh pr edit "$number" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base master --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+          fi
