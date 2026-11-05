@@ -94,8 +94,13 @@ A bug found after the freeze does not unfreeze the line: `status` stays `frozen`
   `addons/sourcemod/gamedata/<name>.games/custom/*.txt`. SourceMod parses those
   files after the shipped ones (`CGameConfig::Reparse`, which logs
   `[SM] Parsed custom gamedata override file: …`), and a key set there replaces
-  the shipped value. The packages, their sha256 in `lines.json`, the pointer and
-  `frozen-verify.yml` all stay as they are. `testing/scripts/test-frozen-hotfixes.py`
+  the shipped value. The packages, their sha256 in `lines.json` and the pointer
+  stay as they are. `frozen-verify.yml` installs `hotfixes/<line>/` over the
+  published packages, as users do (`HOTFIX_DIR` of `release-smoke.sh` and
+  `check-package.sh`), and `check-css34-gamedata.py --allow-custom` counts its
+  overrides: the line is checked against today's gamedata contract with its
+  hotfix, and removing the hotfix turns the weekly check red
+  (`testing/scripts/test-gamedata-overrides.py`). `testing/scripts/test-frozen-hotfixes.py`
   allows `hotfixes/` only for frozen lines, and requires every `core.games` key
   there to equal the active lines' value in
   `builder/assets/gamedata/core.games/common.games.txt`.

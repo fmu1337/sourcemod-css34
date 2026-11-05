@@ -14,6 +14,9 @@
 #   SERVER_TREE   packed server tree (default server-art/css34-server.tar.gz)
 #   OUT_DIR       download dir (default .ci-release-smoke)
 #   IMAGE         container image (default: pinned botplay image from lines.json)
+#   HOTFIX_DIR    a frozen line's hotfix tree (hotfixes/<line>/, relative to the repo):
+#                 copied over the package for the static checks and over cstrike/
+#                 after the install, as the README tells users (docs/FREEZE.md)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -23,7 +26,13 @@ MM_ASSET="${MM_ASSET:?MM_ASSET is required}"
 SUMS_ASSET="${SUMS_ASSET-SHA256SUMS}"
 SERVER_TREE="${SERVER_TREE:-server-art/css34-server.tar.gz}"
 OUT_DIR="${OUT_DIR:-.ci-release-smoke}"
+HOTFIX_DIR="${HOTFIX_DIR:-}"
+export HOTFIX_DIR
 cd "${ROOT}"
+if [[ -n "${HOTFIX_DIR}" && ! -d "${HOTFIX_DIR}/addons" ]]; then
+  echo "FAIL: HOTFIX_DIR ${HOTFIX_DIR} has no addons/" >&2
+  exit 1
+fi
 if [[ -z "${IMAGE:-}" ]]; then
   IMAGE="$(python3 - <<'PY'
 import json
@@ -83,6 +92,7 @@ docker run --rm --platform linux/amd64 \
   -e PLAIN_TAR_INSTALL=1 \
   -e MM_VERSION_EXPECT -e SM_VERSION_EXPECT -e MM_COMMIT_EXPECT -e SM_COMMIT_EXPECT -e MM_REV_EXPECT \
   -e SMOKE_EXPECT_CORE="${SMOKE_EXPECT_CORE:-}" \
+  -e HOTFIX_DIR \
   -e TIMEOUT_SECS=120 \
   -e SMOKE_CONDEBUG=1 \
   -e SMOKE_VERBOSE=1 \
@@ -96,6 +106,10 @@ docker run --rm --platform linux/amd64 \
     tar -xzf /workspace/'"${SERVER_TREE}"' -C /workspace/.ci-server
     testing/scripts/install-deps.sh
     testing/scripts/install-addons.sh
+    if [[ -n "${HOTFIX_DIR}" ]]; then
+      echo "==> Installing hotfix ${HOTFIX_DIR} over cstrike/"
+      cp -R "/workspace/${HOTFIX_DIR}/." /workspace/.ci-server/cstrike/
+    fi
     testing/scripts/smoke-test.sh
   '
 echo "==> Release smoke PASSED for ${BASE_URL}"
