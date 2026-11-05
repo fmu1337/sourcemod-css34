@@ -155,7 +155,7 @@ What `builder/third-party/socket.sh` does to the pinned source:
   instantiations that the libstdc++ and asio headers mark visible (240 symbols) end up in
   the dynamic table. The extension calls no tier0 function, so it needs no SDK. Result:
   `NEEDED libpthread.so.0 libc.so.6 ld-linux.so.2`, highest symbol version GLIBC_2.16.
-- The probe plugin `testing/plugins/css34_socket_probe.sp` is compiled with the line's
+- The probe plugin `testing/plugins/css34_socket_probe/css34_socket_probe.sp` is compiled with the line's
   `spcomp` into `packages/test-plugins/css34_socket_probe.smx` (never released).
 
 `testing/scripts/check-third-party.sh <sm package>`, run by `check-package.sh`, takes

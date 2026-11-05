@@ -10,7 +10,8 @@
  * Results go to addons/sourcemod/logs/css34_socket_probe.log, one line each:
  *   PASS reply type 0x49 bytes=<n> port=<port> hostname_match=<0|1> name=<server name>
  *   FAIL <reason>
- * read by testing/scripts/socket-ext-test.sh.
+ * read by testing/scripts/socket-ext-test.sh. Kept out of testing/plugins/*.sp,
+ * which the botplay suites compile for every line (only SOCKET_LINES have socket.inc).
  */
 #include <sourcemod>
 #include <socket>

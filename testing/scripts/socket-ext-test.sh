@@ -2,7 +2,7 @@
 # Socket extension bundled in the SourceMod package (builder/third-party/socket.sh,
 # lines in SOCKET_LINES) on a running srcds:
 #   - `sm exts load socket.ext` loads it and `sm exts list` reports "Socket (3.0.2)"
-#   - css34_socket_probe (testing/plugins/css34_socket_probe.sp, legacy natives
+#   - css34_socket_probe (testing/plugins/css34_socket_probe/css34_socket_probe.sp, legacy natives
 #     SocketCreate / SocketSetArg / SocketConnect / SocketSend) sends A2S_INFO over
 #     UDP to 127.0.0.1:<port> and gets the server's reply, type 0x49, naming it
 #   - `sm exts unload` unloads it and srcds keeps answering

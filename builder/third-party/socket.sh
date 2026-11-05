@@ -144,7 +144,7 @@ echo "==> Compiling css34_socket_probe.smx" >&2
 mkdir -p "$PACKAGES_DIR/test-plugins"
 "$SPCOMP" -i"$SM_PACKAGE_DIR/scripting/include" -i"$SRC/scripting/include" \
   -o"$PACKAGES_DIR/test-plugins/css34_socket_probe.smx" \
-  "$WDIR/testing/plugins/css34_socket_probe.sp"
+  "$WDIR/testing/plugins/css34_socket_probe/css34_socket_probe.sp"
 
 echo "==> Installing Socket ${SOCKET_VERSION} into ${SOCKET_INSTALL_DIR}" >&2
 files=(
