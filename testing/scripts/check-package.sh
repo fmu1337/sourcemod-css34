@@ -423,6 +423,11 @@ if ! python3 "$(dirname "$0")/check-unversioned-imports.py" "${TMP}"; then
   fail=1
 fi
 
+# Bundled third-party extensions (Socket on sm13-latest): exports, pins, manifest.
+if ! bash "${REPO_ROOT}/testing/scripts/check-third-party.sh" "${SM_PACKAGE}"; then
+  fail=1
+fi
+
 if [[ "${fail}" -ne 0 ]]; then
   echo "Package ABI check FAILED"
   exit 1

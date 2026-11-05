@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
-# Third-party Socket extension (builder/third-party/socket.sh) on a running srcds:
+# Socket extension bundled in the SourceMod package (builder/third-party/socket.sh,
+# lines in SOCKET_LINES) on a running srcds:
 #   - `sm exts load socket.ext` loads it and `sm exts list` reports "Socket (3.0.2)"
 #   - css34_socket_probe (testing/plugins/css34_socket_probe.sp, legacy natives
 #     SocketCreate / SocketSetArg / SocketConnect / SocketSend) sends A2S_INFO over
-#     UDP to 127.0.0.1:<port> and gets the server's reply, type 0x49.
+#     UDP to 127.0.0.1:<port> and gets the server's reply, type 0x49, naming it
+#   - `sm exts unload` unloads it and srcds keeps answering
 #
-# Usage: SERVER_DIR=<srcds root with MM + SM installed> \
-#        SOCKET_PACKAGE=<packages/third-party/socket-*.tar.gz> \
+# Usage: SERVER_DIR=<srcds root with MM + the SourceMod package installed> \
 #        SOCKET_PROBE=<packages/test-plugins/css34_socket_probe.smx> socket-ext-test.sh
 #
-# The archive and the probe are removed from the server tree afterwards.
+# The probe plugin is removed from the server tree afterwards.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SERVER_DIR="${SERVER_DIR:?SERVER_DIR is required}"
-SOCKET_PACKAGE="${SOCKET_PACKAGE:?SOCKET_PACKAGE is required}"
 SOCKET_PROBE="${SOCKET_PROBE:?SOCKET_PROBE is required}"
 PORT="${SOCKET_TEST_PORT:-27015}"
 # shellcheck source=../../builder/third-party/socket.env
 source "${root}/builder/third-party/socket.env"
-cstrike="${SERVER_DIR}/cstrike"
-sm="${cstrike}/addons/sourcemod"
+sm="${SERVER_DIR}/cstrike/addons/sourcemod"
 session="${SOCKET_TEST_LOG:-${SERVER_DIR}/socket-ext.log}"
 results="${sm}/logs/css34_socket_probe.log"
 fail=0
@@ -35,12 +34,9 @@ check() { # pattern file label
   fi
 }
 
-[[ -f "${SOCKET_PACKAGE}" ]] || die "Socket archive not found: ${SOCKET_PACKAGE}"
 [[ -f "${SOCKET_PROBE}" ]] || die "probe plugin not found: ${SOCKET_PROBE}"
-[[ -d "${sm}/extensions" ]] || die "${sm} has no extensions/: install SourceMod first"
+[[ -f "${sm}/extensions/socket.ext.so" ]] || die "${sm}/extensions/socket.ext.so missing: the package does not bundle Socket"
 
-mapfile -t installed < <(tar -tzf "${SOCKET_PACKAGE}" | grep -v '/$')
-tar -xzf "${SOCKET_PACKAGE}" -C "${cstrike}"
 # disabled/: SourceMod does not load it at boot, so the extension is loaded by
 # `sm exts load` first, not as the plugin's dependency.
 mkdir -p "${sm}/plugins/disabled"
@@ -49,8 +45,6 @@ rm -f "${results}"
 srcds_pid=""
 cleanup() {
   [[ -z "${srcds_pid}" ]] || kill "${srcds_pid}" 2>/dev/null || true
-  local f
-  for f in "${installed[@]}"; do rm -f "${cstrike:?}/${f}"; done
   rm -f "${sm}/plugins/disabled/css34_socket_probe.smx"
 }
 trap cleanup EXIT

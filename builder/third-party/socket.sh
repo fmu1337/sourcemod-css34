@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Build the third-party Socket extension (JoinedSenses/sm-ext-socket, "Socket (3.0.2)")
-# against a line's SourceMod tree. Runs inside the release image (manylinux2014 i686,
-# devtoolset-10 GCC 10.2.1, glibc 2.17) through builder/third-party/build.sh, after
-# builder/docker/build.sh left the line's patched tree in sourcemod/ and its package
-# build (spcomp) in sourcemod/build/package.
+# against a line's SourceMod tree and install it into that line's SourceMod package.
+# builder/run/linux.sh runs it after `ambuild`, before package.sh, for the lines in
+# SOCKET_LINES (builder/third-party/socket.env), inside the release image
+# (manylinux2014 i686, devtoolset-10 GCC 10.2.1, glibc 2.17).
 #
-# Output (never part of the SourceMod package):
-#   packages/third-party/socket-<ver>-git<rev>-<line>-linux.tar.gz
-#       addons/sourcemod/extensions/socket.ext.so
-#       addons/sourcemod/scripting/include/socket.inc
-#       addons/sourcemod/licenses/socket/{LICENSE,css34-socket.json}
-#   packages/third-party/socket-<ver>-git<rev>-<line>-linux.json  (same manifest)
-#   packages/test-plugins/css34_socket_probe.smx                   (never released)
+# Installs into SOCKET_INSTALL_DIR (the package tree, sourcemod/build/package):
+#   addons/sourcemod/extensions/socket.ext.so
+#   addons/sourcemod/scripting/include/socket.inc
+#   addons/sourcemod/licenses/socket/LICENSE            (GPL, upstream's)
+#   addons/sourcemod/licenses/socket/css34-socket.json  (pins, toolchain, files;
+#                                                        testing/scripts/check-third-party.sh)
+# and packages/test-plugins/css34_socket_probe.smx (never released).
 #
 # Changes to upstream, all made here so the pinned source stays verifiable:
 #   - sdk/smsdk_ext.h / .cpp come from the line's sourcemod/public (upstream ships
@@ -26,6 +26,7 @@ PACKAGES_DIR="${PACKAGES_DIR:-$WDIR/packages}"
 SOURCEMOD_DIR="${SOURCEMOD_DIR:-$WDIR/sourcemod}"
 CSS34_LINE="${CSS34_LINE:?CSS34_LINE is required}"
 SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:?SOURCEMOD_COMMIT is required (builder/resolve-version.sh)}"
+SOCKET_INSTALL_DIR="${SOCKET_INSTALL_DIR:-$SOURCEMOD_DIR/build/package}"
 CXX="${CXX:-g++}"
 
 # shellcheck source=../fetch-pinned.sh
@@ -48,14 +49,14 @@ gcc_line="$("$CXX" --version | head -1)"
 
 # The line's SourceMod tree, at its pin with the patch series applied.
 [[ -f "$SOURCEMOD_DIR/public/smsdk_ext.cpp" ]] ||
-  die "$SOURCEMOD_DIR has no public/smsdk_ext.cpp: run builder/docker/build.sh for ${CSS34_LINE} first"
+  die "$SOURCEMOD_DIR has no public/smsdk_ext.cpp"
 sm_head="$(git -C "$SOURCEMOD_DIR" rev-parse HEAD)"
 [[ "$sm_head" == "$SOURCEMOD_COMMIT" ]] ||
   die "$SOURCEMOD_DIR is at ${sm_head}, ${CSS34_LINE} pins ${SOURCEMOD_COMMIT}"
 sm_tree="$(git -C "$SOURCEMOD_DIR" write-tree)"
-SM_PACKAGE_DIR="$SOURCEMOD_DIR/build/package/addons/sourcemod"
+SM_PACKAGE_DIR="$SOCKET_INSTALL_DIR/addons/sourcemod"
 SPCOMP="$SM_PACKAGE_DIR/scripting/spcomp"
-[[ -x "$SPCOMP" ]] || die "no $SPCOMP: run builder/docker/build.sh for ${CSS34_LINE} first"
+[[ -x "$SPCOMP" ]] || die "no $SPCOMP: run after the SourceMod build (builder/run/linux.sh)"
 ext_api="$(sed -nE 's/^[[:space:]]*#define[[:space:]]+SMINTERFACE_EXTENSIONAPI_VERSION[[:space:]]+([0-9]+).*/\1/p' \
   "$SOURCEMOD_DIR/public/IExtensionSys.h")"
 [[ -n "$ext_api" ]] || die "cannot read SMINTERFACE_EXTENSIONAPI_VERSION"
@@ -76,8 +77,11 @@ fi
 SRC="$DEPS_DIR/sm-ext-socket"
 echo "==> ${SOCKET_REPO} ${SOCKET_COMMIT}" >&2
 rm -rf "$SRC"
+# A clone with origin set, like checkout-deps.sh's: builder/freeze/collect-inputs.sh
+# mirrors every deps/*/ repository, and offline rebuilds fetch it from that mirror.
 git init -q "$SRC"
-git -C "$SRC" fetch -q --depth 1 "$SOCKET_REPO" "$SOCKET_COMMIT"
+git -C "$SRC" remote add origin "$SOCKET_REPO"
+git -C "$SRC" fetch -q --depth 1 origin "$SOCKET_COMMIT"
 git -C "$SRC" checkout -q --detach FETCH_HEAD
 [[ "$(git -C "$SRC" rev-parse HEAD)" == "$SOCKET_COMMIT" ]] || die "fetched the wrong commit"
 tree_sha="$(cd "$SRC" && git ls-files -z | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')"
@@ -142,16 +146,19 @@ mkdir -p "$PACKAGES_DIR/test-plugins"
   -o"$PACKAGES_DIR/test-plugins/css34_socket_probe.smx" \
   "$WDIR/testing/plugins/css34_socket_probe.sp"
 
-asset="$(socket_asset_name "$CSS34_LINE")"
-STAGE="$OBJ/stage"
-rm -rf "$STAGE"
-mkdir -p "$STAGE/addons/sourcemod/extensions" "$STAGE/addons/sourcemod/scripting/include" \
-  "$STAGE/addons/sourcemod/licenses/socket"
-install -m 0755 "$OBJ/socket.ext.so" "$STAGE/addons/sourcemod/extensions/socket.ext.so"
-install -m 0644 "$SRC/scripting/include/socket.inc" "$STAGE/addons/sourcemod/scripting/include/socket.inc"
-install -m 0644 "$SRC/LICENSE" "$STAGE/addons/sourcemod/licenses/socket/LICENSE"
-manifest="$STAGE/addons/sourcemod/licenses/socket/css34-socket.json"
-python3 - "$manifest" <<PY
+echo "==> Installing Socket ${SOCKET_VERSION} into ${SOCKET_INSTALL_DIR}" >&2
+files=(
+  addons/sourcemod/extensions/socket.ext.so
+  addons/sourcemod/scripting/include/socket.inc
+  addons/sourcemod/licenses/socket/LICENSE
+)
+for rel in "${files[@]}"; do
+  [[ ! -e "$SOCKET_INSTALL_DIR/$rel" ]] || die "$rel already exists in the package (SourceMod ships it?)"
+done
+install -D -m 0755 "$OBJ/socket.ext.so" "$SOCKET_INSTALL_DIR/${files[0]}"
+install -D -m 0644 "$SRC/scripting/include/socket.inc" "$SOCKET_INSTALL_DIR/${files[1]}"
+install -D -m 0644 "$SRC/LICENSE" "$SOCKET_INSTALL_DIR/${files[2]}"
+python3 - "$SOCKET_INSTALL_DIR/addons/sourcemod/licenses/socket/css34-socket.json" "${files[@]}" <<PY
 import json, sys
 json.dump({
     "name": "Socket",
@@ -166,15 +173,6 @@ json.dump({
     "sm_tree": "${sm_tree}",
     "extension_api": int("${ext_api}"),
     "compiler": "${gcc_line}",
-    "css34_pack_commit": "$(git -C "$WDIR" rev-parse HEAD 2>/dev/null || echo unknown)",
+    "files": sys.argv[2:],
 }, open(sys.argv[1], "w"), indent=2, sort_keys=True)
 PY
-mkdir -p "$PACKAGES_DIR/third-party"
-cp -f "$manifest" "$PACKAGES_DIR/third-party/${asset%.tar.gz}.json"
-# Reproducible archive: fixed owner, order and mtime.
-# Reproducible archive: sorted names, fixed owner and mtime, gzip without a
-# timestamp (CentOS 7 tar 1.26 has no --sort).
-(cd "$STAGE" && find addons -print0 | LC_ALL=C sort -z) |
-  tar -C "$STAGE" --null --no-recursion --owner=0 --group=0 --numeric-owner --mtime="1970-01-01 00:00:00 UTC" -T - \
-    -cf - | gzip -9n >"$PACKAGES_DIR/third-party/${asset}"
-echo "==> Built ${PACKAGES_DIR}/third-party/${asset}" >&2
