@@ -59,6 +59,18 @@
 		{
 			"HudRadioMenuMsg"	"ShowMenu"
 			"RadioMenuTimeout"	"4"
+			/**
+			 * The v34 client reads a leading byte in HintText before the
+			 * string (as in SM 1.7.3 and rom4s 1.11); without it nothing
+			 * is shown (PrintHintText, sm_hsay).
+			 */
+			"HintTextPreByte"	"yes"
+			/**
+			 * HudMsg exists in the v34 server_i486.so, as in SM 1.7.3;
+			 * rom4s 1.11 commented this key out. Whether the v34 client
+			 * draws it is not verified yet (docs/PATCHES.md, "CS:S v34
+			 * gamedata").
+			 */
 			"HudTextMsg"		"HudMsg"
 			"GameExtension"	"game.cstrike"
 		}
