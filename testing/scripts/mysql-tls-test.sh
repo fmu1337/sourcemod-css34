@@ -134,7 +134,7 @@ ENTRIES="${entries}" awk '
   { lines[NR] = $0 }
   END {
     last = 0
-    for (i = NR; i > 0; i--) if (lines[i] ~ /^[[:space:]]*}[[:space:]]*$/) { last = i; break }
+    for (i = NR; i > 0; i--) if (lines[i] ~ /^[ \t]*}[ \t]*$/) { last = i; break }
     if (!last) exit 1
     for (i = 1; i < last; i++) print lines[i]
     printf "%s", ENVIRON["ENTRIES"]

@@ -22,6 +22,40 @@ detect_family() {
   fi
 }
 
+# Flaky mirrors (snapshot.debian.org in particular) drop single index downloads.
+# Retries/Timeout exist in every apt down to Debian 8's apt 1.0.
+configure_apt_network() {
+  mkdir -p /etc/apt/apt.conf.d
+  cat >/etc/apt/apt.conf.d/80css34-network <<'EOF'
+Acquire::Retries "5";
+Acquire::http::Timeout "30";
+Acquire::https::Timeout "30";
+EOF
+}
+
+# apt-get update exits 0 when single indexes fail ("W: Failed to fetch"), which
+# later shows up as "unmet dependencies". Retry such runs, up to 3 attempts.
+apt_update() {
+  local attempt log rc=0
+  log="$(mktemp)"
+  for attempt in 1 2 3; do
+    rc=0
+    apt-get update -y "$@" >"${log}" 2>&1 || rc=$?
+    cat "${log}"
+    if [[ "${rc}" -eq 0 ]] && ! grep -Eq 'Failed to fetch|index files failed to download|Hash Sum mismatch' "${log}"; then
+      rm -f "${log}"
+      return 0
+    fi
+    if [[ "${attempt}" -lt 3 ]]; then
+      echo "apt-get update incomplete (attempt ${attempt}/3, exit ${rc}); retrying in $((attempt * 10))s" >&2
+      sleep $((attempt * 10))
+    fi
+  done
+  rm -f "${log}"
+  echo "WARNING: apt-get update still incomplete after 3 attempts (exit ${rc})" >&2
+  return "${rc}"
+}
+
 fix_ubuntu_archives() {
   # shellcheck disable=SC1091
   . /etc/os-release
@@ -51,10 +85,10 @@ EOF
   # once a suite is removed. 18.04 is on archive.ubuntu.com.
   rm -f /etc/apt/sources.list.d/* || true
   write_ubuntu_sources archive.ubuntu.com
-  if ! apt-get update -y; then
+  if ! apt_update; then
     echo "archive.ubuntu.com failed for ${codename}; trying old-releases.ubuntu.com"
     write_ubuntu_sources old-releases.ubuntu.com
-    apt-get update -y || apt-get update -y --allow-unauthenticated
+    apt_update || apt_update --allow-unauthenticated
   fi
 }
 
@@ -123,11 +157,12 @@ apt_install() {
 
 install_debian() {
   export DEBIAN_FRONTEND=noninteractive
+  configure_apt_network
   fix_ubuntu_archives
   fix_debian_archives
   dpkg --add-architecture i386 || true
   rm -rf /var/lib/apt/lists/* 2>/dev/null || true
-  apt-get update -y || apt-get update -y --allow-unauthenticated
+  apt_update || apt_update --allow-unauthenticated
 
   local pkgs=(
     ca-certificates curl wget unzip bzip2 file procps expect git python3 binutils
@@ -160,8 +195,18 @@ fix_centos_vault() {
   fi
 }
 
+configure_rhel_network() {
+  local conf
+  for conf in /etc/yum.conf /etc/dnf/dnf.conf; do
+    [[ -f "${conf}" ]] || continue
+    grep -q '^retries=' "${conf}" || sed -i '0,/^\[main\]/s//[main]\nretries=5/' "${conf}"
+    grep -q '^timeout=' "${conf}" || sed -i '0,/^\[main\]/s//[main]\ntimeout=30/' "${conf}"
+  done
+}
+
 install_rhel() {
   fix_centos_vault
+  configure_rhel_network
   local pkgs=(glibc.i686 libstdc++.i686 zlib.i686 ca-certificates unzip bzip2 file procps-ng expect git python3 binutils)
   if command -v dnf >/dev/null 2>&1; then
     # Align x86_64 runtime with the i686 packages we are about to install.

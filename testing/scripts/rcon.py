@@ -34,6 +34,6 @@ for n, cmd in enumerate(sys.argv[3:], start=10):
             out += b
     except socket.timeout:
         # changelevel / quit can keep the server busy past the socket timeout
-        print(f'>>> {cmd}\n(no reply)', flush=True)
+        print('>>> {0}\n(no reply)'.format(cmd), flush=True)
         break
-    print(f'>>> {cmd}\n{out}', flush=True)
+    print('>>> {0}\n{1}'.format(cmd, out), flush=True)
