@@ -236,6 +236,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
           name: windows-smoke-${{ matrix.line }}
           path: |
             .ci-winserver/cstrike/console.log
@@ -329,6 +331,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
           name: wine-smoke-${{ matrix.line }}
           path: |
             .ci-winserver/wine.log
@@ -440,6 +444,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
           name: smoke-logs-${{ matrix.line }}-${{ strategy.job-index }}
           path: |
             .ci-server/smoke.log
@@ -559,6 +565,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
           name: botplay-logs-${{ matrix.line }}-${{ strategy.job-index }}
           path: |
             .ci-server/botplay-report.json
@@ -642,6 +650,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
           name: host-checks-logs-${{ matrix.line }}
           path: |
             .ci-server/smoke.log

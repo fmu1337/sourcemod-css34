@@ -406,6 +406,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
           name: release-smoke-logs-${{ needs.resolve-line.outputs.css34_line }}-${{ strategy.job-index }}
           retention-days: 7
           path: |
@@ -495,6 +497,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # the logs live under dot directories (.ci-server, .ci-winserver), which upload-artifact skips by default
+          include-hidden-files: true
           name: release-botplay-logs-${{ matrix.line }}
           retention-days: 7
           path: |
