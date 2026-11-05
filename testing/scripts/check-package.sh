@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
 # Static checks on a SourceMod css34 package before/without a full server boot.
+#
+# HOTFIX_DIR (optional): a frozen line's hotfix tree (hotfixes/<line>/, laid out
+# like cstrike/, docs/FREEZE.md), copied over the package first, as users
+# install it. Its gamedata overrides (<name>.games/custom/*.txt) then count.
 set -euo pipefail
 
 SM_PACKAGE="${SM_PACKAGE:?SM_PACKAGE is required}"
+HOTFIX_DIR="${HOTFIX_DIR:-}"
 TMP="$(mktemp -d)"
 cleanup() { rm -rf "${TMP}"; }
 trap cleanup EXIT
 
 tar -xzf "${SM_PACKAGE}" -C "${TMP}"
+gamedata_args=()
+if [[ -n "${HOTFIX_DIR}" ]]; then
+  [[ -d "${HOTFIX_DIR}/addons" ]] || { echo "FAIL: HOTFIX_DIR ${HOTFIX_DIR} has no addons/" >&2; exit 1; }
+  echo "==> Applying hotfix ${HOTFIX_DIR}"
+  cp -R "${HOTFIX_DIR}/." "${TMP}/"
+  gamedata_args+=(--allow-custom)
+fi
 MM_SO="${TMP}/addons/sourcemod/bin/sourcemod_mm_i486.so"
 CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.2.ep1.so"
 if [[ ! -f "${CORE_SO}" ]]; then
@@ -23,7 +35,7 @@ fail=0
 STATIC_SP=0
 
 echo "==> Checking self-contained CS:S v34 gamedata"
-if ! python3 "${REPO_ROOT}/testing/scripts/check-css34-gamedata.py" "${GAMEDATA_ROOT}"; then
+if ! python3 "${REPO_ROOT}/testing/scripts/check-css34-gamedata.py" "${GAMEDATA_ROOT}" ${gamedata_args[@]+"${gamedata_args[@]}"}; then
   fail=1
 fi
 
@@ -90,10 +102,23 @@ else
   echo "FAIL: missing addons/metamod/sourcemod.vdf" >&2
   fail=1
 fi
-if grep -Eq '"DisableAutoUpdate"[[:space:]]+"yes"' "${SM_ROOT}/configs/core.cfg" 2>/dev/null; then
-  echo "OK: core.cfg DisableAutoUpdate=yes"
+# The gamedata auto-updater would write upstream gamedata over the css34 files.
+# Packages from the no-gamedata-updater patch (docs/PATCHES.md) ship neither
+# updater.ext nor webternet.ext and their core never loads updater.ext. Older
+# published packages (frozen sm11, a pointer moved back to an earlier tag) ship
+# both with "DisableAutoUpdate" "yes" in core.cfg.
+mapfile -t updater_exts < <(find "${SM_ROOT}/extensions" \( -name 'updater.ext*' -o -name 'webternet.ext*' \) | sort)
+if (( ${#updater_exts[@]} == 0 )); then
+  if grep -aFq 'updater.ext.' "${CORE_SO}"; then
+    echo "FAIL: ${CORE_SO#"${TMP}"/} still loads updater.ext (no-gamedata-updater patch missing)" >&2
+    fail=1
+  else
+    echo "OK: no gamedata auto-updater (no updater.ext / webternet.ext, core never loads updater.ext)"
+  fi
+elif grep -Eq '"DisableAutoUpdate"[[:space:]]+"yes"' "${SM_ROOT}/configs/core.cfg" 2>/dev/null; then
+  echo "OK: older package: updater.ext shipped, core.cfg DisableAutoUpdate=yes"
 else
-  echo "FAIL: core.cfg does not disable the auto updater" >&2
+  echo "FAIL: ${updater_exts[*]#"${TMP}"/} shipped and core.cfg does not disable the auto updater" >&2
   fail=1
 fi
 while IFS= read -r -d '' bin; do
