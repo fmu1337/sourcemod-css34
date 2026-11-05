@@ -73,6 +73,10 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   only from the `sm11-freeze` tag. The builder (`css34_require_buildable` in `resolve-version.sh`:
   SourceMod 1.12+ only) and `resolve-metamod-pins.py` refuse it; `resolve-version.sh` still resolves its
   pins for smoke expectations. `lines.py check` allows `secondary_metamod` only on a frozen line.
+  A bug in a frozen line does not unfreeze it (`docs/FREEZE.md` "Fixing a frozen line"): a text-only
+  fix (gamedata) ships in `hotfixes/<line>/` as a SourceMod `gamedata/<name>.games/custom/*.txt`
+  override, the packages stay as published (`testing/scripts/test-frozen-hotfixes.py`); a fix in the
+  binaries needs a refreeze (new `-rN` build, freeze tag and input archive).
 - sm11 (D7): primary Metamod is the frozen MM 1.12 (git1227), secondary MM 1.10.7;
   its tag is `1.11.0.6970-mm1.12.0-dual` and `line-sm11-oldstable` also serves MM 1.10.7 as
   `mmsource-legacy-css34-linux.tar.gz` (`lines.py legacy-mm-asset <line>`, `update-line-pointer.sh`

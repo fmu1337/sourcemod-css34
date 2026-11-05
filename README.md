@@ -32,6 +32,22 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 records the sha256 of every file of that release, CI no longer builds it, and it is rebuilt only from the tag
 `sm11-freeze` and the input archive `sm11-freeze-inputs` (`--network none`). `frozen-verify.yml` re-checks the
 published files and smokes the pointer every week.
+
+**sm11 hotfix (install it with the packages).** The frozen SourceMod 1.11 package lacks the gamedata key
+`HintTextPreByte`, so the v34 client shows no `PrintHintText` / `sm_hsay` text (#175). The fix is a SourceMod
+gamedata override in [`hotfixes/sm11-oldstable/`](hotfixes/sm11-oldstable), outside the frozen package:
+
+```bash
+cd /path/to/cstrike
+mkdir -p addons/sourcemod/gamedata/core.games/custom
+curl -fL -o addons/sourcemod/gamedata/core.games/custom/css34-hinttext-prebyte.txt \
+  https://raw.githubusercontent.com/fmu1337/sourcemod-css34/master/hotfixes/sm11-oldstable/addons/sourcemod/gamedata/core.games/custom/css34-hinttext-prebyte.txt
+```
+
+Restart the server. The console then prints
+`[SM] Parsed custom gamedata override file: core.games/custom/css34-hinttext-prebyte.txt`. The override works on both
+Metamod packages of the line, and the other lines ship the key in their packages
+([docs/FREEZE.md](docs/FREEZE.md#fixing-a-frozen-line)).
 What each pointer serves right now (tag, commits, smoke result) is in
 [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json).
 

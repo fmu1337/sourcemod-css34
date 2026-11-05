@@ -97,6 +97,9 @@ on v34 servers: rom4s SM 1.11.0.6522 and SM 1.7.3-stable+5265.
   `1.13.0.7478-mm1.12.0-r6`, confirmed in game; 1.7.3 and rom4s 1.11 have it). The
   gamedata check requires it, and `css34_sm_api_probe` (botplay) hooks `HintText`,
   sends a hint to a bot and requires the first byte to be 1 (`HintText_prebyte`).
+  The frozen `sm11-oldstable` packages (r3) lack it too. They get it from the
+  override `hotfixes/sm11-oldstable/addons/sourcemod/gamedata/core.games/custom/css34-hinttext-prebyte.txt`
+  (`docs/FREEZE.md` "Fixing a frozen line").
 - **`HudTextMsg` "HudMsg"** (same section) is kept as in SM 1.7.3; rom4s 1.11
   shipped it commented out, and its FAQ (hlmod.ru) has admins remove the `//`
   when HUD text does not show. The `HudMsg` usermessage exists in the v34
