@@ -68,7 +68,9 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 - sm11 is **frozen** (T2.7, `docs/FREEZE.md`): `status: frozen`, `releasable: false`, a `frozen`
   block (tag, `sm11-freeze`, `sm11-freeze-inputs`, sha256 of every release asset). CI no longer
   builds it, a new sm11 tag is refused, and `frozen-verify.yml` re-checks its published files weekly
-  (`lines.py frozen-gha`, `testing/scripts/verify-frozen-line.py`). Its dual-core build code (SM 1.11
+  (`lines.py frozen-gha`, `testing/scripts/verify-frozen-line.py`), with the line's text-only
+  hotfix from `hotfixes/<line>/` installed over them (`HOTFIX_DIR`, `check-css34-gamedata.py
+  --allow-custom` for `custom/*.txt` gamedata overrides). Its dual-core build code (SM 1.11
   patcher, `secondary_metamod` builds, the rom4s hl2sdk-ep1c SDK) left master with T3.3: rebuild it
   only from the `sm11-freeze` tag. The builder (`css34_require_buildable` in `resolve-version.sh`:
   SourceMod 1.12+ only) and `resolve-metamod-pins.py` refuse it; `resolve-version.sh` still resolves its
