@@ -82,6 +82,44 @@ the series on the candidate with `git apply --3way` and names the first patch
 that no longer applies; `--check-pins` checks every series on its own pin and
 the MM 1.10 bridge patcher on the bridge pin.
 
+## CS:S v34 gamedata
+
+The package ships its own gamedata (`builder/assets/gamedata/`, checked by
+`testing/scripts/check-css34-gamedata.py`); it is compared with the sets that run
+on v34 servers: rom4s SM 1.11.0.6522 and SM 1.7.3-stable+5265.
+
+- **`HintTextPreByte` "yes"** (`core.games/common.games.txt`, `cstrike` Keys).
+  `CHalfLife2::HintTextMsg` writes a leading `0x01` before the string only with
+  this key. The v34 client expects it: without it `PrintHintText`,
+  `PrintHintTextToAll` and `sm_hsay` show nothing (missing from
+  `1.13.0.7478-mm1.12.0-r6`, confirmed in game; 1.7.3 and rom4s 1.11 have it). The
+  gamedata check requires it, and `css34_sm_api_probe` (botplay) hooks `HintText`,
+  sends a hint to a bot and requires the first byte to be 1 (`HintText_prebyte`).
+- **`HudTextMsg` "HudMsg"** (same section) is kept as in SM 1.7.3; rom4s 1.11
+  shipped it commented out, and its FAQ (hlmod.ru) has admins remove the `//`
+  when HUD text does not show. The `HudMsg` usermessage exists in the v34
+  `server_i486.so`. **ClientMod draws it; the stock v34 client does not, or not
+  always.** With the key `ShowHudText` / `ShowSyncHudText` report support for every
+  client, so plugins do not fall back to hint or center text on their own. HUD
+  plugins for v34 (Levels Ranks HUD / Hud Info, ClientMod Show Damage, Shower of
+  Damage) are written for ClientMod; for the stock client a plugin has to choose
+  hint or center text itself. Without the key HUD text works for nobody, so
+  it stays.
+- **No `GetMaxHealth` in `sdkhooks.games/game.cstrike.txt`** (forbidden by the
+  check). `GetMaxHealth` is not virtual on v34: the `_ZTV9CCSPlayer` vtable of
+  build 4044 `server_i486.so` has no `GetMaxHealth` slot, and slot 107 (the
+  offset in 1.7.3 and rom4s 1.11) is
+  `CBaseEntity::NetworkStateChanged_m_iMaxHealth()`, a void network-state stub;
+  only `CPlayerInfo::GetMaxHealth()` exists. A hook there fires on `m_iMaxHealth`
+  writes, not on max health queries, with a garbage `maxhealth` argument. So `SDKHook(client, SDKHook_GetMaxHealth, ...)`
+  now fails with `Hook type not supported on this game` and `SDKHookEx` returns
+  false (`SDKHookEx_GetMaxHealth_unsupported` in botplay). Plugins that need max
+  health read the `m_iMaxHealth` datamap field. Check with
+  `testing/scripts/check-css34-vtables.py <server_i486.so> --dump _ZTV9CCSPlayer`.
+- `VPhysicsUpdate.linux` is 143 (as in 1.11; 131 in 1.7.3 is
+  `GetAttackDamageScale`), and `UseInvalidUniverseInSteam2IDs` 1 gives
+  `STEAM_0:` SteamIDs as in 1.11.
+
 ## sm13 PostgreSQL explicit_bzero (temporary)
 
 The sm13 series (`sourcemod/0002-glibc217-database-imports`) adds a Linux C

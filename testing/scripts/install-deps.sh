@@ -112,8 +112,11 @@ deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bul
 deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye-updates main contrib non-free
 deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${snap} bullseye-security main contrib non-free
 EOF
+      # snapshot.debian.org (behind a CDN) answers single requests with 503/504
+      # during incidents; apt retries each download instead of failing the job.
       cat >/etc/apt/apt.conf.d/99snapshot <<EOF
 Acquire::Check-Valid-Until "false";
+Acquire::Retries "10";
 EOF
       ;;
     jessie|stretch|buster)

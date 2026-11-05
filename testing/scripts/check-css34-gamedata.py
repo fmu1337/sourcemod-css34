@@ -53,8 +53,14 @@ REQUIRED = {
 # These SDKHooks entries were present in the historical 1.12.0.7245 package,
 # but do not describe the CSS v34 server vtable.  VPhysicsUpdate slot 131 is
 # GetAttackDamageScale on v34; GetMaxHealth is non-virtual and therefore must
-# not be used as a vtable offset.
+# not be used as a vtable offset (CCSPlayer slot 107, the old offset, is
+# CBaseEntity::NetworkStateChanged_m_iMaxHealth(); docs/PATCHES.md).
 REQUIRED_PATTERNS = {
+    # The v34 client expects a leading byte in HintText (SM 1.7.3, rom4s 1.11);
+    # core reads this key only from the "cstrike" section.
+    'core.games/common.games.txt': (
+        r'"cstrike"\s*\{\s*"Keys"\s*\{[^}]*"HintTextPreByte"\s*"yes"',
+    ),
     'sdkhooks.games/game.cstrike.txt': (
         r'"VPhysicsUpdate"\s*\{[^}]*"windows"\s*"142"[^}]*"linux"\s*"143"',
     ),
@@ -79,7 +85,6 @@ UNSUPPORTED_SOURCE_KEYS = {
     'EntityListenersPtr',
     'GetItemDefintionByName',
     'GetItemInLoadout',
-    'HintTextPreByte',
     'ItemDefHashOffset',
     'LoadoutSlotOffset',
     'MTUPatchSize',
