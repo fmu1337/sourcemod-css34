@@ -114,3 +114,64 @@ hand-written link line. No rpath is needed: the dynamic linker reuses the
 `tier0_i486.so` srcds has already loaded. Or drop `Msg` and log through SourceMod
 (`smutils->LogMessage(myself, ...)`, `smutils->LogError(myself, ...)`). A stub such as
 `-DMsg=nb_Msg` only hides the messages.
+
+## Third-party extensions
+
+Built in CI against a line's SourceMod tree, in the release image, then checked and
+smoke-tested on `srcds`. They land in `packages/third-party/` and are **not** part of
+the SourceMod package or of a release.
+
+| Extension | Upstream (pinned) | Lines | Archive in `packages/third-party/` | CI |
+|-----------|-------------------|-------|------------------------------------|----|
+| Socket 3.0.2 (`socket.ext.so`, legacy natives `SocketCreate`, `SocketConnect`, `SocketSend`, `SocketSetArg`, ... and the `Socket` methodmap) | [JoinedSenses/sm-ext-socket](https://github.com/JoinedSenses/sm-ext-socket) `f699399524dd`, boost 1.83.0 headers (asio) | `sm13-latest` (API 11) | `socket-3.0.2-gitf699399-sm13-latest-linux.tar.gz`: `extensions/socket.ext.so`, `scripting/include/socket.inc`, `licenses/socket/` (GPL `LICENSE`, `css34-socket.json`) | `build-linux`: build + `check-third-party.sh`; `smoke`: `socket-ext-test.sh` |
+
+Pins live in `builder/third-party/socket.env`: the upstream commit with a sha256 over its
+tracked files (`git ls-files -z | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum`), and
+the boost tarball, fetched with `fetch_pinned` (sha256
+`6478edfe2f3305127cffe8caf73ea0176c53769f4bf1585be237eb30798c3b8e`). `SOCKET_LINES` names
+the lines it is built for; another line is one more word there, and gets its own binary
+(one `.so` per line, see the top of this page).
+
+Build it after the line's package build (`builder/third-party/socket.sh` refuses a
+`sourcemod/` tree that is not at the line's pin):
+
+```bash
+CSS34_LINE=sm13-latest builder/docker/build.sh
+CSS34_LINE=sm13-latest builder/third-party/build.sh socket
+```
+
+What `builder/third-party/socket.sh` does to the pinned source, inside the
+manylinux2014 i686 image (devtoolset-10 GCC 10.2.1, glibc 2.17):
+
+- `sdk/smsdk_ext.h` / `.cpp` come from the line's `sourcemod/public` (upstream's
+  `smsdk_config.h` stays: name `Socket`, version `3.0.2`), so `GetExtensionVersion()`
+  returns the line's extension API.
+- `boost::thread`, `boost::mutex`, `boost::shared_mutex` and their locks become C++17
+  `std::thread`, `std::mutex`, `std::shared_mutex`, `std::unique_lock`, `std::shared_lock`
+  (`<thread> <mutex> <shared_mutex>`); asio, `boost::bind` and `boost::system` stay
+  header-only (`-DBOOST_BIND_GLOBAL_PLACEHOLDERS -DBOOST_ASIO_NO_TS_EXECUTORS
+  -DBOOST_ERROR_CODE_HEADER_ONLY -DBOOST_SYSTEM_NO_DEPRECATED`). No boost library is
+  compiled or linked.
+- `Extension.cpp Socket.cpp SocketHandler.cpp Callback.cpp CallbackHandler.cpp
+  sdk/smsdk_ext.cpp` with `-std=c++17 -O2 -fPIC -fvisibility=hidden`, linked `-shared
+  -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,-z,defs -lpthread`. The
+  extension calls no tier0 function, so it needs no SDK.
+- The probe plugin `testing/plugins/css34_socket_probe.sp` is compiled with the line's
+  `spcomp` into `packages/test-plugins/css34_socket_probe.smx` (never released).
+
+`testing/scripts/check-third-party.sh <archive>` applies the package rules of
+`check-package.sh`: ELF32 i386, GLIBC ≤ 2.17, no `libstdc++.so.6` / `libgcc_s.so.1` in
+`NEEDED`, no `TEXTREL`, `GetSMExtAPI` as the only export (no `std::` / `boost::` leak),
+unversioned imports only from `testing/unversioned-imports.txt`; with `SM_PACKAGE` the
+manifest's line, SourceMod commit and extension API must match that package.
+
+`testing/scripts/socket-ext-test.sh` (smoke, every `sm13-latest` row) unpacks the
+archive into the server, boots `srcds` on `127.0.0.1:27015` and over RCON requires
+`[SM] Loaded extension socket.ext.so successfully` from `sm exts load socket.ext`,
+`Socket (3.0.2)` in `sm exts list`, and from `css34_socket_probe` (UDP A2S_INFO to
+`127.0.0.1:27015` through `SocketCreate` / `SocketSetArg` / `SocketConnect` /
+`SocketSend`) a reply of type `0x49` naming the server.
+
+Not covered: Windows (no `socket.ext.dll`), `sm12-latest`, and frozen-line offline
+rebuilds (the upstream source is a git fetch that `builder/freeze/collect-inputs.sh`
+does not mirror; boost would be served by `fetch_pinned`).

@@ -147,6 +147,25 @@ jobs:
         with:
           line: ${{ matrix.line }}
 
+      # Third-party Socket extension (JoinedSenses/sm-ext-socket) against this
+      # line's SourceMod tree, in the same image; packages/third-party/, not part
+      # of the SourceMod package. Lines: SOCKET_LINES in builder/third-party/socket.env.
+      - name: Build and check the third-party Socket extension
+        env:
+          CSS34_LINE: ${{ matrix.line }}
+        run: |
+          set -euo pipefail
+          source builder/third-party/socket.env
+          if [[ " ${SOCKET_LINES} " != *" ${CSS34_LINE} "* ]]; then
+            echo "Socket extension is not built for ${CSS34_LINE} (SOCKET_LINES=${SOCKET_LINES})"
+            exit 0
+          fi
+          builder/third-party/build.sh socket
+          source builder/package-paths.sh
+          SM_PACKAGE="$SM_PACKAGE" testing/scripts/check-third-party.sh \
+            "packages/third-party/$(socket_asset_name "$CSS34_LINE")"
+          test -f packages/test-plugins/css34_socket_probe.smx
+
       - name: Cache packages for later jobs
         uses: actions/cache/save@v6
         with:
@@ -392,6 +411,17 @@ jobs:
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
           # T2.9: a PLAPI 11 plugin must run through the nested legacy core that
           # the MM 1.12 package ships next to metamod.2.ep1.
+          # Third-party Socket extension, on the lines it is built for.
+          source builder/third-party/socket.env
+          socket_package=""
+          socket_probe=""
+          if [[ " ${SOCKET_LINES} " == *" ${{ matrix.line }} "* ]]; then
+            socket_package="packages/third-party/$(socket_asset_name "${{ matrix.line }}")"
+            socket_probe="packages/test-plugins/css34_socket_probe.smx"
+            test -f "${socket_package}" && test -f "${socket_probe}"
+            socket_package="/workspace/${socket_package}"
+            socket_probe="/workspace/${socket_probe}"
+          fi
           legacy_probe=""
           if [[ "${LEGACY_BRIDGE}" == 1 ]]; then
             legacy_probe="/workspace/packages/test-plugins/css34_legacy_probe.so"
@@ -405,6 +435,8 @@ jobs:
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
             -e LEGACY_PROBE="${legacy_probe}" \
+            -e SOCKET_PACKAGE="${socket_package}" \
+            -e SOCKET_PROBE="${socket_probe}" \
             -e MYSQL_TLS_CERTS=/workspace/.ci-mysql-tls \
             -e MYSQL_TLS_PROBE=/workspace/packages/test-plugins/css34_mysql_tls_probe \
             -e MM_VERSION_EXPECT \
@@ -434,6 +466,10 @@ jobs:
               # T4.5: TLS through the static OpenSSL of dbi.mysql.ext (skipped
               # when the extension links none) and ssl_mode / ssl_ca from srcds.
               testing/scripts/mysql-tls-test.sh
+              # sm exts load socket.ext and A2S_INFO over its legacy natives.
+              if [[ -n "${SOCKET_PACKAGE}" ]]; then
+                testing/scripts/socket-ext-test.sh
+              fi
             '
 
       - name: Stop MariaDB and MySQL
@@ -451,6 +487,8 @@ jobs:
             .ci-server/smoke.log
             .ci-server/mysql-tls.log*
             .ci-server/legacy-bridge.log*
+            .ci-server/socket-ext.log*
+            .ci-server/cstrike/addons/sourcemod/logs/css34_socket_probe.log
             .ci-server/console-probe.log
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
