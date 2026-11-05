@@ -52,6 +52,7 @@ docker_cmd run --rm -i --platform linux/386 \
   -v "$PACKAGES_DIR:/workspace/packages" \
   -w /workspace \
   -e CSS34_LINE="${CSS34_LINE}" \
+  -e CSS34_BUILD_IMAGE="${IMAGE}" \
   -e SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT}" \
   -e SOURCEMOD_GIT_REV="${SOURCEMOD_GIT_REV}" \
   -e SOURCEMOD_MAJOR="${SOURCEMOD_MAJOR}" \
