@@ -85,6 +85,35 @@ with a `frozen` block:
   expectations) and `resolve-metamod-pins.py` refuses the line; `lines.py check`
   allows `secondary_metamod` only on a frozen line.
 
+## Fixing a frozen line
+
+A bug found after the freeze does not unfreeze the line: `status` stays `frozen`.
+
+- **A text-only fix** (gamedata keys) ships in `hotfixes/<line>/`, laid out like
+  `cstrike/` and copied over it. A gamedata fix is a SourceMod override in
+  `addons/sourcemod/gamedata/<name>.games/custom/*.txt`. SourceMod parses those
+  files after the shipped ones (`CGameConfig::Reparse`, which logs
+  `[SM] Parsed custom gamedata override file: …`), and a key set there replaces
+  the shipped value. The packages, their sha256 in `lines.json`, the pointer and
+  `frozen-verify.yml` all stay as they are. `testing/scripts/test-frozen-hotfixes.py`
+  allows `hotfixes/` only for frozen lines, and requires every `core.games` key
+  there to equal the active lines' value in
+  `builder/assets/gamedata/core.games/common.games.txt`.
+  - `sm11-oldstable`: `core.games/custom/css34-hinttext-prebyte.txt`
+    (`HintTextPreByte` `yes`, #175; see `docs/PATCHES.md` "CS:S v34 gamedata").
+    Checked on srcds (centos:7) with the r3 packages, on MM 1.12 (`2.ep1`) and
+    MM 1.10.7 (`1.ep1`). A `HintText` listen hook on a bot sees `0x01` before
+    the string with the override. Without it, the first byte is the string's
+    first character.
+- **A fix in the binaries** needs a refreeze. Make a maintenance branch from
+  `freeze_tag`, where the line's build code still exists, and build a new `-rN`
+  of the same pins from it. Then make a new freeze tag and a new input archive
+  under a new release name: `freeze-inputs.yml` names it `<prefix>-freeze-inputs`
+  today and must not overwrite the archive of the published build. Last, open a
+  master PR that changes only the `frozen` block. Move the pointer only after that
+  PR is merged, or `frozen-verify.yml` fails. The old release is superseded, never
+  deleted.
+
 ## Owner steps
 
 1. Push the freeze tag: `git tag sm11-freeze <commit> && git push origin sm11-freeze`.
