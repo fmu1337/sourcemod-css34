@@ -56,6 +56,42 @@ apt_update() {
   return "${rc}"
 }
 
+# snapshot.debian.org pins (bullseye) must not run on partial indexes: apt-get
+# update exits 0 after "W: Failed to fetch ... Some index files failed to
+# download", and apt-get install then reports a misleading version skew such as
+# "libc6-i386 : Depends: libc6 (= 2.31-13+deb11u11) but ...u14 is to be
+# installed". APT::Update::Error-Mode "any" (apt >= 2.1.16, bullseye has 2.2)
+# makes apt fail itself; the output check also covers apt ignoring that option.
+# Retries with backoff, then exits: there is no silent fallback to deb.debian.org.
+CSS34_APT_SNAPSHOT=""
+SNAPSHOT_UPDATE_ATTEMPTS="${SNAPSHOT_UPDATE_ATTEMPTS:-5}"
+SNAPSHOT_UPDATE_BACKOFF="${SNAPSHOT_UPDATE_BACKOFF:-15}"
+
+apt_update_snapshot() {
+  local attempt log rc delay="${SNAPSHOT_UPDATE_BACKOFF}"
+  log="$(mktemp)"
+  for ((attempt = 1; attempt <= SNAPSHOT_UPDATE_ATTEMPTS; attempt++)); do
+    rc=0
+    apt-get update -y -o APT::Update::Error-Mode=any >"${log}" 2>&1 || rc=$?
+    cat "${log}"
+    if [[ "${rc}" -eq 0 ]] && ! grep -Eq '^(W: Failed to fetch|E:)' "${log}"; then
+      rm -f "${log}"
+      return 0
+    fi
+    if [[ "${attempt}" -lt "${SNAPSHOT_UPDATE_ATTEMPTS}" ]]; then
+      echo "apt-get update against snapshot.debian.org incomplete (attempt ${attempt}/${SNAPSHOT_UPDATE_ATTEMPTS}, exit ${rc}); retrying in ${delay}s" >&2
+      sleep "${delay}"
+      delay=$((delay * 2))
+    fi
+  done
+  echo "ERROR: snapshot.debian.org unreachable: apt-get update failed to fetch indexes for snapshot ${CSS34_APT_SNAPSHOT} after ${SNAPSHOT_UPDATE_ATTEMPTS} attempts (last exit ${rc})." >&2
+  echo "ERROR: failed indexes:" >&2
+  grep -E '^(W: Failed to fetch|E:)' "${log}" | sed 's/^/ERROR:   /' >&2 || true
+  echo "ERROR: not falling back to deb.debian.org (the snapshot pin is required); re-run once snapshot.debian.org recovers." >&2
+  rm -f "${log}"
+  exit 1
+}
+
 fix_ubuntu_archives() {
   # shellcheck disable=SC1091
   . /etc/os-release
@@ -106,6 +142,7 @@ fix_debian_archives() {
     bullseye)
       local snap="${BULLSEYE_APT_SNAPSHOT:-20260813T000000Z}"
       echo "Pinning bullseye apt to snapshot.debian.org/${snap}"
+      CSS34_APT_SNAPSHOT="${snap}"
       rm -f /etc/apt/sources.list.d/* || true
       cat >/etc/apt/sources.list <<EOF
 deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${snap} bullseye main contrib non-free
@@ -117,6 +154,7 @@ EOF
       cat >/etc/apt/apt.conf.d/99snapshot <<EOF
 Acquire::Check-Valid-Until "false";
 Acquire::Retries "10";
+APT::Update::Error-Mode "any";
 EOF
       ;;
     jessie|stretch|buster)
@@ -165,7 +203,11 @@ install_debian() {
   fix_debian_archives
   dpkg --add-architecture i386 || true
   rm -rf /var/lib/apt/lists/* 2>/dev/null || true
-  apt_update || apt_update --allow-unauthenticated
+  if [[ -n "${CSS34_APT_SNAPSHOT}" ]]; then
+    apt_update_snapshot
+  else
+    apt_update || apt_update --allow-unauthenticated
+  fi
 
   local pkgs=(
     ca-certificates curl wget unzip bzip2 file procps expect git python3 binutils
