@@ -146,6 +146,8 @@ jobs:
         uses: ./.github/actions/build-linux
         with:
           line: ${{ matrix.line }}
+          # Built dependency prefixes only; release.yml never sets this.
+          deps-cache: 'true'
 
       - name: Cache packages for later jobs
         uses: actions/cache/save@v6

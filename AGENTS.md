@@ -41,6 +41,17 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   AMBuild, PIC zlib 1.3.1, MySQL / MariaDB SDKs; for sm13's Linux MySQL extension
   static OpenSSL 3.5 LTS and MariaDB Connector/C built from source, see
   `docs/PATCHES.md` "sm13 MySQL dependencies").
+  Each built prefix (`deps/zlib`, `deps/openssl`, the MariaDB connector,
+  `deps/mysql-5.5`) holds a stamp with the digest of its inputs
+  (`builder/deps_cache.py`: build image, deps path, the exact bytes of
+  `checkout-deps.sh`, `fetch-pinned.sh`, `py.sh`, the OpenSSL patcher,
+  `docker/build.sh` and itself); it is reused only when that stamp matches,
+  otherwise rebuilt (`CSS34_DEPS_REBUILD=1` forces it; freeze builds never reuse).
+  CI deps cache: `ci.yml` `build-linux` passes `deps-cache: 'true'` to
+  `.github/actions/build-linux`, which restores/saves only those prefixes with
+  `actions/cache` (key `css34-deps-v1-<line>-sm<SM pin>-<digest>`, from
+  `deps_cache.py key`). `release.yml` and `builder/freeze/` never use it and build
+  them from scratch. Tests: `testing/scripts/test-deps-cache.py`.
   SourceMod is no git submodule (T3.3): `builder/fetch-sourcemod.sh` checks out the
   line's pinned commit into `sourcemod/` (gitignored), resets and cleans it, and
   initializes its own submodules.
