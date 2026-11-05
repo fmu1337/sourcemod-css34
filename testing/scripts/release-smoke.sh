@@ -13,7 +13,10 @@
 #   SUMS_ASSET    checksum file name (default SHA256SUMS; "" to skip)
 #   SERVER_TREE   packed server tree (default server-art/css34-server.tar.gz)
 #   OUT_DIR       download dir (default .ci-release-smoke)
-#   IMAGE         container image (default: pinned botplay image from lines.json)
+#   IMAGE         container image (default: the botplay image from lines.json,
+#                 prebuilt by test-images.yml when lines.json has a current one)
+#   BASE_IMAGE    fallback when IMAGE cannot be pulled (matrix `base_image`)
+#   GHCR_TOKEN    optional ghcr.io token for a private prebuilt image
 #   HOTFIX_DIR    a frozen line's hotfix tree (hotfixes/<line>/, relative to the repo):
 #                 copied over the package for the static checks and over cstrike/
 #                 after the install, as the README tells users (docs/FREEZE.md)
@@ -34,15 +37,10 @@ if [[ -n "${HOTFIX_DIR}" && ! -d "${HOTFIX_DIR}/addons" ]]; then
   exit 1
 fi
 if [[ -z "${IMAGE:-}" ]]; then
-  IMAGE="$(python3 - <<'PY'
-import json
-from pathlib import Path
-data = json.loads(Path("builder/lines.json").read_text(encoding="utf-8"))
-name = data["botplay_image"]
-print(name + "@" + data["images"][name])
-PY
-)"
+  botplay="$(python3 -c 'import json; print(json.load(open("builder/lines.json"))["botplay_image"])')"
+  read -r IMAGE BASE_IMAGE < <(python3 builder/lines.py test-image-ref "${botplay}")
 fi
+IMAGE="$(testing/scripts/pull-test-image.sh "${IMAGE}" "${BASE_IMAGE:-}")"
 echo "==> Release smoke image ${IMAGE}"
 rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}"

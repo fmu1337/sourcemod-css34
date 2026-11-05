@@ -22,6 +22,38 @@ job the plan requires succeeded. Dispatch inputs: `suite` (`pr` / `weekly`) and 
 
 `debian:11` is no longer a per-PR smoke image. The single per-PR botplay run still uses it. Every image above is pinned by digest in `builder/lines.json` (`python3 builder/lines.py gen`).
 
+### Prebuilt test images
+
+Smoke, botplay and frozen-verify containers do not install their runtime on every run.
+`.github/workflows/test-images.yml` builds each image above `FROM <name>@<digest>` with
+`testing/scripts/install-deps.sh` run at build time (`testing/docker/test-image.Dockerfile`)
+and pushes `ghcr.io/fmu1337/css34-test:<slug>-<12 hex of sha256(install-deps.sh, base digest)>`.
+`builder/lines.json` `test_images` records the pushed digests:
+
+```json
+"test_images": {"debian:11": {"ref": "ghcr.io/fmu1337/css34-test@sha256:…", "base": "sha256:<base digest>", "deps_hash": "<sha256 of install-deps.sh>"}}
+```
+
+- `lines.py` puts a current entry into the matrix rows as `image` (with `base_image`, the
+  pinned base, and `prebuilt: "1"`); without one the row runs the base image as before.
+  `lines.py check` refuses entries that are not smoke/botplay images, malformed refs, and
+  entries whose `deps_hash` / `base` no longer match `install-deps.sh` / `images`
+  (`python3 builder/lines.py test-images-prune && python3 builder/lines.py gen`).
+- Jobs still call `install-deps.sh`. In a prebuilt image it finds
+  `/etc/css34-install-deps.sha256` equal to its own sha256 and prints
+  `Dependencies prebuilt in this image (…); nothing to install.` (no apt/yum traffic); in any
+  other image, or with `CSS34_DEPS_FORCE=1`, it installs as before.
+- `testing/scripts/pull-test-image.sh "$IMAGE" "$BASE_IMAGE"` logs in to ghcr.io with
+  `GHCR_TOKEN` (the job's `GITHUB_TOKEN`, `packages: read`), pulls, and falls back to the
+  base image when the prebuilt one cannot be pulled. `release-smoke.sh` does the same
+  (`lines.py test-image-ref <name>` when no `IMAGE` is given).
+- New digests: on master (`install-deps.sh`, the Dockerfile or `lines.json` changed), weekly and on
+  dispatch, the workflow builds what `lines.json` lacks (dispatch `rebuild_all`: everything;
+  weekly: also recorded images that can no longer be pulled) and opens the PR
+  `test-images/update` with the bump GitHub App. On a same-repository PR touching
+  `install-deps.sh` it pushes the images and prints `results.json` in the `record` job;
+  commit it with `python3 builder/lines.py test-images-record results.json && python3 builder/lines.py gen`.
+
 CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` from `build-linux` (handed to later jobs via Actions cache, not artifacts). rom4s reference drops are not used in this workflow.
 
 Packages come from `builder/docker/build.sh` (manylinux2014, glibc 2.17). `debian:latest` remains only on the opt-in reference botplay jobs, and that tag is pinned too.

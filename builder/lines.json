@@ -204,5 +204,62 @@
     "rockylinux:9"
   ],
   "botplay_image": "debian:11",
-  "weekly_botplay_image": "centos:7"
+  "weekly_botplay_image": "centos:7",
+  "test_images": {
+    "centos:7": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:25497b0e04f8f35c1ed6b5e4d51d9f966f984731c99e03dc889fa7ce8e7fc126",
+      "base": "sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "debian:10": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:361aebd7f9d8f900ae8711a6cf4be03908b9017b46ea6a2351566f334667418a",
+      "base": "sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "debian:11": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:2dba0e2fdf5fe4bbcc3bdfbbe23e8c743b472eba0c831f07ba659258ae5b0f78",
+      "base": "sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "debian:13": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:723c640897b35fdf75b4ae51773dc03e2a6da06ac863b4ad5ff952962e4a4cfc",
+      "base": "sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "debian:8": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:b33be5b7ae2dd8c8a7654763e2306fbf9c3d166a78379692c1480d1db035bbb8",
+      "base": "sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "debian:9": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:158f7cf338530987db570cc26e3dace0c2f18f35f24296e415bd979776b1a12c",
+      "base": "sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "rockylinux:9": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:b97aa5dc3cae702e8416dfbc364a22b86b781c4f280eeb42b8b4fdc4d8e213c7",
+      "base": "sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "ubuntu:14.04": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:e57214d6e55bbc34c92f790a990d3aed4dbe9c8ee686e1fde0ac367a177b6267",
+      "base": "sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "ubuntu:16.04": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:42ddfbf80d3c17a90d6e04df9b5ecec618145adcdb6090a45f709844f0fe414d",
+      "base": "sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "ubuntu:18.04": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:7e469372300e41e91a65699e1ffda26ee05773af478baf80070a23b69421085b",
+      "base": "sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    },
+    "ubuntu:24.04": {
+      "ref": "ghcr.io/fmu1337/css34-test@sha256:87d6e2e657305f9e8c83d889ae97f08a7889fd0b41596d477869f4b8a0340cd7",
+      "base": "sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+      "deps_hash": "e546f5b4176edf5c3b815fd13c57113cc8a725ca0aeb7a0861315fa1716fc908"
+    }
+  }
 }

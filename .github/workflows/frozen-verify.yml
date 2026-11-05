@@ -20,6 +20,8 @@ on:
 
 permissions:
   contents: read
+  # Pull the prebuilt smoke images (test-images.yml) from ghcr.io.
+  packages: read
 
 concurrency:
   group: frozen-verify-${{ github.ref }}
@@ -76,6 +78,8 @@ jobs:
         env:
           BASE_URL: https://github.com/${{ github.repository }}/releases/download/line-${{ matrix.line }}
           IMAGE: ${{ matrix.image }}
+          BASE_IMAGE: ${{ matrix.base_image }}
+          GHCR_TOKEN: ${{ github.token }}
           SM_ASSET: sourcemod-css34-linux.tar.gz
           POINTER_ASSETS: ${{ matrix.pointer_assets }}
           LINE: ${{ matrix.line }}
