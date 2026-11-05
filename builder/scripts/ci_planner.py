@@ -25,6 +25,16 @@ from builder.lines import load_manifest, ci_matrix
 SUITES = ("pr", "weekly")
 # Matrices the workflow consumes, by plan output name.
 OUTPUT_MATRICES = ("build", "smoke", "botplay", "windows")
+# The fields a matrix output keeps, so GitHub's default job names read
+# "smoke (sm13-latest, centos:7)"; the jobs read every other field of their row
+# from the `rows` output (row_key()). A job-level `name:` with ${{ matrix.* }}
+# would show unevaluated when the job is skipped.
+MATRIX_IDENTITY = {
+    "build": ("line",),
+    "windows": ("line",),
+    "smoke": ("line", "image_name"),
+    "botplay": ("line", "image_name"),
+}
 
 
 def parse_bool(val):
@@ -47,6 +57,26 @@ def filter_matrix_for_line(matrices, css34_line):
         else:
             filtered[key] = val
     return filtered
+
+
+def row_key(matrix, row):
+    """Key of a full matrix row in the `rows` output: 'smoke|<line>|<image_name>'."""
+    return "|".join([matrix] + [row[field] for field in MATRIX_IDENTITY[matrix]])
+
+
+def identity_matrices(selected):
+    """Identity-only matrices and the full rows by row_key(); keys must be unique."""
+    identity = {}
+    rows = {}
+    for matrix in OUTPUT_MATRICES:
+        identity[matrix] = []
+        for row in selected[matrix]:
+            key = row_key(matrix, row)
+            if key in rows:
+                raise ValueError(f"duplicate {matrix} matrix row: {key}")
+            rows[key] = row
+            identity[matrix].append({field: row[field] for field in MATRIX_IDENTITY[matrix]})
+    return identity, rows
 
 
 def plan_ci(event_name, code_changed, inputs=None, lines_path=None, pins_changed=False):
@@ -113,6 +143,8 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None, pins_changed
         if run_wine:
             required_jobs.append("wine-smoke")
 
+    identity, rows = identity_matrices(selected)
+
     return {
         "event_name": event_name,
         "code_changed": code_changed,
@@ -124,6 +156,8 @@ def plan_ci(event_name, code_changed, inputs=None, lines_path=None, pins_changed
         "default_line": lines_data["default_line"],
         "required_jobs": required_jobs,
         "matrices": selected,
+        "identity": identity,
+        "rows": rows,
     }
 
 
@@ -159,8 +193,11 @@ def main():
     if args.gha or not args.json:
         for key in OUTPUT_MATRICES:
             print(f"{key}<<EOF")
-            print(json.dumps(plan["matrices"][key], separators=(",", ":")))
+            print(json.dumps(plan["identity"][key], separators=(",", ":")))
             print("EOF")
+        print("rows<<EOF")
+        print(json.dumps(plan["rows"], separators=(",", ":"), sort_keys=True))
+        print("EOF")
 
         for flag in ("run_code_jobs", "run_check_pins", "run_windows", "run_wine"):
             print(f"{flag}={'true' if plan[flag] else 'false'}")

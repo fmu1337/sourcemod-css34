@@ -14,6 +14,9 @@ Verifies:
 - Empty Windows matrix, lines.json additions
 - ci.yml wiring: every job the planner can require exists and is a gate need, the
   host regression runner discovers every testing/scripts/test-* script
+- Job names: matrices hold only line / image_name (GitHub's default job names),
+  every other field comes from the `rows` output; no job-level `name:` holds an
+  expression (a skipped job would show it unevaluated)
 """
 
 import importlib.util
@@ -180,7 +183,83 @@ class TestCIPlannerGate(unittest.TestCase):
         self.assertIn("needs.plan.outputs.run_windows == 'true'", jobs["build-windows"])
         # Every matrix the jobs read is a plan output the planner emits.
         used = set(re.findall(r"fromJSON\(needs\.plan\.outputs\.([a-z_]+)\)", WORKFLOW.read_text()))
-        self.assertEqual(used, set(ci_planner_mod.OUTPUT_MATRICES))
+        self.assertEqual(used, set(ci_planner_mod.OUTPUT_MATRICES) | {"rows"})
+
+    def test_no_job_name_holds_an_expression(self):
+        """A skipped job shows its `name:` unevaluated ("smoke (${{ matrix.line }}, ...)")."""
+        for wf in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            for line in wf.read_text().splitlines():
+                if line.startswith("    name: ") and "${{" in line:
+                    # frozen-verify's verify job always runs (sm11 is frozen).
+                    if wf.name == "frozen-verify.yml":
+                        continue
+                    self.fail("{}: job-level name with an expression: {}".format(wf.name, line.strip()))
+        # Matrix jobs take GitHub's default name "<job> (<identity values>)".
+        for name, job in workflow_jobs().items():
+            if "    strategy:\n" in job:
+                self.assertNotRegex(job, r"(?m)^    name: ", name)
+
+    def test_matrices_hold_identity_and_rows_hold_the_rest(self):
+        jobs = workflow_jobs()
+        identity = ci_planner_mod.MATRIX_IDENTITY
+        self.assertEqual(set(identity), set(ci_planner_mod.OUTPUT_MATRICES))
+        for event, inputs in (("pull_request", {}), ("schedule", {})):
+            plan = plan_ci(event_name=event, code_changed="true", inputs=inputs)
+            for matrix, rows in plan["matrices"].items():
+                self.assertEqual(
+                    plan["identity"][matrix],
+                    [{f: r[f] for f in identity[matrix]} for r in rows], matrix)
+                for row in rows:
+                    self.assertIs(plan["rows"][ci_planner_mod.row_key(matrix, row)], row)
+        # Each matrix job looks its row up by the planner's key and only reads
+        # fields its rows carry; matrix.* is only an identity field.
+        wiring = {
+            "build-windows": ("windows", "format('windows|{0}', matrix.line)"),
+            "wine-smoke": ("windows", "format('windows|{0}', matrix.line)"),
+            "smoke": ("smoke", "format('smoke|{0}|{1}', matrix.line, matrix.image_name)"),
+            "botplay": ("botplay", "format('botplay|{0}|{1}', matrix.line, matrix.image_name)"),
+            "host-checks": ("build", "format('build|{0}', matrix.line)"),
+        }
+        for weekly in (False, True):
+            plan = plan_ci(event_name="schedule" if weekly else "pull_request", code_changed="true")
+            for job, (matrix, key) in wiring.items():
+                text = jobs[job]
+                self.assertIn("include: ${{{{ fromJSON(needs.plan.outputs.{}) }}}}".format(matrix), text, job)
+                self.assertIn("CI_ROW: ${{{{ toJSON(fromJSON(needs.plan.outputs.rows)[{}]) }}}}".format(key), text, job)
+                fields = set(re.findall(r"fromJSON\(env\.CI_ROW\)\.([a-z_]+)", text))
+                self.assertTrue(fields, job)
+                for row in plan["matrices"][matrix]:
+                    self.assertLessEqual(fields, set(row), job)
+                used = set(re.findall(r"matrix\.([a-z_]+)", text))
+                self.assertLessEqual(used, set(identity[matrix]), job)
+        build = jobs["build-linux"]
+        self.assertLessEqual(set(re.findall(r"matrix\.([a-z_]+)", build)), {"line"})
+
+    def test_gha_output_has_identity_matrices_and_rows(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        argv = sys.argv
+        sys.argv = ["ci_planner.py", "--event-name", "pull_request", "--code-changed", "true", "--gha"]
+        try:
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(ci_planner_mod.main(), 0)
+        finally:
+            sys.argv = argv
+        values = dict(re.findall(r"(?ms)^([a-z_]+)<<EOF\n(.*?)\nEOF$", out.getvalue()))
+        plan = plan_ci(event_name="pull_request", code_changed="true")
+        for matrix in ci_planner_mod.OUTPUT_MATRICES:
+            self.assertEqual(json.loads(values[matrix]), plan["identity"][matrix])
+        self.assertEqual(json.loads(values["rows"]), plan["rows"])
+        self.assertEqual(json.loads(values["smoke"])[0],
+                         {"line": MATRIX["debian"][0]["line"], "image_name": MATRIX["debian"][0]["image_name"]})
+
+    def test_duplicate_matrix_rows_are_refused(self):
+        row = dict(MATRIX["debian"][0])
+        selected = {m: [] for m in ci_planner_mod.OUTPUT_MATRICES}
+        selected["smoke"] = [row, dict(row)]
+        with self.assertRaises(ValueError):
+            ci_planner_mod.identity_matrices(selected)
 
     def test_no_dead_skip_steps_or_chmod(self):
         text = WORKFLOW.read_text()
@@ -276,7 +355,7 @@ class TestCIPlannerGate(unittest.TestCase):
             self.assertEqual(row["legacy_bridge"], "1" if bridged else "0", row)
         build_windows = workflow_jobs()["build-windows"]
         self.assertIn("LEGACY_PROBE", build_windows)
-        self.assertIn("matrix.legacy_bridge", build_windows)
+        self.assertIn("fromJSON(env.CI_ROW).legacy_bridge", build_windows)
 
     def test_empty_windows_matrix_support(self):
         """When no lines are windows-eligible, windows matrix is [] and build-windows/wine-smoke are skipped."""
