@@ -63,7 +63,7 @@ rcon() { python3 "${root}/testing/scripts/rcon.py" 127.0.0.1 "${rcon_pw}" "$@"; 
   export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
   exec "${SRCDS_BINARY:-./srcds_i686}" -game cstrike -console -nohltv -nomaster -localcser -tickrate 66 \
     -ip 127.0.0.1 -port "${PORT}" +ip 127.0.0.1 +sv_lan 1 +maxplayers 4 \
-    +hostname css34-socket-probe +rcon_password "${rcon_pw}" +map de_dust2
+    +rcon_password "${rcon_pw}" +map de_dust2
 ) </dev/null >"${session}.console" 2>&1 &
 srcds_pid=$!
 deadline=$((SECONDS + ${SOCKET_TEST_TIMEOUT:-120}))
@@ -85,6 +85,15 @@ until grep -qE '^(PASS|FAIL)' "${results}" 2>/dev/null || (( SECONDS >= probe_de
 done
 {
   rcon "sm plugins list" "sm exts list"
+  # Unloading stops the extension's asio thread; srcds must keep running.
+  rcon "sm plugins unload disabled/css34_socket_probe"
+  ext_id="$(rcon "sm exts list" | sed -nE 's/^\[0*([0-9]+)\] Socket \(.*/\1/p' | head -n1)"
+  if [[ -n "${ext_id}" ]]; then
+    rcon "sm exts unload ${ext_id}"
+  fi
+  sleep 2
+  rcon "echo css34-socket-alive"
+  # srcds v34 also exits with SIGSEGV on quit without this extension.
   rcon "quit" || true
 } >>"${session}" 2>&1
 sleep 3
@@ -98,6 +107,8 @@ cat "${results}" 2>/dev/null || echo "(missing)"
 check '\[SM\] Loaded extension socket\.ext\.so successfully' "${session}" "sm exts load socket.ext"
 check "\\] Socket \\(${SOCKET_VERSION//./\\.}\\)" "${session}" "sm exts list reports Socket (${SOCKET_VERSION})"
 check 'Loaded plugin disabled/css34_socket_probe\.smx successfully' "${session}" "the probe plugin loaded"
+check '\[SM\] Extension socket\.ext\.so is now unloaded' "${session}" "sm exts unload socket.ext"
+check '^css34-socket-alive' "${session}" "srcds still answers after the unload"
 refused='socket\.ext\.so.*(failed to load|too (old|new))|Extension version is too (old|new)'
 if grep -Eq "${refused}" "${session}"; then
   echo "FAIL: SourceMod refused the extension" >&2
@@ -106,7 +117,7 @@ if grep -Eq "${refused}" "${session}"; then
 fi
 if [[ -f "${results}" ]]; then
   check '^PASS reply type 0x49 ' "${results}" "A2S_INFO over socket.ext got a 0x49 reply"
-  check "name=css34-socket-probe\$" "${results}" "the reply names this server"
+  check ' hostname_match=1 ' "${results}" "the reply names this server (hostname)"
   if grep -q '^FAIL' "${results}"; then
     echo "FAIL: probe: $(grep '^FAIL' "${results}" | head -n1)" >&2
     fail=1

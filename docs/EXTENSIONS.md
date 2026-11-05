@@ -154,8 +154,11 @@ manylinux2014 i686 image (devtoolset-10 GCC 10.2.1, glibc 2.17):
   compiled or linked.
 - `Extension.cpp Socket.cpp SocketHandler.cpp Callback.cpp CallbackHandler.cpp
   sdk/smsdk_ext.cpp` with `-std=c++17 -O2 -fPIC -fvisibility=hidden`, linked `-shared
-  -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,-z,defs -lpthread`. The
-  extension calls no tier0 function, so it needs no SDK.
+  -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,-z,defs -lpthread` and a
+  version script that exports `GetSMExtAPI` only: without it the std:: / boost template
+  instantiations that the libstdc++ and asio headers mark visible (240 symbols) end up in
+  the dynamic table. The extension calls no tier0 function, so it needs no SDK. Result:
+  `NEEDED libpthread.so.0 libc.so.6 ld-linux.so.2`, highest symbol version GLIBC_2.16.
 - The probe plugin `testing/plugins/css34_socket_probe.sp` is compiled with the line's
   `spcomp` into `packages/test-plugins/css34_socket_probe.smx` (never released).
 
@@ -170,7 +173,11 @@ archive into the server, boots `srcds` on `127.0.0.1:27015` and over RCON requir
 `[SM] Loaded extension socket.ext.so successfully` from `sm exts load socket.ext`,
 `Socket (3.0.2)` in `sm exts list`, and from `css34_socket_probe` (UDP A2S_INFO to
 `127.0.0.1:27015` through `SocketCreate` / `SocketSetArg` / `SocketConnect` /
-`SocketSend`) a reply of type `0x49` naming the server.
+`SocketSend`) a reply of type `0x49` whose name is the server's `hostname`; then
+`sm exts unload` must unload it (its asio thread stops) with `srcds` still answering.
+Verified on 2026-11-05 on ubuntu:24.04 and in the manylinux2014 image itself (glibc 2.17).
+`srcds_i686` v34 exits with SIGSEGV on `quit` with or without the extension, so the test
+does not check the exit status.
 
 Not covered: Windows (no `socket.ext.dll`), `sm12-latest`, and frozen-line offline
 rebuilds (the upstream source is a git fetch that `builder/freeze/collect-inputs.sh`

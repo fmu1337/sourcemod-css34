@@ -8,7 +8,7 @@
  * SocketSend and waits for the reply in the receive callback. A challenge reply
  * (0x41) is answered once with the challenge appended, as newer engines expect.
  * Results go to addons/sourcemod/logs/css34_socket_probe.log, one line each:
- *   PASS reply type 0x49 bytes=<n> name=<server name>
+ *   PASS reply type 0x49 bytes=<n> port=<port> hostname_match=<0|1> name=<server name>
  *   FAIL <reason>
  * read by testing/scripts/socket-ext-test.sh.
  */
@@ -148,7 +148,10 @@ public void OnSocketReceive(Socket socket, const char[] data, const int size, an
 	// 0x49, protocol byte, then the server name.
 	char name[128];
 	strcopy(name, sizeof(name), data[6]);
-	Result("PASS reply type 0x49 bytes=%d port=%d name=%s", size, port, name);
+	char hostname[128];
+	FindConVar("hostname").GetString(hostname, sizeof(hostname));
+	Result("PASS reply type 0x49 bytes=%d port=%d hostname_match=%d name=%s",
+		size, port, StrEqual(name, hostname) ? 1 : 0, name);
 	Finish();
 }
 

@@ -56,7 +56,7 @@ sm_tree="$(git -C "$SOURCEMOD_DIR" write-tree)"
 SM_PACKAGE_DIR="$SOURCEMOD_DIR/build/package/addons/sourcemod"
 SPCOMP="$SM_PACKAGE_DIR/scripting/spcomp"
 [[ -x "$SPCOMP" ]] || die "no $SPCOMP: run builder/docker/build.sh for ${CSS34_LINE} first"
-ext_api="$(sed -nE 's/^#define[[:space:]]+SMINTERFACE_EXTENSIONAPI_VERSION[[:space:]]+([0-9]+).*/\1/p' \
+ext_api="$(sed -nE 's/^[[:space:]]*#define[[:space:]]+SMINTERFACE_EXTENSIONAPI_VERSION[[:space:]]+([0-9]+).*/\1/p' \
   "$SOURCEMOD_DIR/public/IExtensionSys.h")"
 [[ -n "$ext_api" ]] || die "cannot read SMINTERFACE_EXTENSIONAPI_VERSION"
 
@@ -126,10 +126,14 @@ for src in Extension.cpp Socket.cpp SocketHandler.cpp Callback.cpp CallbackHandl
   objs+=("$obj")
 done
 # Static libstdc++/libgcc (srcds runs on glibc 2.17+ systems with any libstdc++);
-# --exclude-libs keeps their symbols out of the dynamic table; -z defs proves
-# that nothing outside libc/libpthread is imported.
+# --exclude-libs keeps their symbols out of the dynamic table, and the version
+# script also the std:: / boost template instantiations that libstdc++ and asio
+# headers mark visible: SourceMod needs GetSMExtAPI only. -z defs proves that
+# nothing outside libc/libpthread is imported.
+printf '{\n  global: GetSMExtAPI;\n  local: *;\n};\n' >"$OBJ/exports.map"
 "$CXX" -m32 -shared -o "$OBJ/socket.ext.so" "${objs[@]}" \
-  -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,-z,defs -Wl,--as-needed \
+  -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,--version-script="$OBJ/exports.map" \
+  -Wl,-z,defs -Wl,--as-needed \
   -lpthread -lm
 
 echo "==> Compiling css34_socket_probe.smx" >&2
@@ -168,6 +172,9 @@ PY
 mkdir -p "$PACKAGES_DIR/third-party"
 cp -f "$manifest" "$PACKAGES_DIR/third-party/${asset%.tar.gz}.json"
 # Reproducible archive: fixed owner, order and mtime.
-tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' \
-  -C "$STAGE" -czf "$PACKAGES_DIR/third-party/${asset}" addons
+# Reproducible archive: sorted names, fixed owner and mtime, gzip without a
+# timestamp (CentOS 7 tar 1.26 has no --sort).
+(cd "$STAGE" && find addons -print0 | LC_ALL=C sort -z) |
+  tar -C "$STAGE" --null --no-recursion --owner=0 --group=0 --numeric-owner --mtime="1970-01-01 00:00:00 UTC" -T - \
+    -cf - | gzip -9n >"$PACKAGES_DIR/third-party/${asset}"
 echo "==> Built ${PACKAGES_DIR}/third-party/${asset}" >&2
