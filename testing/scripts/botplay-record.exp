@@ -200,6 +200,16 @@ if {[info exists env(DHOOKS_UNLOAD_TEST)] && $env(DHOOKS_UNLOAD_TEST) eq "1"} {
     puts stderr "OK: DHooks unload / reload on a live server"
 }
 
+# Plugin state after the session (runtime <Error>s, legacy plugins still loaded).
+send "sm plugins list\r"
+expect {
+    -re {\[SM\] Listing [0-9]+ plugins:} {}
+    -re {\[SM\] No plugins loaded} {}
+    eof { puts stderr "srcds exited during the final sm plugins list"; exit 6 }
+    timeout {}
+}
+sleep 2
+
 send "status\r"
 expect {
     -re {hostname|# [0-9]+} {}

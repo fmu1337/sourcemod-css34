@@ -478,6 +478,15 @@ elif ! "${ROOT}/testing/scripts/check-upstream-probe.sh" --sm-version "${SM_VERS
   record_failed=1
 fi
 
+# Plugins built by spcomp 1.7.3 / 1.11 (testing/plugins/legacy-smx/) must load
+# and run, and no plugin may fail to load, miss a native or hit a forward
+# argument error.
+if [[ "${INSTALL_BOTPLAY_PLUGINS}" == "1" && "${INSTALL_LEGACY_SMX:-1}" == "1" && "${DISABLE_STOCK_PLUGINS:-0}" != "1" ]]; then
+  if ! "${ROOT}/testing/scripts/check-legacy-plugins.sh" "${BOTPLAY_LOG}" ${sm_probe_sources[@]+"${sm_probe_sources[@]}"}; then
+    record_failed=1
+  fi
+fi
+
 if [[ "${record_failed}" -ne 0 ]]; then
   echo "Botplay test FAILED"
   exit 1
