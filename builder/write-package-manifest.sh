@@ -98,6 +98,20 @@ case "$(basename "$addon_dir")" in
 esac
 [[ -z "$core_fields" ]] || core_fields="${core_fields}"$'\n'
 
+# Bundled third-party extensions (builder/third-party/*.sh write
+# licenses/<name>/css34-<name>.json): name, version and pinned source commit.
+third_party="$(python3 - "$addon_dir" <<'PY'
+import json, pathlib, sys
+items = []
+for m in sorted(pathlib.Path(sys.argv[1]).glob("licenses/*/css34-*.json")):
+    d = json.loads(m.read_text())
+    items.append({k: d[k] for k in ("name", "version", "source", "source_commit")})
+if items:
+    print('  "third_party": ' + json.dumps(items) + ",")
+PY
+)"
+[[ -z "$third_party" ]] || core_fields="${core_fields}${third_party}"$'\n'
+
 mkdir -p "$(dirname "$OUT")"
 cat >"$OUT" <<EOF
 {

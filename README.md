@@ -153,6 +153,12 @@ old plugin, lists that plugin in `meta list` like any other (`meta unload` / `me
 to be deleted. SourceMod extensions that exist only as `*.ext.1.ep1` are a different matter: they need the
 `1.ep1` SourceMod core, which only `sm11-oldstable` on MM 1.10.7 runs.
 
+**Bundled third-party extension**: the `sm13-latest` Linux SourceMod package also ships the Socket extension
+3.0.2 (`extensions/socket.ext.so` + `scripting/include/socket.inc`, JoinedSenses/sm-ext-socket, GPL, legacy
+`SocketCreate` / `SocketConnect` / ... natives), built with the same tree and toolchain. It loads only on demand
+(a plugin that includes `socket.inc`, or `sm exts load socket.ext`). Details: [docs/EXTENSIONS.md](docs/EXTENSIONS.md)
+"Third-party extensions".
+
 ## Releases
 
 A tag pins one SM + MM pair; never mix Metamod from one tag with SourceMod from another.

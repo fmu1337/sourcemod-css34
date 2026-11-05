@@ -114,3 +114,67 @@ hand-written link line. No rpath is needed: the dynamic linker reuses the
 `tier0_i486.so` srcds has already loaded. Or drop `Msg` and log through SourceMod
 (`smutils->LogMessage(myself, ...)`, `smutils->LogError(myself, ...)`). A stub such as
 `-DMsg=nb_Msg` only hides the messages.
+
+## Third-party extensions
+
+Built against a line's SourceMod tree in the release image during the package build
+(`builder/run/linux.sh`, after `ambuild`, before `package.sh`) and shipped **inside**
+that line's Linux SourceMod package, so every release of the line carries them. They are
+not loaded at boot: an extension loads when a plugin needs it or with `sm exts load`.
+
+| Extension | Upstream (pinned) | Lines (Linux package) | Files in the package | Checked by |
+|-----------|-------------------|-----------------------|----------------------|------------|
+| Socket 3.0.2 (`socket.ext.so`, legacy natives `SocketCreate`, `SocketConnect`, `SocketSend`, `SocketSetArg`, ... and the `Socket` methodmap) | [JoinedSenses/sm-ext-socket](https://github.com/JoinedSenses/sm-ext-socket) `f699399524dd`, boost 1.83.0 headers (asio) | `sm13-latest` (API 11) | `extensions/socket.ext.so`, `scripting/include/socket.inc`, `licenses/socket/LICENSE` (GPL), `licenses/socket/css34-socket.json` | `check-third-party.sh` (from `check-package.sh`), smoke `socket-ext-test.sh` |
+
+`css34-package.json` lists them under `third_party` (name, version, source, commit).
+
+Pins live in `builder/third-party/socket.env`: the upstream commit with a sha256 over its
+tracked files (`git ls-files -z | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum`), and
+the boost tarball, fetched with `fetch_pinned` (sha256
+`6478edfe2f3305127cffe8caf73ea0176c53769f4bf1585be237eb30798c3b8e`). The source is
+cloned into `deps/sm-ext-socket` with `origin` set, so `builder/freeze/collect-inputs.sh`
+mirrors it like the other dependencies and an offline rebuild works. `SOCKET_LINES`
+names the lines that bundle it; another line is one more word there and gets its own
+binary (one `.so` per line, see the top of this page).
+
+What `builder/third-party/socket.sh` does to the pinned source:
+
+- `sdk/smsdk_ext.h` / `.cpp` come from the line's `sourcemod/public` (upstream's
+  `smsdk_config.h` stays: name `Socket`, version `3.0.2`), so `GetExtensionVersion()`
+  returns the line's extension API.
+- `boost::thread`, `boost::mutex`, `boost::shared_mutex` and their locks become C++17
+  `std::thread`, `std::mutex`, `std::shared_mutex`, `std::unique_lock`, `std::shared_lock`
+  (`<thread> <mutex> <shared_mutex>`); asio, `boost::bind` and `boost::system` stay
+  header-only (`-DBOOST_BIND_GLOBAL_PLACEHOLDERS -DBOOST_ASIO_NO_TS_EXECUTORS
+  -DBOOST_ERROR_CODE_HEADER_ONLY -DBOOST_SYSTEM_NO_DEPRECATED`). No boost library is
+  compiled or linked.
+- `Extension.cpp Socket.cpp SocketHandler.cpp Callback.cpp CallbackHandler.cpp
+  sdk/smsdk_ext.cpp` with `-std=c++17 -O2 -fPIC -fvisibility=hidden`, linked `-shared
+  -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,-z,defs -lpthread` and a
+  version script that exports `GetSMExtAPI` only: without it the std:: / boost template
+  instantiations that the libstdc++ and asio headers mark visible (240 symbols) end up in
+  the dynamic table. The extension calls no tier0 function, so it needs no SDK. Result:
+  `NEEDED libpthread.so.0 libc.so.6 ld-linux.so.2`, highest symbol version GLIBC_2.16.
+- The probe plugin `testing/plugins/css34_socket_probe/css34_socket_probe.sp` is compiled with the line's
+  `spcomp` into `packages/test-plugins/css34_socket_probe.smx` (never released).
+
+`testing/scripts/check-third-party.sh <sm package>`, run by `check-package.sh`, takes
+the files each `licenses/*/css34-*.json` lists and applies the package ELF rules (ELF32
+i386, GLIBC ≤ 2.17, no `libstdc++.so.6` / `libgcc_s.so.1` in `NEEDED`, unversioned
+imports only from `testing/unversioned-imports.txt`) plus: no `TEXTREL`, `GetSMExtAPI`
+as the only export (no `std::` / `boost::` leak), the manifest's line, SourceMod commit
+and extension API equal to the package's, and Socket at its pin in every package of a
+`SOCKET_LINES` line.
+
+`testing/scripts/socket-ext-test.sh` (smoke, every `sm13-latest` row) boots `srcds` on
+`127.0.0.1:27015` with the installed package and over RCON requires
+`[SM] Loaded extension socket.ext.so successfully` from `sm exts load socket.ext`,
+`Socket (3.0.2)` in `sm exts list`, and from `css34_socket_probe` (UDP A2S_INFO to
+`127.0.0.1:27015` through `SocketCreate` / `SocketSetArg` / `SocketConnect` /
+`SocketSend`) a reply of type `0x49` whose name is the server's `hostname`; then
+`sm exts unload` must unload it (its asio thread stops) with `srcds` still answering.
+Verified on 2026-11-05 on ubuntu:24.04 and in the manylinux2014 image itself (glibc 2.17).
+`srcds_i686` v34 exits with SIGSEGV on `quit` with or without the extension, so the test
+does not check the exit status.
+
+Not covered: the Windows zips (no `socket.ext.dll`) and `sm12-latest`.
