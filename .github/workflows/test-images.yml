@@ -56,6 +56,8 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       build: ${{ steps.plan.outputs.build }}
+      # Full rows by image name; `build` holds only the names (job names).
+      rows: ${{ steps.plan.outputs.rows }}
       count: ${{ steps.plan.outputs.count }}
       push: ${{ steps.plan.outputs.push }}
     steps:
@@ -89,8 +91,18 @@ jobs:
           print(json.dumps([r for r in rows if r["build"]], separators=(",", ":")))
           PY
           count="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' build.json)"
+          # The matrix keeps only `name`, so the jobs are named "build (<name>)"
+          # by GitHub, and just "build" when skipped; the rest comes from `rows`.
+          python3 - <<'PY' > rows.json
+          import json
+          build = json.load(open("build.json"))
+          rows = {r["name"]: r for r in build}
+          assert len(rows) == len(build), "duplicate image names in the plan"
+          print(json.dumps(rows, separators=(",", ":"), sort_keys=True))
+          PY
           {
-            echo "build=$(cat build.json)"
+            echo "build=$(python3 -c 'import json,sys; print(json.dumps([{"name": r["name"]} for r in json.load(open(sys.argv[1]))], separators=(",", ":")))' build.json)"
+            echo "rows=$(cat rows.json)"
             echo "count=${count}"
             echo "push=${SAME_REPO}"
           } >> "$GITHUB_OUTPUT"
@@ -110,7 +122,6 @@ jobs:
           echo "${count} image(s) to build"
 
   build:
-    name: build (${{ matrix.name }})
     needs: plan
     if: needs.plan.outputs.count != '0'
     runs-on: ubuntu-22.04
@@ -119,14 +130,17 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.build) }}
+    env:
+      # This image's row of the plan
+      CI_ROW: ${{ toJSON(fromJSON(needs.plan.outputs.rows)[matrix.name]) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Build ${{ matrix.tag }} from ${{ matrix.name }}
+      - name: Build ${{ fromJSON(env.CI_ROW).tag }} from ${{ matrix.name }}
         env:
-          BASE: ${{ matrix.base }}
-          DEST: ${{ matrix.repo }}:${{ matrix.tag }}
+          BASE: ${{ fromJSON(env.CI_ROW).base }}
+          DEST: ${{ fromJSON(env.CI_ROW).repo }}:${{ fromJSON(env.CI_ROW).tag }}
         run: |
           set -euo pipefail
           ctx="$RUNNER_TEMP/ctx"
@@ -145,7 +159,7 @@ jobs:
 
       - name: The image needs no install at run time
         env:
-          DEST: ${{ matrix.repo }}:${{ matrix.tag }}
+          DEST: ${{ fromJSON(env.CI_ROW).repo }}:${{ fromJSON(env.CI_ROW).tag }}
         run: |
           set -euo pipefail
           # The checked-out install-deps.sh, without network: must be a no-op.
@@ -160,11 +174,11 @@ jobs:
         if: needs.plan.outputs.push == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          DEST: ${{ matrix.repo }}:${{ matrix.tag }}
+          DEST: ${{ fromJSON(env.CI_ROW).repo }}:${{ fromJSON(env.CI_ROW).tag }}
           NAME: ${{ matrix.name }}
-          BASE_DIGEST: ${{ matrix.base_digest }}
-          DEPS_HASH: ${{ matrix.deps_hash }}
-          REPO: ${{ matrix.repo }}
+          BASE_DIGEST: ${{ fromJSON(env.CI_ROW).base_digest }}
+          DEPS_HASH: ${{ fromJSON(env.CI_ROW).deps_hash }}
+          REPO: ${{ fromJSON(env.CI_ROW).repo }}
         run: |
           set -euo pipefail
           echo "$GH_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin

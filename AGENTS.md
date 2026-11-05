@@ -221,7 +221,9 @@ By hand: edit the pin in `builder/lines.json`, run
 `.github/workflows/ci.yml` on PRs). `gen` rewrites `builder/versions.env`,
 `builder/generated/ci-matrix.json`, `builder/generated/tag-map.sh`, and the README pin
 tables. `ci.yml` builds its matrices in the `plan` job
-(`builder/scripts/ci_planner.py`, which also lists the jobs the run requires) and
+(`builder/scripts/ci_planner.py`, which also lists the jobs the run requires; the
+matrices hold only `line` / `image_name`, so job names need no `name:` template, and
+each job reads the rest of its row from the `rows` output as `CI_ROW`) and
 ends in one `gate` job (`builder/scripts/ci_gate.py`). Suites: `pr` (PRs, master pushes)
 and `weekly` (Monday schedule or dispatch `suite=weekly`: old OS smoke, centos:7 botplay,
 Wine smoke); dispatch also takes `css34_line`. `release.yml` takes its OS rows from
