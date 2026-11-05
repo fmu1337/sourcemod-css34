@@ -344,7 +344,8 @@ class LinesTest(unittest.TestCase):
         for name in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
             text = (self.root / name).read_text()
             self.assertIn("pull-test-image.sh", text, name)
-            self.assertIn("BASE_IMAGE: ${{ matrix.base_image }}", text, name)
+            # ci.yml reads the row from the plan's `rows` output (CI_ROW), release.yml from the matrix.
+            self.assertRegex(text, r"BASE_IMAGE: \$\{\{ (matrix|fromJSON\(env\.CI_ROW\))\.base_image \}\}", name)
             self.assertIn("packages: read", text, name)
 
     def run_command_args(self, args, success=True):
