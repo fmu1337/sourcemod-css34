@@ -1,0 +1,21 @@
+/**
+ * Hotfix for the frozen sm11-oldstable line (1.11.0.6970-mm1.12.0-dual-r3).
+ *
+ * The v34 client reads a leading byte in HintText before the string; without
+ * it PrintHintText / sm_hsay show nothing. Newer lines ship this key in
+ * core.games/common.games.txt (#175); the frozen 1.11 package does not.
+ *
+ * SourceMod reads gamedata/core.games/custom/*.txt after the shipped files,
+ * so this key is added without touching the frozen package.
+ * Install: copy into cstrike/addons/sourcemod/gamedata/core.games/custom/
+ */
+"Games"
+{
+	"cstrike"
+	{
+		"Keys"
+		{
+			"HintTextPreByte"	"yes"
+		}
+	}
+}
