@@ -403,6 +403,13 @@ jobs:
           CSS34_LINE="${{ matrix.line }}" source builder/package-paths.sh
           MM_PACKAGE="packages/${MM_PACKAGE_NAME}"
           test -f "$SM_PACKAGE" && test -f "$MM_PACKAGE"
+          # Socket extension bundled in the SourceMod package of SOCKET_LINES.
+          source builder/third-party/socket.env
+          socket_probe=""
+          if [[ " ${SOCKET_LINES} " == *" ${{ matrix.line }} "* ]]; then
+            test -f packages/test-plugins/css34_socket_probe.smx
+            socket_probe="/workspace/packages/test-plugins/css34_socket_probe.smx"
+          fi
           # T2.9: a PLAPI 11 plugin must run through the nested legacy core that
           # the MM 1.12 package ships next to metamod.2.ep1.
           legacy_probe=""
@@ -421,6 +428,7 @@ jobs:
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
             -e LEGACY_PROBE="${legacy_probe}" \
+            -e SOCKET_PROBE="${socket_probe}" \
             -e MYSQL_TLS_CERTS=/workspace/.ci-mysql-tls \
             -e MYSQL_TLS_PROBE=/workspace/packages/test-plugins/css34_mysql_tls_probe \
             -e MM_VERSION_EXPECT \
@@ -450,6 +458,10 @@ jobs:
               # T4.5: TLS through the static OpenSSL of dbi.mysql.ext (skipped
               # when the extension links none) and ssl_mode / ssl_ca from srcds.
               testing/scripts/mysql-tls-test.sh
+              # sm exts load socket.ext and A2S_INFO over its legacy natives.
+              if [[ -n "${SOCKET_PROBE}" ]]; then
+                testing/scripts/socket-ext-test.sh
+              fi
             '
 
       - name: Stop MariaDB and MySQL
@@ -467,6 +479,8 @@ jobs:
             .ci-server/smoke.log
             .ci-server/mysql-tls.log*
             .ci-server/legacy-bridge.log*
+            .ci-server/socket-ext.log*
+            .ci-server/cstrike/addons/sourcemod/logs/css34_socket_probe.log
             .ci-server/console-probe.log
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log

@@ -194,6 +194,16 @@ if [ ! -d "$PACKAGE_DIR/addons/sourcemod" ]; then
   exit 1
 fi
 
+# Third-party Socket extension, bundled in the packages of SOCKET_LINES
+# (builder/third-party/socket.env, docs/EXTENSIONS.md "Third-party extensions").
+# shellcheck source=../third-party/socket.env
+source "$BUILDER_DIR/third-party/socket.env"
+if [[ " ${SOCKET_LINES} " == *" ${CSS34_LINE:-} "* ]]; then
+  WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" PACKAGES_DIR="$PACKAGES_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
+    SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" SOCKET_INSTALL_DIR="$PACKAGE_DIR" \
+    bash "$BUILDER_DIR/third-party/socket.sh"
+fi
+
 mkdir -p "$PACKAGES_DIR"
 ARTIFACT="$(
   SOURCEMOD_GIT_REV="$SOURCEMOD_GIT_REV" bash "$BUILDER_DIR/package.sh" \
