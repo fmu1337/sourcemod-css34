@@ -13,7 +13,7 @@ doc carries a status note at the top saying what is still true.
 | [../testing/README.md](../testing/README.md) | Smoke, botplay, Wine / native Windows tests |
 | [SM13_LATEST.md](SM13_LATEST.md) | `sm13-latest` (default line) |
 | [SM13_MM20.md](SM13_MM20.md) | `sm13-mm20` (frozen on MM 2.0 git1407) |
-| [EXTENSIONS.md](EXTENSIONS.md) | Building third-party SourceMod extensions for these packages: extension API per line (1.13 needs a rebuild), the verified build recipe, `undefined symbol: Msg` |
+| [EXTENSIONS.md](EXTENSIONS.md) | Building third-party SourceMod extensions for these packages: extension API per line (1.13 needs a rebuild), the verified build recipe, `undefined symbol: Msg`, the third-party extensions bundled in the packages (Socket 3.0.2 on `sm13-latest`) |
 | [FREEZE.md](FREEZE.md) | Freezing a line (T2.7): the input archive, `--network none` rebuild, ABI comparison |
 | [MM20_KHOOK.md](MM20_KHOOK.md) | `sm13-mm20-khook`: KHook SourceMod + Metamod 2.0, DHooks x86, Windows |
 | [PATCH_STRATEGY.md](PATCH_STRATEGY.md) | The patch model (one git patch series per line / MM pin, `lines.json`) and how pins are bumped (weekly bump PRs, by hand) |
