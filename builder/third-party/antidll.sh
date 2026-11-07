@@ -15,7 +15,6 @@
 # rejects ("Extension version is too old to load") and SM 1.7 cannot serve
 # ("Could not find interface: ISourceMod"); rebuilding against each SDK is the fix.
 set -euo pipefail
-set -x
 
 WDIR="${WDIR:-/workspace}"
 DEPS_DIR="${DEPS_DIR:-$WDIR/deps}"
@@ -23,7 +22,7 @@ PACKAGES_DIR="${PACKAGES_DIR:-$WDIR/packages}"
 SOURCEMOD_DIR="${SOURCEMOD_DIR:-$WDIR/sourcemod}"
 CSS34_LINE="${CSS34_LINE:?CSS34_LINE is required}"
 SOURCEMOD_COMMIT="${SOURCEMOD_COMMIT:?SOURCEMOD_COMMIT is required (builder/resolve-version.sh)}"
-MMS_DIR="${MMS_DIR:?MMS_DIR is required (the line's Metamod tree)}"
+MMS_DIR="${MMS_DIR:?MMS_DIR is required (Metamod tree of the line)}"
 SM_PACKAGE_DIR="${SM_PACKAGE_DIR:-$SOURCEMOD_DIR/build/package}/addons/sourcemod"
 HL2SDK="${HL2SDK:-$DEPS_DIR/hl2sdk-episode1}"
 CC="${CC:-gcc}"
