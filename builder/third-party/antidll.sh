@@ -130,11 +130,12 @@ CXXONLY=(
   -Wno-packed-not-aligned -Wno-deprecated-declarations -Wno-register
 )
 
-# Link: static libstdc++/libgcc, only GetSMExtAPI exported, everything resolved
+# Link: static libstdc++/libgcc, only GetSMExtAPI and CreateInterface (Metamod
+# plugin entry of an SMEXT_CONF_METAMOD extension) exported, everything resolved
 # against libc/libm/libdl/libpthread and the server's tier0/vstdlib (-z defs).
 link_ext() { # OUT OBJ...
   local out="$1"; shift
-  printf '{\n  global: GetSMExtAPI;\n  local: *;\n};\n' >"$(dirname "$out")/exports.map"
+  printf '{\n  global: GetSMExtAPI; CreateInterface;\n  local: *;\n};\n' >"$(dirname "$out")/exports.map"
   "$CXX" -m32 -shared -o "$out" "$@" \
     -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL \
     -Wl,--version-script="$(dirname "$out")/exports.map" -Wl,-z,defs \
@@ -150,12 +151,12 @@ check_elf() { # SO
   if readelf -d "$so" | grep -q TEXTREL; then die "$so has DT_TEXTREL"; fi
   local exports
   exports="$(readelf -W --dyn-syms "$so" | awk '$5=="GLOBAL" && $7!="UND" {print $8}' | sed 's/@.*//' | sort -u | tr '\n' ' ')"
-  [[ "$exports" == "GetSMExtAPI " ]] || die "$so exports [${exports}], want only GetSMExtAPI"
+  [[ "$exports" == "CreateInterface GetSMExtAPI " ]] || die "$so exports [${exports}], want CreateInterface GetSMExtAPI"
   local maxg
   maxg="$(readelf -W --dyn-syms "$so" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)"
   [[ "$(printf '%s\n2.17\n' "$maxg" | sort -V | tail -1)" == 2.17 ]] || die "$so needs GLIBC_${maxg} > 2.17"
   if readelf -W --dyn-syms "$so" | grep -E 'GLIBCXX_|CXXABI_'; then die "$so imports libstdc++ symbols"; fi
-  echo "OK: $(basename "$so"): i386, exports GetSMExtAPI only, glibc <= 2.17, needs: $(readelf -d "$so" | grep NEEDED | grep -o '\[.*\]' | tr '\n' ' ')" >&2
+  echo "OK: $(basename "$so"): i386, exports CreateInterface + GetSMExtAPI only, glibc <= 2.17, needs: $(readelf -d "$so" | grep NEEDED | grep -o '\[.*\]' | tr '\n' ' ')" >&2
 }
 
 api_of() { sed -nE 's/^[[:space:]]*#define[[:space:]]+SMINTERFACE_EXTENSIONAPI_VERSION[[:space:]]+([0-9]+).*/\1/p' "$1/public/IExtensionSys.h"; }
