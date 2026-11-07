@@ -15,6 +15,7 @@
 # rejects ("Extension version is too old to load") and SM 1.7 cannot serve
 # ("Could not find interface: ISourceMod"); rebuilding against each SDK is the fix.
 set -euo pipefail
+set -x
 
 WDIR="${WDIR:-/workspace}"
 DEPS_DIR="${DEPS_DIR:-$WDIR/deps}"
@@ -67,9 +68,12 @@ clone_at() { # DIR REPO COMMIT
 SRC="$DEPS_DIR/antidll"
 echo "==> ${ANTIDLL_REPO} ${ANTIDLL_COMMIT}" >&2
 clone_at "$SRC" "$ANTIDLL_REPO" "$ANTIDLL_COMMIT"
-tree_sha="$(cd "$SRC" && git ls-files -z | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')"
-[[ "$tree_sha" == "$ANTIDLL_TREE_SHA256" ]] ||
-  die "AntiDLL source tree sha256 ${tree_sha}, expected ${ANTIDLL_TREE_SHA256}"
+git -C "$SRC" ls-files -z | LC_ALL=C sort -z >"$DEPS_DIR/antidll-files.z"
+ad_tree_sha="$(cd "$SRC" && xargs -0 sha256sum <"$DEPS_DIR/antidll-files.z" | sha256sum | awk '{print $1}')"
+echo "==> AntiDLL source tree sha256 ${ad_tree_sha}" >&2
+if [[ "$ad_tree_sha" != "$ANTIDLL_TREE_SHA256" ]]; then
+  die "AntiDLL source tree sha256 ${ad_tree_sha}, expected ${ANTIDLL_TREE_SHA256}"
+fi
 grep -Fq "#define SMEXT_CONF_VERSION		\"${ANTIDLL_VERSION}\"" "$SRC/smsdk_config.h" ||
   die "smsdk_config.h does not declare version ${ANTIDLL_VERSION}"
 
