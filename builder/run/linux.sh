@@ -209,7 +209,9 @@ fi
 # shellcheck source=../third-party/antidll.env
 source "$BUILDER_DIR/third-party/antidll.env"
 if [[ " ${ANTIDLL_LINES} " == *" ${CSS34_LINE:-} "* ]]; then
-  WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" PACKAGES_DIR="$PACKAGES_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR"     SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" SM_PACKAGE_DIR="$PACKAGE_DIR"     bash "$BUILDER_DIR/third-party/antidll.sh"
+  WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" PACKAGES_DIR="$PACKAGES_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR" \
+    SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" SM_PACKAGE_DIR="$PACKAGE_DIR" \
+    bash "$BUILDER_DIR/third-party/antidll.sh"
 fi
 
 mkdir -p "$PACKAGES_DIR"

@@ -189,12 +189,16 @@ link_ext "$OUT/sm13/AntiDLL.ext.2.ep1.so" "${o13[@]}" "$safetyhook"
 check_elf "$OUT/sm13/AntiDLL.ext.2.ep1.so"
 
 # ---- sm17: SourceMod 1.7 SDK, Metamod 1.10 core-legacy (1.ep1) ----
+# core-legacy/ISmmPlugin.h gives SMM_API default visibility only on GCC 4.x.
+# On our GCC 10 it becomes plain extern "C", hiding CreateInterface under
+# -fvisibility=hidden. Supply the supported override so Metamod can attach it.
 mapfile -t SE17 < <(se_defines_17)
 [[ "${#SE17[@]}" -gt 5 ]] || die "cannot read SE_* codes from SM 1.7 AMBuildScript"
 api17="$(api_of "$SM17")"
 echo "==> Compiling AntiDLL.ext.1.ep1.so (SourceMod 1.7 SDK, extension API ${api17})" >&2
 F17=(
   "${COMMON[@]}" "${SE17[@]}"
+  '-DSMM_API=extern "C" __attribute__((visibility("default")))'
   -I"$SM17/public" -I"$SM17/public/extensions" -I"$SM17/public/sourcepawn"
   -I"$SM17/public/amtl" -I"$SM17/public/jit" -I"$SM17/public/jit/x86"
   -I"$MM110/core-legacy" -I"$MM110/core-legacy/sourcehook"
