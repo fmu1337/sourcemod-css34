@@ -158,6 +158,16 @@ jobs:
           path: packages
           key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
 
+      # Third-party AntiDLL archives (builder/third-party/antidll.sh), lines in ANTIDLL_LINES.
+      - name: Upload AntiDLL archives
+        if: hashFiles('packages/antidll/*.tar.gz') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: antidll-${{ matrix.line }}
+          path: packages/antidll/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
   build-windows:
     needs: plan
     if: needs.plan.outputs.run_windows == 'true'

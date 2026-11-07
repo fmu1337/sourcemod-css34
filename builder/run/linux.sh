@@ -204,6 +204,14 @@ if [[ " ${SOCKET_LINES} " == *" ${CSS34_LINE:-} "* ]]; then
     bash "$BUILDER_DIR/third-party/socket.sh"
 fi
 
+# Third-party AntiDLL (sm13 + SourceMod 1.7 variants), standalone archives in
+# packages/antidll/, not in the SourceMod package (builder/third-party/antidll.env).
+# shellcheck source=../third-party/antidll.env
+source "$BUILDER_DIR/third-party/antidll.env"
+if [[ " ${ANTIDLL_LINES} " == *" ${CSS34_LINE:-} "* ]]; then
+  WDIR="$WDIR" DEPS_DIR="$DEPS_DIR" PACKAGES_DIR="$PACKAGES_DIR" SOURCEMOD_DIR="$SOURCEMOD_DIR"     SOURCEMOD_COMMIT="$SOURCEMOD_COMMIT" SM_PACKAGE_DIR="$PACKAGE_DIR"     bash "$BUILDER_DIR/third-party/antidll.sh"
+fi
+
 mkdir -p "$PACKAGES_DIR"
 ARTIFACT="$(
   SOURCEMOD_GIT_REV="$SOURCEMOD_GIT_REV" bash "$BUILDER_DIR/package.sh" \
