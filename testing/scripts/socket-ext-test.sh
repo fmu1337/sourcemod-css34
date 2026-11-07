@@ -51,7 +51,7 @@ trap cleanup EXIT
 
 echo "==> Booting srcds for the Socket extension test (UDP ${PORT})"
 rcon_pw="css34socket"
-rcon() { python3 "${root}/testing/scripts/rcon.py" 127.0.0.1 "${rcon_pw}" "$@"; }
+rcon() { RCON_PORT="${PORT}" python3 "${root}/testing/scripts/rcon.py" 127.0.0.1 "${rcon_pw}" "$@"; }
 (
   cd "${SERVER_DIR}"
   export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"

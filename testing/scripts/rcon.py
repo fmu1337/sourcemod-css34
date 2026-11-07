@@ -1,5 +1,8 @@
-"""Minimal Source RCON client: rcon.py HOST PASSWORD CMD... ("sleep N" pauses)."""
-import socket, struct, sys, time
+"""Source RCON client: rcon.py HOST PASSWORD CMD...; RCON_PORT defaults to 27015.
+
+Commands named "sleep N" pause between requests.
+"""
+import os, socket, struct, sys, time
 def pkt(i, t, body):
     b = struct.pack('<ii', i, t) + body.encode() + b'\x00\x00'
     return struct.pack('<i', len(b)) + b
@@ -16,7 +19,7 @@ def recv_pkt(s):
         d += c
     i, t = struct.unpack('<ii', d[:8]); return i, t, d[8:-2].decode(errors='replace').replace('\x00', '')
 host, pw = sys.argv[1], sys.argv[2]
-s = socket.create_connection((host, 27015), timeout=10)
+s = socket.create_connection((host, int(os.environ.get('RCON_PORT', '27015'))), timeout=10)
 s.sendall(pkt(1, 3, pw))
 while True:
     i, t, _ = recv_pkt(s)
