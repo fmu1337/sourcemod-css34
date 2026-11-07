@@ -20,7 +20,8 @@ upstream's; it is the minimum. So an extension built with SourceMod 1.12 or olde
 ship one binary per line. `extension_api` / `extension_api_min` in `css34-package.json`,
 `lines.json` and `VERSIONS.txt` give the range of each package.
 
-Reported on 1.13 without a rebuild: ProtectCMDS (API 7), cssdm, navfile_blocker.
+ProtectCMDS, cssdm and navfile_blocker need builds against compatible 1.13 headers;
+their older API 7/8 binaries are rejected by the loader.
 
 ## Third-party extensions running on `sm13-latest`
 
