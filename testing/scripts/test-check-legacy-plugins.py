@@ -80,6 +80,17 @@ def main():
             print(("ok   " if present else "FAIL ") + f"{ver}/{smx} present")
 
     results.append(expect("clean session passes", 0, PLUGINS_LIST, PROBE))
+    missing_stock = "\n".join(line for line in PLUGINS_LIST.splitlines()
+                              if '"Fun Commands"' not in line) + "\n"
+    results.append(expect("repeated incomplete lists cannot supply missing stock plugin", 1,
+                          missing_stock + missing_stock, PROBE, "spcomp 1.7.3-dev+5334"))
+    results.append(expect("stock plugin must still run in final list", 1,
+                          PLUGINS_LIST + missing_stock, PROBE, "spcomp 1.7.3-dev+5334"))
+    results.append(expect("repeated complete lists pass", 0,
+                          PLUGINS_LIST + PLUGINS_LIST, PROBE))
+    results.append(expect("missing plugin listing fails", 1, "status\nhostname: test\n", PROBE))
+    results.append(expect("Errors section fails without status row", 1,
+                          PLUGINS_LIST + 'Errors:\nx.smx: boom\n', PROBE, "Errors:"))
     results.append(expect("<Error> plugin fails", 1,
                           PLUGINS_LIST + '  08 <Error> "x" (1.0) by y\n', PROBE, "<Error>"))
     results.append(expect("<Failed> plugin fails", 1,
@@ -109,8 +120,12 @@ def main():
                           PROBE + VARARGS, "INFO: varargs forward compiler=1.7.3-dev+5334"))
     results.append(expect("varargs errors fail when required", 1, PLUGINS_LIST,
                           PROBE + VARARGS, "varargs forward", {"LEGACY_FWD_REQUIRE_VARARGS": "1"}))
+    results.append(expect("missing varargs results fail when required", 1, PLUGINS_LIST,
+                          PROBE, "varargs forward", {"LEGACY_FWD_REQUIRE_VARARGS": "1"}))
+    clean_varargs = (VARARGS + VARARGS.replace("1.7.3-dev+5334", "1.11.0.6970")).replace(
+        "runs=3 errors=3 last_error=4", "runs=6 errors=0 last_error=0")
     results.append(expect("clean varargs pass when required", 0, PLUGINS_LIST,
-                          PROBE + VARARGS.replace("runs=3 errors=3 last_error=4", "runs=6 errors=0 last_error=0"),
+                          PROBE + clean_varargs,
                           "OK: varargs forward", {"LEGACY_FWD_REQUIRE_VARARGS": "1"}))
     if not all(results):
         sys.exit(1)

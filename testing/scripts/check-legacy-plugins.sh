@@ -31,11 +31,23 @@ LEGACY_FWD_MIN_OK="${LEGACY_FWD_MIN_OK:-4}"
 
 failed=0
 fail() { echo "FAIL: $*" >&2; failed=1; }
+final_plugins=""
 
 # --- sm plugins list --------------------------------------------------------
 if [[ ! -f "${BOTPLAY_LOG}" ]]; then
   fail "botplay log ${BOTPLAY_LOG} missing"
 else
+  # Check the last snapshot on its own: summing the boot and final listings
+  # can let two sightings of one plugin hide another plugin's disappearance.
+  final_plugins="$(tr -d '\r' <"${BOTPLAY_LOG}" | awk '
+    /\[SM\] (Listing [0-9]+ plugins?:|No plugins loaded)/ { listing=""; found=1 }
+    found { listing=listing $0 ORS }
+    END { printf "%s", listing }
+  ')"
+  [[ -n "${final_plugins}" ]] || fail "no sm plugins list snapshot found"
+  if tr -d '\r' <"${BOTPLAY_LOG}" | grep -qE '^[[:space:]]*Errors:[[:space:]]*$'; then
+    fail "Errors: section in sm plugins list"
+  fi
   bad_plugins="$(tr -d '\r' <"${BOTPLAY_LOG}" | grep -E '^[[:space:]]*[0-9]+ <(Failed|Error)>' || true)"
   if [[ -n "${bad_plugins}" ]]; then
     fail "plugin(s) listed as <Failed>/<Error>:"
@@ -92,10 +104,9 @@ for ver in "${!stock_per_version[@]}"; do
   compilers+=("${spver}")
   want="${stock_per_version[${ver}]}"
   have=0
-  if [[ -f "${BOTPLAY_LOG}" ]]; then
-    have="$(tr -d '\r' <"${BOTPLAY_LOG}" | grep -E '^[[:space:]]*[0-9]+ "' | grep -cF "(${spver})" || true)"
+  if [[ -n "${final_plugins}" ]]; then
+    have="$(grep -E '^[[:space:]]*[0-9]+ "' <<<"${final_plugins}" | sort -u | grep -cF "(${spver})" || true)"
   fi
-  # sm plugins list runs twice (start and end of the session)
   if [[ "${have}" -ge "${want}" ]]; then
     echo "OK: ${want} stock plugin(s) built by spcomp ${spver} listed as running"
   else
@@ -144,6 +155,13 @@ fi
 varargs_lines=""
 if [[ ${#existing[@]} -gt 0 ]]; then
   varargs_lines="$(grep -hE '\[css34_legacy_fwd\] compiler=[^ ]+ varargs ' "${existing[@]}" 2>/dev/null || true)"
+fi
+if [[ "${LEGACY_FWD_REQUIRE_VARARGS:-0}" == "1" ]]; then
+  for spver in "${compilers[@]}"; do
+    if ! grep -qF "compiler=${spver} varargs " <<<"${varargs_lines}"; then
+      fail "no varargs forward results from spcomp ${spver}"
+    fi
+  done
 fi
 while IFS= read -r compiler; do
   [[ -z "${compiler}" ]] && continue
