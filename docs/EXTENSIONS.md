@@ -22,6 +22,29 @@ ship one binary per line. `extension_api` / `extension_api_min` in `css34-packag
 
 Reported on 1.13 without a rebuild: ProtectCMDS (API 7), cssdm, navfile_blocker.
 
+## Third-party extensions running on `sm13-latest`
+
+Builds for SourceMod 1.13 that run on the Danyas servers with `1.13.0.7478-mm1.12.0-r7` (2026-11-05). This repository
+does not build or ship them.
+
+| Extension | 1.13 build | Notes |
+|---|---|---|
+| ProtectCMDS | `css34.sm113` build of `fmu1337/ProtectCMDS` v1.1.4 (`protectcmds.css34.sm113.ext.so`) | the old 1.0.10 / v1.1.1 builds are API 7 |
+| navfile_blocker | rebuilt from the original 2012 source with SM 1.13 headers | needs `-r5` or newer: earlier packages resolved `"library" "engine"` signatures to 0 ([PATCHES.md](PATCHES.md), `0004-gameconfigs-rtld-noload`) |
+| CS:S DM | `fmu1337/sm34.cssdm` 2.1.6-git325 sm13 (`cssdm.ext.2.ep1.so`) | replaces both the `.1.ep1` and the `.2.ep1` builds of older trees |
+| socket | `JoinedSenses/sm-ext-socket` (legacy Socket 3.x API: `SocketCreate`, `SocketConnect`, `SocketSend`, …) rebuilt with SM 1.13 `public/smsdk_ext.*` | see below |
+
+**socket.** Many old v34 plugins need it: wS plugins, kigen-ac, MyArena vip. The rewrites by Accelerator74 and ProjectSky (libuv) offer only
+the methodmap API, and plugins compiled against the old natives fail to load with them. The JoinedSenses source builds for
+API 11 after two changes:
+
+- replace `boost::thread`, `boost::mutex` and `boost::shared_mutex` (and their lock types) with C++17
+  `std::thread`, `std::mutex` and `std::shared_mutex`;
+- use asio header-only (boost 1.83 headers with `-DBOOST_ERROR_CODE_HEADER_ONLY -DBOOST_ASIO_NO_TS_EXECUTORS`).
+
+Link with `-static-libstdc++ -static-libgcc -lpthread`. Prebuilt releases with a glibc 2.17 floor
+are maintained at [fmu1337/sm-ext-socket](https://github.com/fmu1337/sm-ext-socket) (release v3.0.2-css34).
+
 ## Recipe
 
 Build with the same trees and toolchain as the release, so the headers match the binary
