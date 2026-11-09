@@ -1,10 +1,10 @@
 css34: sdktools: OnMapEnd uses SourceHook::List like OutputHookList (SM 1.12 #2589 cherry-pick)
 
 diff --git a/extensions/sdktools/output.cpp b/extensions/sdktools/output.cpp
-index 08f3ec6b70faccac7d1af6cc6300670ff1d4f529..8f6fcf834f3a3f222b34ec2f3afabf0afe60f67e 100644
+index b1d988dcab6ff99680cf2fdc944abce1ae959d53..8f6fcf834f3a3f222b34ec2f3afabf0afe60f67e 100644
 --- a/extensions/sdktools/output.cpp
 +++ b/extensions/sdktools/output.cpp
-@@ -282,10 +282,11 @@ void EntityOutputManager::CleanUpHook(omg_hooks *hook)
+@@ -282,6 +282,7 @@ void EntityOutputManager::CleanUpHook(omg_hooks *hook)
  
  void EntityOutputManager::OnMapEnd()
  {
@@ -12,8 +12,3 @@ index 08f3ec6b70faccac7d1af6cc6300670ff1d4f529..8f6fcf834f3a3f222b34ec2f3afabf0a
  	IPluginIterator *plugins = plsys->GetPluginIterator();
  	for (; plugins->MorePlugins(); plugins->NextPlugin())
  	{
--		std::list<omg_hooks *> *pList = NULL;
-+		SourceHook::List<omg_hooks *> *pList = NULL;
- 		if (!plugins->GetPlugin()->GetProperty("OutputHookList", (void **)&pList, false) || !pList)
- 		{
- 			continue;

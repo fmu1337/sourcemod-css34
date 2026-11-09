@@ -19,7 +19,7 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 | `<line>` | SourceMod | Metamod | Role |
 |----------|-----------|---------|------|
 | `sm13-latest` | 1.13.0.7478 | 1.12.0 git1229 | **Default / recommended** |
-| `sm12-latest` | 1.12.0.7257 | 1.12.0 git1229 | Latest 1.12 |
+| `sm12-latest` | 1.12.0.7260 | 1.12.0 git1229 | Latest 1.12 |
 | `sm13-mm20-khook` | 1.13.0.7565 (KHook branch + master) | 2.0.0 git1472 (KHook) | Frozen outside CI; archived builder, ships `dhooks.ext` |
 | `sm13-mm20` | 1.13.0.7404 | 2.0.0 git1407 (last SourceHook MM 2.0) | Retired outside CI |
 | `sm11-oldstable` | 1.11.0.6970 | 1.12.0 git1227 | OldStable, frozen: dual-core; MM 1.12 default, MM 1.10.7 as mmsource-legacy |
@@ -111,7 +111,7 @@ Details, the mapping onto MariaDB Connector/C and the CI cases: [docs/PATCHES.md
 | Line (`CSS34_LINE`) | SourceMod | Metamod | Role |
 |---------------------|-----------|---------|------|
 | `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.12 git1227** (`75dd7b26…`) | OldStable, frozen ([docs](docs/FREEZE.md)): dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy |
-| `sm12-latest` | **1.12.0.7257** (`e68dada2…`) | **1.12 git1229** (`4e031eb5…`) | Latest 1.12 |
+| `sm12-latest` | **1.12.0.7260** (`3f746067…`) | **1.12 git1229** (`4e031eb5…`) | Latest 1.12 |
 | `sm13-latest` | **1.13.0.7478** (`b34de51b…`) | **1.12 git1229** (`4e031eb5…`) | Latest 1.13 (default) |
 | `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | 2.0 git1407 (last SourceHook MM 2.0) (`0084b86a…`) | Retired outside CI ([docs](docs/SM13_MM20.md)) |
 | `sm13-mm20-khook` | **1.13.0.7565** (KHook branch + master) (`25954d4a…`) | **2.0 git1472 (KHook)** (`05c5c63a…`) | Frozen outside CI ([docs](docs/MM20_KHOOK.md)) |
