@@ -49,8 +49,8 @@ a binary built for SM 1.7–1.12 also fails the API check (`Extension version is
    change: same plugin count, no new `<Failed>` / `<Error>`, no new `<FAILED>` extension. On any difference, stop the
    server and unpack the backup.
 
-The Danyas servers run this as two scripts (`sm113-upgrade.sh`: backup and stock-file copy; `sm113-migrate.sh`:
-A2S check for zero players, baseline listing, upgrade, overlay of own extensions, comparison and automatic rollback).
+It is worth scripting in two parts: one for the backup and stock-file copy, one for the move itself (A2S check for
+zero players, baseline listing, upgrade, overlay of own extensions, comparison and automatic rollback).
 
 ## After the move
 

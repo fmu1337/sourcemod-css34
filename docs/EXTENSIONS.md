@@ -25,7 +25,7 @@ their older API 7/8 binaries are rejected by the loader.
 
 ## Third-party extensions running on `sm13-latest`
 
-Builds for SourceMod 1.13 that run on the Danyas servers with `1.13.0.7478-mm1.12.0-r7` (2026-11-05). This repository
+Builds for SourceMod 1.13 that run on production CS:S v34 servers with `1.13.0.7478-mm1.12.0-r7` (2026-11-05). This repository
 does not build or ship them.
 
 | Extension | 1.13 build | Notes |
