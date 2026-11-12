@@ -59,6 +59,8 @@
 		{
 			"HudRadioMenuMsg"	"ShowMenu"
 			"RadioMenuTimeout"	"4"
+			// The v34 client reads a leading byte in HintText; without it no hint is shown.
+			"HintTextPreByte"	"yes"
 			"HudTextMsg"		"HudMsg"
 			"GameExtension"	"game.cstrike"
 		}
