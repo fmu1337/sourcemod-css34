@@ -9,13 +9,13 @@ export APPLY_SRCDS_PATCH="${APPLY_SRCDS_PATCH:-1}"
 export APPLY_VALVE_RC="${APPLY_VALVE_RC:-1}"
 
 # Prefer in-tree packages when present and not overridden.
-if [[ -z "${SM_PACKAGE:-}" && -z "${SM_URL:-}" ]]; then
+if [[ -z "${SM_PACKAGE:-}" ]]; then
   auto_sm="$(PACKAGES_DIR="$ROOT/packages" bash -c 'source "$1/builder/package-paths.sh"; [[ ! -f "$SM_PACKAGE" ]] || printf "%s" "$SM_PACKAGE"' bash "$ROOT")"
   if [[ -n "${auto_sm}" ]]; then
     export SM_PACKAGE="${auto_sm}"
   fi
 fi
-if [[ -z "${MM_PACKAGE:-}" && -z "${MM_URL:-}" && "${USE_BUILT_MM:-0}" != "1" ]]; then
+if [[ -z "${MM_PACKAGE:-}" && "${USE_BUILT_MM:-0}" != "1" ]]; then
   auto_mm="$(PACKAGES_DIR="$ROOT/packages" bash -c 'source "$1/builder/package-paths.sh"; [[ ! -f "$MM_PACKAGE" ]] || printf "%s" "$MM_PACKAGE"' bash "$ROOT")"
   if [[ -n "${auto_mm}" ]]; then
     export MM_PACKAGE="${auto_mm}"
@@ -47,13 +47,7 @@ if [[ -z "${MM_VERSION_EXPECT:-}" || -z "${SM_VERSION_EXPECT:-}" ]]; then
   fi
 fi
 
-if [[ -z "${MM_VERSION_EXPECT:-}" ]]; then
-  if [[ -n "${MM_PACKAGE:-}" || "${USE_BUILT_MM:-0}" == "1" || -n "${BUILT_MM_PACKAGE:-}" || -n "${BUILT_MM_DIR:-}" ]]; then
-    export MM_VERSION_EXPECT=1.10.7
-  else
-    export MM_VERSION_EXPECT=1.10.6
-  fi
-fi
+export MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.7}"
 export SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6970}"
 
 chmod +x "${ROOT}/testing/scripts/"*.sh

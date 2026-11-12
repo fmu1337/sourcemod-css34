@@ -29,4 +29,4 @@ Do not describe a downstream compatibility build as an unmodified upstream build
 - [A recall corrupts the recall site's stack and registers on MSVC x86](14-khook-msvc-recall-stack.md)
 - [DHooks does not build / run on Windows x86](15-khook-windows-build-and-sdkhooks.md)
 
-The original KHook findings remain in [UPSTREAM_REPORTS.md](../UPSTREAM_REPORTS.md).
+The original combined list of the KHook findings (files 06–15), since removed, is [UPSTREAM_REPORTS.md at `7c27aca`](https://github.com/fmu1337/sourcemod-css34/blob/7c27aca8105a5a6c5702c0a485212c9d9c977951/docs/UPSTREAM_REPORTS.md).

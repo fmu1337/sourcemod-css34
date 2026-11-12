@@ -10,8 +10,8 @@ against, not from its source:
 | Line | SourceMod | Extension API it loads | Built with older headers | Built with newer headers |
 |------|-----------|------------------------|--------------------------|--------------------------|
 | `sm11-oldstable` (frozen) | 1.11.0.6970 | up to 8 | loads | `too new to load` |
-| `sm12-latest` | 1.12.0.7257 | up to 8 | loads | `too new to load` |
-| `sm13-latest` | 1.13.0.7478 | **9 and 11** (10 is refused) | `Extension version is too old to load (8, max is 9)` | — |
+| `sm12-latest` | 1.12.0.7260 | up to 8 | loads | `too new to load` |
+| `sm13-latest` | 1.13.0.7488 | **9 and 11** (10 is refused) | `Extension version is too old to load (8, max is 9)` | — |
 
 SourceMod 1.13 raised the minimum to 9 (V9: SourcePawn API revamp) and builds at 11; its
 `ExtensionSys.cpp` also refuses 10 explicitly. The wording "max is 9" in the 1.13 error is

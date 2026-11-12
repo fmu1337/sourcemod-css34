@@ -151,7 +151,7 @@
       "status": "retired",
       "pointer": true,
       "releasable": false,
-      "role": "Retired outside CI ([docs](docs/SM13_MM20.md))",
+      "role": "Retired outside CI ([docs, archive/khook](https://github.com/fmu1337/sourcemod-css34/blob/archive/khook/docs/SM13_MM20.md))",
       "install_role": "Retired outside CI",
       "mm_note": "(last SourceHook MM 2.0)"
     },
@@ -164,7 +164,7 @@
       "extra_tags": [
         "1.13.0.7565-mm2.0.0-khook-dhooks"
       ],
-      "role": "Frozen outside CI ([docs](docs/MM20_KHOOK.md))",
+      "role": "Frozen outside CI ([docs, archive/khook](https://github.com/fmu1337/sourcemod-css34/blob/archive/khook/docs/MM20_KHOOK.md))",
       "install_role": "Frozen outside CI; archived builder, ships `dhooks.ext`",
       "sm_note": "(KHook branch + master)",
       "mm_note": "(KHook)"

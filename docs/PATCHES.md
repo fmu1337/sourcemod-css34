@@ -4,7 +4,7 @@
 
 `builder/patches/series/sm13-latest/` is how sm13-latest is patched
 (`apply-sourcemod.sh` applies the line's series with `apply-series.sh`; a line
-without one fails). `series.json` names SourceMod `b34de51b` (1.13.0.7478) and the
+without one fails). `series.json` names SourceMod `5eb6a120` (1.13.0.7488) and the
 tree each repository must have after `git apply --index`; the build fails on any
 other result. The series was generated from the former scripted patcher
 (`apply-sourcemod-v112.sh`, removed at the end of T3.4) on a clean
@@ -23,16 +23,16 @@ files, exports, `NEEDED` and `SONAME` (`compare-package-abi.py`).
 | `sourcemod/0007-css34-versioning` | Build number from `SOURCEMOD_GIT_REV` (lines.json), detached/submodule HEAD in `Versioning`, `CSS34 pack:` line in `sm version`. | Shallow clones give a wrong build number; smoke checks the pack commit. |
 | `sourcemod/0008-dbi-connect-options` | New interface `IDBConnectOptions` (`public/IDBConnectOptions.h`): core keeps every key of a `databases.cfg` entry and of `SQL_ConnectCustom`'s KeyValues (bridge hook `GetKeyValuesPairs`, `SM_LOGIC_MAGIC` changed) and a driver reads them by the `DatabaseInfo` pointer it received. `DatabaseInfo` and the existing DBI interfaces are unchanged. | Core passes only driver/host/database/user/pass/port/timeout/schema to a driver; `ssl_mode` / `ssl_ca` never reach it. Section "sm13 MySQL TLS options" below. |
 | `sourcemod/0009-mysql-tls-options` | `dbi.mysql.ext`: `ssl_mode` / `ssl_ca` (keys and values of fmu1337/sm-dbi-mysql; default `disabled`, as stock SourceMod) mapped onto MariaDB Connector/C, TLS 1.2/1.3 with OpenSSL, `utf8mb4` in the handshake; unknown modes and verify modes without a readable CA fail the connect; persistent connections are shared only with equal TLS settings. | Upstream turns certificate verification off and requests no TLS: plaintext to every server, a `REQUIRE SSL` account (HeatWave's usual setup) is refused. |
-| `sourcemod/0010-handlesys-lazy-table` | `HandleSystem` allocates its 2^20-entry table with `calloc` instead of `new[]` + `memset` (and frees it with `free`). Limit and handle encoding unchanged. | Upstream `cab60f73` (1.11.0.6792, "Bump handle limit to 1MB") zeroes ~64 MB at startup, all of it resident: srcds RSS 156 MB with stock plugins vs 82 MB on rom4s 1.11.0.6572; 90 MB with the patch (README "Memory use"). |
+| `sourcemod/0010-handlesys-lazy-table` | `HandleSystem` allocates its 2^20-entry table with `calloc` instead of `new[]` + `memset` (and frees it with `free`). Limit and handle encoding unchanged. | Upstream `cab60f73` (1.11.0.6792, "Bump handle limit to 1MB") zeroes ~64 MB at startup, all of it resident: srcds RSS 156 MB with only the package's stock plugins vs 82 MB on rom4s 1.11.0.6572; 90 MB with the patch (README "Memory use"). |
 | `sourcemod/0011-no-gamedata-updater` | `AMBuildScript` builds neither `extensions/updater` nor `extensions/curl` (`webternet.ext`); `StartSourceMod` no longer loads `updater.ext`; `configs/core.cfg` loses `DisableAutoUpdate`, `ForceRestartAfterUpdate`, `AutoUpdateURL` and `DebugSpew` (it only described updater logging; an old `core.cfg` with these keys still loads). The sources stay in the tree, unbuilt. | `updater.ext` posts the md5 of every `gamedata/` file to `update.sourcemod.net` over plain HTTP and writes what comes back over them: upstream gamedata without CS:S v34 entries. Packages only switched it off with `"DisableAutoUpdate" "yes"`. `webternet.ext` (libcurl 7.19.2 without TLS) has no natives and no user besides the updater. `check-package.sh` and `package_windows.py` refuse a package that ships either or whose core still loads `updater.ext`. |
 | `sourcepawn/0001-gcc10-link-flags` | `-Wno-sign-compare`; pthread/rt/`-lgcc_s` `NEEDED`. | GCC 10 sign-compare errors in the JIT/compiler; missing `NEEDED` on glibc 2.17. |
 | `hl2sdk-manifests/0001-episode1-defines` | episode1 Linux defines `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE`. | The SDK's malloc hooks/overrides in SourceMod modules on CS:S v34. |
-| `hl2sdk-manifests/0002-compiler-flag-guard` | Drop manifest compiler flags GCC 10 does not know (formerly `manifest_flag_guard.py`). | Unknown-flag errors from newer manifests (hl2sdk-manifests `ebd6e10`). |
+| `hl2sdk-manifests/0002-compiler-flag-guard` | Drop manifest compiler flags GCC 10 does not know (formerly `manifest_flag_guard.py`). | Unknown-flag errors from newer manifests (the hl2sdk-manifests gitlink of the pin: `f7f2377c` for sm13, `931f7aa5` for sm12). |
 
 ## sm12-latest patch series
 
-`builder/patches/series/sm12-latest/` is made the same way for SourceMod `e68dada2`
-(1.12.0.7257) and patches sm12-latest. Its patches are the
+`builder/patches/series/sm12-latest/` is made the same way for SourceMod `3f746067`
+(1.12.0.7260) and patches sm12-latest. Its patches are the
 sm13 ones above except:
 
 - no `glibc217-database-imports`: SM 1.12's database extensions need neither shim;
@@ -54,8 +54,8 @@ and `SONAME`.
 ## Metamod 1.12 patch series (MM_112)
 
 `builder/patches/series/MM_112/` (`"root": "metamod"`) is keyed by the Metamod pin
-rather than a line: every line that builds `MM_112_COMMIT` (`cb477558`, 1.12.0
-git1228) uses it. `checkout-deps.sh` fetches the pin with `fetch-sourcemod.sh`
+rather than a line: every line that builds `MM_112_COMMIT` (`4e031eb5`, 1.12.0
+git1229) uses it. `checkout-deps.sh` fetches the pin with `fetch-sourcemod.sh`
 (exact tree, LF as committed), applies the series whose `commit` matches, then
 `apply-mmsource-oldbridge.sh modern` (the legacy-plugin bridge stays a script: it
 is our own code, kept once in `builder/patches/mm-oldbridge/`). `build-metamod.sh`
@@ -67,7 +67,7 @@ build's files, exports, `NEEDED` and `SONAME`.
 | `metamod/0001-build-episode1-toolchain` | `AMBuildScript`: episode1 `tier1_i486.a` before `vstdlib`; pthread/rt/`gcc_s` `NEEDED`; link through the C++ driver; GCC 10 flags; hidden static libstdc++. | As SourceMod's `0001`: ConVars from `vstdlib`, missing `NEEDED` on glibc 2.17, `-Werror`, exported `std::` symbols. |
 | `metamod/0002-episode1-mem-h` | `provider_ep2.cpp` includes `tier0/mem.h`. | `MemAllocScratch` undeclared on episode1. |
 | `metamod/0003-css34-versioning` | Build number from lines.json (`generate_headers.py`), `CSS34 pack:` line in `meta version`. | A `--depth` clone gives a wrong build number; smoke checks the pack commit. |
-| `hl2sdk-manifests/0001-episode1-defines`, `0002-compiler-flag-guard` | As in SourceMod, for Metamod's own manifests (`4304a88`). | As in SourceMod. |
+| `hl2sdk-manifests/0001-episode1-defines`, `0002-compiler-flag-guard` | As in SourceMod, for Metamod's own manifests (gitlink `f7f2377c`). | As in SourceMod. |
 
 ## Refreshing a series
 
@@ -337,10 +337,10 @@ in plaintext.
   Adding `<list>` alone would leave the cleanup interpreting a SourceHook list
   as a different container type. SM 1.13 already uses `std::list` consistently
   and is not rewritten.
-- Drift policy: fail on missing/changed map-end anchors, unknown storage types,
-  or malformed already-patched code; validate the consistent SM 1.13 layout.
-- Validation: checker fixtures plus runtime entity-output probe across map
-  changes; manylinux GCC 10 build and PR CI remain required.
+- Drift: like every patch of the series it applies only to the pinned commit; a bump
+  rebases it with `patch-series.sh refresh sm12-latest` (`git apply --3way`).
+- Validation: the botplay entity-output probe across map changes
+  (`css34_upstream_probe`, #2589), the manylinux GCC 10 build and PR CI.
 - Upstream report candidate for **#101 / T3.6**: the 1.12-dev cherry-pick uses
   the wrong container type. Report against that branch with the compiler error
   and storage-type mismatch, rather than proposing a change to 1.13.

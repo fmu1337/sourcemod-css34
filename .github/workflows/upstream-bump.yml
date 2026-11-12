@@ -1,6 +1,6 @@
 name: Upstream bump
 
-# T4.4 (replaces the daily Jules task, docs/archive/JULES_DAILY_VERSION_BUMP.md).
+# T4.4 (replaces the former daily Jules bump task).
 #
 # Weekly (and on dispatch): for each tracked target of builder/scripts/upstream-bump.py
 # (sm12-latest, sm13-latest, MM_112) whose pin is behind its upstream branch, open or
@@ -13,8 +13,9 @@ name: Upstream bump
 # (`-r<N>` when the base tag exists); release.yml then builds it as a prerelease,
 # smokes the public URLs, promotes it and switches line-<line>.
 #
-# Jules (optional, secrets.JULES_API_KEY): every new or rebuilt bump PR gets a read-only
-# Jules review, posted as a PR comment (what changed upstream that matters for v34, what to
+# Jules (optional, secrets.JULES_API_KEY): a bump PR gets a read-only Jules review once per
+# target commit (the session is keyed by title, so a PR for a commit Jules already reviewed,
+# e.g. a rebuilt or reopened bump to the same upstream commit, gets none), posted as a PR comment (what changed upstream that matters for v34, what to
 # check, what to change). When a bump cannot be applied (a patch no longer fits), Jules gets
 # a minimal-fix task and opens its own PR against master. Jules never gets this repository's
 # token, pushes nothing to master or bump/*, and nothing merges automatically; a Jules API

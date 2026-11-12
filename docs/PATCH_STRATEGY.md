@@ -1,8 +1,6 @@
 # Стратегия патчей css34
 
 Как устроены патчи сегодня (после эпика #73, фазы 3–4) и как поднимать версии SourceMod / Metamod.
-История решений (PR #7, #10, #15, #17, эпоха 6572 / 6588 / 6970) — в
-[archive/PATCH_STRATEGY_HISTORY.md](archive/PATCH_STRATEGY_HISTORY.md).
 
 ## Модель
 
