@@ -233,10 +233,10 @@ index dd49eb56fb9934bcf09954c2597eb8ab44d110ef..907b617df918819131a73a352c048d89
  	{
  		return BAD_HANDLE;
 diff --git a/core/logic_bridge.cpp b/core/logic_bridge.cpp
-index 4c86d592bcc042acafb04752d3a620bceb579b90..77c19579b4f7000f1fca6afa5aa13d882e7cc3f4 100644
+index 8fc3c3eaffeb4078481c588984550c0a6d5b0b1b..53ecd8af67a91dcea2c6d8b1a5e35d734837eb10 100644
 --- a/core/logic_bridge.cpp
 +++ b/core/logic_bridge.cpp
-@@ -410,6 +410,15 @@ static void keyvalues_to_dbinfo(KeyValues *kv, DatabaseInfo *out)
+@@ -413,6 +413,15 @@ static void keyvalues_to_dbinfo(KeyValues *kv, DatabaseInfo *out)
  	out->user = kv->GetString("user", "");
  }
  
@@ -252,7 +252,7 @@ index 4c86d592bcc042acafb04752d3a620bceb579b90..77c19579b4f7000f1fca6afa5aa13d88
  static int get_activity_flags()
  {
  	return sm_show_activity.GetInt();
-@@ -541,6 +550,7 @@ CoreProviderImpl::CoreProviderImpl()
+@@ -546,6 +555,7 @@ CoreProviderImpl::CoreProviderImpl()
  	this->UpdateAdminCmdFlags = update_admin_cmd_flags;
  	this->LookForCommandAdminFlags = look_for_cmd_admin_flags;
  	this->GetGlobalTarget = get_global_target;
