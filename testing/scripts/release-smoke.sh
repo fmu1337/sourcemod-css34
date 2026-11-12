@@ -13,7 +13,13 @@
 #   SUMS_ASSET    checksum file name (default SHA256SUMS; "" to skip)
 #   SERVER_TREE   packed server tree (default server-art/css34-server.tar.gz)
 #   OUT_DIR       download dir (default .ci-release-smoke)
-#   IMAGE         container image (default: pinned botplay image from lines.json)
+#   IMAGE         container image (default: the botplay image from lines.json,
+#                 prebuilt by test-images.yml when lines.json has a current one)
+#   BASE_IMAGE    fallback when IMAGE cannot be pulled (matrix `base_image`)
+#   GHCR_TOKEN    optional ghcr.io token for a private prebuilt image
+#   HOTFIX_DIR    a frozen line's hotfix tree (hotfixes/<line>/, relative to the repo):
+#                 copied over the package for the static checks and over cstrike/
+#                 after the install, as the README tells users (docs/FREEZE.md)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -23,17 +29,18 @@ MM_ASSET="${MM_ASSET:?MM_ASSET is required}"
 SUMS_ASSET="${SUMS_ASSET-SHA256SUMS}"
 SERVER_TREE="${SERVER_TREE:-server-art/css34-server.tar.gz}"
 OUT_DIR="${OUT_DIR:-.ci-release-smoke}"
+HOTFIX_DIR="${HOTFIX_DIR:-}"
+export HOTFIX_DIR
 cd "${ROOT}"
-if [[ -z "${IMAGE:-}" ]]; then
-  IMAGE="$(python3 - <<'PY'
-import json
-from pathlib import Path
-data = json.loads(Path("builder/lines.json").read_text(encoding="utf-8"))
-name = data["botplay_image"]
-print(name + "@" + data["images"][name])
-PY
-)"
+if [[ -n "${HOTFIX_DIR}" && ! -d "${HOTFIX_DIR}/addons" ]]; then
+  echo "FAIL: HOTFIX_DIR ${HOTFIX_DIR} has no addons/" >&2
+  exit 1
 fi
+if [[ -z "${IMAGE:-}" ]]; then
+  botplay="$(python3 -c 'import json; print(json.load(open("builder/lines.json"))["botplay_image"])')"
+  read -r IMAGE BASE_IMAGE < <(python3 builder/lines.py test-image-ref "${botplay}")
+fi
+IMAGE="$(testing/scripts/pull-test-image.sh "${IMAGE}" "${BASE_IMAGE:-}")"
 echo "==> Release smoke image ${IMAGE}"
 rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}"
@@ -83,6 +90,7 @@ docker run --rm --platform linux/amd64 \
   -e PLAIN_TAR_INSTALL=1 \
   -e MM_VERSION_EXPECT -e SM_VERSION_EXPECT -e MM_COMMIT_EXPECT -e SM_COMMIT_EXPECT -e MM_REV_EXPECT \
   -e SMOKE_EXPECT_CORE="${SMOKE_EXPECT_CORE:-}" \
+  -e HOTFIX_DIR \
   -e TIMEOUT_SECS=120 \
   -e SMOKE_CONDEBUG=1 \
   -e SMOKE_VERBOSE=1 \
@@ -96,6 +104,10 @@ docker run --rm --platform linux/amd64 \
     tar -xzf /workspace/'"${SERVER_TREE}"' -C /workspace/.ci-server
     testing/scripts/install-deps.sh
     testing/scripts/install-addons.sh
+    if [[ -n "${HOTFIX_DIR}" ]]; then
+      echo "==> Installing hotfix ${HOTFIX_DIR} over cstrike/"
+      cp -R "/workspace/${HOTFIX_DIR}/." /workspace/.ci-server/cstrike/
+    fi
     testing/scripts/smoke-test.sh
   '
 echo "==> Release smoke PASSED for ${BASE_URL}"

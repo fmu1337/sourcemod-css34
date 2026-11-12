@@ -1,7 +1,7 @@
 css34: sourcepawn: -Wno-sign-compare, pthread/rt/-lgcc_s NEEDED
 
 diff --git a/AMBuildScript b/AMBuildScript
-index 8116f0c8c61034291dfc5184345fe43ecb12cc06..ba39b377092f2bb98dd3c53807fbaa0f69f3412f 100644
+index f69e34dcd2ab16c9883475b0188981b6f37e9399..c1fbb36ed45248d72f227072a17a216144b440ba 100644
 --- a/AMBuildScript
 +++ b/AMBuildScript
 @@ -111,7 +111,7 @@ class Config(object):
@@ -11,8 +11,8 @@ index 8116f0c8c61034291dfc5184345fe43ecb12cc06..ba39b377092f2bb98dd3c53807fbaa0f
 -                cxx.postlink += ['-lpthread', '-lrt']
 +                cxx.postlink += ['-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s']
              elif cxx.target.platform == 'mac':
-                 cxx.cflags += ['-mmacosx-version-min=10.15']
-                 cxx.linkflags += ['-mmacosx-version-min=10.15']
+                 cxx.cflags += ['-mmacosx-version-min=11.0']
+                 cxx.linkflags += ['-mmacosx-version-min=11.0']
 @@ -144,9 +144,11 @@ class Config(object):
              '-pipe',
              '-Wall',

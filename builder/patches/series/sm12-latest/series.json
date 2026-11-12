@@ -1,9 +1,9 @@
 {
   "line": "sm12-latest",
-  "commit": "e68dada2979eb3093d81d2e3766f741e7d431e4a",
+  "commit": "3f7460671f7adc4a3c6791a47d21ba3e7b5fba91",
   "trees": {
     "hl2sdk-manifests": "faa0989e4e2db01454a4226b33d47a3672a947f3",
-    "sourcemod": "9a0ef9d1af94d7c2355ee23ebdc7d6d723f3a51e",
+    "sourcemod": "d4faca9de9654ffe2977f06b19dfe75799dfbcf6",
     "sourcepawn": "6a62937000456471f69c0ce4c3f408b29cb8ee9f"
   }
 }

@@ -9,6 +9,15 @@ inputs:
   line:
     description: CSS34_LINE to build (an active line of builder/lines.json)
     required: true
+  deps-cache:
+    description: >-
+      'true' restores and saves the built dependency prefixes (zlib, OpenSSL,
+      MariaDB Connector/C, MySQL SDK; builder/deps_cache.py paths) with
+      actions/cache. ci.yml only: release.yml leaves it unset and always builds
+      them from scratch. The builder reuses a restored prefix only when its
+      stamp matches this build's inputs.
+    required: false
+    default: 'false'
 outputs:
   sm_asset:
     description: File name of the SourceMod package in packages/
@@ -19,6 +28,35 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Deps cache key (${{ inputs.line }})
+      id: deps-key
+      if: inputs.deps-cache == 'true'
+      shell: bash
+      env:
+        CSS34_LINE: ${{ inputs.line }}
+      run: |
+        set -euo pipefail
+        source builder/resolve-version.sh
+        # Build image, deps path and the exact bytes of the scripts that build
+        # the prefixes (their version and sha256 pins included); the SourceMod
+        # pin decides which prefixes the line needs.
+        key="$(python3 builder/deps_cache.py key --line "$CSS34_LINE" --sm-commit "$SOURCEMOD_COMMIT")"
+        echo "key=${key}" >> "$GITHUB_OUTPUT"
+        {
+          echo 'paths<<CSS34_DEPS_PATHS'
+          python3 builder/deps_cache.py paths
+          echo 'CSS34_DEPS_PATHS'
+        } >> "$GITHUB_OUTPUT"
+        echo "Deps cache key: ${key}"
+
+    - name: Restore built dependency prefixes
+      id: deps-restore
+      if: inputs.deps-cache == 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.deps-key.outputs.paths }}
+        key: ${{ steps.deps-key.outputs.key }}
+
     - name: Build SourceMod + Metamod (manylinux2014, ${{ inputs.line }})
       shell: bash
       env:
@@ -41,3 +79,11 @@ runs:
         # Exact names of what this run built: later jobs never glob.
         echo "sm_asset=$(basename "$SM_PACKAGE")" >> "$GITHUB_OUTPUT"
         echo "mm_asset=$(basename "$MM_PACKAGE")" >> "$GITHUB_OUTPUT"
+
+    # After the static checks: only prefixes of a build whose packages passed.
+    - name: Save built dependency prefixes
+      if: inputs.deps-cache == 'true' && steps.deps-restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ steps.deps-key.outputs.paths }}
+        key: ${{ steps.deps-key.outputs.key }}

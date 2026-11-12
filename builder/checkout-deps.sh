@@ -14,13 +14,38 @@ mkdir -p "$DEPS"
 source "$BUILDER_DIR/fetch-pinned.sh"
 fetch_verified() { fetch_pinned "$@"; }
 
+# Built prefixes (zlib, OpenSSL, MariaDB Connector/C, MySQL SDK) carry a stamp
+# with the digest of every input that decides them (builder/deps_cache.py: build
+# image, deps path, these scripts with their version and sha256 pins). A prefix
+# is reused only when that stamp matches this build, whether it is left over from
+# an earlier build or restored by ci.yml's deps cache; otherwise it is rebuilt.
+# Freeze builds (CSS34_OFFLINE, CSS34_SAVE_DOWNLOADS) never reuse.
+DEPS_DIGEST=""
+deps_digest() {
+  if [[ -z "$DEPS_DIGEST" ]]; then
+    local image="${CSS34_BUILD_IMAGE:-}"
+    # Outside builder/docker/build.sh: tie the stamps to this host's compiler.
+    [[ -n "$image" ]] || image="host:$(uname -m):$("${CC:-gcc}" --version 2>/dev/null | head -1)"
+    DEPS_DIGEST="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/deps_cache.py" digest \
+      --root "$BUILDER_DIR/.." --image "$image" --deps-dir "$(cd "$DEPS" && pwd)")"
+    echo "==> Deps inputs digest ${DEPS_DIGEST}"
+  fi
+}
+deps_reusable() { # PREFIX REQUIRED_FILE...
+  deps_digest
+  bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/deps_cache.py" check "$1" "$DEPS_DIGEST" "${@:2}"
+}
+deps_stamp() { # PREFIX
+  deps_digest
+  bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/deps_cache.py" stamp "$1" "$DEPS_DIGEST"
+}
+
 # The sm13 MariaDB archive uses zlib. Embed a pinned PIC build so the
 # extension has no unversioned compression imports or additional runtime ABI.
 install_zlib() {
   local prefix="$DEPS/zlib"
-  local stamp="$prefix/.css34-zlib-1.3.1-pic"
   local tarball="$DEPS/zlib-1.3.1.tar.gz"
-  if [[ -f "$stamp" && -f "$prefix/lib/libz.a" ]]; then
+  if deps_reusable "$prefix" lib/libz.a include/zlib.h; then
     echo "==> Static PIC zlib 1.3.1 already built at $prefix"
     return
   fi
@@ -37,7 +62,7 @@ install_zlib() {
     make install
   )
   rm -rf "$DEPS/zlib-1.3.1" "$tarball"
-  touch "$stamp"
+  deps_stamp "$prefix"
 }
 
 # OpenSSL 3.x's Configure (IPC::Cmd) and Makefile template (Time::Piece) need
@@ -91,10 +116,9 @@ install_build_perl() {
 OPENSSL_VERSION=3.5.9
 install_openssl() {
   local prefix="$DEPS/openssl"
-  local stamp="$prefix/.css34-openssl-${OPENSSL_VERSION}-linux-syscall-v1"
   local tarball="$DEPS/openssl-${OPENSSL_VERSION}.tar.gz"
   local sha="603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
-  if [[ -f "$stamp" && -f "$prefix/lib/libssl.a" && -f "$prefix/lib/libcrypto.a" ]]; then
+  if deps_reusable "$prefix" lib/libssl.a lib/libcrypto.a include/openssl/opensslv.h; then
     echo "==> OpenSSL ${OPENSSL_VERSION} already built at $prefix"
     return
   fi
@@ -121,7 +145,7 @@ install_openssl() {
     make install_sw
   )
   rm -rf "$DEPS/openssl-${OPENSSL_VERSION}" "$tarball"
-  touch "$stamp"
+  deps_stamp "$prefix"
 }
 
 # MariaDB Connector/C (SM 1.13 7461+, --mariadb-path). AlliedModders' Linux
@@ -133,10 +157,9 @@ install_openssl() {
 # the OpenSSL above and the PIC zlib, in this glibc 2.17 image.
 install_mariadb_connector_linux() {
   local prefix="$1"
-  local stamp="$prefix/.css34-src-${MARIADB_CONNECTOR_VERSION}-openssl-${OPENSSL_VERSION}-v1"
   local src="$DEPS/mariadb-connector-c-${MARIADB_CONNECTOR_VERSION}-src"
   local tarball="$src.tar.gz"
-  if [[ -f "$stamp" && -f "$prefix/lib/libmariadbclient.a" ]]; then
+  if deps_reusable "$prefix" lib/libmariadbclient.a include/mariadb/mysql.h; then
     echo "==> MariaDB Connector/C ${MARIADB_CONNECTOR_VERSION} already built at $prefix"
     return
   fi
@@ -175,7 +198,7 @@ install_mariadb_connector_linux() {
   cp "$src/build/libmariadb/libmariadbclient.a" "$prefix/lib/"
   test -f "$prefix/include/mariadb/mysql.h"
   rm -rf "$src" "$tarball"
-  touch "$stamp"
+  deps_stamp "$prefix"
 }
 
 clone_repo() {
@@ -278,7 +301,7 @@ if [ "$BUILD_PLATFORM" = "windows" ]; then
     rm -f "$DEPS/mysql.zip"
   fi
 else
-  if [ ! -f "$DEPS/mysql-5.5/lib/libmysqlclient_r.a" ]; then
+  if ! deps_reusable "$DEPS/mysql-5.5" lib/libmysqlclient_r.a include/mysql.h; then
     fetch_verified \
       "https://cdn.mysql.com/archives/mysql-5.6/mysql-5.6.15-linux-glibc2.5-i686.tar.gz" \
       "$DEPS/mysql.tar.gz" \
@@ -287,6 +310,7 @@ else
     rm -rf "$DEPS/mysql-5.5"
     mv "$DEPS/mysql-5.6.15-linux-glibc2.5-i686" "$DEPS/mysql-5.5"
     rm -f "$DEPS/mysql.tar.gz"
+    deps_stamp "$DEPS/mysql-5.5"
   fi
 fi
 

@@ -49,6 +49,8 @@ on:
 
 permissions:
   contents: write
+  # Pull the prebuilt smoke/botplay images (test-images.yml) from ghcr.io.
+  packages: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -399,6 +401,8 @@ jobs:
           SM_ASSET: ${{ needs.linux.outputs.sm_asset || needs.resolve-line.outputs.sm_asset }}
           MM_ASSET: ${{ needs.linux.outputs.mm_asset || needs.resolve-line.outputs.mm_asset }}
           IMAGE: ${{ matrix.image }}
+          BASE_IMAGE: ${{ matrix.base_image }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           testing/scripts/release-smoke.sh
 
@@ -438,6 +442,8 @@ jobs:
       - name: Botplay public release URLs on ${{ matrix.image_name }}
         env:
           IMAGE: ${{ matrix.image }}
+          BASE_IMAGE: ${{ matrix.base_image }}
+          GHCR_TOKEN: ${{ github.token }}
           BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.resolve-line.outputs.tag }}
           SM_ASSET: ${{ needs.linux.outputs.sm_asset || needs.resolve-line.outputs.sm_asset }}
           MM_ASSET: ${{ needs.linux.outputs.mm_asset || needs.resolve-line.outputs.mm_asset }}
@@ -465,6 +471,7 @@ jobs:
             export SM_VERSION_EXPECT="$sm_ver"
             export MM_VERSION_EXPECT="${mm_ver%%-*}"
           fi
+          IMAGE="$(testing/scripts/pull-test-image.sh "$IMAGE" "$BASE_IMAGE")"
           docker run --rm --platform linux/amd64 \
             -v "$PWD:/workspace" \
             -e SERVER_DIR=/workspace/.ci-server \

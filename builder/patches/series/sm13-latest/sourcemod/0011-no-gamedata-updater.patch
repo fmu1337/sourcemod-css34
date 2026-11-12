@@ -76,10 +76,10 @@ index b86dc76182484f4e4620952f6bbd086e4cc61ed2..43c3c04fa76277628e5c90f1d0a356bd
  	 * If set to yes, SourceMod will validate steamid auth strings with the Steam backend before giving out admin access.
  	 * This can prevent malicious users from impersonating admins with stolen Steam apptickets.
 diff --git a/core/sourcemod.cpp b/core/sourcemod.cpp
-index 8d5c6bf0b4c698c792a21949abde2a4c27c453f4..7a7b1a84a01372866364ff821174214d41490a26 100644
+index daa9666a8887509aa41ab852073fcbc3f21e110a..df391b6c3a21db69af56d8f660bfd1c03ea8be86 100644
 --- a/core/sourcemod.cpp
 +++ b/core/sourcemod.cpp
-@@ -265,12 +265,7 @@ void SourceModBase::StartSourceMod(bool late)
+@@ -271,12 +271,7 @@ void SourceModBase::StartSourceMod(bool late)
  		AllPluginsLoaded();
  	}
  
