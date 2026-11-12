@@ -4,7 +4,7 @@ Patched [SourceMod](https://www.sourcemod.net/) + [Metamod:Source](https://www.s
 
 All packages are built from source: no rom4s/reference `.so` is spliced in. Smoke asserts SDK Hooks load and the css34 `OnTakeDamage` gamedata (linux **61**). Botplay hooks `SDKHook_OnTakeDamage` and logs hits.
 
-Docs: [docs/README.md](docs/README.md) (index — current reference vs. history). Known doc/project inconsistencies and simplification proposals: [docs/REVIEW_2026-10.md](docs/REVIEW_2026-10.md).
+Docs: [docs/README.md](docs/README.md) (index — current reference vs. history).
 
 ## What to install
 
@@ -113,8 +113,8 @@ Details, the mapping onto MariaDB Connector/C and the CI cases: [docs/PATCHES.md
 | `sm11-oldstable` | **1.11.0.6970** (`f53cb134…`) | **1.12 git1227** (`75dd7b26…`) | OldStable, frozen ([docs](docs/FREEZE.md)): dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy |
 | `sm12-latest` | **1.12.0.7260** (`3f746067…`) | **1.12 git1229** (`4e031eb5…`) | Latest 1.12 |
 | `sm13-latest` | **1.13.0.7488** (`5eb6a120…`) | **1.12 git1229** (`4e031eb5…`) | Latest 1.13 (default) |
-| `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | 2.0 git1407 (last SourceHook MM 2.0) (`0084b86a…`) | Retired outside CI ([docs](docs/SM13_MM20.md)) |
-| `sm13-mm20-khook` | **1.13.0.7565** (KHook branch + master) (`25954d4a…`) | **2.0 git1472 (KHook)** (`05c5c63a…`) | Frozen outside CI ([docs](docs/MM20_KHOOK.md)) |
+| `sm13-mm20` | 1.13.0.7404 (`cdedec76…`) | 2.0 git1407 (last SourceHook MM 2.0) (`0084b86a…`) | Retired outside CI ([docs, archive/khook](https://github.com/fmu1337/sourcemod-css34/blob/archive/khook/docs/SM13_MM20.md)) |
+| `sm13-mm20-khook` | **1.13.0.7565** (KHook branch + master) (`25954d4a…`) | **2.0 git1472 (KHook)** (`05c5c63a…`) | Frozen outside CI ([docs, archive/khook](https://github.com/fmu1337/sourcemod-css34/blob/archive/khook/docs/MM20_KHOOK.md)) |
 <!-- lines-versions:end -->
 
 `sm13-dev` (7404 + MM 1.12) is gone (T3.3): use `sm13-latest`. Its last tag, `1.13.0.7404-mm1.12.0`, is no
@@ -130,9 +130,9 @@ Resolver: [`builder/resolve-version.sh`](builder/resolve-version.sh).
 Bumps: `.github/workflows/upstream-bump.yml` opens a PR per lagging line every week and tags the line after
 merge; by hand, see [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md#апгрейд-новая-ревизия-той-же-major).
 
-> `meta version` prints the Metamod build number from `lines.json` (`1.12.0-dev+1228`,
+> `meta version` prints the Metamod build number from `lines.json` (`1.12.0-dev+1229`,
 > or `1.10.7-dev+976` on `sm11-oldstable`) and `Build ID: <rev>:<commit prefix>`.
-> `sm version` prints `<major>.<minor>.0.<SM_REV>` (for example `1.13.0.7478`).
+> `sm version` prints `<major>.<minor>.0.<SM_REV>` (for example `1.13.0.7488`).
 > The clones stay shallow; `generate_headers.py` reads `MMS_GIT_REV` / `SOURCEMOD_GIT_REV`.
 
 ### What pairs with what
@@ -141,7 +141,7 @@ merge; by hand, see [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md#апгрей
 |--|--|--|
 | **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable`, runs `sourcemod.1.ep1`) | no |
 | **MM 1.11** (`metamod.2.ep1`) | no (myarena bundle; `11 < 14`) | not a release path |
-| **MM 1.12** git1227 / git1228 | **matched** (`sm11-oldstable` git1227, runs `sourcemod.2.ep1`) | **matched** (`sm12-latest`, `sm13-latest`) |
+| **MM 1.12** git1227 / git1229 | **matched** (`sm11-oldstable` git1227, runs `sourcemod.2.ep1`) | **matched** (`sm12-latest`, `sm13-latest`) |
 | **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
 | **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
 
@@ -164,8 +164,8 @@ A rebuild of the same pins gets a `-r<N>` suffix (tags are never moved); `releas
 
 | Tag | Line | Built from | SourceMod | Metamod |
 |-----|------|------------|-----------|---------|
-| [`1.13.0.7478-mm1.12.0-r5`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7478-mm1.12.0-r5) | `sm13-latest` (GitHub Latest) | `5d59959` | 1.13.0-git7478 | 1.12.0 git1229 (+ legacy bridge, 1.10.7 git976) |
-| [`1.12.0.7257-mm1.12.0-r4`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7257-mm1.12.0-r4) | `sm12-latest` | `5d59959` | 1.12.0-git7257 | 1.12.0 git1229 (+ legacy bridge, 1.10.7 git976) |
+| [`1.13.0.7488-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7488-mm1.12.0) | `sm13-latest` (GitHub Latest) | `3c444a4` | 1.13.0-git7488 | 1.12.0 git1229 (+ legacy bridge, 1.10.7 git976) |
+| [`1.12.0.7260-mm1.12.0`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.12.0.7260-mm1.12.0) | `sm12-latest` | `99db589` | 1.12.0-git7260 | 1.12.0 git1229 (+ legacy bridge, 1.10.7 git976) |
 | [`1.11.0.6970-mm1.12.0-dual-r3`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.11.0.6970-mm1.12.0-dual-r3) | `sm11-oldstable` (frozen) | `978ec55` | 1.11.0-git6970, both cores | 1.12.0 git1227 (+ legacy bridge); 1.10.7 git976 as `mmsource-legacy` |
 | [`1.13.0.7565-mm2.0.0-khook-dhooks-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks-r2) | `sm13-mm20-khook` | `88713a7` | 1.13.0-git7565 (KHook branch + master), + `dhooks.ext` | 2.0.0 git1472 (KHook) |
 | [`1.13.0.7404-mm2.0.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0-r2) | `sm13-mm20` | `88713a7` | 1.13.0-git7404 | 2.0.0 git1407 |
@@ -206,7 +206,6 @@ Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}` and
 names above. Older Linux tags before `-r2` keep `mmsource-<ver>-dev-css34-linux.tar.gz`;
 tags published before the Windows rename keep `mmsource-<ver>-dev-css34-windows.zip`.
 Historical URLs in `testing/versions/matrix.json` intentionally retain those names.
-The rename consumer audit and installer migration are in [docs/WINDOWS_ASSETS.md](docs/WINDOWS_ASSETS.md).
 
 ### SourceMod 1.11: choosing Metamod
 
@@ -286,12 +285,12 @@ back: an update whose tagged commit is older than the one served is skipped.
 Line pointers (`line-<line>`) serve fixed URLs consumed by installers (such as `fmu1337/v34_server_base`).
 Each line pointer serves the latest smoke-passed release tag for that build line.
 
-If a published pointer needs to be repointed or rolled back to a specific tag (e.g. `1.12.0.7253-mm1.12.0`), perform a manual repoint dispatch:
+If a published pointer needs to be repointed or rolled back to a specific tag (e.g. `1.13.0.7478-mm1.12.0-r8`), perform a manual repoint dispatch:
 
 1. Open **GitHub Actions** → **Release** workflow (`release.yml`).
 2. Click **Run workflow** (`workflow_dispatch`).
 3. Select the target branch (`master`).
-4. In **Target release tag to repoint line pointer to**, enter the target release tag (e.g. `1.12.0.7253-mm1.12.0` or `1.13.0.7472-mm1.12.0`).
+4. In **Target release tag to repoint line pointer to**, enter the target release tag (e.g. `1.13.0.7478-mm1.12.0-r8` or `1.12.0.7257-mm1.12.0-r7`).
 5. Run the workflow.
 
 **What happens during a repoint dispatch:**
@@ -342,7 +341,7 @@ leftover `extensions/updater.ext.so` and `webternet.ext.so` are never loaded and
   load (KHook recall on MSVC x86). Both tags now point at `b1f5192`, which carries the fix, and their assets
   were re-uploaded from it on 2026-10-12, but those exact files never went through the Wine smoke. Prefer
   `1.13.0.7565-mm2.0.0-khook-dhooks-r2`. Fix and Wine / native Windows smoke:
-  [docs/MM20_KHOOK.md](docs/MM20_KHOOK.md#windows).
+  [MM20_KHOOK.md on `archive/khook`](https://github.com/fmu1337/sourcemod-css34/blob/archive/khook/docs/MM20_KHOOK.md#windows).
 
 **Install traps**
 

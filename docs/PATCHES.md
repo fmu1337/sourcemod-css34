@@ -4,7 +4,7 @@
 
 `builder/patches/series/sm13-latest/` is how sm13-latest is patched
 (`apply-sourcemod.sh` applies the line's series with `apply-series.sh`; a line
-without one fails). `series.json` names SourceMod `b34de51b` (1.13.0.7478) and the
+without one fails). `series.json` names SourceMod `5eb6a120` (1.13.0.7488) and the
 tree each repository must have after `git apply --index`; the build fails on any
 other result. The series was generated from the former scripted patcher
 (`apply-sourcemod-v112.sh`, removed at the end of T3.4) on a clean
@@ -31,8 +31,8 @@ files, exports, `NEEDED` and `SONAME` (`compare-package-abi.py`).
 
 ## sm12-latest patch series
 
-`builder/patches/series/sm12-latest/` is made the same way for SourceMod `e68dada2`
-(1.12.0.7257) and patches sm12-latest. Its patches are the
+`builder/patches/series/sm12-latest/` is made the same way for SourceMod `3f746067`
+(1.12.0.7260) and patches sm12-latest. Its patches are the
 sm13 ones above except:
 
 - no `glibc217-database-imports`: SM 1.12's database extensions need neither shim;
@@ -54,8 +54,8 @@ and `SONAME`.
 ## Metamod 1.12 patch series (MM_112)
 
 `builder/patches/series/MM_112/` (`"root": "metamod"`) is keyed by the Metamod pin
-rather than a line: every line that builds `MM_112_COMMIT` (`cb477558`, 1.12.0
-git1228) uses it. `checkout-deps.sh` fetches the pin with `fetch-sourcemod.sh`
+rather than a line: every line that builds `MM_112_COMMIT` (`4e031eb5`, 1.12.0
+git1229) uses it. `checkout-deps.sh` fetches the pin with `fetch-sourcemod.sh`
 (exact tree, LF as committed), applies the series whose `commit` matches, then
 `apply-mmsource-oldbridge.sh modern` (the legacy-plugin bridge stays a script: it
 is our own code, kept once in `builder/patches/mm-oldbridge/`). `build-metamod.sh`

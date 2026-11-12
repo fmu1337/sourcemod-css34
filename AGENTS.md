@@ -5,7 +5,7 @@
 This repo is a **build system** (not a long-running app). It compiles patched
 **SourceMod + Metamod:Source** packages for **Counter-Strike: Source v34** — two
 buildable lines selected by `CSS34_LINE` (`sm12-latest`, default `sm13-latest` =
-SM 1.13.0.7478 + MM 1.12 git1228; pins in `builder/lines.json`; generated
+SM 1.13.0.7488 + MM 1.12 git1229; pins in `builder/lines.json`; generated
 `builder/versions.env`; `sm11-oldstable` is frozen) — and
 smoke-tests them on a real `srcds`
 dedicated server. See `README.md`, `docs/README.md`, `testing/README.md`, and

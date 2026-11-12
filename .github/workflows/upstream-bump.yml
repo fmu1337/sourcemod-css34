@@ -1,6 +1,6 @@
 name: Upstream bump
 
-# T4.4 (replaces the daily Jules task, docs/archive/JULES_DAILY_VERSION_BUMP.md).
+# T4.4 (replaces the former daily Jules bump task).
 #
 # Weekly (and on dispatch): for each tracked target of builder/scripts/upstream-bump.py
 # (sm12-latest, sm13-latest, MM_112) whose pin is behind its upstream branch, open or

@@ -30,14 +30,14 @@ Metamod:    apply-series.sh series/MM_112/        # серия под pin MM 1.1
 Что из этого следует для апгрейда SM сегодня:
 
 1. Новая ревизия той же major (7472 → 75xx): меняется pin в `builder/versions.env` (и в местах из
-   [JULES_DAILY_VERSION_BUMP.md](JULES_DAILY_VERSION_BUMP.md)), затем
+   [JULES_DAILY_VERSION_BUMP.md](https://github.com/fmu1337/sourcemod-css34/blob/bc3ab6d/docs/archive/JULES_DAILY_VERSION_BUMP.md), удалён), затем
    `builder/scripts/patch-series.sh refresh <line>` (или `refresh MM_112`) перебазирует серию
    (`git apply --3way`); конфликт правится в самом `.patch`. См. [PATCHES.md](../PATCHES.md).
 2. Серия своя у каждой линии и у pin'а MM: правка одной линии не задевает другие.
 3. Новая линия = новый case в `resolve-version.sh`, переменные в `versions.env`, строки в матрицах
    `test-server.yml` / `build.yml`, маппинг тега в `release.yml`, запись в `matrix.json`.
 
-Предложения, как это упростить, — в [REVIEW_2026-10.md](../REVIEW_2026-10.md). Всё, что ниже, — история
+Предложения, как это упростить, — в [REVIEW_2026-10.md](https://github.com/fmu1337/sourcemod-css34/blob/bc3ab6d/docs/REVIEW_2026-10.md) (удалён; его предложения вошли в [ROADMAP.md](ROADMAP.md)). Всё, что ниже, — история
 обсуждения (PR #7, #10, #15, #17) и чек-листы граблей, которые по-прежнему полезны при апгрейдах.
 
 ---
@@ -281,4 +281,4 @@ sudo bash testing/scripts/run-built-mm-matrix.sh
 | `builder/patches/apply-sourcemod.sh` | Был патчсет SM 1.11 (6970) + роутер в `apply-sourcemod-v112.sh`; после T3.3/T3.4 — только роутер на серию линии |
 | Тег `1.11.0.6572-mm1.10.7` | Исторический (до матрицы линий); текущие сборки — см. README |
 | Draft [#6](https://github.com/fmu1337/sourcemod-css34/pull/6) (1.12) | Superseded #23 (1.12 в master, линия `sm12-latest`) |
-| [PR #54](https://github.com/fmu1337/sourcemod-css34/pull/54), [PR #55](https://github.com/fmu1337/sourcemod-css34/pull/55) | SourceHook header-graft на MM 2.0 git1469 отвергнут (`g_SHPtr` = NULL на KHook MM); заменены `sm13-mm20-khook` (#59). Детали — [MM20_KHOOK.md](../MM20_KHOOK.md), CI-покрытие `sm13-mm20` — [SM13_MM20.md](../SM13_MM20.md) |
+| [PR #54](https://github.com/fmu1337/sourcemod-css34/pull/54), [PR #55](https://github.com/fmu1337/sourcemod-css34/pull/55) | SourceHook header-graft на MM 2.0 git1469 отвергнут (`g_SHPtr` = NULL на KHook MM); заменены `sm13-mm20-khook` (#59). Детали — [MM20_KHOOK.md](https://github.com/fmu1337/sourcemod-css34/blob/archive/khook/docs/MM20_KHOOK.md), CI-покрытие `sm13-mm20` — [SM13_MM20.md](https://github.com/fmu1337/sourcemod-css34/blob/archive/khook/docs/SM13_MM20.md) |

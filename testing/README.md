@@ -271,7 +271,7 @@ uploaded as the `windows-smoke-<line>` artifact on a failure).
 # needs wine32, xvfb, unzip, python3 (e.g. an ubuntu:22.04 container)
 SM_WIN_PACKAGE="$(ls packages/sourcemod-*-css34-windows.zip)" \
 MM_WIN_PACKAGE="$(ls packages/mmsource-*-css34-windows.zip)" \
-SM_VERSION_EXPECT=1.13.0.7478 MM_VERSION_EXPECT=1.12.0 \
+SM_VERSION_EXPECT=1.13.0.7488 MM_VERSION_EXPECT=1.12.0 \
 EXPECT_EXTS='CS Tools,SDK Tools,BinTools,SDK Hooks' LOAD_EXTS=sdkhooks \
   testing/scripts/wine-smoke-test.sh
 ```
