@@ -3,3 +3,6 @@
 builder/patches/*.patch -text
 builder/patches/*.take -text
 builder/patches/series/** -text
+# Legacy test fixtures are verified byte for byte by SHA256SUMS and cmp.
+testing/plugins/legacy-smx/** -text
+testing/plugins/css34_legacy_forward_probe.sp -text

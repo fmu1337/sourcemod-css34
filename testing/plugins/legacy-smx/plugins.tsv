@@ -1,0 +1,9 @@
+# compiler dir	source (in that release, or testing/plugins)	installed as
+1.7.3-git5334	adminmenu	adminmenu.smx
+1.7.3-git5334	basecommands	basecommands.smx
+1.7.3-git5334	funcommands	funcommands.smx
+1.7.3-git5334	css34_legacy_forward_probe	css34_legacy_forward_probe_sm17.smx
+1.11.0-git6970	basechat	basechat.smx
+1.11.0-git6970	basecomm	basecomm.smx
+1.11.0-git6970	playercommands	playercommands.smx
+1.11.0-git6970	css34_legacy_forward_probe	css34_legacy_forward_probe_sm111.smx
