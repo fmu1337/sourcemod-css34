@@ -52,8 +52,15 @@ jobs:
         run: |
           set -euo pipefail
           python3 builder/lines.py check >/dev/null
-          prefix="${CSS34_LINE%%-*}"
-          echo "release=${prefix}-freeze-inputs" >> "$GITHUB_OUTPUT"
+          # Run on a freeze tag: its inputs go to the release <tag>-inputs
+          # (sm11-freeze -> sm11-freeze-inputs, sm11-freeze-r4 -> sm11-freeze-r4-inputs),
+          # so a refreeze never overwrites an earlier archive.
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            echo "release=${GITHUB_REF_NAME}-inputs" >> "$GITHUB_OUTPUT"
+          else
+            prefix="${CSS34_LINE%%-*}"
+            echo "release=${prefix}-freeze-inputs" >> "$GITHUB_OUTPUT"
+          fi
           echo "image_tag=${CSS34_LINE}-freeze" >> "$GITHUB_OUTPUT"
 
       - name: Install zstd
