@@ -18,10 +18,10 @@ name: Release
 #     explicitly, only for a tag of lines.json's default_line (never on a
 #     repoint). On red it stays a prerelease and line-<line> keeps serving the
 #     previous build. Windows assets never gate promotion; SHA256SUMS is last.
-#   * Asset names carry the revision (sourcemod-…-git7472-…, mmsource-…-git1226-…),
+#   * Asset names carry the revision (sourcemod-…-git<rev>-…, mmsource-…-git<mmrev>-…),
 #     and every release also carries the same files under fixed names
-#     (sourcemod-css34-linux.tar.gz, mmsource-css34-linux.tar.gz, *-windows.zip; the
-#     names line-<line> serves), VERSIONS.txt (key=value: exact versions, asset names,
+#     (sourcemod-css34-linux.tar.gz, mmsource-css34-linux.tar.gz, *-windows.zip;
+#     line-<line> serves only the Linux ones, update-line-pointer.sh), VERSIONS.txt (key=value: exact versions, asset names,
 #     sha256; builder/scripts/release-versions.py) and SHA256SUMS.
 #   * Published releases are never deleted: after a pointer move, the older
 #     releases of the line get a "superseded" banner (supersede-releases.py).

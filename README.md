@@ -170,8 +170,9 @@ A rebuild of the same pins gets a `-r<N>` suffix (tags are never moved); `releas
 | [`1.13.0.7565-mm2.0.0-khook-dhooks-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7565-mm2.0.0-khook-dhooks-r2) | `sm13-mm20-khook` | `88713a7` | 1.13.0-git7565 (KHook branch + master), + `dhooks.ext` | 2.0.0 git1472 (KHook) |
 | [`1.13.0.7404-mm2.0.0-r2`](https://github.com/fmu1337/sourcemod-css34/releases/tag/1.13.0.7404-mm2.0.0-r2) | `sm13-mm20` | `88713a7` | 1.13.0-git7404 | 2.0.0 git1407 |
 
-The release page of each `line-<line>` pointer says what it serves now, since when, and the sha256 of
-every file; GitHub's own date on that page is when the pointer was first created.
+This table is kept by hand and can lag behind a release; what a pointer serves is authoritative on the
+release page of each `line-<line>` pointer, which says what it serves now, since when, and the sha256 of
+every file (all lines at once: [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json)); GitHub's own date on that page is when the pointer was first created.
 
 ### Release retention
 
