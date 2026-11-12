@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare plugins/ for botplay bisect: stock on/off + SMAC subsets.
+# Prepare plugins/ for botplay: stock on/off + SMAC subsets.
 set -euo pipefail
 
 SERVER_DIR="${SERVER_DIR:?SERVER_DIR is required}"

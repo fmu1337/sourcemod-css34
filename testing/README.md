@@ -54,7 +54,7 @@ and pushes `ghcr.io/fmu1337/css34-test:<slug>-<12 hex of sha256(install-deps.sh,
   `install-deps.sh` it pushes the images and prints `results.json` in the `record` job;
   commit it with `python3 builder/lines.py test-images-record results.json && python3 builder/lines.py gen`.
 
-CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` from `build-linux` (handed to later jobs via Actions cache, not artifacts). rom4s reference drops are not used in this workflow.
+CI installs **only** the in-tree `packages/mmsource-*-css34-linux.tar.gz` and `packages/sourcemod-*-css34-linux.tar.gz` from `build-linux` (handed to later jobs via Actions cache, not artifacts).
 
 Packages come from `builder/docker/build.sh` (manylinux2014, glibc 2.17). `debian:latest` remains only on the opt-in reference botplay jobs, and that tag is pinned too.
 
@@ -86,10 +86,6 @@ On failure, smoke prints tails of `smoke.log`, `console-probe.log`, `cstrike/con
 
 The **botplay-stress** matrix (`test-built-botplay-matrix`) is the largest CI gate: SMAC + 8 bots + map rotation + `css34_botplay_stress.smx` SDKHook_OnTakeDamage probe (requires OnTakeDamage hits in SM logs) + `css34_cstrike_forward_probe.smx` (requires cstrike TerminateRound / buy / price detour hits and a `GetPlayerWeaponSlot` → `CS_DropWeapon` → `GivePlayerItem` round, `css34_cs_probe_mode 8` in `botplay-stress.cfg`)) + `css34_dhooks_probe.smx` (where dhooks.ext ships: DHooks virtual hooks on `CCSPlayer::OnTakeDamage`, `CBasePlayer::EyePosition` (Vector return, override) and `CCSPlayer::PlayStepSound` (float param, `MRES_ChangedHandled` recall), and detours on `CCSPlayer::RoundRespawn` and `CWeaponCSBase::GetMaxSpeed` (float return, override) must install, fire and return sane values; probe gamedata lives in `testing/plugins/gamedata/`; lines without DHooks log `available=0` and are skipped) + `css34_gamedata_probe.smx` (gamedata `"library" "engine"` symbols `@sv`, `@Cmd_ExecuteString` and navfile_blocker's `@CDownloadListGenerator::OnResourcePrecachedFullPath`, and `"library" "server"` `@CWeaponCSBase::GetMaxSpeed`, must resolve; it also logs the engine's `GAMEBIN` / `EXECUTABLE_PATH` search paths) + prebuilt plugins from spcomp 1.7.3 and 1.11 (`testing/plugins/legacy-smx/`: stock `adminmenu` / `basecommands` / `funcommands` / `basechat` / `basecomm` / `playercommands` replace the package copies, and `css34_legacy_forward_probe` calls global, private and function forwards with mixed parameter types across the 1.7.3, 1.11 and package-compiled copies; `check-legacy-plugins.sh` fails on `<Failed>` / `<Error>` plugins, missing natives, plugin load errors and forward argument errors) + `css34_upstream_probe.smx` (sound hook `Plugin_Changed` continues into the next hook on SM 1.13.0.7475+, a `HookSingleEntityOutput` does not fire on a new `logic_relay` after a map change, and `GetClientOfUserId` rejects out-of-range userids). Runs for all `CSS34_LINE` builds on every `master` push.
 
-## `srcds_run` / engine launch flags
-
-String-audited notes for CSS v34 (`-dev`, `-debug`, `-norestart`, `-tickrate`, dedicated/engine layers, MyArena cross-checks): [docs/srcds-params.md](docs/srcds-params.md). Re-scrape stock binaries with `testing/scripts/extract-srcds-params.sh`.
-
 ## Buffer / modern-OS fixes
 
 See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
@@ -97,13 +93,11 @@ See [docs/bufferfix.md](docs/bufferfix.md). CI defaults to:
 - minimal `cstrike/cfg/valve.rc`
 - **srcds_patch** — ELF rewrite memcpy→memmove (`patch-srcds-bufferfix.py`)
 
-## Botplay baseline (rom4s + SMAC)
+## Botplay (SMAC + bots)
 
-`testing/botplay/rom4s-baseline.json` holds the counters of a session with **rom4s** Metamod 1.10.6 + SourceMod 6572: compile [smac_v34](https://github.com/fmu1337/smac_v34), spawn bots (`botplay-server.cfg`), record, then parse `cstrike/console.log` for `round_start`, `round_end`, and kills. To re-record it, run `testing/scripts/botplay-test.sh` locally with `BOTPLAY_PROFILE=rom4s` (the CI job for it was removed: it never ran).
+`botplay-test.sh` compiles [smac_v34](https://github.com/fmu1337/smac_v34), spawns bots (`botplay-server.cfg`), records a session, then parses `cstrike/console.log` (`round_start`, `round_end`, kills) and the probe plugins' log lines. `ci.yml` `botplay` runs it with the **built** MM + SM packages of every line; the crash, extension, gamedata and API/ABI checks are required. Published releases get the same session in release.yml `botplay-release` (`BOTPLAY_PROFILE=release`).
 
-`ci.yml` `botplay` runs the same session with the **built** MM + SM packages of every line and compares against `testing/botplay/rom4s-baseline.json` for information only (the comparison goes to the job summary). Event-count differences do not fail CI; the botplay crash, extension, gamedata and API/ABI checks remain required. Published releases get the same session in release.yml `botplay-release` (`BOTPLAY_PROFILE=release`).
-
-SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/`. Our packages ship `GeoLite2-Country.mmdb` (`prepare-package.sh`, enforced by `check-package.sh`); `botplay-test.sh` also installs one via `install-geoip2-db.sh` when it is missing (e.g. for rom4s packages).
+SM 1.12+ `geoip.ext` needs a GeoIP2 `*.mmdb` under `configs/geoip/`. Our packages ship `GeoLite2-Country.mmdb` (`prepare-package.sh`, enforced by `check-package.sh`); `botplay-test.sh` also installs one via `install-geoip2-db.sh` when it is missing.
 
 **Stress profile (default):** `botplay-stress.cfg` execs `botplay-server.cfg` (fast 1‑minute rounds) then raises `bot_quota` to 8. Plugin `css34_botplay_stress.smx` rotates maps every 3 rounds (`de_dust2` → `de_inferno` → `de_nuke`) and logs sdkhooks/sdktools ABI probe results each round.
 
@@ -129,33 +123,11 @@ BOTPLAY_PROFILE=built \
 REPORT_JSON=$PWD/.ci-server/built-botplay-report.json \
 RECORD_SECS=120 \
   testing/scripts/botplay-test.sh
-testing/scripts/compare-botplay-reports.sh \
-  testing/botplay/rom4s-baseline.json \
-  .ci-server/built-botplay-report.json
+cat .ci-server/built-botplay-report.json
 ```
 
-Local short run (rom4s):
-
-```bash
-chmod +x testing/scripts/*.sh
-SERVER_DIR=$PWD/.ci-server CACHE_DIR=$PWD/.ci-cache RECORD_SECS=120 \
-  testing/scripts/fetch-server.sh
-APPLY_VALVE_RC=1 APPLY_SRCDS_PATCH=1 testing/scripts/apply-valve-rc-fix.sh
-APPLY_SRCDS_PATCH=1 testing/scripts/apply-srcds-patch.sh
-KEEP_MAP=de_dust2 testing/scripts/trim-server-maps.sh
-BOTPLAY_PROFILE=rom4s RECORD_SECS=120 testing/scripts/botplay-test.sh
-cat .ci-server/botplay-report.txt
-```
-
-Artifacts: `botplay-report.json`, `built-botplay-report.json`, `botplay-compare.txt`, `cstrike/console.log`.
-
-### Botplay bisect (built crash)
-
-`testing/scripts/botplay-bisect.sh` runs short (90s) cases locally (the CI job for it was removed: it never ran). Set `BISECT_SET=quick` (5 cases, ~15 min) or `BISECT_SET=full` (19 cases, ~50 min).
-
-**Root cause (2026-07):** built SM binaries are fine on CS:S v34; the crash (`Bad entity in IndexOfEdict()`) comes from **upstream `sdkhooks.games` gamedata** shipped in the package (wrong vtable offsets for ep1/CSS). Overlaying rom4s `gamedata/sdkhooks.games` onto a built install fixes botplay; `prepare-package.sh` now copies css34-specific sdkhooks gamedata from `builder/assets/gamedata/sdkhooks.games/`.
-
-Reverse bisect (`rom4s` SM + one built `.so` at a time) passes for every binary; `rom4s` gamedata + built binaries also passes.
+The css34 `sdkhooks.games` gamedata (`builder/assets/gamedata/sdkhooks.games/`) exists because upstream's has
+wrong vtable offsets for ep1/CSS (`Bad entity in IndexOfEdict()` under botplay, 2026-07).
 
 ## Legacy-plugin bridge (T2.9)
 
@@ -298,12 +270,11 @@ CSS34_LINE=sm13-latest \
 ```
 
 Needs root (or passwordless sudo) inside the target distro for package installs.
-Without `SM_PACKAGE` / `MM_PACKAGE` and without `packages/*.tar.gz`, `install-addons.sh` downloads the
-rom4s SM 6572 + MM 1.10.6 drops, i.e. it tests rom4s, not this repo.
+Without `SM_PACKAGE` / `MM_PACKAGE` and without `packages/*.tar.gz`, `install-addons.sh` fails.
 
 ## Version URLs
 
-Published release pairs of the five `CSS34_LINE`s, mix PASS/FAIL notes, and historical community URLs live in [`versions/matrix.json`](versions/matrix.json) (`releases`, `compatibility`, `reference`). What each line pointer serves right now is in [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json). CI smoke builds only in-tree pure-source packages — it does not download `reference.*` URLs.
+What each line pointer serves right now is in [`lines-index/lines.json`](https://github.com/fmu1337/sourcemod-css34/releases/download/lines-index/lines.json); pins are in [`builder/lines.json`](../builder/lines.json).
 
 ## CI hygiene regression checks
 

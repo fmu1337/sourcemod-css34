@@ -68,4 +68,3 @@ if [[ "$failures" -gt 0 ]]; then
 fi
 
 echo "==> Generated matrices and tag map match; no pin copies in workflows or builder scripts"
-echo "OK: testing/versions/matrix.json is historical and is not a pin source"

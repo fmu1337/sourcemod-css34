@@ -159,7 +159,7 @@ fi
 
 record_secs="${RECORD_SECS:-600}"
 map_name="${MAP:-de_dust2}"
-profile_name="${BOTPLAY_PROFILE:-rom4s}"
+profile_name="${BOTPLAY_PROFILE:-built}"
 botplay_cfg_name="${BOTPLAY_CFG:-botplay-stress.cfg}"
 mm_version="${MM_VERSION_EXPECT:-}"
 sm_version="${SM_VERSION_EXPECT:-}"

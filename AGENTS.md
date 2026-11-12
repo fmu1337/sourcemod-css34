@@ -132,8 +132,8 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   needs `unrar`), then boot `srcds` inside a pinned image from `builder/lines.json`
   (`centos:7`, `ubuntu:24.04`, or `debian:13` on every PR; older images are the
   weekly suite and release matrix) running `install-deps.sh` → `install-addons.sh` →
-  `smoke-test.sh` with `SM_PACKAGE` / `MM_PACKAGE` set (without them
-  `install-addons.sh` falls back to downloading rom4s 6572 + MM 1.10.6). The
+  `smoke-test.sh` with `SM_PACKAGE` / `MM_PACKAGE` set (`install-addons.sh`
+  fails without them). The
   559 MB server zip is cached under `.ci-cache/`. It boots a 32-bit `srcds_i686`
   and probes `meta version` / `sm version` / `sm exts load dbi.mysql.ext` /
   `sm exts load dbi.pgsql.ext` / `sm exts list` / `sm plugins list` via `expect`
@@ -228,5 +228,4 @@ ends in one `gate` job (`builder/scripts/ci_gate.py`). Suites: `pr` (PRs, master
 and `weekly` (Monday schedule or dispatch `suite=weekly`: old OS smoke, centos:7 botplay,
 Wine smoke); dispatch also takes `css34_line`. `release.yml` takes its OS rows from
 `lines.py` `ci_matrix` (`release-pins`). Planner and gate are covered by
-`python3 testing/scripts/test-ci-planner-gate.py`. Upstream tip probe:
-`builder/scripts/resolve-upstream-tips.sh`.
+`python3 testing/scripts/test-ci-planner-gate.py`.

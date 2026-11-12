@@ -1,8 +1,7 @@
 # docs/ index
 
-Two kinds of documents live here. **Reference** docs describe how the repository works today and are
-kept in sync with the code; **history** docs record decisions, experiments and field reports. A history
-doc carries a status note at the top saying what is still true.
+**Reference** docs describe how the repository works today and are kept in sync with the code. Older
+history (field reports, version comparisons, the patch-strategy debate) is in git history only.
 
 ## Reference (current)
 
@@ -18,7 +17,6 @@ doc carries a status note at the top saying what is still true.
 | [PATCHES.md](PATCHES.md) | Every patch of every series: what it changes and what breaks without it |
 | [upstream-reports/](upstream-reports/README.md) | Draft bug reports for SourceMod / Metamod / KHook, one file per report (the owner submits them) |
 | [../testing/docs/bufferfix.md](../testing/docs/bufferfix.md) | memcpy→memmove ELF rewrite of the v34 server |
-| [../testing/docs/srcds-params.md](../testing/docs/srcds-params.md) | v34 `srcds` launch flags |
 
 The MM 2.0 lines `sm13-mm20` (retired) and `sm13-mm20-khook` (frozen) are built only from the
 [`archive/khook`](https://github.com/fmu1337/sourcemod-css34/tree/archive/khook) branch, and their docs live
@@ -31,8 +29,3 @@ SourceMod + Metamod 2.0, DHooks x86, Windows).
 | Doc | What it records |
 |-----|-----------------|
 | [archive/ROADMAP.md](archive/ROADMAP.md) | The work plan of epic #73 (done): owner decisions D1–D7 and the task IDs `Tn.m` cited in code and commits |
-| [archive/PATCH_STRATEGY_HISTORY.md](archive/PATCH_STRATEGY_HISTORY.md) | The 2026-07 single-pin vs layered-patches debate, upgrade traps of the SM 1.11 era (6572 / 6588 / 6970), the 2026-10-13 status snapshot |
-| [archive/BYTE_MATCH.md](archive/BYTE_MATCH.md) | Why byte-identical `.so` vs rom4s 6572 is not a goal (still valid) |
-| [SDKHOOKS_EP1_RELEASE_BLOCKERS.md](SDKHOOKS_EP1_RELEASE_BLOCKERS.md) | 2026-07 field report: PLAPI 11 vs MM 1.11 mix, SDKHooks vtables on the 6572 tag |
-| [archive/V34_COMPARISON_v1.11.6572_vs_v1.12.7239.md](archive/V34_COMPARISON_v1.11.6572_vs_v1.12.7239.md) | What changed for v34 between SM 6572 and 7239 (first 1.12 port, PR #23) |
-| [archive/v34-variant-6522-notes.md](archive/v34-variant-6522-notes.md) | myarena SM 6522 bundle, forum notes (myarena, HLmod / FrozDark) |

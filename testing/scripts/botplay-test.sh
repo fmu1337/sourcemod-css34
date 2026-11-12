@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Rom4s or built packages + SMAC + botplay recording session.
+# Built or released packages + SMAC + botplay recording session.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SERVER_DIR="${SERVER_DIR:?SERVER_DIR is required}"
 
-BOTPLAY_PROFILE="${BOTPLAY_PROFILE:-rom4s}"
+BOTPLAY_PROFILE="${BOTPLAY_PROFILE:-built}"
 MAP="${MAP:-de_dust2}"
 PORT="${PORT:-27015}"
 RECORD_SECS="${RECORD_SECS:-600}"
@@ -54,14 +54,8 @@ case "${BOTPLAY_PROFILE}" in
     SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6970}"
     BOTPLAY_PROFILE=built
     ;;
-  rom4s)
-    MM_URL="${MM_URL:-https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz}"
-    SM_URL="${SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
-    MM_VERSION_EXPECT="${MM_VERSION_EXPECT:-1.10.6}"
-    SM_VERSION_EXPECT="${SM_VERSION_EXPECT:-1.11.0.6572}"
-    ;;
   *)
-    echo "Unknown BOTPLAY_PROFILE=${BOTPLAY_PROFILE} (use rom4s, built, or release)" >&2
+    echo "Unknown BOTPLAY_PROFILE=${BOTPLAY_PROFILE} (use built or release)" >&2
     exit 1
     ;;
 esac
@@ -111,11 +105,6 @@ if [[ "${SKIP_INSTALL_ADDONS:-0}" != "1" ]]; then
         exit 1
       fi
       export SM_PACKAGE MM_PACKAGE SERVER_DIR
-      "${ROOT}/testing/scripts/install-addons.sh"
-      ;;
-    rom4s)
-      unset MM_PACKAGE SM_PACKAGE USE_BUILT_MM BUILT_MM_DIR BUILT_MM_PACKAGE || true
-      export MM_URL SM_URL SERVER_DIR
       "${ROOT}/testing/scripts/install-addons.sh"
       ;;
   esac

@@ -558,32 +558,6 @@ jobs:
               testing/scripts/botplay-test.sh
             '
 
-      # Informational: the counters next to the rom4s 6572 baseline, in the job
-      # summary. The botplay step above is the gate.
-      - name: Compare botplay vs rom4s baseline
-        if: always()
-        env:
-          LINE: ${{ matrix.line }}
-          IMAGE_NAME: ${{ matrix.image_name }}
-        run: |
-          report=.ci-server/botplay-report.json
-          out=.ci-server/botplay-compare.txt
-          {
-            echo "### Botplay ${LINE} on ${IMAGE_NAME} vs rom4s baseline"
-            echo
-            if [[ -f "$report" ]]; then
-              rc=0
-              bash testing/scripts/compare-botplay-reports.sh \
-                testing/botplay/rom4s-baseline.json "$report" "$out" >/dev/null 2>&1 || rc=$?
-              echo '```'
-              cat "$out" 2>/dev/null || echo "(no comparison output, exit ${rc})"
-              echo '```'
-              [[ "$rc" == 0 ]] || echo "Below the baseline in at least one counter (exit ${rc})."
-            else
-              echo "No botplay-report.json (the botplay step failed before writing it)."
-            fi
-          } | tee -a "$GITHUB_STEP_SUMMARY"
-
       - name: Upload botplay report on failure
         if: failure()
         uses: actions/upload-artifact@v7

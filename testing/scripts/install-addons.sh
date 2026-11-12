@@ -1,33 +1,19 @@
 #!/usr/bin/env bash
 # Install Metamod:Source + SourceMod into SERVER_DIR/cstrike.
-# SM_PACKAGE can be a local .tar.gz path or a URL.
+# SM_PACKAGE / MM_PACKAGE are local .tar.gz paths (or USE_BUILT_MM=1 for a Metamod build tree).
 set -euo pipefail
 
 SERVER_DIR="${SERVER_DIR:?SERVER_DIR is required}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-CACHE_DIR="${CACHE_DIR:-${ROOT}/.ci-cache}"
 
-MM_URL="${MM_URL:-https://bitbucket.org/rom4s/mmsdrop-1.10/downloads/mmsource-1.10.6-css34-linux.tar.gz}"
 MM_PACKAGE="${MM_PACKAGE:-}"
 BUILT_MM_DIR="${BUILT_MM_DIR:-}"
 USE_BUILT_MM="${USE_BUILT_MM:-0}"
 SM_PACKAGE="${SM_PACKAGE:-}"
-SM_URL="${SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
 
-mkdir -p "${CACHE_DIR}" "${SERVER_DIR}/cstrike"
+mkdir -p "${SERVER_DIR}/cstrike"
 
-download() {
-  local url="$1" out="$2"
-  if [[ -f "${out}" && -s "${out}" ]]; then
-    echo "Using cached $(basename "${out}")"
-    return 0
-  fi
-  echo "Downloading ${url}"
-  curl -fL --retry 5 --retry-delay 3 -o "${out}.partial" "${url}"
-  mv "${out}.partial" "${out}"
-}
-
-  install_metamod() {
+install_metamod() {
   rm -rf "${SERVER_DIR}/cstrike/addons/metamod" "${SERVER_DIR}/cstrike/addons/metamod.vdf"
   if [[ "${USE_BUILT_MM}" == "1" || -n "${BUILT_MM_DIR}" || -n "${BUILT_MM_PACKAGE:-}" ]]; then
     BUILT_MM_PACKAGE="${BUILT_MM_PACKAGE:-${ROOT}/deps/mmsource-1.10/build/package}" \
@@ -43,28 +29,23 @@ download() {
     echo "Installing Metamod:Source from local package ${MM_PACKAGE}"
     tar -xzf "${MM_PACKAGE}" -C "${SERVER_DIR}/cstrike"
   else
-    MM_TGZ="${CACHE_DIR}/mmsource-1.10.6-css34-linux.tar.gz"
-    download "${MM_URL}" "${MM_TGZ}"
-    tar -xzf "${MM_TGZ}" -C "${SERVER_DIR}/cstrike"
-    echo "Installed Metamod:Source from ${MM_URL}"
+    echo "MM_PACKAGE is required (or USE_BUILT_MM=1 / BUILT_MM_PACKAGE)" >&2
+    exit 1
   fi
 }
 
 install_metamod
 
-if [[ -n "${SM_PACKAGE}" ]]; then
-  if [[ ! -f "${SM_PACKAGE}" ]]; then
-    echo "SM_PACKAGE not found: ${SM_PACKAGE}" >&2
-    exit 1
-  fi
-  echo "Installing SourceMod from local package ${SM_PACKAGE}"
-  tar -xzf "${SM_PACKAGE}" -C "${SERVER_DIR}/cstrike"
-else
-  SM_TGZ="${CACHE_DIR}/$(basename "${SM_URL}")"
-  download "${SM_URL}" "${SM_TGZ}"
-  echo "Installing SourceMod from ${SM_URL}"
-  tar -xzf "${SM_TGZ}" -C "${SERVER_DIR}/cstrike"
+if [[ -z "${SM_PACKAGE}" ]]; then
+  echo "SM_PACKAGE is required" >&2
+  exit 1
 fi
+if [[ ! -f "${SM_PACKAGE}" ]]; then
+  echo "SM_PACKAGE not found: ${SM_PACKAGE}" >&2
+  exit 1
+fi
+echo "Installing SourceMod from local package ${SM_PACKAGE}"
+tar -xzf "${SM_PACKAGE}" -C "${SERVER_DIR}/cstrike"
 
 # PLAIN_TAR_INSTALL=1: installer contract — `tar -xzf mm; tar -xzf sm` and
 # nothing else. Skip every fixup below so smoke proves the packages are
@@ -73,19 +54,6 @@ if [[ "${PLAIN_TAR_INSTALL:-0}" == "1" ]]; then
   echo "PLAIN_TAR_INSTALL=1: no post-extract fixups"
   ls -la "${SERVER_DIR}/cstrike/addons/metamod" "${SERVER_DIR}/cstrike/addons/sourcemod/bin" || true
   exit 0
-fi
-
-# Optional: keep rom4s reference logic with a host-built core (logic ABI still tracked).
-if [[ "${OVERLAY_ROM4S_LOGIC:-}" == "1" && -n "${SM_PACKAGE:-}" ]]; then
-  REF_URL="${REFERENCE_SM_URL:-https://github.com/rom4s/sourcemod-css34/releases/download/v1.11.0.6572/sourcemod-1.11.0-git6572-css34-linux.tar.gz}"
-  REF_TGZ="${CACHE_DIR}/$(basename "${REF_URL}")"
-  download "${REF_URL}" "${REF_TGZ}"
-  tmp_overlay="$(mktemp -d)"
-  tar -xzf "${REF_TGZ}" -C "${tmp_overlay}" addons/sourcemod/bin/sourcemod.logic.so
-  cp -f "${tmp_overlay}/addons/sourcemod/bin/sourcemod.logic.so" \
-    "${SERVER_DIR}/cstrike/addons/sourcemod/bin/sourcemod.logic.so"
-  rm -rf "${tmp_overlay}"
-  echo "Overlaid rom4s sourcemod.logic.so (OVERLAY_ROM4S_LOGIC=1)"
 fi
 
 mkdir -p "${SERVER_DIR}/cstrike/addons/metamod"
@@ -97,13 +65,6 @@ if [[ ! -f "${SERVER_DIR}/cstrike/addons/metamod/sourcemod.vdf" ]]; then
 	"file"		"addons/sourcemod/bin/sourcemod_mm"
 }
 EOF
-fi
-
-# Third-party packages (the rom4s fallback) still ship SourceMod's gamedata
-# updater: turn it off. Ours have no updater.ext and no such key.
-if [[ -f "${SERVER_DIR}/cstrike/addons/sourcemod/configs/core.cfg" ]]; then
-  sed -i 's/^\([[:space:]]*"DisableAutoUpdate"[[:space:]]*\)"no"/\1"yes"/' \
-    "${SERVER_DIR}/cstrike/addons/sourcemod/configs/core.cfg" || true
 fi
 
 echo "Addons installed under ${SERVER_DIR}/cstrike/addons"

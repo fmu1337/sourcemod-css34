@@ -2,7 +2,7 @@
 
 Patched [SourceMod](https://www.sourcemod.net/) + [Metamod:Source](https://www.sourcemm.net/) builds for **Counter-Strike: Source v34** (non-Steam / legacy).
 
-All packages are built from source: no rom4s/reference `.so` is spliced in. Smoke asserts SDK Hooks load and the css34 `OnTakeDamage` gamedata (linux **61**). Botplay hooks `SDKHook_OnTakeDamage` and logs hits.
+All packages are built from source. Smoke asserts SDK Hooks load and the css34 `OnTakeDamage` gamedata (linux **61**). Botplay hooks `SDKHook_OnTakeDamage` and logs hits.
 
 Docs: [docs/README.md](docs/README.md) (index — current reference vs. history).
 
@@ -140,7 +140,7 @@ merge; by hand, see [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md#апгрей
 | | SM 1.11 dual-core (`1.ep1` + `2.ep1`) | SM 1.12 / 1.13 (`2.ep1`) |
 |--|--|--|
 | **MM 1.10** (`metamod.1.ep1`) | **matched** (`sm11-oldstable`, runs `sourcemod.1.ep1`) | no |
-| **MM 1.11** (`metamod.2.ep1`) | no (myarena bundle; `11 < 14`) | not a release path |
+| **MM 1.11** (`metamod.2.ep1`) | no (`11 < 14`) | not a release path |
 | **MM 1.12** git1227 / git1229 | **matched** (`sm11-oldstable` git1227, runs `sourcemod.2.ep1`) | **matched** (`sm12-latest`, `sm13-latest`) |
 | **MM 2.0** git1407 | no | experimental (`sm13-mm20`) |
 | **MM 2.0** git1450+ (KHook, no SourceHook) | no | only the SM KHook branch (`sm13-mm20-khook`); SM `master` cannot run on it |
@@ -205,7 +205,6 @@ Asset names: `sourcemod-<ver>-git<rev>-css34-{linux.tar.gz|windows.zip}` and
 `mmsource-<ver>-git<mmrev>-css34-{linux.tar.gz|windows.zip}` for packages built from this tree, plus the fixed
 names above. Older Linux tags before `-r2` keep `mmsource-<ver>-dev-css34-linux.tar.gz`;
 tags published before the Windows rename keep `mmsource-<ver>-dev-css34-windows.zip`.
-Historical URLs in `testing/versions/matrix.json` intentionally retain those names.
 
 ### SourceMod 1.11: choosing Metamod
 
@@ -346,12 +345,10 @@ leftover `extensions/updater.ext.so` and `webternet.ext.so` are never loaded and
 **Install traps**
 
 - Our SM **1.11** packages carry both cores and run on MM 1.12 (2.ep1) or MM 1.10.7 (1.ep1). Older SM 1.11
-  drops expect Metamod **1.10.x / `metamod.1.ep1` / PLAPI 11**: a leftover myarena `metamod.2.ep1.so`
-  (MM 1.11) → `Older Metamod… (11 < 14)` — not a bad package, a mix. See
-  [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
+  drops expect Metamod **1.10.x / `metamod.1.ep1` / PLAPI 11**: a leftover third-party `metamod.2.ep1.so`
+  (MM 1.11) → `Older Metamod… (11 < 14)` — not a bad package, a mix: install MM and SM from the same line.
 - Installing over an old SourceMod: delete a flat `gamedata/sm-cstrike.games.txt` left from older drops
   (`[CSTRIKE] Could not locate HandleCommand_Buy`); ours lives in `gamedata/sm-cstrike.games/`.
-- Historical community URLs (rom4s / myarena) for local compare: [`testing/versions/matrix.json`](testing/versions/matrix.json) (`reference` section).
 
 ### Memory use
 
@@ -427,8 +424,7 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
   `debian:11` smoke itself, plus `debian:8`/`9`/`10`, `ubuntu:14.04`/`16.04`/`18.04`, `rockylinux:9`, and botplay on `centos:7`,
   run on the weekly schedule, on `workflow_dispatch` with `suite=weekly`, and on release.
   Images are pinned by digest in `builder/lines.json`. Packages pass between jobs via
-  **Actions cache**. Reference (rom4s / published-release) botplay, extra distros and bisect are
-  `workflow_dispatch` opt-ins.
+  **Actions cache**.
 - `.github/workflows/release.yml` — tag-driven; tag (minus `-r<N>`) maps to `CSS34_LINE`; packages attach with
   `gh release upload` (**GitHub Releases**, not Actions artifacts) to a **prerelease** with generated notes;
   public-URL smoke on the weekly OS matrix and botplay on `centos:7`, then `promote` (full release, explicit
@@ -445,8 +441,7 @@ CSS34_LINE=sm13-latest builder/run/windows.sh
 
 Failure logs remain downloadable for seven days after a run (`retention-days: 7`; CI uploads
 no other artifacts, packages move between jobs through the Actions cache). Only PR runs
-cancel an older run of the same workflow/ref. Botplay baseline comparisons are informational;
-server crashes and API/ABI probes still fail the job.
+cancel an older run of the same workflow/ref. Server crashes and API/ABI probes still fail the job.
 
 ```bash
 git tag 1.13.0.<rev>-mm1.12.0-r<N> && git push origin 1.13.0.<rev>-mm1.12.0-r<N>   # rebuild sm13-latest
@@ -461,6 +456,5 @@ map generated from `builder/lines.json`.
 
 - Docs index (current vs. history): [docs/README.md](docs/README.md).
 - Patch layout and upgrade strategy: [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md).
-- SDKHooks EP1 / PLAPI traps: [docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md](docs/SDKHOOKS_EP1_RELEASE_BLOCKERS.md).
-- Compatibility PASS/FAIL notes and historical URLs: [`testing/versions/matrix.json`](testing/versions/matrix.json). Live pins are [`builder/lines.json`](builder/lines.json).
+- Live pins: [`builder/lines.json`](builder/lines.json).
 - Smoke / botplay / Wine testing: [testing/README.md](testing/README.md).
