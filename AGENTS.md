@@ -41,6 +41,17 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   AMBuild, PIC zlib 1.3.1, MySQL / MariaDB SDKs; for sm13's Linux MySQL extension
   static OpenSSL 3.5 LTS and MariaDB Connector/C built from source, see
   `docs/PATCHES.md` "sm13 MySQL dependencies").
+  Each built prefix (`deps/zlib`, `deps/openssl`, the MariaDB connector,
+  `deps/mysql-5.5`) holds a stamp with the digest of its inputs
+  (`builder/deps_cache.py`: build image, deps path, the exact bytes of
+  `checkout-deps.sh`, `fetch-pinned.sh`, `py.sh`, the OpenSSL patcher,
+  `docker/build.sh` and itself); it is reused only when that stamp matches,
+  otherwise rebuilt (`CSS34_DEPS_REBUILD=1` forces it; freeze builds never reuse).
+  CI deps cache: `ci.yml` `build-linux` passes `deps-cache: 'true'` to
+  `.github/actions/build-linux`, which restores/saves only those prefixes with
+  `actions/cache` (key `css34-deps-v1-<line>-sm<SM pin>-<digest>`, from
+  `deps_cache.py key`). `release.yml` and `builder/freeze/` never use it and build
+  them from scratch. Tests: `testing/scripts/test-deps-cache.py`.
   SourceMod is no git submodule (T3.3): `builder/fetch-sourcemod.sh` checks out the
   line's pinned commit into `sourcemod/` (gitignored), resets and cleans it, and
   initializes its own submodules.
@@ -68,7 +79,9 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
 - sm11 is **frozen** (T2.7, `docs/FREEZE.md`): `status: frozen`, `releasable: false`, a `frozen`
   block (tag, `sm11-freeze`, `sm11-freeze-inputs`, sha256 of every release asset). CI no longer
   builds it, a new sm11 tag is refused, and `frozen-verify.yml` re-checks its published files weekly
-  (`lines.py frozen-gha`, `testing/scripts/verify-frozen-line.py`). Its dual-core build code (SM 1.11
+  (`lines.py frozen-gha`, `testing/scripts/verify-frozen-line.py`), with the line's text-only
+  hotfix from `hotfixes/<line>/` installed over them (`HOTFIX_DIR`, `check-css34-gamedata.py
+  --allow-custom` for `custom/*.txt` gamedata overrides). Its dual-core build code (SM 1.11
   patcher, `secondary_metamod` builds, the rom4s hl2sdk-ep1c SDK) left master with T3.3: rebuild it
   only from the `sm11-freeze` tag. The builder (`css34_require_buildable` in `resolve-version.sh`:
   SourceMod 1.12+ only) and `resolve-metamod-pins.py` refuse it; `resolve-version.sh` still resolves its
@@ -129,6 +142,15 @@ sudo dockerd > /tmp/dockerd.log 2>&1 &   # wait ~5s, then: sudo docker info
   `Build ID: <MM_REV>:<sha prefix>`; `sm version` must be `<major>.<SM_REV>`
   (the revs come from `builder/lines.json`). Image digests live only in
   `builder/lines.json`; `python3 builder/lines.py gen` writes the matrix.
+- **Prebuilt test images**: `test-images.yml` bakes `install-deps.sh` into each smoke/botplay
+  image (`ghcr.io/fmu1337/css34-test`, `testing/docker/test-image.Dockerfile`);
+  `lines.json` `test_images` records `ref` / `base` / `deps_hash`, and matrix rows carry
+  `image` (prebuilt when current) and `base_image` (fallback,
+  `testing/scripts/pull-test-image.sh`). In such an image `install-deps.sh` is a no-op
+  (marker `/etc/css34-install-deps.sha256`). Editing `install-deps.sh` makes the entries
+  stale: `lines.py check` fails until `python3 builder/lines.py test-images-prune` and `gen`;
+  after the merge the workflow rebuilds and opens the `test-images/update` PR.
+  Details: `testing/README.md` "Prebuilt test images".
 - **Core gates**: each matrix row names the Metamod package it installs (`mm_package`)
   and the core that must run (`expect_core`, `2.ep1`). `smoke-test.sh` takes
   `SMOKE_EXPECT_CORE=1.ep1|2.ep1` (`1.ep1` only for the frozen sm11 pointer's
@@ -199,7 +221,9 @@ By hand: edit the pin in `builder/lines.json`, run
 `.github/workflows/ci.yml` on PRs). `gen` rewrites `builder/versions.env`,
 `builder/generated/ci-matrix.json`, `builder/generated/tag-map.sh`, and the README pin
 tables. `ci.yml` builds its matrices in the `plan` job
-(`builder/scripts/ci_planner.py`, which also lists the jobs the run requires) and
+(`builder/scripts/ci_planner.py`, which also lists the jobs the run requires; the
+matrices hold only `line` / `image_name`, so job names need no `name:` template, and
+each job reads the rest of its row from the `rows` output as `CI_ROW`) and
 ends in one `gate` job (`builder/scripts/ci_gate.py`). Suites: `pr` (PRs, master pushes)
 and `weekly` (Monday schedule or dispatch `suite=weekly`: old OS smoke, centos:7 botplay,
 Wine smoke); dispatch also takes `css34_line`. `release.yml` takes its OS rows from

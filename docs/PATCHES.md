@@ -190,8 +190,8 @@ fallback follows in the caller. `patch-openssl-getentropy.py` compiles out only
 that libc probe on Linux. The upstream syscall path, kernel-seeding checks and
 device fallback remain intact. The patcher fails closed on missing or
 inconsistent anchors, a changed syscall line, or any other `getentropy()` call.
-The build runs `openssl rand`, fails if `libcrypto.a`/`libssl.a` still mention
-`getentropy`, and versions its stamps by OpenSSL release, so cached 1.1.1w or
+The build runs `openssl rand` and fails if `libcrypto.a`/`libssl.a` still mention
+`getentropy`; its stamp is an inputs digest (next section), so cached 1.1.1w or
 unpatched archives are rebuilt. `testing/scripts/test-openssl-entropy-patch.py`
 compiles the patched function and covers each refusal. No new libc symbol is
 allowlisted: any OpenSSL symbol the connector misses would be an unversioned
@@ -210,6 +210,34 @@ same TLS version and cipher, and the TLS library must be the OpenSSL the build
 compiled against; a plaintext login must be refused, and so must an unrelated
 CA. `css34_mysql_probe.sp` then exercises every `ssl_mode` through
 `dbi.mysql.ext` inside srcds (cases in `testing/README.md`).
+
+### Reusing built prefixes (CI deps cache)
+
+Building OpenSSL is the largest dependency step of an sm13 Linux build (about
+85 s of a 6.8 min CI job; Connector/C about 12 s, the MySQL SDK about 9 s).
+`checkout-deps.sh` stamps each prefix it builds or unpacks (`deps/zlib`,
+`deps/openssl`, `deps/mariadb-connector-c-3.4.9-x86`, `deps/mysql-5.5`) with
+`.css34-deps-stamp.json`, holding the digest `builder/deps_cache.py` computes
+over the build image reference (`CSS34_BUILD_IMAGE`, passed by
+`builder/docker/build.sh`), the deps path, and the exact bytes of the files that
+fetch and build the prefixes: `checkout-deps.sh` (versions, URLs, sha256 pins,
+configure options), `fetch-pinned.sh`, `py.sh`, `patch-openssl-getentropy.py`,
+`docker/build.sh` and `deps_cache.py`. A prefix is reused only when its stamp
+records this digest and its libraries and headers exist; a missing, foreign or
+older stamp rebuilds it. Builds with `CSS34_OFFLINE` or `CSS34_SAVE_DOWNLOADS`
+(the freeze path) never reuse, and `CSS34_DEPS_REBUILD=1` forces a rebuild.
+
+`ci.yml`'s `build-linux` restores and saves these four prefixes (never the
+SourceMod or Metamod trees) through the `deps-cache` input of
+`.github/actions/build-linux`. Its key is
+`css34-deps-v1-<line>-sm<SourceMod pin>-<digest>`: the same digest the builder
+checks inside the container, plus the line and SourceMod pin, which decide
+which prefixes the line needs (`--mariadb-path`). The prefixes are saved only
+after the static package checks pass. `release.yml` does not set the input and
+the freeze scripts require a fresh `deps/`, so released and frozen packages
+always build every prefix from source. A build from cached prefixes produced the
+same package ABI (`compare-package-abi.py`: files, exports, NEEDED, SONAME) as a
+cold build.
 
 ## sm13 MySQL TLS options (ssl_mode / ssl_ca)
 
