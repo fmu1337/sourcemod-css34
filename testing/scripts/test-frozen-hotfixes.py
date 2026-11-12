@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hotfixes for frozen lines (docs/FREEZE.md, "Fixing a frozen line").
+"""Hotfixes for frozen lines (docs/MAINTAINING.md, "The frozen line").
 
 hotfixes/<line>/ holds files a server copies over cstrike/ on top of a frozen
 line's packages. These tests check that:

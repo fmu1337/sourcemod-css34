@@ -10,7 +10,7 @@ overrides (CGameConfig::Reparse reads them after the shipped files and their
 keys replace the shipped values): they are not "unexpected" files, and the
 required and forbidden entries are checked on the shipped file plus the
 overrides of its directory. Only a frozen line's hotfix (hotfixes/<line>/,
-docs/FREEZE.md) adds such files; packages never ship them.
+docs/MAINTAINING.md) adds such files; packages never ship them.
 """
 
 from pathlib import Path
@@ -61,7 +61,7 @@ REQUIRED = {
 # but do not describe the CSS v34 server vtable.  VPhysicsUpdate slot 131 is
 # GetAttackDamageScale on v34; GetMaxHealth is non-virtual and therefore must
 # not be used as a vtable offset (CCSPlayer slot 107, the old offset, is
-# CBaseEntity::NetworkStateChanged_m_iMaxHealth(); docs/PATCHES.md).
+# CBaseEntity::NetworkStateChanged_m_iMaxHealth(); docs/CHANGES.md).
 REQUIRED_PATTERNS = {
     # The v34 client expects a leading byte in HintText (SM 1.7.3, rom4s 1.11);
     # core reads this key only from the "cstrike" section.

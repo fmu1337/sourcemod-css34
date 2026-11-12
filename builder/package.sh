@@ -45,7 +45,7 @@ required=(
 )
 
 # SourceMod 1.12+ has one core (2.ep1); a 1.ep1 core means an SM 1.11 tree,
-# which master no longer builds (sm11-oldstable is frozen, docs/FREEZE.md).
+# which master no longer builds (sm11-oldstable is frozen, docs/MAINTAINING.md).
 if [[ -e "$PACKAGE_DIR/addons/sourcemod/bin/sourcemod.1.ep1.so" ]]; then
   echo "FAIL: unexpected sourcemod.1.ep1.so: master packages SourceMod 1.12+ (2.ep1) only" >&2
   exit 1

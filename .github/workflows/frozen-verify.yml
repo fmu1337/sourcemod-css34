@@ -1,6 +1,6 @@
 name: Frozen verify
 
-# T2.7 (docs/FREEZE.md): every week, re-check what a frozen line has published.
+# T2.7 (docs/MAINTAINING.md): every week, re-check what a frozen line has published.
 # For each line with a "frozen" block in builder/lines.json (one row per smoke
 # image, from `python3 builder/lines.py frozen-gha`):
 #   * testing/scripts/verify-frozen-line.py: the frozen tag's assets and the
@@ -85,7 +85,7 @@ jobs:
           LINE: ${{ matrix.line }}
         run: |
           set -euo pipefail
-          # A text-only fix of the frozen line (hotfixes/<line>/, docs/FREEZE.md) is
+          # A text-only fix of the frozen line (hotfixes/<line>/, docs/MAINTAINING.md) is
           # installed over the published packages, as the README tells users.
           HOTFIX_DIR=""
           if [[ -d "hotfixes/${LINE}" ]]; then HOTFIX_DIR="hotfixes/${LINE}"; fi

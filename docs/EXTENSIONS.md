@@ -25,13 +25,13 @@ their older API 7/8 binaries are rejected by the loader.
 
 ## Third-party extensions running on `sm13-latest`
 
-Builds for SourceMod 1.13 that run on production CS:S v34 servers with `1.13.0.7478-mm1.12.0-r7` (2026-11-05). This repository
+Builds for SourceMod 1.13 that run on production CS:S v34 servers (`sm13-latest`, 2026-11-05). This repository
 does not build or ship them.
 
 | Extension | 1.13 build | Notes |
 |---|---|---|
 | ProtectCMDS | `css34.sm113` build of `fmu1337/ProtectCMDS` v1.1.4 (`protectcmds.css34.sm113.ext.so`) | the old 1.0.10 / v1.1.1 builds are API 7 |
-| navfile_blocker | rebuilt from the original 2012 source with SM 1.13 headers | needs `-r5` or newer: earlier packages resolved `"library" "engine"` signatures to 0 ([PATCHES.md](PATCHES.md), `0004-gameconfigs-rtld-noload`) |
+| navfile_blocker | rebuilt from the original 2012 source with SM 1.13 headers | needs `-r5` or newer: earlier packages resolved `"library" "engine"` signatures to 0 ([CHANGES.md](CHANGES.md), `0004-gameconfigs-rtld-noload`) |
 | CS:S DM | `fmu1337/sm34.cssdm` 2.1.6-git325 sm13 (`cssdm.ext.2.ep1.so`) | replaces both the `.1.ep1` and the `.2.ep1` builds of older trees |
 | socket | `JoinedSenses/sm-ext-socket` (legacy Socket 3.x API: `SocketCreate`, `SocketConnect`, `SocketSend`, …) rebuilt with SM 1.13 `public/smsdk_ext.*` | see below |
 
@@ -117,7 +117,7 @@ loading it into `srcds` with the `sm13-latest` package.
 `Msg`, `Warning`, `DevMsg` and `ConMsg` live in the game's `bin/tier0_i486.so`. srcds
 loads tier0 as a dependency of the engine, not into the global symbol scope:
 `dlsym(RTLD_DEFAULT, "Msg")` inside a running `srcds_i686` returns 0 with the `sm13-latest`
-packages and with rom4s SourceMod 1.11.0.6572 + Metamod 1.10.6 alike, and `srcds_i686`
+packages and with SourceMod 1.11 alike, and `srcds_i686`
 itself needs only `libm`, `libdl` and `libc`. A library loaded later finds `Msg` only
 through its own `NEEDED` entry for `tier0_i486.so`. SourceMod never exported `Msg`, and
 tier0 is the game's own file, so nothing about it changed with SourceMod 1.13: a binary

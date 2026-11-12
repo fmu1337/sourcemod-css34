@@ -4,7 +4,7 @@
 check-css34-gamedata.py --allow-custom treats <name>.games/custom/*.txt as SourceMod
 overrides (read after the shipped file, keys replace the shipped values);
 check-package.sh passes it only with HOTFIX_DIR, and frozen-verify.yml sets
-HOTFIX_DIR to hotfixes/<line> when that tree exists (docs/FREEZE.md).
+HOTFIX_DIR to hotfixes/<line> when that tree exists (docs/MAINTAINING.md).
 """
 
 import os

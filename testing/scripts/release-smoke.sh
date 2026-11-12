@@ -19,7 +19,7 @@
 #   GHCR_TOKEN    optional ghcr.io token for a private prebuilt image
 #   HOTFIX_DIR    a frozen line's hotfix tree (hotfixes/<line>/, relative to the repo):
 #                 copied over the package for the static checks and over cstrike/
-#                 after the install, as the README tells users (docs/FREEZE.md)
+#                 after the install, as the README tells users (docs/MAINTAINING.md)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

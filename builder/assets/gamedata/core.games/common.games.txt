@@ -68,7 +68,7 @@
 			/**
 			 * HudMsg exists in the v34 server_i486.so, as in SM 1.7.3;
 			 * rom4s 1.11 commented it out. ClientMod draws it, the stock
-			 * v34 client does not, or not always (docs/PATCHES.md,
+			 * v34 client does not, or not always (docs/CHANGES.md,
 			 * "CS:S v34 gamedata").
 			 */
 			"HudTextMsg"		"HudMsg"

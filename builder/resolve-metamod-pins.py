@@ -26,7 +26,7 @@ def resolve(data, name):
         raise ValueError("unknown build line: " + name)
     line = data["lines"][name]
     if "secondary_metamod" in line:
-        raise ValueError(name + " is a frozen dual-core line; rebuild it from its freeze tag (docs/FREEZE.md)")
+        raise ValueError(name + " is a frozen dual-core line; rebuild it from its freeze tag (docs/MAINTAINING.md)")
     rows = []
     for role, key in (("primary", "metamod"), ("bridge", "bridge_metamod")):
         if key not in line:

@@ -59,7 +59,7 @@ def prompt(kind, target, old, new, rev, context):
         "Repository fmu1337/sourcemod-css34 builds SourceMod and Metamod:Source for Counter-Strike: Source v34 "
         "(legacy Source engine, SDK episode1, 32-bit Linux and Windows). Upstream code is patched by git patch "
         "series ({series}) applied to the exact pinned upstream commit; pins live in builder/lines.json. "
-        "Read docs/PATCH_STRATEGY.md and docs/PATCHES.md first.\n\n"
+        "Read docs/MAINTAINING.md and docs/CHANGES.md first.\n\n"
         "This is an upstream bump of `{target}`: lines.json pin `{pin}` moves from alliedmodders/{repo} "
         "{old} to {new} (rev {rev}, branch {branch}). Upstream diff: {compare}\n"
     ).format(series=series, target=target, pin=spec["pin"], repo=repo, old=old, new=new, rev=rev,
@@ -89,12 +89,12 @@ def prompt(kind, target, old, new, rev, context):
             "1. set pins.{pin}.commit = {new} and pins.{pin}.rev = {rev} in builder/lines.json;\n"
             "2. run builder/scripts/patch-series.sh refresh <series> for {series_list}; where a patch no "
             "longer applies, adapt that patch to the new upstream code (keep what it is for, see "
-            "docs/PATCHES.md), then rerun the refresh;\n"
+            "docs/CHANGES.md), then rerun the refresh;\n"
             "3. if gamedata lookups changed, extend builder/assets/gamedata/ with CS:S v34 values only when "
             "you can justify them; otherwise leave it and report;\n"
             "4. run python3 builder/lines.py gen and python3 builder/lines.py check.\n"
             "Only builder/lines.json, builder/patches/series/**, the files lines.py gen writes, "
-            "builder/assets/gamedata/** and docs/PATCHES.md may change. In the PR description list every "
+            "builder/assets/gamedata/** and docs/CHANGES.md may change. In the PR description list every "
             "patch you changed and why. If you cannot fix it safely, make no code change and explain what "
             "blocks it.\n"
         ).format(pin=spec["pin"], new=new, rev=rev, series_list=", ".join(spec["series"]))
