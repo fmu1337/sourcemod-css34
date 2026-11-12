@@ -152,6 +152,7 @@ merge; by hand, see [docs/PATCH_STRATEGY.md](docs/PATCH_STRATEGY.md#апгрей
 old plugin, lists that plugin in `meta list` like any other (`meta unload` / `meta pause` work), and nothing has
 to be deleted. SourceMod extensions that exist only as `*.ext.1.ep1` are a different matter: they need the
 `1.ep1` SourceMod core, which only `sm11-oldstable` on MM 1.10.7 runs.
+Moving an SM 1.7 / 1.8 / 1.11 server: [docs/MIGRATION.md](docs/MIGRATION.md).
 
 ## Releases
 
