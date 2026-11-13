@@ -75,21 +75,22 @@ upload-first, updates are serialized per line, and an older tag never moves a po
 
 ## The frozen line (`sm11-oldstable`)
 
-SM 1.11.0.6970 dual-core, MM 1.12 git1227 + MM 1.10.7. Its pointer serves `1.11.0.6970-mm1.12.0-dual-r3`
-for good; `lines.json` `frozen` records the sha256 of every asset. Master no longer has its build code:
+SM 1.11.0.6970 dual-core, MM 1.12 git1227 + MM 1.10.7. Its pointer serves `1.11.0.6970-mm1.12.0-dual-r4`;
+`lines.json` `frozen` records the sha256 of every asset. Master no longer has its build code, and the line
+gets no upstream commits.
 
-- **Rebuild** only from the tag `sm11-freeze` and the release `sm11-freeze-inputs` (git mirrors, pinned
-  downloads, the saved build image, `MANIFEST.json`):
-  `git checkout sm11-freeze && builder/freeze/build-offline.sh <assets> <out>` (`--network none`).
-  `testing/scripts/compare-package-abi.py` must find the same files, exports, `NEEDED` and `SONAME`.
+- **Fixes** (r4 added `HintTextPreByte`, #175) are commits on a branch from the current freeze tag
+  (`sm11-freeze-r4`, branch `claude/sm11-refreeze-r4`). The owner pushes the next `1.11.0.6970-mm1.12.0-dual-rN`
+  and `sm11-freeze-rN` on that commit: the tag runs that branch's `release.yml` (build, smoke, botplay,
+  pointer). Then run *Freeze inputs* on `sm11-freeze-rN` with `publish: true` (approval in the
+  `frozen-release` environment; it uploads `sm11-freeze-rN-inputs`), and open a master PR that changes only
+  the `frozen` block.
+- **Rebuild** offline from the freeze tag and its inputs release (git mirrors, pinned downloads, the saved
+  build image, `MANIFEST.json`): `git checkout sm11-freeze-r4 && builder/freeze/build-offline.sh <assets> <out>`
+  (`--network none`). `testing/scripts/compare-package-abi.py` must find the same files, exports,
+  `NEEDED` and `SONAME`.
 - **Weekly** `frozen-verify.yml` checks the published files against `frozen.assets` and smokes the
-  pointer on both Metamod builds, with the hotfix installed.
-- **A text-only fix** (gamedata) goes to `hotfixes/<line>/` as a SourceMod
-  `gamedata/<name>.games/custom/*.txt` override; the packages stay untouched. Current one:
-  `HintTextPreByte` (#175).
-- **A binary fix** needs a refreeze: branch from `sm11-freeze`, build a new `-rN`, new freeze tag and
-  input archive (`freeze-inputs.yml`, approval in the `frozen-release` environment), then a master PR
-  that changes only the `frozen` block.
+  pointer on both Metamod builds.
 
 ## CI
 

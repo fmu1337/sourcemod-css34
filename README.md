@@ -18,7 +18,7 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 |----------|-----------|---------|------|
 | `sm13-latest` | 1.13.0.7488 (`5eb6a120…`) | 1.12.0 git1229 (`4e031eb5…`) | **Default** |
 | `sm12-latest` | 1.12.0.7260 (`3f746067…`) | 1.12.0 git1229 (`4e031eb5…`) | Latest 1.12 |
-| `sm11-oldstable` | 1.11.0.6970 (`f53cb134…`) | 1.12.0 git1227 (`75dd7b26…`) | Frozen, dual-core; install the hotfix below |
+| `sm11-oldstable` | 1.11.0.6970 (`f53cb134…`) | 1.12.0 git1227 (`75dd7b26…`) | Frozen, dual-core |
 <!-- lines-install:end -->
 
 ```bash
@@ -31,19 +31,8 @@ Always take Metamod and SourceMod from the same line (or the same tag). What eac
 or the `line-<line>` release page. Windows zips are on the tag releases only. Coming from SM 1.7 / 1.8 /
 1.11: [docs/MIGRATION.md](docs/MIGRATION.md). Third-party extensions: [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
 
-### sm11 hotfix
+### sm11
 
-The frozen SourceMod 1.11 package lacks the gamedata key `HintTextPreByte`, so the v34 client shows no
-`PrintHintText` / `sm_hsay` text. Install the override with the packages:
-
-```bash
-cd /path/to/cstrike
-mkdir -p addons/sourcemod/gamedata/core.games/custom
-curl -fL -o addons/sourcemod/gamedata/core.games/custom/css34-hinttext-prebyte.txt \
-  https://raw.githubusercontent.com/fmu1337/sourcemod-css34/master/hotfixes/sm11-oldstable/addons/sourcemod/gamedata/core.games/custom/css34-hinttext-prebyte.txt
-```
-
-The console then prints `[SM] Parsed custom gamedata override file: core.games/custom/css34-hinttext-prebyte.txt`.
 `line-sm11-oldstable` also serves MM 1.10.7 as `mmsource-legacy-css34-linux.tar.gz`, for extensions that
 exist only as `*.ext.1.ep1` (it runs the `1.ep1` SourceMod core; no DHooks).
 

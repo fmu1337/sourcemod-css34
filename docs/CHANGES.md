@@ -53,5 +53,3 @@ with reproduction steps are at
 - **sm13 MySQL stack**: OpenSSL 3.5 LTS and MariaDB Connector/C 3.4.9 built from pinned sources
   (AlliedModders' connector binary is built against OpenSSL 1.1); OpenSSL's libc `getentropy` probe
   compiled out (glibc 2.17).
-- **sm11 hotfix** (`hotfixes/sm11-oldstable/`): `HintTextPreByte` as a gamedata override for the frozen
-  1.11 packages.

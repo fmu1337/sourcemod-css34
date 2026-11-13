@@ -26,4 +26,4 @@ them on a real `srcds`. Read [README.md](README.md), [docs/MAINTAINING.md](docs/
   engine libraries) before it goes into `testing/unversioned-imports.txt`, never against the host libc.
 - **Never delete a release or tag.** Mark it superseded or `known_bad` instead.
 - Cloud agents cannot push tags: dispatch `release-tag.yml` for a rebuild (`-rN`).
-- `sm11-oldstable` is frozen: fixes go to `hotfixes/sm11-oldstable/` (gamedata overrides) or a refreeze.
+- `sm11-oldstable` is frozen: fixes go to its freeze branch and a new `-rN` (docs/MAINTAINING.md).
