@@ -49,12 +49,18 @@ jobs:
 
       - name: Names
         id: names
+        env:
+          PUBLISH: ${{ github.event.inputs.publish }}
         run: |
           set -euo pipefail
           python3 builder/lines.py check >/dev/null
           # Run on a freeze tag: its inputs go to the release <tag>-inputs
           # (sm11-freeze -> sm11-freeze-inputs, sm11-freeze-r4 -> sm11-freeze-r4-inputs),
           # so a refreeze never overwrites an earlier archive.
+          if [[ "$PUBLISH" == true && "$GITHUB_REF_TYPE" != tag ]]; then
+            echo "FAIL: publish only from a freeze tag (Use workflow from -> Tags), not ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             echo "release=${GITHUB_REF_NAME}-inputs" >> "$GITHUB_OUTPUT"
           else
