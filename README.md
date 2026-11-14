@@ -1,5 +1,7 @@
 # sourcemod-css34
 
+**English** | [Русский](README.ru.md)
+
 Patched [SourceMod](https://www.sourcemod.net/) + [Metamod:Source](https://www.sourcemm.net/) for
 **Counter-Strike: Source v34** (episode1, 32-bit), built from source for glibc 2.17+ Linux and Windows.
 What we change and why: [docs/CHANGES.md](docs/CHANGES.md).
