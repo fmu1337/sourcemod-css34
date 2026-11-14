@@ -52,6 +52,8 @@ tar -xzf sourcemod-css34-linux.tar.gz -C /path/to/cstrike
   (`Could not locate HandleCommand_Buy`): удалите его.
 - Автообновления gamedata нет: `updater.ext` перезаписал бы gamedata для v34. Оставшиеся от старых пакетов
   `updater.ext.so` / `webternet.ext.so` никогда не загружаются, их можно удалить.
+- В `core.cfg` нет `FollowCSGOServerGuidelines` и `SteamAuthstringValidation`: на v34 обе ничего не делают.
+  Старый `core.cfg` с ними загружается без изменений.
 
 ## MySQL HeatWave / MySQL 8.4 (`sm13-latest`)
 

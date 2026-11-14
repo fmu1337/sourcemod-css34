@@ -49,6 +49,8 @@ exist only as `*.ext.1.ep1` (it runs the `1.ep1` SourceMod core; no DHooks).
   (`Could not locate HandleCommand_Buy`): delete it.
 - No gamedata auto-updater: `updater.ext` would overwrite the v34 gamedata. Leftover
   `updater.ext.so` / `webternet.ext.so` from older packages are never loaded and can be deleted.
+- `core.cfg` has no `FollowCSGOServerGuidelines` / `SteamAuthstringValidation`: neither does anything on
+  v34. An old `core.cfg` with them loads unchanged.
 
 ## MySQL HeatWave / MySQL 8.4 (`sm13-latest`)
 
