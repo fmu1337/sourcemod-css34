@@ -22,8 +22,6 @@ afterwards; any other result fails the build. Our own code stays a script: the l
 - After a pin change: `builder/scripts/patch-series.sh refresh <line | MM_112>` rebases the series
   (`git apply --3way`); on a conflict, fix the `.patch` and refresh again. Then `lines.py gen` and `check`.
 - Edit a patch: change the checked-out tree, regenerate with `patch-series.sh refresh`.
-- Before a bump: `builder/scripts/check-patch-drift.sh --sm-commit <rev> --line <line>` (or
-  `--range old..new`, `--mm-commit`) names the first patch that no longer applies.
 - New line: an entry in `lines.json`, its own series, a target in `upstream-bump.py`, and any gamedata
   `check-css34-gamedata.py` asks for.
 
