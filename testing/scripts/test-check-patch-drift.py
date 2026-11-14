@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for builder/scripts/check-patch-drift.sh (patch series, T3.4)."""
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -11,6 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]
 DRIFT_SCRIPT = ROOT / "builder/scripts/check-patch-drift.sh"
 GIT_ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
                GIT_COMMITTER_EMAIL="t@t", GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+
+
+def sm_pin_rev(line):
+    data = json.loads((ROOT / "builder/lines.json").read_text())
+    return data["pins"][data["lines"][line]["sourcemod"]]["rev"]
 
 
 def drift(*args, timeout=None):
@@ -59,9 +65,10 @@ class CheckPatchDriftTest(unittest.TestCase):
 @unittest.skipIf(os.environ.get("SKIP_NETWORK_TESTS") == "1", "SKIP_NETWORK_TESTS is set")
 class CheckPatchDriftNetworkTest(unittest.TestCase):
     def test_sm13_range_applies(self):
-        # 7485 bumped SourcePawn to the commit the current sm13 series patches; keep
-        # the range inside the pinned SourcePawn, or the sourcepawn patch drifts.
-        result = drift("--range", "7485..7488", "--line", "sm13-latest", timeout=900)
+        # Both ends at the line's own pin (builder/lines.json), so a bump does not
+        # leave the test on revisions the refreshed series no longer fits.
+        rev = sm_pin_rev("sm13-latest")
+        result = drift("--range", f"{rev}..{rev}", "--line", "sm13-latest", timeout=900)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout.count("[OK] No patch drift detected"), 2)
 
