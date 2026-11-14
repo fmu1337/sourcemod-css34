@@ -1,0 +1,50 @@
+css34: core.cfg without options that do nothing on episode1
+
+- FollowCSGOServerGuidelines: every reader (core HalfLife2, sdktools) is
+  under SOURCE_ENGINE == SE_CSGO; on episode1 nothing parses or checks it.
+- SteamAuthstringValidation: PlayerManager parses it, but its only check,
+  CPlayer::IsAuthStringValidated, is under SOURCE_ENGINE >= SE_ORANGEBOX and
+  returns true on episode1 (the v34 engine has no IsClientFullyAuthenticated).
+  Admins are matched by the engine's auth string either way.
+
+Code is unchanged: an old core.cfg that still has either key loads as before.
+
+diff --git a/configs/core.cfg b/configs/core.cfg
+index 43c3c04fa76277628e5c90f1d0a356bdf97d4f89..bdb1610d9dfc323aeba2173013c428e3470e8569 100644
+--- a/configs/core.cfg
++++ b/configs/core.cfg
+@@ -72,14 +72,6 @@
+ 	 */
+ 	"AllowClLanguageVar"		"On"
+ 
+-	/**
+-	 * If set to yes, SourceMod will validate steamid auth strings with the Steam backend before giving out admin access.
+-	 * This can prevent malicious users from impersonating admins with stolen Steam apptickets.
+-	 * If Steam is down, admins will not be authenticated until Steam comes back up.
+-	 * This option increases the security of your server, but is still experimental.
+-	 */
+-	"SteamAuthstringValidation"	"yes"
+-	
+ 	/**
+ 	 * Enables or disables whether SourceMod blocks known or potentially malicious plugins from loading.
+ 	 * It is STRONGLY advised that this is left enabled, there have been cases in the past with plugins that
+@@ -107,19 +99,6 @@
+ 	 */
+ 	"SlowScriptTimeout"	"8"
+ 	
+-	/**
+-	 * Per "http://blog.counter-strike.net/index.php/server_guidelines/", certain plugin
+-	 * functionality will trigger all of the game server owner's Game Server Login Tokens
+-	 * (GSLTs) to get banned when executed on a Counter-Strike: Global Offensive game server.
+-	 *
+-	 * Enabling this option will block plugins from using functionality that is known to cause this.
+-	 * This option only has any effect on CS:GO. Note that this does NOT guarantee that you cannot
+-	 * receive a ban.
+-	 *
+-	 * Disable this option at your own risk.
+-	 */
+-	"FollowCSGOServerGuidelines"	"yes"
+-
+ 	/**
+ 	 * Controls whether the SourcePawn runtime will generate additional metadata about
+ 	 * JIT-compiled functions for performance profiling or debugging purposes.
