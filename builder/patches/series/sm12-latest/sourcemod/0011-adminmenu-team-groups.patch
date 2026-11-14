@@ -1,0 +1,24 @@
+css34: admin menu groups for terrorists and counter-terrorists
+
+configs/adminmenu_grouping.txt ships "Terrorists" (@t) and
+"Counter-Terrorists" (@ct) commented out, for servers that are not CS:S or do
+not run the cstrike extension. Every css34 package is CS:S and ships
+game.cstrike, which registers @t / @ct (CommandTargetProcessor, no engine
+guard), so the groups are on.
+
+diff --git a/configs/adminmenu_grouping.txt b/configs/adminmenu_grouping.txt
+index 84e6e29f2a59f75353d5dc62489f35c544111c22..2a88e28c617ef146d36baeb1cf3e5debace14f2c 100644
+--- a/configs/adminmenu_grouping.txt
++++ b/configs/adminmenu_grouping.txt
+@@ -13,8 +13,7 @@ Groups
+ 	"Humans"				"@humans"
+ 	"Current aim"			"@aim"
+ 
+-	/* You can enable these if you are using Counter-Strike Source and running the cstrike extension */
+-//	"Terrorists"			"@t"
+-//	"Counter-Terrorists"	"@ct"
++	"Terrorists"			"@t"
++	"Counter-Terrorists"	"@ct"
+ 
+ }
+\ No newline at end of file
