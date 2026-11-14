@@ -26,6 +26,7 @@ with reproduction steps are at
 | `0009-mysql-tls-options` (sm13 only) | MySQL driver never requests TLS and turns verification off; HeatWave / MySQL 8.4 `REQUIRE SSL` accounts are refused | `ssl_mode` / `ssl_ca` (see README), TLS 1.2+, `utf8mb4` | — |
 | `0010-handlesys-lazy-table` | since 1.11.0.6792 the 2^20-entry handle table is zeroed at startup: +64 MB RSS in every srcds (156 MB vs 82 MB) | `calloc` instead of `new[]` + `memset`: 90 MB | — |
 | `0011-no-gamedata-updater` | `updater.ext` overwrites the css34 gamedata with upstream's (no v34 entries) over plain HTTP | `updater.ext` and `webternet.ext` are not built or loaded | — |
+| `0012-core-cfg-no-dead-options` | `core.cfg` ships `FollowCSGOServerGuidelines` (read only on CS:GO) and `SteamAuthstringValidation` (checked only on Orange Box+; the episode1 engine has no `IsClientFullyAuthenticated`) | both keys removed from `core.cfg`; an old `core.cfg` that has them still loads | — |
 | sm12 `0007-sdktools-onmapend-list` | the 1.12 cherry-pick of SM #2589 uses the wrong list type: GCC 10 fails | `SourceHook::List<omg_hooks *>`, as `OutputHookList` stores | yes (1.12-dev) |
 | `sourcepawn/0001-gcc10-link-flags` | GCC 10 sign-compare errors; pthread / rt not in `NEEDED` | `-Wno-sign-compare`, explicit `NEEDED` | yes (pthread / rt) |
 | `hl2sdk-manifests/0001-episode1-defines` | the SDK's malloc hooks end up in SourceMod modules | `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE` for episode1 | — |
