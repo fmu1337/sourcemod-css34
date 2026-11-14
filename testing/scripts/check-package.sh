@@ -1,25 +1,13 @@
 #!/usr/bin/env bash
 # Static checks on a SourceMod css34 package before/without a full server boot.
-#
-# HOTFIX_DIR (optional): a frozen line's hotfix tree (hotfixes/<line>/, laid out
-# like cstrike/, docs/FREEZE.md), copied over the package first, as users
-# install it. Its gamedata overrides (<name>.games/custom/*.txt) then count.
 set -euo pipefail
 
 SM_PACKAGE="${SM_PACKAGE:?SM_PACKAGE is required}"
-HOTFIX_DIR="${HOTFIX_DIR:-}"
 TMP="$(mktemp -d)"
 cleanup() { rm -rf "${TMP}"; }
 trap cleanup EXIT
 
 tar -xzf "${SM_PACKAGE}" -C "${TMP}"
-gamedata_args=()
-if [[ -n "${HOTFIX_DIR}" ]]; then
-  [[ -d "${HOTFIX_DIR}/addons" ]] || { echo "FAIL: HOTFIX_DIR ${HOTFIX_DIR} has no addons/" >&2; exit 1; }
-  echo "==> Applying hotfix ${HOTFIX_DIR}"
-  cp -R "${HOTFIX_DIR}/." "${TMP}/"
-  gamedata_args+=(--allow-custom)
-fi
 MM_SO="${TMP}/addons/sourcemod/bin/sourcemod_mm_i486.so"
 CORE_SO="${TMP}/addons/sourcemod/bin/sourcemod.2.ep1.so"
 if [[ ! -f "${CORE_SO}" ]]; then
@@ -35,7 +23,7 @@ fail=0
 STATIC_SP=0
 
 echo "==> Checking self-contained CS:S v34 gamedata"
-if ! python3 "${REPO_ROOT}/testing/scripts/check-css34-gamedata.py" "${GAMEDATA_ROOT}" ${gamedata_args[@]+"${gamedata_args[@]}"}; then
+if ! python3 "${REPO_ROOT}/testing/scripts/check-css34-gamedata.py" "${GAMEDATA_ROOT}"; then
   fail=1
 fi
 
@@ -103,7 +91,7 @@ else
   fail=1
 fi
 # The gamedata auto-updater would write upstream gamedata over the css34 files.
-# Packages from the no-gamedata-updater patch (docs/PATCHES.md) ship neither
+# Packages from the no-gamedata-updater patch (docs/CHANGES.md) ship neither
 # updater.ext nor webternet.ext and their core never loads updater.ext. Older
 # published packages (frozen sm11, a pointer moved back to an earlier tag) ship
 # both with "DisableAutoUpdate" "yes" in core.cfg.

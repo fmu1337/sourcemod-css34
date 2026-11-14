@@ -74,7 +74,7 @@
       "status": "frozen",
       "pointer": true,
       "releasable": false,
-      "role": "OldStable, frozen ([docs](docs/FREEZE.md)): dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy",
+      "role": "OldStable, frozen ([docs](docs/MAINTAINING.md)): dual-core (1.ep1 + 2.ep1); MM 1.10.7 as mmsource-legacy",
       "windows": true,
       "smoke": [
         {
@@ -87,18 +87,18 @@
           "image": "debian:13"
         }
       ],
-      "install_role": "OldStable, frozen: dual-core; MM 1.12 default, MM 1.10.7 as mmsource-legacy",
+      "install_role": "Frozen, dual-core",
       "frozen": {
-        "tag": "1.11.0.6970-mm1.12.0-dual-r3",
-        "freeze_tag": "sm11-freeze",
-        "inputs_release": "sm11-freeze-inputs",
+        "tag": "1.11.0.6970-mm1.12.0-dual-r4",
+        "freeze_tag": "sm11-freeze-r4",
+        "inputs_release": "sm11-freeze-r4-inputs",
         "assets": {
-          "mmsource-1.10.7-git976-css34-linux.tar.gz": "96d3e5c3167180ede3037eeb2dbdb3e89c01bd66d194b88a25acd6efc506a4fd",
-          "mmsource-1.10.7-git976-css34-windows.zip": "573bc46b5688e27c3ab9cdfa9bc2613a0be6be239960a72f6fe49932204b63c1",
-          "mmsource-1.12.0-git1227-css34-linux.tar.gz": "5150d5059495329ee680cfbceb3ff9f2872bc92c39ca20fd98654c635fa2ee84",
-          "mmsource-1.12.0-git1227-css34-windows.zip": "6afe2e5a96166025cabddea7ab52d987e2e41995326091f4ec5fa96a7125f215",
-          "sourcemod-1.11.0-git6970-css34-linux.tar.gz": "6a953594ac489fd0c98bdc82f9a210febf1320220d6ee59b5957476343298e96",
-          "sourcemod-1.11.0-git6970-css34-windows.zip": "83ec075804e79a25ef4725744a2e3a2b79fdf301db5a1647229cbe89309a7351"
+          "mmsource-1.10.7-git976-css34-linux.tar.gz": "43a42b6bc260610d13719286d4e992d6c6a3e2a138e1f602a9bf4067997325c0",
+          "mmsource-1.10.7-git976-css34-windows.zip": "bc6811e1346e6df20f51ed5b4ea51432a7020408582c4fb82de89cdf771b5fa2",
+          "mmsource-1.12.0-git1227-css34-linux.tar.gz": "9ac3701c5e694f74379e7de86498815292556fd32af81ce56b3717960cfb0f3c",
+          "mmsource-1.12.0-git1227-css34-windows.zip": "319d8fb935856ae6ff2ad71bd2abb7dcf19663ef2f23b61e54fde0d9d3fa7b27",
+          "sourcemod-1.11.0-git6970-css34-linux.tar.gz": "28623edc7702c9da7d7c451b57c336b7b9e43baff3f82f5ded856013c1ea116e",
+          "sourcemod-1.11.0-git6970-css34-windows.zip": "fcd4564a2b80e89bcb121edf7e9988f494cfa4900f314a0d62bd856779209b5a"
         }
       }
     },
@@ -131,7 +131,7 @@
       "pointer": true,
       "releasable": true,
       "role": "Latest 1.13 (default)",
-      "install_role": "**Default / recommended**",
+      "install_role": "**Default**",
       "smoke": [
         {
           "image": "centos:7"
@@ -151,7 +151,8 @@
       "status": "retired",
       "pointer": true,
       "releasable": false,
-      "role": "Retired outside CI ([docs, archive/khook](https://github.com/fmu1337/sourcemod-css34/blob/archive/khook/docs/SM13_MM20.md))",
+      "role": "Retired, MM 2.0 ([docs](docs/KHOOK.md))",
+      "readme": false,
       "install_role": "Retired outside CI",
       "mm_note": "(last SourceHook MM 2.0)"
     },
@@ -164,7 +165,8 @@
       "extra_tags": [
         "1.13.0.7565-mm2.0.0-khook-dhooks"
       ],
-      "role": "Frozen outside CI ([docs, archive/khook](https://github.com/fmu1337/sourcemod-css34/blob/archive/khook/docs/MM20_KHOOK.md))",
+      "role": "Frozen, MM 2.0 KHook ([docs](docs/KHOOK.md))",
+      "readme": false,
       "install_role": "Frozen outside CI; archived builder, ships `dhooks.ext`",
       "sm_note": "(KHook branch + master)",
       "mm_note": "(KHook)"

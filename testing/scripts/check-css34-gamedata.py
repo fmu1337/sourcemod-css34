@@ -4,13 +4,6 @@
 With --source, also reject new direct gamedata lookups in the SourceMod core
 and built-in extensions until they are either supplied by this v34 contract or
 explicitly classified as unavailable on the legacy engine.
-
-With --allow-custom, <name>.games/custom/*.txt files are SourceMod gamedata
-overrides (CGameConfig::Reparse reads them after the shipped files and their
-keys replace the shipped values): they are not "unexpected" files, and the
-required and forbidden entries are checked on the shipped file plus the
-overrides of its directory. Only a frozen line's hotfix (hotfixes/<line>/,
-docs/FREEZE.md) adds such files; packages never ship them.
 """
 
 from pathlib import Path
@@ -61,7 +54,7 @@ REQUIRED = {
 # but do not describe the CSS v34 server vtable.  VPhysicsUpdate slot 131 is
 # GetAttackDamageScale on v34; GetMaxHealth is non-virtual and therefore must
 # not be used as a vtable offset (CCSPlayer slot 107, the old offset, is
-# CBaseEntity::NetworkStateChanged_m_iMaxHealth(); docs/PATCHES.md).
+# CBaseEntity::NetworkStateChanged_m_iMaxHealth(); docs/CHANGES.md).
 REQUIRED_PATTERNS = {
     # The v34 client expects a leading byte in HintText (SM 1.7.3, rom4s 1.11);
     # core reads this key only from the "cstrike" section.
@@ -123,36 +116,13 @@ def source_keys(source: Path) -> set[str]:
     return keys
 
 
-CUSTOM = re.compile(r'^(?:[^/]+\.games/)?custom/[^/]+\.txt$')
-
-
-def custom_overrides(root: Path, rel: str, actual: set[str]) -> list[str]:
-    """Override files SourceMod parses after <rel>: <rel's dir>/custom/*.txt."""
-    parent = rel.rsplit('/', 1)[0] + '/' if '/' in rel else ''
-    return sorted(name for name in actual
-                  if CUSTOM.match(name) and name.startswith(parent + 'custom/'))
-
-
-def effective_text(root: Path, rel: str, overrides: list[str]) -> str:
-    texts = [(root / rel).read_text(encoding='latin-1')]
-    texts += [(root / name).read_text(encoding='latin-1') for name in overrides]
-    return '\n'.join(texts)
-
-
 def main() -> int:
-    usage = f'usage: {Path(sys.argv[0]).name} <gamedata-dir> [--source <sourcemod-dir>] [--allow-custom]'
     args = sys.argv[1:]
-    allow_custom = '--allow-custom' in args
-    args = [arg for arg in args if arg != '--allow-custom']
     if len(args) not in (1, 3) or (len(args) == 3 and args[1] != '--source'):
-        print(usage, file=sys.stderr)
+        print(f'usage: {Path(sys.argv[0]).name} <gamedata-dir> [--source <sourcemod-dir>]', file=sys.stderr)
         return 2
     root = Path(args[0])
     actual = {path.relative_to(root).as_posix() for path in root.rglob('*') if path.is_file()}
-    custom = {name for name in actual if CUSTOM.match(name)} if allow_custom else set()
-    if custom:
-        print('OK: custom gamedata overrides: ' + ', '.join(sorted(custom)))
-    actual -= custom
     failed = False
     missing = sorted(FILES - actual)
     extra = sorted(actual - FILES)
@@ -175,7 +145,7 @@ def main() -> int:
         path = root / rel
         if not path.is_file():
             continue
-        text = effective_text(root, rel, custom_overrides(root, rel, custom))
+        text = path.read_text(encoding='latin-1')
         absent = [pattern for pattern in patterns if not re.search(pattern, text, re.DOTALL)]
         if absent:
             print(f'FAIL: {rel} has incorrect CSS v34 entries: ' + ', '.join(absent), file=sys.stderr)
@@ -184,7 +154,7 @@ def main() -> int:
         path = root / rel
         if not path.is_file():
             continue
-        text = effective_text(root, rel, custom_overrides(root, rel, custom))
+        text = path.read_text(encoding='latin-1')
         present = [needle for needle in needles if needle in text]
         if present:
             print(f'FAIL: {rel} contains unsupported CSS v34 entries: ' + ', '.join(present), file=sys.stderr)

@@ -58,7 +58,7 @@ apply_sm_line "${CSS34_LINE:-sm13-latest}"
 css34_require_buildable() {
   if [[ "$SOURCEMOD_MAJOR" -lt 12 ]]; then
     echo "FAIL: ${CSS34_LINE} (SourceMod 1.${SOURCEMOD_MAJOR}) is frozen: master builds SourceMod 1.12+ only;" \
-      "rebuild it from its freeze tag and input archive (docs/FREEZE.md)" >&2
+      "rebuild it from its freeze tag and input archive (docs/MAINTAINING.md)" >&2
     return 1
   fi
 }

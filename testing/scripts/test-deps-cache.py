@@ -88,7 +88,7 @@ class Image(unittest.TestCase):
             if old is not None:
                 os.environ['ML2014_IMAGE'] = old
         self.assertRegex(image, r'^quay\.io/pypa/manylinux2014_i686@sha256:[0-9a-f]{64}$')
-        self.assertIn(image, (ROOT / 'AGENTS.md').read_text())
+        self.assertIn(image, (ROOT / 'docs' / 'EXTENSIONS.md').read_text())
 
     def test_build_sh_passes_the_image_into_the_container(self):
         text = (ROOT / 'builder/docker/build.sh').read_text()

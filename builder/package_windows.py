@@ -259,7 +259,7 @@ def package_sourcemod(package_dir, output_dir, sourcemod_dir):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     # SourceMod 1.12+ has one core (2.ep1); master no longer builds the
-    # dual-core SM 1.11 (sm11-oldstable is frozen, docs/FREEZE.md).
+    # dual-core SM 1.11 (sm11-oldstable is frozen, docs/MAINTAINING.md).
     if (package_dir / "addons/sourcemod/bin/sourcemod.1.ep1.dll").is_file():
         fail("unexpected sourcemod.1.ep1.dll: master packages SourceMod 1.12+ (2.ep1) only")
     required = [
@@ -296,7 +296,7 @@ UPDATER_EXTENSIONS = ("updater.ext.dll", "webternet.ext.dll")
 
 def refuse_gamedata_updater(package_dir):
     """No gamedata auto-updater: it would write upstream gamedata over css34's
-    (series patch no-gamedata-updater, docs/PATCHES.md)."""
+    (series patch no-gamedata-updater, docs/CHANGES.md)."""
     extensions = package_dir / "addons/sourcemod/extensions"
     shipped = [name for name in UPDATER_EXTENSIONS if (extensions / name).is_file()]
     if shipped:

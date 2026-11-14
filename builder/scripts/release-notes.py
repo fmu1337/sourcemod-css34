@@ -113,7 +113,7 @@ def render(tag, repo, commit, root=ROOT):
     series = series_for(root, name, part["mm_commit"])
     if series:
         out.append("- Patches: git patch series {} (`builder/patches/series/`, "
-                   "see `docs/PATCHES.md`).".format(
+                   "see `docs/CHANGES.md`).".format(
                        ", ".join("`{}` ({} patches)".format(s, n) for s, n in series)))
     out.append("")
     smoke = [item["image"] for item in line.get("smoke", [])]

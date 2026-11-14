@@ -98,7 +98,7 @@ printf '%s %s %s\n' "$MM_PACKAGE" "$EXPECTED_MM_REV" "$EXPECTED_MM_COMMIT" >> "$
         return result, sm_name, mm_names
 
     def test_frozen_sm11_is_refused_before_outputs(self):
-        # T3.3: sm11-oldstable is rebuilt only from its freeze tag (docs/FREEZE.md).
+        # T3.3: sm11-oldstable is rebuilt only from its freeze tag (docs/MAINTAINING.md).
         result, _, _ = self.release("sm11-oldstable")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("frozen dual-core line", result.stderr)

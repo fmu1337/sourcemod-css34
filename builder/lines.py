@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parent.parent
 LINE_FIELDS = {
     "sourcemod", "metamod", "secondary_metamod", "status", "pointer", "releasable", "role",
     "install_role", "extra_tags", "smoke",
-    "windows", "sm_note", "mm_note", "frozen", "bridge_metamod",
+    "windows", "sm_note", "mm_note", "frozen", "bridge_metamod", "readme",
 }
-# T2.7 (docs/FREEZE.md): a frozen line keeps its published release and pointer,
+# T2.7 (docs/MAINTAINING.md): a frozen line keeps its published release and pointer,
 # leaves CI, and is rebuilt only from its freeze tag and input archive.
 FROZEN_FIELDS = {"tag", "freeze_tag", "inputs_release", "assets"}
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
@@ -85,6 +85,7 @@ def load_manifest(path):
         require(isinstance(line.get("pointer", False), bool), name + ".pointer must be a bool")
         require(isinstance(line.get("releasable", True), bool), name + ".releasable must be a bool")
         require(isinstance(line.get("windows", False), bool), name + ".windows must be a bool")
+        require(isinstance(line.get("readme", True), bool), name + ".readme must be a bool")
         for key in ("role", "install_role", "sm_note", "mm_note"):
             if key in line:
                 require(isinstance(line[key], str) and line[key].strip() and "\n" not in line[key],
@@ -546,45 +547,27 @@ def mm_text(part, style):
     return text
 
 
-def version_names(data):
-    return list(data["lines"])
+def readme_names(data):
+    """Lines listed in the README table.
+    "readme": false hides a line (the MM 2.0 lines, archived in archive/khook)."""
+    names = [name for name, line in data["lines"].items()
+             if line.get("pointer") and line.get("readme", True)]
+    # default line, then active lines, then the rest, each group in file order
+    return sorted(names, key=lambda n: (n != data["default_line"],
+                                        data["lines"][n]["status"] != "active"))
 
 
-def install_names(data):
-    preferred = [data["default_line"], "sm12-latest", "sm13-mm20-khook", "sm13-mm20"]
-    names = []
-    for name in preferred + list(data["lines"]):
-        if name in names or name not in data["lines"]:
-            continue
-        if data["lines"][name].get("pointer"):
-            names.append(name)
-    return names
-
-
-def render_readme_tables(data):
-    install = ["| `<line>` | SourceMod | Metamod | Role |",
-               "|----------|-----------|---------|------|"]
-    for name in install_names(data):
+def render_readme_table(data):
+    rows = ["| `<line>` | SourceMod | Metamod | Role |",
+            "|----------|-----------|---------|------|"]
+    for name in readme_names(data):
         part = line_parts(data, name)
-        sm = part["sm_expect"]
+        sm = "{} (`{}…`)".format(part["sm_expect"], part["sm_short"])
         if part["sm_note"]:
             sm += " " + part["sm_note"]
-        install.append("| `{}` | {} | {} | {} |".format(
-            name, sm, mm_text(part, "install"), part["install_role"]))
-    versions = ["| Line (`CSS34_LINE`) | SourceMod | Metamod | Role |",
-                "|---------------------|-----------|---------|------|"]
-    for name in version_names(data):
-        part = line_parts(data, name)
-        sm = part["sm_expect"]
-        mm = mm_text(part, "version")
-        if part["status"] != "retired":
-            sm = "**{}**".format(sm)
-            mm = "**{}**".format(mm)
-        if part["sm_note"]:
-            sm += " " + part["sm_note"]
-        versions.append("| `{}` | {} (`{}…`) | {} (`{}…`) | {} |".format(
-            name, sm, part["sm_short"], mm, part["mm_short"], part["role"]))
-    return "\n".join(install) + "\n", "\n".join(versions) + "\n"
+        mm = "{} (`{}…`)".format(mm_text(part, "install"), part["mm_short"])
+        rows.append("| `{}` | {} | {} | {} |".format(name, sm, mm, part["install_role"]))
+    return "\n".join(rows) + "\n"
 
 
 def replace_block(text, begin, end, body):
@@ -595,9 +578,8 @@ def replace_block(text, begin, end, body):
 
 
 def render_readme(data, current):
-    install, versions = render_readme_tables(data)
-    current = replace_block(current, "<!-- lines-install:begin -->", "<!-- lines-install:end -->", install)
-    return replace_block(current, "<!-- lines-versions:begin -->", "<!-- lines-versions:end -->", versions)
+    return replace_block(current, "<!-- lines-install:begin -->", "<!-- lines-install:end -->",
+                         render_readme_table(data))
 
 
 def render_versions(data):

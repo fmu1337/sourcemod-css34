@@ -153,7 +153,7 @@ class LinesTest(unittest.TestCase):
                          [e["image"] for e in data["lines"]["sm11-oldstable"]["smoke"]])
         row = rows[0]
         self.assertEqual((row["line"], row["freeze_tag"], row["inputs_release"]),
-                         ("sm11-oldstable", "sm11-freeze", "sm11-freeze-inputs"))
+                         ("sm11-oldstable", "sm11-freeze-r4", "sm11-freeze-r4-inputs"))
         pins = data["pins"]
         self.assertEqual(json.loads(row["pointer_assets"]), {
             "sourcemod-css34-linux.tar.gz": "sourcemod-1.11.0-git{}-css34-linux.tar.gz".format(pins["SM_OLDSTABLE"]["rev"]),
@@ -171,7 +171,7 @@ class LinesTest(unittest.TestCase):
         cases = (
             (lambda l: (l.pop("secondary_metamod"), l.update(status="active")), "needs status frozen"),
             (lambda l: l.update(status="active"), "master builds one Metamod per line"),
-            (lambda l: l.update(releasable=True), "rebuilt only from sm11-freeze"),
+            (lambda l: l.update(releasable=True), "rebuilt only from sm11-freeze-r4"),
             (lambda l: l["frozen"].update(tag="1.11.0.6970-mm1.10.7"), "is not a build of"),
             (lambda l: l["frozen"]["assets"].update({"x.tar.gz": "abc"}), "needs a sha256"),
             (lambda l: l["frozen"].pop("inputs_release"), "must have exactly"),
