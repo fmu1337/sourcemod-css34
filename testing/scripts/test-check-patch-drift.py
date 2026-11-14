@@ -59,7 +59,9 @@ class CheckPatchDriftTest(unittest.TestCase):
 @unittest.skipIf(os.environ.get("SKIP_NETWORK_TESTS") == "1", "SKIP_NETWORK_TESTS is set")
 class CheckPatchDriftNetworkTest(unittest.TestCase):
     def test_sm13_range_applies(self):
-        result = drift("--range", "7472..7477", "--line", "sm13-latest", timeout=900)
+        # 7485 bumped SourcePawn to the commit the current sm13 series patches; keep
+        # the range inside the pinned SourcePawn, or the sourcepawn patch drifts.
+        result = drift("--range", "7485..7488", "--line", "sm13-latest", timeout=900)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout.count("[OK] No patch drift detected"), 2)
 
