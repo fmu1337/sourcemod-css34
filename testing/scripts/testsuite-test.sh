@@ -91,7 +91,7 @@ fi
 
 rcon_pw="css34testsuite"
 rcon() { python3 "${root}/testing/scripts/rcon.py" 127.0.0.1 "${rcon_pw}" "$@"; }
-errors_lines() { cat "${sm}"/logs/errors_*.log 2>/dev/null | wc -l; }
+errors_lines() { cat "${sm}"/logs/errors_*.log 2>/dev/null | wc -l || true; }
 srcds_pid=""
 plugin_file=""
 cleanup() {
