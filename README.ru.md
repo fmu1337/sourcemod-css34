@@ -54,6 +54,7 @@ tar -xzf sourcemod-css34-linux.tar.gz -C /path/to/cstrike
   `updater.ext.so` / `webternet.ext.so` никогда не загружаются, их можно удалить.
 - В `core.cfg` нет `FollowCSGOServerGuidelines` и `SteamAuthstringValidation`: на v34 обе ничего не делают.
   Старый `core.cfg` с ними загружается без изменений.
+- В админ-меню есть группы целей Terrorists (`@t`) и Counter-Terrorists (`@ct`).
 
 ## MySQL HeatWave / MySQL 8.4 (`sm13-latest`)
 

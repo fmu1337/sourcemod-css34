@@ -51,6 +51,7 @@ exist only as `*.ext.1.ep1` (it runs the `1.ep1` SourceMod core; no DHooks).
   `updater.ext.so` / `webternet.ext.so` from older packages are never loaded and can be deleted.
 - `core.cfg` has no `FollowCSGOServerGuidelines` / `SteamAuthstringValidation`: neither does anything on
   v34. An old `core.cfg` with them loads unchanged.
+- The admin menu offers Terrorists (`@t`) / Counter-Terrorists (`@ct`) as target groups.
 
 ## MySQL HeatWave / MySQL 8.4 (`sm13-latest`)
 
