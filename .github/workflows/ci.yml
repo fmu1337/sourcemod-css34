@@ -444,6 +444,9 @@ jobs:
               testing/scripts/install-deps.sh
               testing/scripts/install-addons.sh
               testing/scripts/smoke-test.sh
+              # SourceMod testsuite: compile it all, run the mock tests on v34.
+              TESTSUITE_MOCK_DIR=/workspace/packages/test-plugins/testsuite-mock \
+                testing/scripts/testsuite-test.sh
               if [[ -n "${LEGACY_PROBE}" ]]; then
                 testing/scripts/legacy-bridge-test.sh
               fi
@@ -468,6 +471,7 @@ jobs:
             .ci-server/mysql-tls.log*
             .ci-server/legacy-bridge.log*
             .ci-server/console-probe.log
+            .ci-server/testsuite/
             .ci-server/cstrike/console.log
             .ci-server/cstrike/addons/metamod/bin/metamod-fatal.log
             .ci-server/addons/metamod/bin/metamod-fatal.log

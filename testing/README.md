@@ -31,7 +31,11 @@ the `test-images/update` PR.
 5. The expected core runs (`SMOKE_EXPECT_CORE`, `2.ep1`; `1.ep1` only for sm11's `mmsource-legacy`).
 6. Legacy-plugin bridge: the PLAPI 11 probe `css34_legacy_probe` loads through MM 1.12, hooks
    `LevelInit` and unloads (`legacy-bridge-test.sh`).
-7. sm13 MySQL TLS: against MariaDB 11.8, MySQL 8.4 and MySQL 8.4 without TLS
+7. SourceMod testsuite (`testsuite-test.sh`): every `scripting/testsuite/*.sp` compiles with the
+   package's spcomp (a few upstream files that no longer compile are listed in `KNOWN_BROKEN`), and the
+   self-checking tests from SourceMod's `plugins/testsuite/mock` (8 on sm13, 1 on sm12) run on v34, one
+   boot each: at least one `OK`, no `FAIL`, no SourceMod error.
+8. sm13 MySQL TLS: against MariaDB 11.8, MySQL 8.4 and MySQL 8.4 without TLS
    (`mysql-tls-server.sh`, `mysql-tls-test.sh`) every `ssl_mode` behaves as documented, a plaintext login
    to a `REQUIRE SSL` account and a wrong CA are refused.
 

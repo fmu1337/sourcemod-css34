@@ -188,6 +188,17 @@ for arg in "${DB_PATH_ARGS[@]}"; do
     -Wl,-Bstatic -lssl -lcrypto -lz -Wl,-Bdynamic -lpthread -lm -lrt -ldl
 done
 
+# SourceMod's self-checking tests (plugins/testsuite/mock, testing.inc): upstream
+# runs them on hl2sdk-mock, testing/scripts/testsuite-test.sh on srcds v34.
+# Sources only, next to the other test plugins (never released).
+mock_tests="$PACKAGES_DIR/test-plugins/testsuite-mock"
+rm -rf "$mock_tests"
+if compgen -G "$SOURCEMOD_DIR/plugins/testsuite/mock/*.sp" >/dev/null; then
+  mkdir -p "$mock_tests"
+  cp -f "$SOURCEMOD_DIR"/plugins/testsuite/mock/*.sp "$mock_tests/"
+  echo "==> Copied $(find "$mock_tests" -name '*.sp' | wc -l) SourceMod mock test(s) to $mock_tests"
+fi
+
 PACKAGE_DIR="$SOURCEMOD_DIR/build/package"
 if [ ! -d "$PACKAGE_DIR/addons/sourcemod" ]; then
   echo "Build finished but package directory was not found." >&2
