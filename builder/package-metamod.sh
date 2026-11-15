@@ -20,6 +20,12 @@ trap 'rm -rf "$staging"' EXIT
 
 cp -a "$MMS_PACKAGE_DIR/addons" "$staging/"
 
+# MM builds two Linux loaders: server_i486.so for engines that append
+# "_i486.so" to the metamod.vdf path (episode1, so CS:S v34) and server.so for
+# L4D2 and newer, which append ".so" and whose game binary is server.so (MM
+# loader/AMBuilder, 07a7cc2 / 15e694b). v34 never loads server.so.
+rm -f "$staging/addons/metamod/bin/server.so"
+
 # Match rom4s/css34 gameinfo path (relative to hl2/cstrike).
 vdf="$staging/addons/metamod.vdf"
 if [[ -f "$vdf" ]]; then
@@ -48,7 +54,6 @@ required=(
   "addons/metamod.vdf"
   "addons/metamod/bin/${mm_core}"
   "addons/metamod/bin/server_i486.so"
-  "addons/metamod/bin/server.so"
 )
 
 for rel in "${required[@]}"; do

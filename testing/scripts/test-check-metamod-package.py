@@ -61,7 +61,7 @@ class TestCheckMetamodPackage(unittest.TestCase):
         with open(os.path.join(mm_dir, "css34-package.json"), "w") as f:
             json.dump(manifest, f)
 
-        for fname in (bins or ["metamod.1.ep1.so"]) + ["server.so", "server_i486.so"]:
+        for fname in (bins or ["metamod.1.ep1.so"]) + ["server_i486.so"]:
             with open(os.path.join(bin_dir, fname), "wb") as f:
                 f.write(legacy_core if fname == "metamod.1.ep1.so" else b"")
 
