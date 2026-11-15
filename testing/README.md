@@ -34,7 +34,10 @@ the `test-images/update` PR.
 7. SourceMod testsuite (`testsuite-test.sh`): every `scripting/testsuite/*.sp` compiles with the
    package's spcomp (a few upstream files that no longer compile are listed in `KNOWN_BROKEN`), and the
    self-checking tests from SourceMod's `plugins/testsuite/mock` (8 on sm13, 1 on sm12) run on v34, one
-   boot each: at least one `OK`, no `FAIL`, no SourceMod error.
+   boot each: at least one `OK`, no `FAIL`, no SourceMod error. The other testsuite plugins (they print
+   results instead of asserting them) load in one boot, run their server commands and survive a map
+   change with no SourceMod error, load failure or crash; `benchmark`, `gamerules-props` and `tf2-test`
+   are skipped (`MANUAL_SKIP` says why).
 8. sm13 MySQL TLS: against MariaDB 11.8, MySQL 8.4 and MySQL 8.4 without TLS
    (`mysql-tls-server.sh`, `mysql-tls-test.sh`) every `ssl_mode` behaves as documented, a plaintext login
    to a `REQUIRE SSL` account and a wrong CA are refused.

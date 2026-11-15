@@ -9,6 +9,9 @@
 #    prints "... OK" / "... FAIL: ..."; upstream runs them on hl2sdk-mock) run on
 #    the real v34 server, one boot per test. A test passes when it prints at
 #    least one OK, no FAIL, and SourceMod logs no error for it.
+# 3. The other testsuite plugins print results without asserting them: one boot
+#    loads each over RCON, runs its commands and changes the map; a SourceMod
+#    error log line, a load failure or a crash fails (MANUAL_RUN / MANUAL_SKIP).
 #
 # Usage: SERVER_DIR=<srcds root with MM + SM installed> \
 #        TESTSUITE_MOCK_DIR=<packages/test-plugins/testsuite-mock> testsuite-test.sh
@@ -84,7 +87,14 @@ if [[ "${#mock_sources[@]}" -eq 0 ]]; then
     echo "FAIL: no SourceMod mock tests in '${TESTSUITE_MOCK_DIR}' (the build copies them to packages/test-plugins)" >&2
     exit 1
   fi
-  echo "SKIP: in-game tests (set TESTSUITE_MOCK_DIR)"
+  echo "SKIP: mock tests (set TESTSUITE_MOCK_DIR)"
+fi
+if [[ ! -x "${SERVER_DIR}/${srcds_binary#./}" ]]; then
+  if [[ "${CSS34_CI}" == 1 ]]; then
+    echo "FAIL: no srcds binary ${srcds_binary} in ${SERVER_DIR}" >&2
+    exit 1
+  fi
+  echo "SKIP: in-game tests (no srcds in ${SERVER_DIR})"
   [[ "${fail}" -eq 0 ]] && echo "Testsuite compile PASSED"
   exit "${fail}"
 fi
@@ -94,9 +104,11 @@ rcon() { python3 "${root}/testing/scripts/rcon.py" 127.0.0.1 "${rcon_pw}" "$@"; 
 errors_lines() { cat "${sm}"/logs/errors_*.log 2>/dev/null | wc -l || true; }
 srcds_pid=""
 plugin_file=""
+manual_files=()
 cleanup() {
   if [[ -n "${srcds_pid}" ]]; then kill "${srcds_pid}" 2>/dev/null || true; fi
   if [[ -n "${plugin_file}" ]]; then rm -f "${plugin_file}"; fi
+  if [[ "${#manual_files[@]}" -gt 0 ]]; then rm -f "${manual_files[@]}"; fi
 }
 trap cleanup EXIT
 
@@ -197,9 +209,178 @@ run_test() {
 }
 
 echo "==> Running ${#mock_sources[@]} SourceMod mock test(s) on srcds v34"
-for sp in "${mock_sources[@]}"; do
+for sp in ${mock_sources[@]+"${mock_sources[@]}"}; do
   run_test "${sp}"
 done
+
+# 3. The other scripting/testsuite plugins print their results instead of
+#    asserting them, so they are judged by what SourceMod and srcds report: one
+#    srcds boot loads each plugin over RCON, runs its server commands, then
+#    changes the map once (OnMapInit / OnMapStart plugins). Any line SourceMod
+#    adds to its error log (ThrowError, native errors, exceptions, load
+#    failures), a plugin that does not load, or a crash fails the run.
+#    "name|command;command" (no commands: the load itself is the test). Order
+#    matters: fwdtest1 finds fwdtest2.smx by file name.
+MANUAL_RUN=(
+  "bug4059|test_bug4059"
+  "callfunctest|test_callfunc;test_callfunc_reentrant"
+  "capstest|sm_test_caps1"
+  "clientprefstest|"
+  "cstrike-test|"
+  "entpropelements|sm_teststrings"
+  "fakenative1|"
+  "filetest|test_fread1"
+  "findmap|test_findmap de_dust2;test_findmap de_css34_missing"
+  "floats|test_floats"
+  "fwdtest2|"
+  "fwdtest1|test_create_gforward;test_create_pforward;test_exec_gforward;test_exec_pforward"
+  "keyvalues|test_keyvalues"
+  "mapdisplayname|test_mapdisplayname de_dust2"
+  "ptstest|"
+  "sorttest|test_sort_ints;test_sort_floats;test_sort_strings;test_sort_1d;test_sort_2d;test_adtsort_ints;test_adtsort_floats;test_adtsort_strings;test_adtsort_custom"
+  "tries|test_maps;test_int_maps"
+  "entitylumptest|"
+  "outputtest|"
+)
+# Not run, with the reason. capstest's sm_test_caps2 / 3 fail the plugin on
+# purpose (RequireFeature of a missing native), so only sm_test_caps1 runs.
+declare -A MANUAL_SKIP=(
+  [benchmark]="needs translations/fakedict-sourcemod.cfg, which SourceMod does not ship"
+  [gamerules-props]="TF2 / Alien Swarm only (AskPluginLoad2 refuses other games)"
+  [tf2-test]="TF2 natives; packages ship no tf2 extension"
+)
+
+run_manual() {
+  local session="${work}/manual.log" entry name cmds cmd reply errors_before up=1
+  local -a cmd_list
+  mkdir -p "${work}/manual"
+  local listed=" "
+  for entry in "${MANUAL_RUN[@]}"; do listed+="${entry%%|*} "; done
+  for smx in "${work}"/compile/*.smx; do
+    name="$(basename "${smx}" .smx)"
+    if [[ "${listed}" != *" ${name} "* && -z "${MANUAL_SKIP[${name}]:-}" ]]; then
+      echo "FAIL: ${name}.smx compiles but is neither in MANUAL_RUN nor MANUAL_SKIP" >&2
+      fail=1
+    fi
+  done
+  for name in "${!MANUAL_SKIP[@]}"; do
+    echo "SKIP: ${name}: ${MANUAL_SKIP[${name}]}"
+  done
+
+  rm -f "${SERVER_DIR}/cstrike/console.log"
+  errors_before="$(errors_lines)"
+  (
+    cd "${SERVER_DIR}"
+    export LD_LIBRARY_PATH=".:bin:${LD_LIBRARY_PATH:-}"
+    exec "${srcds_binary}" -game cstrike -console -condebug -nohltv -nomaster -localcser \
+      -tickrate 66 -ip 127.0.0.1 -port 27015 +ip 127.0.0.1 +sv_lan 1 +maxplayers 4 \
+      +rcon_password "${rcon_pw}" +map de_dust2
+  ) </dev/null >"${session}.console" 2>&1 &
+  srcds_pid=$!
+
+  wait_rcon() {
+    local deadline=$((SECONDS + TESTSUITE_TIMEOUT))
+    until rcon "echo css34-testsuite-up" 2>/dev/null | grep -q css34-testsuite-up; do
+      if ! kill -0 "${srcds_pid}" 2>/dev/null || (( SECONDS >= deadline )); then
+        return 1
+      fi
+      sleep 2
+    done
+  }
+
+  : >"${session}"
+  if ! wait_rcon; then
+    echo "FAIL: manual testsuite: srcds did not answer RCON within ${TESTSUITE_TIMEOUT}s" >&2
+    up=0
+  fi
+  local ran=0
+  for entry in "${MANUAL_RUN[@]}"; do
+    [[ "${up}" == 1 ]] || break
+    name="${entry%%|*}"
+    cmds="${entry#*|}"
+    if [[ ! -f "${work}/compile/${name}.smx" ]]; then
+      echo "SKIP: ${name}: does not compile on this line"
+      continue
+    fi
+    # Plugins look each other up by file name (fwdtest1 -> fwdtest2.smx), so
+    # they go straight into plugins/; copied after boot, so never autoloaded.
+    cp -f "${work}/compile/${name}.smx" "${sm}/plugins/${name}.smx"
+    manual_files+=("${sm}/plugins/${name}.smx")
+    reply="$(rcon "sm plugins load ${name}" 2>&1 || true)"
+    printf '>>> sm plugins load %s\n%s\n' "${name}" "${reply}" >>"${session}"
+    if ! grep -q 'successfully' <<<"${reply}"; then
+      echo "FAIL: ${name}: did not load: ${reply}" >&2
+      fail=1
+      continue
+    fi
+    cmd_list=()
+    [[ -z "${cmds}" ]] || IFS=';' read -r -a cmd_list <<<"${cmds}"
+    # ${arr[@]+...}: an empty array is "unbound" under set -u in bash 4.2 (centos:7).
+    for cmd in ${cmd_list[@]+"${cmd_list[@]}"}; do
+      [[ -n "${cmd}" ]] || continue
+      reply="$(rcon "${cmd}" 2>&1 || true)"
+      printf '>>> %s\n%s\n' "${cmd}" "${reply}" >>"${session}"
+      if ! kill -0 "${srcds_pid}" 2>/dev/null; then
+        echo "FAIL: ${name}: srcds died on '${cmd}'" >&2
+        up=0
+        fail=1
+        break
+      fi
+    done
+    ran=$((ran + 1))
+    echo "OK: ${name} loaded${cmds:+, ran ${cmds//;/, }}"
+  done
+
+  if [[ "${up}" == 1 ]]; then
+    # OnMapInit (entity lump) and OnMapStart (entity outputs) need a map load.
+    rcon "changelevel de_dust2" >>"${session}" 2>&1 || true
+    sleep 5
+    if wait_rcon; then
+      sleep "${TESTSUITE_SETTLE}"
+      rcon "sm plugins list" >>"${session}" 2>&1 || true
+      echo "OK: map change with the testsuite plugins loaded"
+    else
+      echo "FAIL: manual testsuite: srcds did not come back after changelevel" >&2
+      fail=1
+    fi
+    rcon "quit" >/dev/null 2>&1 || true
+  else
+    fail=1
+  fi
+  local waited=0
+  while kill -0 "${srcds_pid}" 2>/dev/null && (( waited < 15 )); do
+    sleep 1
+    waited=$((waited + 1))
+  done
+  kill "${srcds_pid}" 2>/dev/null || true
+  wait "${srcds_pid}" 2>/dev/null || true
+  srcds_pid=""
+  if [[ "${#manual_files[@]}" -gt 0 ]]; then rm -f "${manual_files[@]}"; fi
+  manual_files=()
+
+  cat "${session}.console" >>"${session}"
+  [[ -f "${SERVER_DIR}/cstrike/console.log" ]] && cat "${SERVER_DIR}/cstrike/console.log" >>"${session}"
+  local errors_new
+  errors_new="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" || true)"
+  if [[ -n "${errors_new}" ]]; then
+    echo "FAIL: manual testsuite: SourceMod logged errors" >&2
+    printf '%s\n' "${errors_new}" >&2
+    fail=1
+  fi
+  if grep -Eq 'Segmentation fault|SIGSEGV|Aborted|SIGABRT' "${session}"; then
+    echo "FAIL: manual testsuite: srcds crashed" >&2
+    fail=1
+  fi
+  if grep -Eq '<Failed>|<Error>' "${session}"; then
+    echo "FAIL: manual testsuite: a plugin is in a failed state" >&2
+    grep -E '<Failed>|<Error>' "${session}" >&2 || true
+    fail=1
+  fi
+  echo "----- manual testsuite: ${ran} plugin(s) run (log: ${session}) -----"
+}
+
+echo "==> Running the other scripting/testsuite plugins on srcds v34"
+run_manual
 
 if [[ "${fail}" -ne 0 ]]; then
   echo "Testsuite test FAILED"
