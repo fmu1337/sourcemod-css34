@@ -28,6 +28,7 @@ with reproduction steps are at
 | `0011-no-gamedata-updater` | `updater.ext` overwrites the css34 gamedata with upstream's (no v34 entries) over plain HTTP | `updater.ext` and `webternet.ext` are not built or loaded | — |
 | `0012-core-cfg-no-dead-options` | `core.cfg` ships `FollowCSGOServerGuidelines` (read only on CS:GO) and `SteamAuthstringValidation` (checked only on Orange Box+; the episode1 engine has no `IsClientFullyAuthenticated`) | both keys removed from `core.cfg`; an old `core.cfg` that has them still loads | — |
 | `0013-adminmenu-team-groups` | `adminmenu_grouping.txt` ships the Terrorists (`@t`) / Counter-Terrorists (`@ct`) groups commented out | groups enabled: every package is CS:S with `game.cstrike` | — |
+| `0014-no-admin-schema-r1409-upgrade` | `sql-init-scripts/{mysql,sqlite}/update_admins*r1409.sql` upgrade the admin tables from the SourceMod 1.0 beta schema (2007); `sql-admin-manager` (`sm_update_adm_tables`) carries the same upgrade | both files dropped from the package | — |
 | sm12 `0007-sdktools-onmapend-list` | the 1.12 cherry-pick of SM #2589 uses the wrong list type: GCC 10 fails | `SourceHook::List<omg_hooks *>`, as `OutputHookList` stores | yes (1.12-dev) |
 | `sourcepawn/0001-gcc10-link-flags` | GCC 10 sign-compare errors; pthread / rt not in `NEEDED` | `-Wno-sign-compare`, explicit `NEEDED` | yes (pthread / rt) |
 | `hl2sdk-manifests/0001-episode1-defines` | the SDK's malloc hooks end up in SourceMod modules | `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE` for episode1 | — |
@@ -50,6 +51,8 @@ with reproduction steps are at
   no `GetMaxHealth` hook (not virtual on v34; read `m_iMaxHealth` instead), `VPhysicsUpdate` 143.
 - **Legacy-plugin bridge** (`builder/patches/mm-oldbridge/`): every MM 1.12 package also ships the
   MM 1.10.7 core `metamod.1.ep1`, and MM 1.12 hands PLAPI 7–12 plugins from `metaplugins.ini` to it.
+- **One Metamod loader on Linux**: the package ships `server_i486.so` only. Episode1 appends `_i486.so` to
+  the `metamod.vdf` path; `server.so` is MM's loader for L4D2 and newer (`builder/package-metamod.sh`).
 - **Build for old Linux**: manylinux2014 i686 (glibc 2.17, GCC 10), static hidden libstdc++, every ELF
   checked for GLIBC ≤ 2.17 and unversioned imports (`testing/unversioned-imports.txt`).
 - **sm13 MySQL stack**: OpenSSL 3.5 LTS and MariaDB Connector/C 3.4.9 built from pinned sources

@@ -1,0 +1,58 @@
+css34: drop the r1409 admin schema upgrade scripts
+
+configs/sql-init-scripts/{mysql,sqlite}/update_admins*r1409.sql upgrade the
+SQL admin tables from the SourceMod 1.0 beta schema (added 2007-09-10,
+alliedmodders/sourcemod 6aec628a). sql-admin-manager carries the same upgrade
+(sm_update_adm_tables, SCHEMA_UPGRADE_1), and the create_admins / admins-sqlite
+scripts already make the current schema, so nothing reads these files.
+
+diff --git a/configs/sql-init-scripts/mysql/update_admins_r1409.sql b/configs/sql-init-scripts/mysql/update_admins_r1409.sql
+deleted file mode 100644
+index 81c0992c0e0136242750e237a1298b384f8ae6ea..0000000000000000000000000000000000000000
+--- a/configs/sql-init-scripts/mysql/update_admins_r1409.sql
++++ /dev/null
+@@ -1,15 +0,0 @@
+-
+-ALTER TABLE sm_admins ADD immunity INT UNSIGNED NOT NULL;
+-
+-ALTER TABLE sm_groups ADD immunity_level INT UNSIGNED NOT NULL;
+-UPDATE sm_groups SET immunity_level = 2 WHERE immunity = 'default';
+-UPDATE sm_groups SET immunity_level = 1 WHERE immunity = 'global';
+-ALTER TABLE sm_groups DROP immunity;
+-
+-CREATE TABLE sm_config (
+-  cfg_key varchar(32) NOT NULL,
+-  cfg_value varchar(255) NOT NULL,
+-  PRIMARY KEY (cfg_key)
+-);
+-INSERT INTO sm_config (cfg_key, cfg_value) VALUES ('admin_version', '1.0.0.1409') ON DUPLICATE KEY UPDATE cfg_value = '1.0.0.1409';
+-
+diff --git a/configs/sql-init-scripts/sqlite/update_admins-r1409.sql b/configs/sql-init-scripts/sqlite/update_admins-r1409.sql
+deleted file mode 100644
+index d3a85ec8361ddd2b748e031b8dc3b1426cc8a695..0000000000000000000000000000000000000000
+--- a/configs/sql-init-scripts/sqlite/update_admins-r1409.sql
++++ /dev/null
+@@ -1,23 +0,0 @@
+-
+-ALTER TABLE sm_admins ADD immunity INTEGER DEFAULT 0 NOT NULL;
+-
+-CREATE TABLE _sm_groups_temp (
+-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+-  flags varchar(30) NOT NULL,
+-  name varchar(120) NOT NULL,
+-  immunity_level INTEGER DEFAULT 0 NOT NULL
+-);
+-INSERT INTO _sm_groups_temp (id, flags, name) SELECT id, flags, name FROM sm_groups;
+-UPDATE _sm_groups_temp SET immunity_level = 2 WHERE id IN (SELECT g.id FROM sm_groups g WHERE g.immunity = 'global');
+-UPDATE _sm_groups_temp SET immunity_level = 1 WHERE id IN (SELECT g.id FROM sm_groups g WHERE g.immunity = 'default');
+-DROP TABLE sm_groups;
+-ALTER TABLE _sm_groups_temp RENAME TO sm_groups;
+-
+-CREATE TABLE IF NOT EXISTS sm_config (
+-  cfg_key varchar(32) NOT NULL,
+-  cfg_value varchar(255) NOT NULL,
+-  PRIMARY KEY (cfg_key)
+-);
+-
+-REPLACE INTO sm_config (cfg_key, cfg_value) VALUES ('admin_version', '1.0.0.1409');
+-
