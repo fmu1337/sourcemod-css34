@@ -241,14 +241,34 @@ MANUAL_RUN=(
   "tries|test_maps;test_int_maps"
   "entitylumptest|"
   "outputtest|"
+  "benchmark|bench"
 )
 # Not run, with the reason. capstest's sm_test_caps2 / 3 fail the plugin on
 # purpose (RequireFeature of a missing native), so only sm_test_caps1 runs.
 declare -A MANUAL_SKIP=(
-  [benchmark]="needs translations/fakedict-sourcemod.cfg, which SourceMod does not ship"
   [gamerules-props]="TF2 / Alien Swarm only (AskPluginLoad2 refuses other games)"
   [tf2-test]="TF2 natives; packages ship no tf2 extension"
 )
+# benchmark loads translations/fakedict-sourcemod.txt (LoadTranslations
+# "fakedict-sourcemod.cfg") and formats six of its phrases with %T. SourceMod
+# never shipped that file (it was dvander's local test dictionary, 2007), so
+# the test writes one: the six phrases bench uses plus FAKEDICT_FILLER filler
+# phrases, so "dictionary time" measures a real parse. A missing phrase would
+# be a "Language phrase ... not found" error and fail the run.
+FAKEDICT_FILLER="${FAKEDICT_FILLER:-2000}"
+write_fakedict() { # <path>
+  awk -v filler="${FAKEDICT_FILLER}" 'BEGIN {
+    n = split("LVWANBAGVXSXUGB IDYCVNWEOWNND UZWTRNHY EPRHAFCIUOIG RMZCVWIEY ZHPU", key, " ")
+    print "\"Phrases\""
+    print "{"
+    for (i = 1; i <= n; i++)
+      printf "\t\"%s\"\n\t{\n\t\t\"en\"\t\t\"benchmark phrase %d (%s)\"\n\t}\n", key[i], i, key[i]
+    for (i = 1; i <= filler; i++)
+      printf "\t\"FAKEDICT_%05d\"\n\t{\n\t\t\"en\"\t\t\"filler phrase number %d of the fake dictionary\"\n\t}\n", i, i
+    print "}"
+  }' >"$1"
+}
+
 run_manual() {
   local session="${work}/manual.log" entry name cmds cmd reply errors_before up=1
   local -a cmd_list
@@ -265,6 +285,9 @@ run_manual() {
   for name in "${!MANUAL_SKIP[@]}"; do
     echo "SKIP: ${name}: ${MANUAL_SKIP[${name}]}"
   done
+
+  write_fakedict "${sm}/translations/fakedict-sourcemod.txt"
+  manual_files+=("${sm}/translations/fakedict-sourcemod.txt")
 
   rm -f "${SERVER_DIR}/cstrike/console.log"
   errors_before="$(errors_lines)"
@@ -363,6 +386,8 @@ run_manual() {
 
   cat "${session}.console" >>"${session}"
   [[ -f "${SERVER_DIR}/cstrike/console.log" ]] && cat "${SERVER_DIR}/cstrike/console.log" >>"${session}"
+  # benchmark's timings, for the record (not judged).
+  tr -d '\r' <"${session}" | grep -E '^(dictionary time|[a-z()]+ benchmark): ' | sort -u || true
   local errors_new
   errors_new="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" || true)"
   if [[ -n "${errors_new}" ]]; then
