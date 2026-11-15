@@ -1,0 +1,65 @@
+css34: SourcePawn 2: forwards into variadic or short-handed callbacks crash
+
+Runtime::InvokeMethod (forwards, Call_Finish, any IPluginFunction call into a
+plugin compiled by the 1.13 spcomp) reserved and filled only the arguments the
+caller passed. The callee's frame has one slot per signature entry, and a
+legacy variadic function (`f(a, b, ...)`) takes its extra arguments as a
+packed array ([count, values...]) in its last slot. The invoker drops
+trailing arguments a callback does not declare, so a variadic callback got
+fewer cells than its frame: the pack slot held stale stack data, and the
+callee's registers ran one cell past the reserved stack, where the next
+native call wrote its parameters. testsuite fwdtest1 (a private forward into
+`ZohMyGod(num, const String:format[], ...)`) segfaulted srcds that way.
+
+InvokeMethod now reserves every signature slot, zero-fills formal arguments
+the caller left out, and passes a pack of the remaining arguments (count 0
+when there are none) to a variadic callee, the same layout the lowering builds
+for script-to-script calls. Upstream sourcepawn at our pin has the same code.
+
+diff --git a/vm/v2/runtime.cpp b/vm/v2/runtime.cpp
+index dc5efb20f7a9ea22e9657dc403e0a778ffe389a7..06476d2f82e6721335c0fd28f37cb651e50a982f 100644
+--- a/vm/v2/runtime.cpp
++++ b/vm/v2/runtime.cpp
+@@ -699,13 +699,39 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
+ 
+     ke::SaveRestore<uint32_t> save_sp(env_->sp());
+ 
++    // The callee reads one argument slot per entry of its signature; a
++    // legacy variadic function takes its extra arguments as one packed array
++    // ([count, values...]) in its last slot. Callers such as forwards pass a
++    // flat list instead, so build that layout here: missing formal arguments
++    // become 0 and anything beyond them goes into the pack. Without this the
++    // pack slot was left as whatever was on the stack, and the first
++    // variadic use (e.g. VFormat) dereferenced it.
++    uint32_t arg_slots = (uint32_t)method->signature()->args().size();
++    bool variadic = method->IsLegacyVariadic();
++    uint32_t formal_argc = variadic ? arg_slots - 1 : arg_slots;
++
++    uint32_t pack_addr = 0;
++    if (variadic) {
++        uint32_t extra = num_params > formal_argc ? num_params - formal_argc : 0;
++        pack_addr = env_->sp();
++        if (!env_->addStack((extra + 1) * sizeof(cell_t)))
++            return false;
++        cell_t* pack = env_->heap().ToPhysAddr<cell_t*>(pack_addr);
++        pack[0] = (cell_t)extra;
++        for (uint32_t i = 0; i < extra; i++)
++            pack[i + 1] = params[formal_argc + i];
++    }
++
+     uint32_t frame_base = env_->sp();
+-    if (!env_->addStack(num_params * sizeof(cell_t)))
++    uint32_t frame_slots = arg_slots > num_params ? arg_slots : num_params;
++    if (!env_->addStack(frame_slots * sizeof(cell_t)))
+         return false;
+     cell_t* sp = env_->heap().ToPhysAddr<cell_t*>(frame_base);
+ 
+-    for (unsigned int i = 0; i < num_params; i++)
+-        sp[i] = params[i];
++    for (uint32_t i = 0; i < formal_argc; i++)
++        sp[i] = i < num_params ? params[i] : 0;
++    if (variadic)
++        sp[formal_argc] = (cell_t)pack_addr;
+ 
+     // Enter the execution engine.
+     bool ok = env_->Invoke(this, method->GetFunction(), frame_base, result);

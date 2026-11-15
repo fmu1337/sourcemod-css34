@@ -170,7 +170,8 @@ run_test() {
     [[ -f "${console}" ]] && cat "${console}"
   } >"${session}"
   local errors_new
-  errors_new="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" || true)"
+  errors_new="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" \
+    | filter_expected_errors || true)"
 
   local ok_count fail_lines test_fail=0
   # stdout and console.log hold the same lines; count each test line once.
@@ -249,6 +250,47 @@ declare -A MANUAL_SKIP=(
   [gamerules-props]="TF2 / Alien Swarm only (AskPluginLoad2 refuses other games)"
   [tf2-test]="TF2 natives; packages ship no tf2 extension"
 )
+# Errors that SourceMod reports on purpose, as "plugin|message": an exception
+# with that message, blamed on that plugin, is reported as EXPECTED instead of
+# failing. Any other error still fails. fwdtest1 calls VFormat, which SourceMod
+# 1.13 refuses in plugins compiled to SourcePawn 2 (the format of the 1.13
+# spcomp); on sm12 the call works and nothing is logged.
+MANUAL_EXPECTED_ERRORS=(
+  "fwdtest1|VFormat is not supported in SourcePawn 2 plugins"
+)
+
+# Print the error log lines minus the expected exceptions (and the session
+# header lines SourceMod writes when it opens a new error log).
+filter_expected_errors() {
+  local entry plugins="" messages=""
+  for entry in "${MANUAL_EXPECTED_ERRORS[@]}"; do
+    plugins+="${entry%%|*}.smx"$'\t'
+    messages+="${entry#*|}"$'\t'
+  done
+  awk -v plugins="${plugins}" -v messages="${messages}" '
+    function flush(   i, n, p, m) {
+      if (nblock == 0) return
+      n = split(plugins, p, "\t"); split(messages, m, "\t")
+      for (i = 1; i < n; i++) {
+        if (index(block[1], "Exception reported: " m[i]) && index(blamed, "Blaming: " p[i])) {
+          print "EXPECTED: " p[i] ": " m[i] > "/dev/stderr"
+          nblock = 0; blamed = ""; return
+        }
+      }
+      for (i = 1; i <= nblock; i++) print block[i]
+      nblock = 0; blamed = ""
+    }
+    /SourceMod error session started|: Info \(map "/ { next }
+    /\[SM\] Exception reported: / { flush(); block[++nblock] = $0; next }
+    nblock && /\[SM\] (Blaming: |Call stack trace:|  \[[0-9]+\] )/ {
+      block[++nblock] = $0
+      if ($0 ~ /Blaming: /) blamed = $0
+      next
+    }
+    { flush(); print }
+    END { flush() }
+  '
+}
 
 run_manual() {
   local session="${work}/manual.log" entry name cmds cmd reply errors_before up=1
@@ -330,6 +372,7 @@ run_manual() {
         break
       fi
     done
+    [[ "${up}" == 1 ]] || break
     ran=$((ran + 1))
     echo "OK: ${name} loaded${cmds:+, ran ${cmds//;/, }}"
   done
@@ -364,7 +407,8 @@ run_manual() {
   cat "${session}.console" >>"${session}"
   [[ -f "${SERVER_DIR}/cstrike/console.log" ]] && cat "${SERVER_DIR}/cstrike/console.log" >>"${session}"
   local errors_new
-  errors_new="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" || true)"
+  errors_new="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" \
+    | filter_expected_errors || true)"
   if [[ -n "${errors_new}" ]]; then
     echo "FAIL: manual testsuite: SourceMod logged errors" >&2
     printf '%s\n' "${errors_new}" >&2

@@ -32,6 +32,7 @@ with reproduction steps are at
 | `0015-console-detours-shutdown` | once a plugin uses a command listener, every SourceMod command logs `Console detour tried to unhook command ... but it wasn't found` at shutdown (`Disable()` leaves the hooker enabled) | `Disable()` turns the hooker off | yes |
 | sm12 `0007-sdktools-onmapend-list` | the 1.12 cherry-pick of SM #2589 uses the wrong list type: GCC 10 fails | `SourceHook::List<omg_hooks *>`, as `OutputHookList` stores | yes (1.12-dev) |
 | `sourcepawn/0001-gcc10-link-flags` | GCC 10 sign-compare errors; pthread / rt not in `NEEDED` | `-Wno-sign-compare`, explicit `NEEDED` | yes (pthread / rt) |
+| `sourcepawn/0002-v2-invoke-arg-slots` (sm13 only) | a forward or `Call_Finish` into a variadic callback (`f(a, b, ...)`) of a plugin built by the 1.13 spcomp (SourcePawn 2) leaves its varargs slot as stale stack data and its registers one cell past the reserved stack: srcds segfaults (testsuite `fwdtest1`) | every signature slot reserved, missing arguments zero-filled, varargs passed as the packed array the callee expects | yes |
 | `hl2sdk-manifests/0001-episode1-defines` | the SDK's malloc hooks end up in SourceMod modules | `NO_HOOK_MALLOC`, `NO_MALLOC_OVERRIDE` for episode1 | — |
 | `hl2sdk-manifests/0002-compiler-flag-guard` | manifests pass flags GCC 10 does not know | drop unknown flags | — |
 
