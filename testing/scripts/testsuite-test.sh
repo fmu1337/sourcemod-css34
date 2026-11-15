@@ -170,8 +170,7 @@ run_test() {
     [[ -f "${console}" ]] && cat "${console}"
   } >"${session}"
   local errors_new
-  errors_new="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" \
-    | filter_expected_errors || true)"
+  errors_new="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" || true)"
 
   local ok_count fail_lines test_fail=0
   # stdout and console.log hold the same lines; count each test line once.
@@ -409,6 +408,14 @@ run_manual() {
   local errors_new
   errors_new="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" \
     | filter_expected_errors || true)"
+  local raw_errors entry
+  raw_errors="$(cat "${sm}"/logs/errors_*.log 2>/dev/null | tail -n +"$((errors_before + 1))" || true)"
+  for entry in "${MANUAL_EXPECTED_ERRORS[@]}"; do
+    grep -qF "Exception reported: ${entry#*|}" <<<"${raw_errors}" \
+      || echo "NOTE: ${entry%%|*}: expected error not logged on this line: ${entry#*|}"
+  done
+  # The private forward output (fwdtest1 / fwdtest2), for the record.
+  tr -d '\r' <"${session}" | grep -E 'private forward|^num = |^buffer = ' | sort -u || true
   if [[ -n "${errors_new}" ]]; then
     echo "FAIL: manual testsuite: SourceMod logged errors" >&2
     printf '%s\n' "${errors_new}" >&2
