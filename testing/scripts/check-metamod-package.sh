@@ -13,7 +13,9 @@ CORE_SO="${TMP}/addons/metamod/bin/metamod.2.ep1.so"
 if [[ ! -f "${CORE_SO}" ]]; then
   CORE_SO="${TMP}/addons/metamod/bin/metamod.1.ep1.so"
 fi
-LOADER_SO="${TMP}/addons/metamod/bin/server.so"
+# episode1 loads server_i486.so (the engine appends "_i486.so" to the vdf
+# path). server.so is the L4D2+ loader; packages before it was dropped carry it.
+LOADER_SO="${TMP}/addons/metamod/bin/server_i486.so"
 VDF="${TMP}/addons/metamod.vdf"
 
 fail=0
@@ -23,8 +25,11 @@ if [[ ! -f "${CORE_SO}" ]]; then
   exit 1
 fi
 if [[ ! -f "${LOADER_SO}" ]]; then
-  echo "FAIL: missing server.so loader" >&2
+  echo "FAIL: missing server_i486.so loader" >&2
   exit 1
+fi
+if [[ -f "${TMP}/addons/metamod/bin/server.so" ]]; then
+  echo "NOTE: package also ships server.so (L4D2+ loader, unused on v34; dropped in newer packages)"
 fi
 if [[ ! -f "${VDF}" ]]; then
   echo "FAIL: missing addons/metamod.vdf" >&2
@@ -35,9 +40,9 @@ fi
 
 echo "==> Checking loader exports"
 if nm -D "${LOADER_SO}" 2>/dev/null | grep -E ' T CreateInterface([[:space:]]|$)' >/dev/null; then
-  echo "OK: server.so exports CreateInterface"
+  echo "OK: server_i486.so exports CreateInterface"
 else
-  echo "FAIL: server.so missing CreateInterface" >&2
+  echo "FAIL: server_i486.so missing CreateInterface" >&2
   fail=1
 fi
 
