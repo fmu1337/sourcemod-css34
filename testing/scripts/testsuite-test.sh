@@ -322,6 +322,9 @@ run_manual() {
       printf '>>> %s\n%s\n' "${cmd}" "${reply}" >>"${session}"
       if ! kill -0 "${srcds_pid}" 2>/dev/null; then
         echo "FAIL: ${name}: srcds died on '${cmd}'" >&2
+        echo "----- last console lines -----" >&2
+        tail -n 60 "${session}.console" >&2 || true
+        tail -n 60 "${SERVER_DIR}/cstrike/console.log" >&2 2>/dev/null || true
         up=0
         fail=1
         break
