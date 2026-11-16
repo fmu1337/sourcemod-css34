@@ -1,7 +1,7 @@
 css34: GameConfigs: RTLD_NOLOAD for already-mapped engine binaries
 
 diff --git a/core/logic/GameConfigs.cpp b/core/logic/GameConfigs.cpp
-index abe2407e1c03f08d4e78f99d76689045444ef4f8..a91196ab7e2aa5160fd804d12a542d781ac397ea 100644
+index adfc44f29c884e2c3dba2b029c4f6d27c0d8cb00..f5aab9e72f3220c0b6650a4c6ec10a9e8202db27 100644
 --- a/core/logic/GameConfigs.cpp
 +++ b/core/logic/GameConfigs.cpp
 @@ -52,6 +52,9 @@
@@ -24,7 +24,7 @@ index abe2407e1c03f08d4e78f99d76689045444ef4f8..a91196ab7e2aa5160fd804d12a542d78
  						if (handle)
  						{
  							if (bridge->SymbolsAreHidden())
-@@ -1256,6 +1260,77 @@ void GameConfigManager::RemoveCachedConfig(CGameConfig *config)
+@@ -1270,6 +1274,77 @@ void GameConfigManager::RemoveCachedConfig(CGameConfig *config)
  	m_Lookup.remove(config->m_File);
  }
  
@@ -102,7 +102,7 @@ index abe2407e1c03f08d4e78f99d76689045444ef4f8..a91196ab7e2aa5160fd804d12a542d78
  void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  {
  	GameBinaryInfo info;
-@@ -1275,10 +1350,34 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+@@ -1289,10 +1364,34 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  			FreeLibrary(hModule);
  		}
  #else
@@ -138,7 +138,7 @@ index abe2407e1c03f08d4e78f99d76689045444ef4f8..a91196ab7e2aa5160fd804d12a542d78
  			dlclose(pHandle);
  		}
  #endif
-@@ -1287,6 +1386,20 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+@@ -1301,6 +1400,20 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  			break;
  	}
  
