@@ -18,8 +18,8 @@ https://github.com/fmu1337/sourcemod-css34/releases/download/line-<line>/sourcem
 <!-- lines-install:begin -->
 | `<line>` | SourceMod | Metamod | Role |
 |----------|-----------|---------|------|
-| `sm13-latest` | 1.13.0.7488 (`5eb6a120…`) | 1.12.0 git1229 (`4e031eb5…`) | **Default** |
-| `sm12-latest` | 1.12.0.7260 (`3f746067…`) | 1.12.0 git1229 (`4e031eb5…`) | Latest 1.12 |
+| `sm13-latest` | 1.13.0.7488 (`5eb6a120…`) | 1.12.0 git1230 (`1ef6f245…`) | **Default** |
+| `sm12-latest` | 1.12.0.7260 (`3f746067…`) | 1.12.0 git1230 (`1ef6f245…`) | Latest 1.12 |
 | `sm11-oldstable` | 1.11.0.6970 (`f53cb134…`) | 1.12.0 git1227 (`75dd7b26…`) | Frozen, dual-core |
 <!-- lines-install:end -->
 

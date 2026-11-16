@@ -45,10 +45,10 @@
       "mode": "1.12"
     },
     "MM_112": {
-      "commit": "4e031eb571f5978eea8207b5d915c9cd0e8d6c58",
+      "commit": "1ef6f24512801c24998a8b2939428f8ce44ad341",
       "branch": "1.12-dev",
       "dirname": "mmsource-1.12",
-      "rev": 1229,
+      "rev": 1230,
       "mode": "1.12"
     },
     "MM_20": {
