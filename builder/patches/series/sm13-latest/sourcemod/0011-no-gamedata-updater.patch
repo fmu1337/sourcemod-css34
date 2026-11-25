@@ -16,10 +16,10 @@ goes with it.
   that still has them loads unchanged.
 
 diff --git a/AMBuildScript b/AMBuildScript
-index fc340280dfbb188c4083a2e32dc165cfd095488c..3203bd468a18c4fb999c7be8aa364b819d0c2cce 100644
+index 0997a9ad7e7652f44808da1510168190342a500b..85dcbb493b4dd9e94ed6d8ed08c49f801e183f63 100644
 --- a/AMBuildScript
 +++ b/AMBuildScript
-@@ -734,7 +734,6 @@ else:
+@@ -736,7 +736,6 @@ else:
      'core/logic/AMBuilder',
      'extensions/bintools/AMBuilder',
      'extensions/clientprefs/AMBuilder',
@@ -27,7 +27,7 @@ index fc340280dfbb188c4083a2e32dc165cfd095488c..3203bd468a18c4fb999c7be8aa364b81
      'extensions/cstrike/AMBuilder',
      'extensions/dhooks/AMBuilder',
      'extensions/geoip/AMBuilder',
-@@ -746,7 +745,8 @@ else:
+@@ -748,7 +747,8 @@ else:
      'extensions/sqlite/AMBuilder',
      'extensions/tf2/AMBuilder',
      'extensions/topmenus/AMBuilder',
@@ -76,10 +76,10 @@ index b86dc76182484f4e4620952f6bbd086e4cc61ed2..43c3c04fa76277628e5c90f1d0a356bd
  	 * If set to yes, SourceMod will validate steamid auth strings with the Steam backend before giving out admin access.
  	 * This can prevent malicious users from impersonating admins with stolen Steam apptickets.
 diff --git a/core/sourcemod.cpp b/core/sourcemod.cpp
-index daa9666a8887509aa41ab852073fcbc3f21e110a..df391b6c3a21db69af56d8f660bfd1c03ea8be86 100644
+index 8d5c6bf0b4c698c792a21949abde2a4c27c453f4..7a7b1a84a01372866364ff821174214d41490a26 100644
 --- a/core/sourcemod.cpp
 +++ b/core/sourcemod.cpp
-@@ -271,12 +271,7 @@ void SourceModBase::StartSourceMod(bool late)
+@@ -265,12 +265,7 @@ void SourceModBase::StartSourceMod(bool late)
  		AllPluginsLoaded();
  	}
  
