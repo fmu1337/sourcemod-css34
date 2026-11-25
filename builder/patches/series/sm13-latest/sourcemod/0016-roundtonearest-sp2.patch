@@ -1,0 +1,25 @@
+css34: RoundToNearest rounds for SourcePawn 2 plugins
+
+sm_RoundToNearest has returned (int)val (truncation) since upstream 34dedcaab
+(2016-06-22, "Remove half-up rounding"). SourcePawn 1 plugins never reach the
+native: the legacy runtime inlines RoundToNearest as OP_RND_TO_NEAREST, which
+rounds in the current FPU mode (half to even). Plugins compiled by spcomp 1.13
+(SourcePawn 2) call the native and get 0.6 -> 0, 1.5 -> 1, -0.6 -> 0. The native
+now uses rintf, so both kinds of plugin get 0.6 -> 1, 1.5 -> 2, 2.5 -> 2,
+-0.5 -> 0. Upstream has the same code (master). Issue #211.
+
+diff --git a/core/logic/smn_float.cpp b/core/logic/smn_float.cpp
+index de2c590f6c67296244dc2f56cdfa6047e7808ffc..d591e52f1474d4750fc79397fc8f19213da678a2 100644
+--- a/core/logic/smn_float.cpp
++++ b/core/logic/smn_float.cpp
+@@ -191,7 +191,9 @@ static cell_t sm_RoundToNearest(IPluginContext *pCtx, const cell_t *params)
+ {
+ 	float val = sp_ctof(params[1]);
+ 
+-	return (int)val;
++	/* css34: SourcePawn 2 plugins call this native; SourcePawn 1 plugins get OP_RND_TO_NEAREST
++	 * (current FPU mode, half to even) instead. rintf gives both the same result. */
++	return (int)rintf(val);
+ }
+ 
+ static cell_t sm_RoundToFloor(IPluginContext *pCtx, const cell_t *params)
