@@ -324,19 +324,19 @@ echo "==> Checking ConVar is embedded from static tier1 (not imported from vstdl
 # circular engine cvar list. rom4s embeds these as T/B.
 # Avoid `nm | grep -q` under pipefail (SIGPIPE from nm makes the pipeline fail).
 core_dynsyms="$(nm -D "${CORE_SO}" 2>/dev/null || true)"
-if printf '%s\n' "${core_dynsyms}" | grep -F ' T _ZN6ConVarC1EPKcS1_i' >/dev/null; then
-  echo "OK: ConVar ctor is defined locally (static tier1)"
-else
-  echo "FAIL: ConVar ctor not embedded — likely linked from vstdlib (hang risk)" >&2
-  printf '%s\n' "${core_dynsyms}" | grep 'ConVarC1' || true
-  fail=1
-fi
-if printf '%s\n' "${core_dynsyms}" | grep -F ' B _ZN14ConCommandBase18s_pConCommandBasesE' >/dev/null; then
-  echo "OK: ConCommandBase::s_pConCommandBases is local"
-else
-  echo "FAIL: missing local s_pConCommandBases" >&2
-  fail=1
-fi
+# Since SourceMod #2622/#2623 the core links with exports.map (local: *), so the
+# embedded tier1 symbols are no longer in the dynamic table at all. Either way
+# they must not be undefined imports (U), which would mean vstdlib provides them.
+for sym in _ZN6ConVarC1EPKcS1_i _ZN14ConCommandBase18s_pConCommandBasesE; do
+  if printf '%s\n' "${core_dynsyms}" | grep -E " U ${sym}(@|\$)" >/dev/null; then
+    echo "FAIL: ${sym} is imported — likely linked from vstdlib (hang risk)" >&2
+    fail=1
+  elif printf '%s\n' "${core_dynsyms}" | grep -E " [TBD] ${sym}\$" >/dev/null; then
+    echo "OK: ${sym} is defined locally (static tier1)"
+  else
+    echo "OK: ${sym} is not imported (static tier1, hidden by exports.map)"
+  fi
+done
 
 if printf '%s\n' "${core_dynsyms}" | grep -E ' U GetCVarIF$' >/dev/null; then
   echo "OK: GetCVarIF is an undefined ref (resolved via vstdlib at runtime)"
