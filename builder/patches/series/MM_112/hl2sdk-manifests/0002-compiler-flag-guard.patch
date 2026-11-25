@@ -1,7 +1,7 @@
 css34: SdkHelpers: drop manifest compiler flags GCC 10 rejects
 
 diff --git a/SdkHelpers.ambuild b/SdkHelpers.ambuild
-index 11a9087a6e4874f5c0051ec28170cfa5b1c5b68d..09b0782416941e6e4cd6cd8369ac2a7b48d86d48 100644
+index 1d12bef6cc5322bee6dcb61e8e725a5119ad1660..63917efdc9368b30d7aa1b7b69f8d3ad96d3efbd 100644
 --- a/SdkHelpers.ambuild
 +++ b/SdkHelpers.ambuild
 @@ -2,6 +2,53 @@
@@ -58,7 +58,7 @@ index 11a9087a6e4874f5c0051ec28170cfa5b1c5b68d..09b0782416941e6e4cd6cd8369ac2a7b
  def get_this_file_path():
      return get_this_file_path.__code__.co_filename
  
-@@ -280,11 +327,12 @@ class SdkHelpers(object):
+@@ -269,11 +316,12 @@ class SdkHelpers(object):
              cxx.linkflags[0:0] = [file_name]
  
          # cflags
