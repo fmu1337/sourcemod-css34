@@ -1,7 +1,7 @@
 css34: episode1 build: tier1 before vstdlib, pthread/rt NEEDED, C++ link driver, GCC 10 flags, static hidden libstdc++, dynamic libgcc_s
 
 diff --git a/AMBuildScript b/AMBuildScript
-index 7887649733bb3ae3507578b8d7dd01e16e1fe111..79106ab38e75ec20c957deea2f9ed45a300920d5 100644
+index bff9c50170583aa7ffa0e11356afd7220342300b..7d1c567ee46fe45a87fab9a5280b1450002c6bb0 100644
 --- a/AMBuildScript
 +++ b/AMBuildScript
 @@ -79,6 +79,10 @@ class SMConfig(object):
@@ -40,10 +40,10 @@ index 7887649733bb3ae3507578b8d7dd01e16e1fe111..79106ab38e75ec20c957deea2f9ed45a
        cxx.linkflags += ['-lgcc_eh']
 -    cxx.linkflags += ['-static-libstdc++']
 +    cxx.linkflags += ['-static-libstdc++', '-Wl,--exclude-libs=libstdc++.a:libsupc++.a']  # css34: hide static libstdc++
+     cxx.linkflags += ['-Wl,--version-script=' + os.path.join(builder.sourcePath, "exports.map")]
+     cxx.linkdeps += [os.path.join(builder.sourcePath, "exports.map")]
  
-   def configure_mac(self, cxx):
-     cxx.defines += ['OSX', '_OSX', 'POSIX', 'KE_ABSOLUTELY_NO_STL']
-@@ -506,6 +518,18 @@ class SMConfig(object):
+@@ -508,6 +520,18 @@ class SMConfig(object):
      binary = self.Library(context, compiler, name)
      SetArchFlags(compiler)
      self.ConfigureForExtension(context, binary.compiler)
@@ -62,7 +62,7 @@ index 7887649733bb3ae3507578b8d7dd01e16e1fe111..79106ab38e75ec20c957deea2f9ed45a
      return binary
  
    def AddCxxCompat(self, binary):
-@@ -528,6 +552,17 @@ class SMConfig(object):
+@@ -530,6 +554,17 @@ class SMConfig(object):
  
      SdkHelpers.configureCxx(context, binary, sdk)
  
@@ -81,7 +81,7 @@ index 7887649733bb3ae3507578b8d7dd01e16e1fe111..79106ab38e75ec20c957deea2f9ed45a
  
    def AddCDetour(self, binary):
 diff --git a/core/logic/AMBuilder b/core/logic/AMBuilder
-index 3af40f19d72c4f118cc57978158cebda5034a5c5..c217d4fc795c9b4a84fbe948d85853409cd5a31a 100644
+index 3af40f19d72c4f118cc57978158cebda5034a5c5..13ef53fce6eebd70c184e5c4e21cc375c7e9a056 100644
 --- a/core/logic/AMBuilder
 +++ b/core/logic/AMBuilder
 @@ -2,7 +2,42 @@
@@ -128,7 +128,7 @@ index 3af40f19d72c4f118cc57978158cebda5034a5c5..c217d4fc795c9b4a84fbe948d8585340
    binary.compiler.cxxincludes += [
      builder.sourcePath,
      os.path.join(builder.sourcePath, 'core', 'logic'),
-@@ -14,11 +49,61 @@ for cxx in builder.targets:
+@@ -14,11 +49,56 @@ for cxx in builder.targets:
    ]
    binary.compiler.defines += [
      'SM_DEFAULT_THREADER',
@@ -183,12 +183,7 @@ index 3af40f19d72c4f118cc57978158cebda5034a5c5..c217d4fc795c9b4a84fbe948d8585340
 +    # css34: hide static archive symbols from the dynamic export table
 +    if '-Wl,--exclude-libs,ALL' not in binary.compiler.linkflags:
 +      binary.compiler.linkflags += ['-Wl,--exclude-libs,ALL']
-+    # css34: template instantiations in .o files ignore --exclude-libs; export only the C API.
-+    _vs = _os.path.join(_os.environ.get('WDIR', ''), 'builder', 'patches', 'sourcemod-logic.version')
-+    if not _os.path.isfile(_vs):
-+      raise Exception('logic version script missing: ' + _vs)
-+    if '-Wl,--version-script,' + _vs not in binary.compiler.linkflags:
-+      binary.compiler.linkflags += ['-Wl,--version-script,' + _vs]
++    # css34: exports.map (upstream, AMBuildScript) already limits logic.so to logic_load/get_textparsers.
    elif binary.compiler.target.platform == 'mac':
      binary.compiler.cflags += ['-Wno-deprecated-declarations']
      binary.compiler.postlink += ['-framework', 'CoreServices']

@@ -1,7 +1,0 @@
-{
-  global:
-    logic_load;
-    get_textparsers;
-  local:
-    *;
-};
