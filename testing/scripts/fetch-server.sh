@@ -12,20 +12,14 @@ ESTEAM_ZIP_URL="${ESTEAM_ZIP_URL:-https://bitbucket.org/rom4s/other.get/download
 
 mkdir -p "${CACHE_DIR}" "${SERVER_DIR}"
 
-download() {
-  local url="$1" out="$2"
-  if [[ -f "${out}" && -s "${out}" ]]; then
-    echo "Using cached $(basename "${out}")"
-    return 0
-  fi
-  echo "Downloading ${url}"
-  curl -fL --retry 5 --retry-delay 3 -o "${out}.partial" "${url}"
-  mv "${out}.partial" "${out}"
-}
-
-download "${BASE_ZIP_URL}" "${CACHE_DIR}/srcds_css34_4044.zip"
-download "${BIN_ZIP_URL}" "${CACHE_DIR}/srcds_css34_l_a.zip"
-download "${ESTEAM_ZIP_URL}" "${CACHE_DIR}/srcds_css34_l_eSTEAMATiON.zip"
+# shellcheck source=testing/scripts/srcds-zips.sh
+. "${ROOT}/testing/scripts/srcds-zips.sh"
+# Check every zip before failing, so one run reports all mismatches.
+zips_ok=1
+fetch_srcds_zip "${BASE_ZIP_URL}" "${CACHE_DIR}/srcds_css34_4044.zip" || zips_ok=0
+fetch_srcds_zip "${BIN_ZIP_URL}" "${CACHE_DIR}/srcds_css34_l_a.zip" || zips_ok=0
+fetch_srcds_zip "${ESTEAM_ZIP_URL}" "${CACHE_DIR}/srcds_css34_l_eSTEAMATiON.zip" || zips_ok=0
+[[ "${zips_ok}" == 1 ]] || exit 1
 
 echo "Assembling server into ${SERVER_DIR}"
 rm -rf "${SERVER_DIR}"

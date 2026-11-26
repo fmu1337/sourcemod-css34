@@ -283,7 +283,7 @@ def validate_runtime_images(data):
                 "weekly_smoke image is not pinned: " + str(name))
         require(name not in seen, "weekly_smoke lists " + str(name) + " twice")
         seen.append(name)
-    for key in ("botplay_image", "weekly_botplay_image"):
+    for key in ("botplay_image", "weekly_botplay_image", "wine_image"):
         name = data.get(key)
         require(isinstance(name, str) and name in images, str(key) + " is not a pinned image")
     for lname, line in data["lines"].items():
@@ -388,9 +388,11 @@ def mm_win_package_name(mode, rev):
     return "mmsource-{}-git{}-css34-windows.zip".format(mm_version(mode), rev)
 
 
-def windows_row(part):
+def windows_row(data, part):
     """A Windows build/smoke row: the Metamod zip to install and what it must report."""
     item = row_expect(part, False)
+    # Container of the weekly Wine smoke, pinned by digest like every other image.
+    item["wine_image"] = image_ref(data, data["wine_image"])
     item.update(mm_runtime(part))
     # Runtime meta version is 1.12.0-dev+<rev>.
     item["mm_expect"] = "{}-dev+{}".format(item["mm_expect"], item["mm_rev"])
@@ -479,7 +481,7 @@ def ci_matrix(data):
     windows = []
     for name, line in data["lines"].items():
         if line.get("windows") and line["status"] == "active":
-            windows.append(windows_row(line_parts(data, name)))
+            windows.append(windows_row(data, line_parts(data, name)))
     return {
         "build": [row_expect(row, True) for row in rows],
         "debian": debian_rows(data),

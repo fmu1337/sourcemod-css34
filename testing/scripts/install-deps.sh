@@ -70,6 +70,24 @@ apt_update() {
   return "${rc}"
 }
 
+# Suites whose archives no longer serve valid signatures. Only these may fall
+# back to unauthenticated apt; a current image must verify every package.
+eol_suite() {
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  case "${ID:-}:${VERSION_ID:-}" in
+    ubuntu:14.04|ubuntu:16.04|ubuntu:18.04|debian:8|debian:9|debian:10) return 0 ;;
+  esac
+  return 1
+}
+
+# Signed update first; unauthenticated only on an EOL suite.
+apt_update_any() {
+  apt_update && return 0
+  eol_suite || return 1
+  apt_update --allow-unauthenticated
+}
+
 fix_ubuntu_archives() {
   # shellcheck disable=SC1091
   . /etc/os-release
@@ -102,7 +120,7 @@ EOF
   if ! apt_update; then
     echo "archive.ubuntu.com failed for ${codename}; trying old-releases.ubuntu.com"
     write_ubuntu_sources old-releases.ubuntu.com
-    apt_update || apt_update --allow-unauthenticated
+    apt_update_any
   fi
 }
 
@@ -167,6 +185,10 @@ apt_install() {
       extra_opts+=(--force-yes)
       ;;
   esac
+  if ! eol_suite; then
+    apt-get install -y --no-install-recommends "$@"
+    return
+  fi
   apt-get install -y --no-install-recommends --allow-unauthenticated ${extra_opts[@]+"${extra_opts[@]}"} "$@" \
     || apt-get install -y --no-install-recommends --allow-unauthenticated --force-yes "$@" \
     || apt-get install -y --no-install-recommends "$@"
@@ -179,7 +201,7 @@ install_debian() {
   fix_debian_archives
   dpkg --add-architecture i386 || true
   rm -rf /var/lib/apt/lists/* 2>/dev/null || true
-  apt_update || apt_update --allow-unauthenticated
+  apt_update_any
 
   local pkgs=(
     ca-certificates curl wget unzip bzip2 file procps expect git python3 binutils

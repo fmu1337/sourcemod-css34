@@ -21,7 +21,7 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: server-art/css34-server.tar.gz
-        key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+        key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/srcds-zips.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
 
     - name: Prepare server tree (cache miss)
       if: steps.restore.outputs.cache-hit != 'true'

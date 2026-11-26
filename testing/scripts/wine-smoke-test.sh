@@ -84,14 +84,16 @@ native_crash_report() {
 }
 
 mkdir -p "${CACHE_DIR}"
+# shellcheck source=testing/scripts/srcds-zips.sh
+. "${ROOT}/testing/scripts/srcds-zips.sh"
 rm -rf "${SERVER_DIR}"; mkdir -p "${SERVER_DIR}"
 if [[ -n "${SERVER_TGZ:-}" && -f "${SERVER_TGZ}" ]]; then
   tar -xzf "${SERVER_TGZ}" -C "${SERVER_DIR}" ./cstrike ./hl2 ./platform
 else
-  [[ -s "${CACHE_DIR}/srcds_css34_4044.zip" ]] || curl -fL --retry 5 -o "${CACHE_DIR}/srcds_css34_4044.zip" https://bitbucket.org/rom4s/other.get/downloads/srcds_css34_4044.zip
+  fetch_srcds_zip https://bitbucket.org/rom4s/other.get/downloads/srcds_css34_4044.zip "${CACHE_DIR}/srcds_css34_4044.zip"
   unz "${CACHE_DIR}/srcds_css34_4044.zip" "${SERVER_DIR}"
 fi
-[[ -s "${CACHE_DIR}/srcds_css34_w_a.zip" ]] || curl -fL --retry 5 -o "${CACHE_DIR}/srcds_css34_w_a.zip" "${WIN_BIN_ZIP_URL}"
+fetch_srcds_zip "${WIN_BIN_ZIP_URL}" "${CACHE_DIR}/srcds_css34_w_a.zip"
 unz "${CACHE_DIR}/srcds_css34_w_a.zip" "${SERVER_DIR}"
 # Only the Windows server binaries and addons from here on
 rm -rf "${SERVER_DIR}/cstrike/addons" "${SERVER_DIR}/cstrike/cfg/sourcemod"

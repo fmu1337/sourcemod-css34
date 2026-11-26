@@ -47,8 +47,11 @@ on:
         required: false
         default: ""
 
+# Read-only by default; only the jobs that create, upload to or edit releases
+# get contents: write (#197). The smoke jobs run downloaded srcds zips with the
+# repository mounted, so they must hold no write token.
 permissions:
-  contents: write
+  contents: read
   # Pull the prebuilt smoke/botplay images (test-images.yml) from ghcr.io.
   packages: read
 
@@ -73,6 +76,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Map tag / input → CSS34_LINE
         id: map
@@ -204,6 +209,9 @@ jobs:
     needs: [resolve-line]
     if: needs.resolve-line.outputs.repoint != '1'
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: read
     # Exact names of what this run built: a release can hold older assets
     # with other names (e.g. mmsource-…-dev-…), so later jobs never glob.
     outputs:
@@ -212,6 +220,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # Same build and static checks as ci.yml build-linux.
       - name: Build and check packages
@@ -260,9 +270,14 @@ jobs:
     if: needs.resolve-line.outputs.repoint != '1'
     # Same build as ci.yml build-windows (toolchain pin: builder/windows-toolchain.env).
     runs-on: windows-2022
+    permissions:
+      contents: write
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Build and check packages
         uses: ./.github/actions/build-windows
@@ -303,9 +318,14 @@ jobs:
     needs: [resolve-line, linux, windows, promote]
     if: always() && github.ref_type == 'tag' && needs.resolve-line.outputs.repoint != '1' && needs.linux.result == 'success'
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Write VERSIONS.txt and SHA256SUMS
         env:
@@ -346,6 +366,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: OS matrix for the released line
         id: m
@@ -390,6 +412,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Restore or prepare the server tree
         uses: ./.github/actions/server-tree
@@ -435,6 +459,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Restore or prepare the server tree
         uses: ./.github/actions/server-tree
@@ -525,6 +551,9 @@ jobs:
       ((github.ref_type == 'tag' && needs.linux.result == 'success') ||
        needs.resolve-line.outputs.repoint == '1')
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: read
     steps:
       - name: Promote ${{ needs.resolve-line.outputs.tag }}
         env:
@@ -556,6 +585,9 @@ jobs:
       needs.promote.result != 'cancelled' &&
       ((github.ref_type == 'tag' && needs.linux.result == 'success') || needs.resolve-line.outputs.repoint == '1')
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: read
     # One writer per line-<line>. Per line, not global: a concurrency group holds
     # one running + one pending job and a newer pending one cancels it, so a
     # global group would silently drop pointers when several lines are tagged
@@ -566,6 +598,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Download tag assets
         env:
@@ -632,6 +666,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Restore or prepare the server tree
         uses: ./.github/actions/server-tree
