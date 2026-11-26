@@ -29,10 +29,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:b43d912c555c0b79395d1188f83a424b7caea3c83cf13a57413934cc2d16b582",
       "base_image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
       "image_name": "centos:7",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -45,10 +45,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:b43d912c555c0b79395d1188f83a424b7caea3c83cf13a57413934cc2d16b582",
       "base_image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
       "image_name": "centos:7",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm12-latest",
@@ -61,10 +61,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:e1e382a4b680067bedcb8534b32548d248e574e98792dc60a7c1969c712e674a",
       "base_image": "ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
       "image_name": "ubuntu:24.04",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -77,10 +77,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:e1e382a4b680067bedcb8534b32548d248e574e98792dc60a7c1969c712e674a",
       "base_image": "ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac",
       "image_name": "ubuntu:24.04",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm12-latest",
@@ -93,10 +93,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:13@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:9a2ddcfdf0d85c7af99bc1ec96b05e897d93452e9a2e7611312648b8fc5400d3",
       "base_image": "debian:13@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
       "image_name": "debian:13",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -109,10 +109,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:13@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:9a2ddcfdf0d85c7af99bc1ec96b05e897d93452e9a2e7611312648b8fc5400d3",
       "base_image": "debian:13@sha256:4c25275446ca371766b8b093c696782eabce06263fccacb8d5d813b3dc44b308",
       "image_name": "debian:13",
-      "prebuilt": "0"
+      "prebuilt": "1"
     }
   ],
   "botplay": [
@@ -126,10 +126,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:9b076e8d37f832361cbf68c18568e45a9ad6d7d4c23466006fda03f979d138f3",
       "base_image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
       "image_name": "debian:11",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -141,10 +141,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:9b076e8d37f832361cbf68c18568e45a9ad6d7d4c23466006fda03f979d138f3",
       "base_image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
       "image_name": "debian:11",
-      "prebuilt": "0"
+      "prebuilt": "1"
     }
   ],
   "weekly": [
@@ -159,10 +159,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:8@sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:d6a24560bce7b3071e3da70cd4033a78759fb1a0146e44d20156a0707c31a6c5",
       "base_image": "debian:8@sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
       "image_name": "debian:8",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -175,10 +175,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:8@sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:d6a24560bce7b3071e3da70cd4033a78759fb1a0146e44d20156a0707c31a6c5",
       "base_image": "debian:8@sha256:32ad5050caffb2c7e969dac873bce2c370015c2256ff984b70c1c08b3a2816a0",
       "image_name": "debian:8",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm12-latest",
@@ -191,10 +191,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:9@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:c6f32af08df8a46f0530ab97ca0cfbd9c2e036a2b54ff3bd8f95662531a40476",
       "base_image": "debian:9@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
       "image_name": "debian:9",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -207,10 +207,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:9@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:c6f32af08df8a46f0530ab97ca0cfbd9c2e036a2b54ff3bd8f95662531a40476",
       "base_image": "debian:9@sha256:c5c5200ff1e9c73ffbf188b4a67eb1c91531b644856b4aefe86a58d2f0cb05be",
       "image_name": "debian:9",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm12-latest",
@@ -223,10 +223,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:10@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:be461b924d50147b0c0ade7b08844b56829eded892c8f53d1b382a66e9b36076",
       "base_image": "debian:10@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
       "image_name": "debian:10",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -239,10 +239,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:10@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:be461b924d50147b0c0ade7b08844b56829eded892c8f53d1b382a66e9b36076",
       "base_image": "debian:10@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225",
       "image_name": "debian:10",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm12-latest",
@@ -255,10 +255,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:9b076e8d37f832361cbf68c18568e45a9ad6d7d4c23466006fda03f979d138f3",
       "base_image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
       "image_name": "debian:11",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -271,10 +271,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:9b076e8d37f832361cbf68c18568e45a9ad6d7d4c23466006fda03f979d138f3",
       "base_image": "debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9",
       "image_name": "debian:11",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm12-latest",
@@ -287,10 +287,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "ubuntu:14.04@sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:33e672e96d05fa7ab4f01728358940687c2085975683c60b5706d1c57d6d6442",
       "base_image": "ubuntu:14.04@sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
       "image_name": "ubuntu:14.04",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -303,10 +303,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "ubuntu:14.04@sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:33e672e96d05fa7ab4f01728358940687c2085975683c60b5706d1c57d6d6442",
       "base_image": "ubuntu:14.04@sha256:64483f3496c1373bfd55348e88694d1c4d0c9b660dee6bfef5e12f43b9933b30",
       "image_name": "ubuntu:14.04",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm12-latest",
@@ -319,10 +319,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "ubuntu:16.04@sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:a1040922ea6b7c39ccbf0200fe70235ff91a9b399cce13a7e23ceae061ff6bea",
       "base_image": "ubuntu:16.04@sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
       "image_name": "ubuntu:16.04",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -335,10 +335,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "ubuntu:16.04@sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:a1040922ea6b7c39ccbf0200fe70235ff91a9b399cce13a7e23ceae061ff6bea",
       "base_image": "ubuntu:16.04@sha256:1f1a2d56de1d604801a9671f301190704c25d604a416f59e03c04f5c6ffee0d6",
       "image_name": "ubuntu:16.04",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm12-latest",
@@ -351,10 +351,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "ubuntu:18.04@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:d6f6fb23984dc8737e530daca369edd2619a8d0b450127be02abed087c42ef4b",
       "base_image": "ubuntu:18.04@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
       "image_name": "ubuntu:18.04",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -367,10 +367,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "ubuntu:18.04@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:d6f6fb23984dc8737e530daca369edd2619a8d0b450127be02abed087c42ef4b",
       "base_image": "ubuntu:18.04@sha256:152dc042452c496007f07ca9127571cb9c29697f42acbfad72324b2bb2e43c98",
       "image_name": "ubuntu:18.04",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm12-latest",
@@ -383,10 +383,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:6bd1d9fc7e2cf507ff679315d8f8be65f97866b2c12f6dfbaa4f10246ccfc6e3",
       "base_image": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
       "image_name": "rockylinux:9",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -399,10 +399,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:6bd1d9fc7e2cf507ff679315d8f8be65f97866b2c12f6dfbaa4f10246ccfc6e3",
       "base_image": "rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6",
       "image_name": "rockylinux:9",
-      "prebuilt": "0"
+      "prebuilt": "1"
     }
   ],
   "weekly_botplay": [
@@ -416,10 +416,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:b43d912c555c0b79395d1188f83a424b7caea3c83cf13a57413934cc2d16b582",
       "base_image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
       "image_name": "centos:7",
-      "prebuilt": "0"
+      "prebuilt": "1"
     },
     {
       "line": "sm13-latest",
@@ -431,10 +431,10 @@
       "expect_core": "2.ep1",
       "dhooks_expect": "1",
       "legacy_bridge": "1",
-      "image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
+      "image": "ghcr.io/fmu1337/css34-test@sha256:b43d912c555c0b79395d1188f83a424b7caea3c83cf13a57413934cc2d16b582",
       "base_image": "centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4",
       "image_name": "centos:7",
-      "prebuilt": "0"
+      "prebuilt": "1"
     }
   ],
   "windows": [
