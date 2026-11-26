@@ -8,6 +8,10 @@ rounds in the current FPU mode (half to even). Plugins compiled by spcomp 1.13
 now uses rintf, so both kinds of plugin get 0.6 -> 1, 1.5 -> 2, 2.5 -> 2,
 -0.5 -> 0. Upstream has the same code (master). Issue #211.
 
+TEMPORARY (2026-11-26): drop this patch at the next upstream bump of
+sm13-latest, then re-check #211 on the bumped build. If upstream still truncates,
+ask the owner before dropping it: without it SourcePawn 2 plugins truncate again.
+
 diff --git a/core/logic/smn_float.cpp b/core/logic/smn_float.cpp
 index de2c590f6c67296244dc2f56cdfa6047e7808ffc..d591e52f1474d4750fc79397fc8f19213da678a2 100644
 --- a/core/logic/smn_float.cpp
