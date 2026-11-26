@@ -41,6 +41,36 @@ if {[info exists env(RECORD_SECS)] && $env(RECORD_SECS) ne ""} {
     set record_secs 600
 }
 
+# Send quit and require a clean exit: srcds must close the console within
+# QUIT_TIMEOUT seconds and must not die from a signal (a crash in shutdown,
+# e.g. an extension's unload, would otherwise pass). Exit code `code` on failure.
+proc quit_and_reap {code} {
+    global env
+    set quit_timeout 60
+    if {[info exists env(QUIT_TIMEOUT)] && $env(QUIT_TIMEOUT) ne ""} {
+        set quit_timeout $env(QUIT_TIMEOUT)
+    }
+    send "quit\r"
+    expect {
+        -timeout $quit_timeout
+        eof {}
+        timeout {
+            puts stderr "FAIL: srcds did not exit within ${quit_timeout}s after quit (hang in shutdown)"
+            catch {exec kill -9 [exp_pid]}
+            catch {close}
+            catch {wait}
+            exit $code
+        }
+    }
+    set result [wait]
+    # pid spawn_id os_error value ?CHILDKILLED|CHILDSUSP signame message?
+    if {[lindex $result 2] == 0 && [llength $result] > 4} {
+        puts stderr "FAIL: srcds died in shutdown: [lrange $result 4 end]"
+        exit $code
+    }
+    puts stderr "OK: srcds exited after quit (status [lindex $result 3])"
+}
+
 cd $server_dir
 set env(LD_LIBRARY_PATH) ".:bin:$env(LD_LIBRARY_PATH)"
 
@@ -141,6 +171,7 @@ while {[clock seconds] < $end_at} {
     if {$remaining < 1} { set remaining 1 }
     if {$remaining > 30} { set remaining 30 }
     expect {
+        -timeout $remaining
         eof {
             puts stderr "srcds exited during botplay recording"
             exit 8
@@ -210,18 +241,16 @@ expect {
 }
 sleep 2
 
+# The server must still answer at the end (a deadlock mid-recording would
+# otherwise pass once the minimum counters were met).
 send "status\r"
 expect {
     -re {hostname|# [0-9]+} {}
-    eof {}
-    timeout {}
+    eof { puts stderr "srcds exited before the final status"; exit 12 }
+    timeout { puts stderr "srcds did not answer the final status"; exit 12 }
 }
 
-send "quit\r"
-expect {
-    eof {}
-    timeout {}
-}
+quit_and_reap 11
 
 puts stderr "OK: botplay recording finished (${record_secs}s)"
 exit 0

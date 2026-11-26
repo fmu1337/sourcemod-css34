@@ -30,6 +30,36 @@ if {[info exists env(SRCDS_BINARY)] && $env(SRCDS_BINARY) ne ""} {
     set binary "./srcds_i686"
 }
 
+# Send quit and require a clean exit: srcds must close the console within
+# QUIT_TIMEOUT seconds and must not die from a signal (a crash in shutdown,
+# e.g. an extension's unload, would otherwise pass). Exit code `code` on failure.
+proc quit_and_reap {code} {
+    global env
+    set quit_timeout 60
+    if {[info exists env(QUIT_TIMEOUT)] && $env(QUIT_TIMEOUT) ne ""} {
+        set quit_timeout $env(QUIT_TIMEOUT)
+    }
+    send "quit\r"
+    expect {
+        -timeout $quit_timeout
+        eof {}
+        timeout {
+            puts stderr "FAIL: srcds did not exit within ${quit_timeout}s after quit (hang in shutdown)"
+            catch {exec kill -9 [exp_pid]}
+            catch {close}
+            catch {wait}
+            exit $code
+        }
+    }
+    set result [wait]
+    # pid spawn_id os_error value ?CHILDKILLED|CHILDSUSP signame message?
+    if {[lindex $result 2] == 0 && [llength $result] > 4} {
+        puts stderr "FAIL: srcds died in shutdown: [lrange $result 4 end]"
+        exit $code
+    }
+    puts stderr "OK: srcds exited after quit (status [lindex $result 3])"
+}
+
 cd $server_dir
 set env(LD_LIBRARY_PATH) ".:bin:$env(LD_LIBRARY_PATH)"
 
@@ -248,11 +278,7 @@ expect {
 # Allow plugin lines to flush before shutdown.
 sleep 1
 
-send "quit\r"
-expect {
-    eof {}
-    timeout {}
-}
+quit_and_reap 11
 
 # Retain a failed result after collecting the remaining diagnostics.
 exit $probe_failed

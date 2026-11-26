@@ -33,6 +33,12 @@ for line in sys.stdin:
         else:
             response = '[SM] Loaded extension ' + name + ' successfully'
     if cmd == 'quit':
+        if os.environ['MODE'] == 'segv':
+            import signal
+            os.kill(os.getpid(), signal.SIGSEGV)
+        if os.environ['MODE'] == 'hang':
+            import time
+            time.sleep(60)
         break
     if response:
         print(response, flush=True)
@@ -54,7 +60,7 @@ class ConsoleProbe(unittest.TestCase):
                 env = dict(os.environ, SERVER_DIR=tmp, SRCDS_BINARY=str(fake),
                            COMMAND_LOG=str(root / 'commands'), MODE=mode,
                            CONSOLE_PROBE_LOG=str(root / 'console.log'),
-                           CONSOLE_PROBE_TIMEOUT='1', LD_LIBRARY_PATH=os.environ.get('LD_LIBRARY_PATH', ''))
+                           CONSOLE_PROBE_TIMEOUT='1', QUIT_TIMEOUT='2', LD_LIBRARY_PATH=os.environ.get('LD_LIBRARY_PATH', ''))
                 result = subprocess.run([os.environ.get('EXPECT', 'expect'), str(wrapper)],
                                         env=env, capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0 if mode == 'success' else 1,
@@ -62,6 +68,28 @@ class ConsoleProbe(unittest.TestCase):
                 commands = (root / 'commands').read_text().splitlines()
                 self.assertEqual(commands[-3:], ['sm exts list', 'sm plugins list', 'quit'])
                 self.assertIn('sm exts load regex.ext', commands)
+
+    def test_crash_or_hang_at_quit_fails(self):
+        # A segfault or a hang in shutdown used to exit 0 (#193).
+        for mode in ['segv', 'hang']:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                fake = root / 'srcds'
+                fake.write_text(FAKE)
+                fake.chmod(0o755)
+                wrapper = root / 'test.exp'
+                wrapper.write_text('rename sleep real_sleep\nproc sleep {seconds} {}\n'
+                                   'source {' + str(PROBE) + '}\n')
+                env = dict(os.environ, SERVER_DIR=tmp, SRCDS_BINARY=str(fake),
+                           COMMAND_LOG=str(root / 'commands'), MODE=mode,
+                           CONSOLE_PROBE_LOG=str(root / 'console.log'),
+                           CONSOLE_PROBE_TIMEOUT='1', QUIT_TIMEOUT='2',
+                           LD_LIBRARY_PATH=os.environ.get('LD_LIBRARY_PATH', ''))
+                result = subprocess.run([os.environ.get('EXPECT', 'expect'), str(wrapper)],
+                                        env=env, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 11, result.stdout + result.stderr)
+                self.assertIn('died in shutdown' if mode == 'segv' else 'did not exit within',
+                              result.stderr)
 
 
 if __name__ == '__main__':
