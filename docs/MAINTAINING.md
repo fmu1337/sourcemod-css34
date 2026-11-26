@@ -40,7 +40,7 @@ bump does not apply, opens its own minimal-fix PR. Nothing Jules produces merges
 
 - **Tags.** `1.<maj>.0.<SM rev>-mm<MM ver>`; a rebuild of the same pins gets `-r<N>`; tags never move.
   Push them through `release-tag.yml` (dispatch: `line`, master `sha`, optional `expected_tag`; it computes
-  the next tag and refuses frozen / retired lines, known-bad tags and already tagged commits), or let
+  the next tag, skipping known-bad ones, and refuses frozen / retired lines and already tagged commits), or let
   `upstream-bump.yml` do it after a bump merge.
 - **`release.yml`** builds the tag into a **prerelease** with generated notes, smokes the public URLs on
   the weekly OS matrix and runs botplay, then promotes it (GitHub *Latest* only for the default line),
@@ -52,7 +52,7 @@ bump does not apply, opens its own minimal-fix PR. Nothing Jules produces merges
   sha256) and `SHA256SUMS`. Every package carries `addons/{sourcemod,metamod}/css34-package.json`.
 - **Never delete a release.** Other repositories link to the assets (12 deleted on 2026-11-03 broke
   them). After a pointer move, older releases of the line get a *superseded* note
-  (`supersede-releases.py`). A broken build gets `known_bad` in `lines.json` and *Release Maintenance* →
+  (`supersede-releases.py`). A broken build gets its exact tag (`-rN` included) in `known_bad` in `lines.json` and *Release Maintenance* →
   `mark-known-bad` (prerelease + banner). *Release Maintenance* also re-publishes drafts; it has no delete.
 - **Repoint / roll back a pointer:** Actions → *Release* → *Run workflow* on `master` with the target tag.
   It checks the tag (line, not known-bad, assets present), smokes it, promotes it if needed (never

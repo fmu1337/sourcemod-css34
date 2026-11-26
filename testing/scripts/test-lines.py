@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise pin generation and drift failures in an isolated repository copy."""
 
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -363,14 +364,19 @@ class LinesTest(unittest.TestCase):
         self.assertIn("lists image ubuntu:24.04 twice", self.run_command("gen", False).stderr)
         self.assertEqual((self.root / "builder/versions.env").read_bytes(), original)
 
-    def test_known_bad_pointer_pin_is_rejected(self):
+    def test_known_bad_entry_of_pointer_pin_is_allowed(self):
+        # known_bad names single releases (#196): listing the current pin's
+        # base tag or a -rN of it must not break the line.
         target = self.root / "builder/lines.json"
         data = json.loads(target.read_text())
-        data["pins"]["SM_LATEST"]["rev"] = 7245
+        spec = importlib.util.spec_from_file_location("lines_mod", self.root / "builder/lines.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        base = mod.line_parts(data, "sm13-latest")["tag"]
+        data["known_bad"][base] = "test: broken first build"
+        data["known_bad"][base + "-r2"] = "test: broken rebuild"
         target.write_text(json.dumps(data))
-        original = (self.root / "builder/versions.env").read_bytes()
-        self.assertIn("known-bad tag", self.run_command("check", False).stderr)
-        self.assertEqual((self.root / "builder/versions.env").read_bytes(), original)
+        self.assertNotIn("known-bad tag", self.run_command("check", False).stderr)
 
     def test_allow_failure_is_rejected(self):
         target = self.root / "builder/lines.json"

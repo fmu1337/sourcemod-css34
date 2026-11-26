@@ -230,16 +230,18 @@ def release_tags(root, old_json, new_json, existing):
         keys = ("sm_commit", "mm_commit", "bridge_mm_commit")
         if before is not None and all(before.get(k) == part.get(k) for k in keys):
             continue
-        base = part["tag"]
-        if base in new.get("known_bad", {}):
-            raise SystemExit("FAIL: {} is known-bad".format(base))
-        tags.append(next_free_tag(base, existing))
+        tags.append(next_free_tag(part["tag"], existing, new.get("known_bad", {})))
     return tags
 
 
-def next_free_tag(base, existing):
-    """<base> when no tag of it exists, else <base>-r<highest N + 1> (the base counts as r1)."""
-    taken = [t for t in existing if t == base or re.fullmatch(re.escape(base) + r"-r[0-9]+", t)]
+def next_free_tag(base, existing, known_bad=()):
+    """<base> when no tag of it exists, else <base>-r<highest N + 1> (the base counts as r1).
+
+    known_bad entries name single releases: a known-bad <base> or <base>-rN
+    counts as taken, so the next build gets a new -rN instead of being refused.
+    """
+    pattern = re.compile(re.escape(base) + r"-r[0-9]+")
+    taken = [t for t in list(existing) + list(known_bad) if t == base or pattern.fullmatch(t)]
     if not taken:
         return base
     numbers = [int(t.rsplit("-r", 1)[1]) for t in taken if t != base]
@@ -257,9 +259,7 @@ def next_tag(root, lines_json, name, existing):
         raise SystemExit("FAIL: {} is not a releasable pointer line (status {}, releasable {}, pointer {})".format(
             name, line.get("status"), line.get("releasable", True), line.get("pointer", False)))
     base = mod.line_parts(data, name)["tag"]
-    if base in data.get("known_bad", {}):
-        raise SystemExit("FAIL: {} is known-bad".format(base))
-    return next_free_tag(base, existing)
+    return next_free_tag(base, existing, data.get("known_bad", {}))
 
 
 def main():

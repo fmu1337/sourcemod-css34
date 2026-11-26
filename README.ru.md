@@ -74,7 +74,8 @@ tar -xzf sourcemod-css34-linux.tar.gz -C /path/to/cstrike
 
 ## Плохие релизы
 
-Никогда не попадают на указатель; список — `known_bad` в `builder/lines.json`:
+Никогда не попадают на указатель; список — `known_bad` в `builder/lines.json`. Каждая запись — один релиз
+(точный тег, с `-rN`): следующий `-rN` тех же пинов не блокируется и получает следующий свободный номер.
 
 - `1.12.0.7239-mm1.12.0`, `1.12.0.7245-mm1.12.0`, `1.13.0.7394-mm1.12.0`: отсутствует или неверна gamedata
   для v34 (`SDKHook()` → `Hook type not supported on this game`).
