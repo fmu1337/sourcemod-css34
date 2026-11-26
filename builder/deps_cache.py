@@ -12,7 +12,7 @@ the stamp inside it records the same inputs digest as this build; anything else
 The digest covers everything that determines the prefixes' contents:
   - the build image (CSS34_BUILD_IMAGE, set by builder/docker/build.sh from the
     image reference it runs, a sha256 digest);
-  - the deps directory path (OpenSSL embeds its OPENSSLDIR);
+  - the deps directory path (the configure / cmake commands use it);
   - the exact bytes of INPUT_FILES: the scripts that fetch, configure and build
     the prefixes, which also hold every version and sha256 pin they use.
 The SourceMod and Metamod pins do not change these prefixes; the SourceMod pin
