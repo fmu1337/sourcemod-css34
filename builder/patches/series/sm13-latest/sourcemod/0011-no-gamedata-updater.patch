@@ -16,10 +16,10 @@ goes with it.
   that still has them loads unchanged.
 
 diff --git a/AMBuildScript b/AMBuildScript
-index 0997a9ad7e7652f44808da1510168190342a500b..85dcbb493b4dd9e94ed6d8ed08c49f801e183f63 100644
+index a0d1b06df8cc48853163e3e0d982b012d46fc38d..4341f184104da6f7f8d0baef04e056ff71fa26d0 100644
 --- a/AMBuildScript
 +++ b/AMBuildScript
-@@ -736,7 +736,6 @@ else:
+@@ -737,7 +737,6 @@ else:
      'core/logic/AMBuilder',
      'extensions/bintools/AMBuilder',
      'extensions/clientprefs/AMBuilder',
@@ -27,7 +27,7 @@ index 0997a9ad7e7652f44808da1510168190342a500b..85dcbb493b4dd9e94ed6d8ed08c49f80
      'extensions/cstrike/AMBuilder',
      'extensions/dhooks/AMBuilder',
      'extensions/geoip/AMBuilder',
-@@ -748,7 +747,8 @@ else:
+@@ -749,7 +748,8 @@ else:
      'extensions/sqlite/AMBuilder',
      'extensions/tf2/AMBuilder',
      'extensions/topmenus/AMBuilder',

@@ -122,8 +122,9 @@ class PatchSeriesTest(unittest.TestCase):
         for name in ("builder/lines.py", "builder/lines.json"):
             (root / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / name, root / name)
+        # Every series: lines.py requires one for each active line and its Metamod.
+        shutil.copytree(ROOT / "builder/patches/series", root / "builder/patches/series")
         series = root / "builder/patches/series/sm13-latest"
-        shutil.copytree(ROOT / "builder/patches/series/sm13-latest", series)
         sys.path.insert(0, str(root / "builder"))
         try:
             import importlib
@@ -142,8 +143,9 @@ class PatchSeriesTest(unittest.TestCase):
         for name in ("builder/lines.py", "builder/lines.json"):
             (root / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / name, root / name)
+        # Every series: lines.py requires one for each active line and its Metamod.
+        shutil.copytree(ROOT / "builder/patches/series", root / "builder/patches/series")
         series = root / "builder/patches/series/MM_112"
-        shutil.copytree(ROOT / "builder/patches/series/MM_112", series)
         sys.path.insert(0, str(root / "builder"))
         try:
             import importlib

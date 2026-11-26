@@ -45,7 +45,7 @@ if [[ -f "${ROOT}/builder/resolve-version.sh" ]]; then
   eval "$(
     CSS34_LINE="${resolve_line}" bash -c "
       source '${ROOT}/builder/resolve-version.sh' >/dev/null 2>&1
-      echo \"RESOLVED_SM_COMMIT='\${SOURCEMOD_BUILD_COMMIT:-\$SOURCEMOD_COMMIT}'\"
+      echo \"RESOLVED_SM_COMMIT='\$SOURCEMOD_COMMIT'\"
       echo \"RESOLVED_SM_REV='\${SOURCEMOD_GIT_REV}'\"
       echo \"RESOLVED_SM_MAJOR='\${SOURCEMOD_MAJOR}'\"
       echo \"RESOLVED_MM_COMMIT='\${MMS_COMMIT}'\"

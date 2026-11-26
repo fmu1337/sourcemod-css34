@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # T2.7: rebuild a frozen line from its input archive with --network none.
 #
-#   builder/freeze/build-offline.sh ASSETS_DIR PACKAGES_OUT
+#   CSS34_INPUTS_SHA256=<sha256> builder/freeze/build-offline.sh ASSETS_DIR PACKAGES_OUT
+#
+# CSS34_INPUTS_SHA256 is the sha256 of the archive's SHA256SUMS, from master's
+# builder/lines.json (frozen.inputs_sha256): SHA256SUMS, MANIFEST.json and the
+# image id all come from ASSETS_DIR, so only this pin ties them to the release.
 #
 # ASSETS_DIR holds the files of builder/freeze/collect-inputs.sh (release
 # sm11-freeze-inputs). Run it from a fresh checkout of MANIFEST.json's
@@ -22,6 +26,9 @@ command -v zstd >/dev/null || die "zstd is required"
 [[ ! -e "$ROOT/sourcemod/.git" ]] || die "$ROOT/sourcemod is initialized: rebuild in a fresh checkout"
 
 echo "==> Checking SHA256SUMS"
+want_sums="${CSS34_INPUTS_SHA256:?CSS34_INPUTS_SHA256 is required (lines.json frozen.inputs_sha256)}"
+got_sums="$(sha256sum "$ASSETS/SHA256SUMS" | cut -d' ' -f1)"
+[[ "$got_sums" == "$want_sums" ]] || die "SHA256SUMS is $got_sums, the pin is $want_sums"
 (cd "$ASSETS" && sha256sum -c --quiet SHA256SUMS) || die "input archive does not match SHA256SUMS"
 
 mget() { python3 -c 'import functools, json, sys; print(functools.reduce(lambda v, k: v[k], sys.argv[2].split("."), json.load(open(sys.argv[1]))))' "$ASSETS/MANIFEST.json" "$1"; }

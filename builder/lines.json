@@ -92,6 +92,7 @@
         "tag": "1.11.0.6970-mm1.12.0-dual-r4",
         "freeze_tag": "sm11-freeze-r4",
         "inputs_release": "sm11-freeze-r4-inputs",
+      "inputs_sha256": "c6b7cfa91c19d52f7330e6206668de6d3a95412d62b9f49e6d5278385237dd73",
         "assets": {
           "mmsource-1.10.7-git976-css34-linux.tar.gz": "43a42b6bc260610d13719286d4e992d6c6a3e2a138e1f602a9bf4067997325c0",
           "mmsource-1.10.7-git976-css34-windows.zip": "bc6811e1346e6df20f51ed5b4ea51432a7020408582c4fb82de89cdf771b5fa2",

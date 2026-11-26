@@ -20,29 +20,8 @@ version="$(tr -d '\r\n' < "$SOURCEMOD_DIR/product.version")"
 filename="sourcemod-${version}-git${rev}-css34-linux.tar.gz"
 archive="$OUTPUT_DIR/$filename"
 
-required=(
-  "addons/metamod/sourcemod.vdf"
-  "addons/sourcemod/bin/sourcemod.2.ep1.so"
-  "addons/sourcemod/extensions/dbi.mysql.ext.so"
-  "addons/sourcemod/extensions/dbi.sqlite.ext.so"
-  "addons/sourcemod/extensions/game.cstrike.ext.2.ep1.so"
-  "addons/sourcemod/gamedata/core.games/blacklist.plugins.txt"
-  "addons/sourcemod/gamedata/core.games/common.games.txt"
-  "addons/sourcemod/gamedata/core.games/engine.ep1.txt"
-  "addons/sourcemod/gamedata/core.games/master.games.txt"
-  "addons/sourcemod/gamedata/funcommands.games.txt"
-  "addons/sourcemod/gamedata/sdkhooks.games/common.games.txt"
-  "addons/sourcemod/gamedata/sdkhooks.games/game.cstrike.txt"
-  "addons/sourcemod/gamedata/sdkhooks.games/master.games.txt"
-  "addons/sourcemod/gamedata/sdktools.games/common.games.txt"
-  "addons/sourcemod/gamedata/sdktools.games/engine.ep1.txt"
-  "addons/sourcemod/gamedata/sdktools.games/game.cstrike.txt"
-  "addons/sourcemod/gamedata/sdktools.games/master.games.txt"
-  "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt"
-  "addons/sourcemod/gamedata/sm-cstrike.games/master.games.txt"
-  "addons/sourcemod/scripting/include/version_auto.inc"
-  "cfg/sourcemod/sourcemod.cfg"
-)
+# One list for both platforms (package_windows.py reads it too).
+mapfile -t required < <(grep -v -e '^#' -e '^$' "$BUILDER_DIR/package-required.txt" | sed 's/{lib}/so/g')
 
 # SourceMod 1.12+ has one core (2.ep1); a 1.ep1 core means an SM 1.11 tree,
 # which master no longer builds (sm11-oldstable is frozen, docs/MAINTAINING.md).

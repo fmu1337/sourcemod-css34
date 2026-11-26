@@ -46,6 +46,15 @@ done
 [[ -d "$series/$root" ]] || { echo "FAIL: $series has no $root/ patches" >&2; exit 1; }
 repos+=("$root")
 
+# Every repository series.json pins a tree for must have patches here, and the
+# other way round: a tree that is never checked would let its repo drift.
+trees="$(python3 -c 'import json,sys; print(" ".join(sorted(json.load(open(sys.argv[1]))["trees"])))' "$manifest")"
+dirs="$(printf '%s\n' "${repos[@]}" | LC_ALL=C sort | xargs)"
+[[ "$trees" == "$dirs" ]] || {
+  echo "FAIL: $manifest pins trees for [$trees], the series has patches for [$dirs]" >&2
+  exit 1
+}
+
 for repo in "${repos[@]}"; do
   if [[ "$repo" == "$root" ]]; then target="$sm"; else target="$sm/$repo"; fi
   [[ -e "$target/.git" ]] || { echo "FAIL: $target is not a git checkout" >&2; exit 1; }

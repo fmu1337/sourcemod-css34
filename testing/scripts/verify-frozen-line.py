@@ -4,6 +4,7 @@
     verify-frozen-line.py --base https://github.com/<repo>/releases/download \\
         --repo-git https://github.com/<repo> --line sm11-oldstable --tag <frozen tag> \\
         --freeze-tag sm11-freeze --inputs-release sm11-freeze-inputs \\
+        --inputs-sha256 <sha256 of its SHA256SUMS> \\
         --assets '<json name -> sha256>' --pointer-assets '<json pointer name -> asset>'
 
 The arguments are a row of `python3 builder/lines.py frozen-gha`. Fails unless:
@@ -11,7 +12,8 @@ The arguments are a row of `python3 builder/lines.py frozen-gha`. Fails unless:
     sha256, and every asset downloads with that sha256;
   * line-<line> serves the frozen tag with smoke=pass, and each pointer file is
     byte-identical to its release asset (SHA256SUMS and download);
-  * the input archive release has MANIFEST.json for this line, whose
+  * the input archive release's SHA256SUMS has the sha256 lines.json pins
+    (frozen.inputs_sha256), and it has MANIFEST.json for this line, whose
     builder_commit is the freeze tag's commit, and SHA256SUMS agrees with the
     MANIFEST's asset list (the archive itself is not downloaded).
 """
@@ -67,7 +69,8 @@ def tag_commit(repo_git: str, tag: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    for name in ("base", "repo-git", "line", "tag", "freeze-tag", "inputs-release", "assets", "pointer-assets"):
+    for name in ("base", "repo-git", "line", "tag", "freeze-tag", "inputs-release", "inputs-sha256", "assets",
+                 "pointer-assets"):
         ap.add_argument(f"--{name}", required=True)
     args = ap.parse_args()
     assets: dict[str, str] = json.loads(args.assets)
@@ -124,7 +127,12 @@ def main() -> int:
     # 3. The input archive.
     rel = args.inputs_release
     try:
-        in_sums = sums(fetch(f"{base}/{rel}/SHA256SUMS").decode())
+        in_raw = fetch(f"{base}/{rel}/SHA256SUMS")
+        if hashlib.sha256(in_raw).hexdigest() != args.inputs_sha256:
+            fail(f"{rel}/SHA256SUMS is {hashlib.sha256(in_raw).hexdigest()}, lines.json pins {args.inputs_sha256}")
+        else:
+            ok(f"{rel}/SHA256SUMS matches frozen.inputs_sha256")
+        in_sums = sums(in_raw.decode())
         raw = fetch(f"{base}/{rel}/MANIFEST.json")
         manifest = json.loads(raw)
     except (OSError, ValueError) as error:

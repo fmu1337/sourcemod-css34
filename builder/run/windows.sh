@@ -51,8 +51,7 @@ bash "$BUILDER_DIR/checkout-deps.sh" "$DEPS_DIR" "$BUILDER_DIR"
 chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/write-build-stamps.sh" \
   "$BUILDER_DIR/write-package-manifest.sh" "$BUILDER_DIR"/patches/*.sh 2>/dev/null || true
 
-python -m pip install --upgrade pip
-python -m pip install "$DEPS_DIR/ambuild"
+# checkout-deps.sh installed AMBuild from the pinned setuptools wheel (no PyPI).
 
 # RootConsoleMenu.cpp / Metamod versioning include css34_build_stamp.h.
 echo "==> Writing CSS34 build stamp headers (pre-Metamod)"
@@ -106,7 +105,6 @@ build_and_package_mm_win() {
       -OutputDir "$PACKAGES_DIR" \
       -MmsDir "$mm_dir" | tail -n1 | tr -d '\r'
   )"
-  cp -f "$mm_art" "$WDIR/$(basename "$mm_art")"
   echo "==> Metamod package: $mm_art"
 }
 
@@ -179,5 +177,4 @@ ARTIFACT="$(
     -SourceModDir "$SOURCEMOD_DIR" | tail -n1 | tr -d '\r'
 )"
 
-cp -f "$ARTIFACT" "$WDIR/$(basename "$ARTIFACT")"
 echo "==> Build complete: $ARTIFACT"

@@ -193,13 +193,17 @@ class VerifyFrozenLineTest(unittest.TestCase):
              "assets": {n: hashlib.sha256(d).hexdigest() for n, d in archived.items()}}
         self.write("R", {**archived, "MANIFEST.json": json.dumps(m).encode()})
 
-    def verify(self) -> subprocess.CompletedProcess:
+    def verify(self, inputs_sha256=None) -> subprocess.CompletedProcess:
         assets = {n: hashlib.sha256(d).hexdigest() for n, d in self.assets.items()}
+        if inputs_sha256 is None:
+            sums = self.base / "R" / "SHA256SUMS"
+            inputs_sha256 = hashlib.sha256(sums.read_bytes()).hexdigest() if sums.is_file() else "0" * 64
         pointer = {"sourcemod-css34-linux.tar.gz": "sm.tar.gz", "mmsource-css34-linux.tar.gz": "mm.tar.gz"}
         return subprocess.run(["python3", str(ROOT / "testing/scripts/verify-frozen-line.py"),
                                "--base", f"file://{self.base}", "--repo-git", str(self.repo),
                                "--line", "L", "--tag", "T", "--freeze-tag", "sm11-freeze",
-                               "--inputs-release", "R", "--assets", json.dumps(assets),
+                               "--inputs-release", "R", "--inputs-sha256", inputs_sha256,
+                               "--assets", json.dumps(assets),
                                "--pointer-assets", json.dumps(pointer)], capture_output=True, text=True)
 
     def test_matching_files_pass(self):
@@ -228,6 +232,11 @@ class VerifyFrozenLineTest(unittest.TestCase):
         res = self.verify()
         self.assertNotEqual(res.returncode, 0)
         self.assertIn("sm11-freeze is " + self.commit, res.stderr)
+
+    def test_inputs_sums_other_than_the_pin_fail(self):
+        res = self.verify("f" * 64)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("R/SHA256SUMS is ", res.stderr)
 
     def test_missing_inputs_release_fails(self):
         import shutil

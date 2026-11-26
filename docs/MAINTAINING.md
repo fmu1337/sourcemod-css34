@@ -82,9 +82,12 @@ gets no upstream commits.
   and `sm11-freeze-rN` on that commit: the tag runs that branch's `release.yml` (build, smoke, botplay,
   pointer). Then run *Freeze inputs* on `sm11-freeze-rN` with `publish: true` (approval in the
   `frozen-release` environment; it uploads `sm11-freeze-rN-inputs`), and open a master PR that changes only
-  the `frozen` block.
+  the `frozen` block (with `inputs_sha256`, the sha256 of the inputs release's `SHA256SUMS`, which
+  the *Freeze inputs* run prints).
 - **Rebuild** offline from the freeze tag and its inputs release (git mirrors, pinned downloads, the saved
-  build image, `MANIFEST.json`): `git checkout sm11-freeze-r4 && builder/freeze/build-offline.sh <assets> <out>`
+  build image, `MANIFEST.json`): first check that `sha256sum <assets>/SHA256SUMS` is master's
+  `frozen.inputs_sha256` (the r4 script predates the check; later freezes take it as
+  `CSS34_INPUTS_SHA256`), then `git checkout sm11-freeze-r4 && builder/freeze/build-offline.sh <assets> <out>`
   (`--network none`). `testing/scripts/compare-package-abi.py` must find the same files, exports,
   `NEEDED` and `SONAME`.
 - **Weekly** `frozen-verify.yml` checks the published files against `frozen.assets` and smokes the

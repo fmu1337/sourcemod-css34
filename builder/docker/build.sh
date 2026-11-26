@@ -35,6 +35,13 @@ if [[ -n "${CSS34_SAVE_DOWNLOADS:-}" ]]; then
   extra_args+=(-v "$CSS34_SAVE_DOWNLOADS:/save-downloads" -e CSS34_SAVE_DOWNLOADS=/save-downloads)
 fi
 
+# Optional overrides the builder reads inside the container; forward the ones set.
+for var in CSS34_DEPS_REBUILD BUILD_DATE GLIBC_FLOOR AMBUILD_COMMIT HL2SDK_EPISODE1_COMMIT; do
+  if [[ -n "${!var:-}" ]]; then
+    extra_args+=(-e "${var}=${!var}")
+  fi
+done
+
 docker_cmd() {
   if docker info >/dev/null 2>&1; then
     docker "$@"
@@ -45,7 +52,8 @@ docker_cmd() {
 
 echo "==> Building SourceMod css34 in ${IMAGE} (line ${CSS34_LINE})" >&2
 
-docker_cmd run --rm -i --platform linux/386 \
+build_rc=0
+if docker_cmd run --rm -i --platform linux/386 \
   --entrypoint linux32 \
   ${extra_args[@]+"${extra_args[@]}"} \
   -v "$ROOT:/workspace" \
@@ -125,18 +133,27 @@ register_git_safe_dirs() {
 }
 register_git_safe_dirs
 
+# Hand the trees back to the host user whether or not the build succeeds.
+give_back() {
+  if [[ -n "${HOST_UID:-}" && -n "${HOST_GID:-}" ]]; then
+    chown -R "${HOST_UID}:${HOST_GID}" /workspace/deps /workspace/packages /workspace/sourcemod 2>/dev/null || true
+    [[ -z "${CSS34_SAVE_DOWNLOADS:-}" ]] || chown -R "${HOST_UID}:${HOST_GID}" "${CSS34_SAVE_DOWNLOADS}" 2>/dev/null || true
+  fi
+}
+trap give_back EXIT
 chmod +x builder/run/linux.sh builder/checkout-deps.sh builder/package.sh \
   builder/package-metamod.sh builder/build-metamod.sh \
   builder/prepare-package.sh builder/py.sh builder/patches/*.sh \
   builder/download-geolite2.sh
 builder/run/linux.sh
-if [[ -n "${HOST_UID:-}" && -n "${HOST_GID:-}" ]]; then
-  chown -R "${HOST_UID}:${HOST_GID}" /workspace/deps /workspace/packages /workspace/sourcemod 2>/dev/null || true
-  [[ -z "${CSS34_SAVE_DOWNLOADS:-}" ]] || chown -R "${HOST_UID}:${HOST_GID}" "${CSS34_SAVE_DOWNLOADS}" 2>/dev/null || true
-fi
 INNER
+then :; else build_rc=$?; fi
 
 sudo chown -R "$(id -u):$(id -g)" "$ROOT/deps" "$ROOT/packages" "$ROOT/sourcemod" 2>/dev/null || true
+if [[ "${build_rc}" -ne 0 ]]; then
+  echo "FAIL: manylinux build exited ${build_rc}" >&2
+  exit "${build_rc}"
+fi
 
 source "$ROOT/builder/package-paths.sh"
 ARTIFACT="$SM_PACKAGE"

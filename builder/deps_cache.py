@@ -14,7 +14,10 @@ The digest covers everything that determines the prefixes' contents:
     image reference it runs, a sha256 digest);
   - the deps directory path (OpenSSL embeds its OPENSSLDIR);
   - the exact bytes of INPUT_FILES: the scripts that fetch, configure and build
-    the prefixes, which also hold every version and sha256 pin they use.
+    the prefixes, which also hold every version and sha256 pin they use;
+  - the compiler environment (BUILD_ENV) the builder runs with.
+An image named by tag only (no @sha256:) can change under the same name: its
+digest gets a random part, so such a build never reuses a prefix.
 The SourceMod and Metamod pins do not change these prefixes; the SourceMod pin
 only decides which of them a line needs (configure.py --mariadb-path), so it
 goes into the CI cache key, not into the digest.
@@ -53,8 +56,11 @@ INPUT_FILES = (
     'builder/py.sh',
     'builder/patches/patch-openssl-getentropy.py',
     'builder/docker/build.sh',
+    'builder/run/linux.sh',
     'builder/deps_cache.py',
 )
+# Compiler and flags that reach the prefixes' configure/make.
+BUILD_ENV = ('CC', 'CXX', 'CPPFLAGS', 'CFLAGS', 'CXXFLAGS', 'LDFLAGS')
 
 # The prefixes checkout-deps.sh stamps (relative to deps/). build-perl is only
 # a build tool of OpenSSL and is not cached.
@@ -87,7 +93,11 @@ def inputs(root: Path, image: str, deps_dir: str) -> dict:
         if not path.is_file():
             raise SystemExit(f'FAIL: deps cache input {rel} is missing')
         files[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return {'schema': SCHEMA, 'image': image, 'deps_dir': deps_dir, 'files': files}
+    env = {name: os.environ[name] for name in BUILD_ENV if os.environ.get(name)}
+    data = {'schema': SCHEMA, 'image': image, 'deps_dir': deps_dir, 'files': files, 'env': env}
+    if '@sha256:' not in image:
+        data['unpinned_image'] = os.urandom(16).hex()
+    return data
 
 
 def digest_of(data: dict) -> str:

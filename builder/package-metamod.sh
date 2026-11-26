@@ -27,26 +27,26 @@ cp -a "$MMS_PACKAGE_DIR/addons" "$staging/"
 rm -f "$staging/addons/metamod/bin/server.so"
 
 # Match rom4s/css34 gameinfo path (relative to hl2/cstrike).
+# Like package_windows.py: the rewrite must happen, or the package is wrong.
 vdf="$staging/addons/metamod.vdf"
-if [[ -f "$vdf" ]]; then
-  sed -i 's|"file"[[:space:]]*"addons/metamod/bin/server"|"file"\t"../cstrike/addons/metamod/bin/server"|' "$vdf"
+if [[ ! -f "$vdf" ]] || ! grep -Eq '"file"[[:space:]]*"addons/metamod/bin/server"' "$vdf"; then
+  echo "FAIL: metamod.vdf has no gameinfo file path to rewrite" >&2
+  exit 1
 fi
+sed -i 's|"file"[[:space:]]*"addons/metamod/bin/server"|"file"\t"../cstrike/addons/metamod/bin/server"|' "$vdf"
+grep -q '"../cstrike/addons/metamod/bin/server"' "$vdf" ||
+  { echo "FAIL: metamod.vdf rewrite did not apply" >&2; exit 1; }
 
 echo "==> Stripping Metamod Linux binaries" >&2
 while IFS= read -r -d '' binary; do
   strip --strip-unneeded "$binary"
 done < <(find "$staging/addons/metamod/bin" -type f -name '*.so' -print0)
 
-# Prefer modern 2.ep1 (MM 1.12); fall back to legacy 1.ep1 (MM 1.10 css34).
-mm_core=""
-for cand in metamod.2.ep1.so metamod.1.ep1.so; do
-  if [[ -e "$staging/addons/metamod/bin/$cand" ]]; then
-    mm_core="$cand"
-    break
-  fi
-done
-if [[ -z "$mm_core" ]]; then
-  echo "Missing metamod.2.ep1.so / metamod.1.ep1.so in Metamod package" >&2
+# The package's core is metamod.2.ep1 (MM 1.12); a legacy metamod.1.ep1 next
+# to it is the legacy-plugin bridge, never the core.
+mm_core=metamod.2.ep1.so
+if [[ ! -e "$staging/addons/metamod/bin/$mm_core" ]]; then
+  echo "Missing $mm_core in Metamod package" >&2
   exit 1
 fi
 

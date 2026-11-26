@@ -5,7 +5,7 @@
 #
 # Reads from env (set by builder/resolve-version.sh / builder/run/linux.sh):
 #   CSS34_LINE, SOURCEMOD_DIR, SOURCEMOD_GIT_REV, SOURCEMOD_COMMIT,
-#   SOURCEMOD_BUILD_COMMIT, MMS_DIR, MMS_GIT_REV, MMS_COMMIT
+#   MMS_DIR, MMS_GIT_REV, MMS_COMMIT
 #
 # extension_api / extension_api_min come from SourceMod public/IExtensionSys.h.
 # SM 1.11/1.12 define no _MIN (any API <= VERSION loads), so min is 1 there.
@@ -19,7 +19,7 @@ MMS_DIR="${MMS_DIR:?MMS_DIR required}"
 
 sm_product="$(tr -d '\r\n' < "$SOURCEMOD_DIR/product.version")"
 sm_rev="${SOURCEMOD_GIT_REV:?SOURCEMOD_GIT_REV required}"
-sm_commit="${SOURCEMOD_BUILD_COMMIT:-${SOURCEMOD_COMMIT:-}}"
+sm_commit="${SOURCEMOD_COMMIT:-}"
 if [[ -z "$sm_commit" ]]; then
   sm_commit="$(git -C "$SOURCEMOD_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
 fi
