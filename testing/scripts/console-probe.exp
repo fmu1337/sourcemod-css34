@@ -30,6 +30,53 @@ if {[info exists env(SRCDS_BINARY)] && $env(SRCDS_BINARY) ne ""} {
     set binary "./srcds_i686"
 }
 
+# Send quit and require a clean exit: srcds must close the console within
+# QUIT_TIMEOUT seconds and must not die from a signal (a crash in shutdown,
+# e.g. an extension's unload, would otherwise pass). Exit code `code` on failure.
+proc quit_and_reap {code} {
+    global env
+    set quit_timeout 60
+    if {[info exists env(QUIT_TIMEOUT)] && $env(QUIT_TIMEOUT) ne ""} {
+        set quit_timeout $env(QUIT_TIMEOUT)
+    }
+    send "quit\r"
+    set tail ""
+    expect {
+        -timeout $quit_timeout
+        -re {[^\r\n]*[\r\n]+} {
+            append tail $expect_out(0,string)
+            set tail [string range $tail end-2000 end]
+            exp_continue
+        }
+        eof { append tail $expect_out(buffer) }
+        timeout {
+            puts stderr "FAIL: srcds did not exit within ${quit_timeout}s after quit (hang in shutdown)"
+            catch {exec kill -9 [exp_pid]}
+            catch {close}
+            catch {wait}
+            exit $code
+        }
+    }
+    set result [wait]
+    # pid spawn_id os_error value ?CHILDKILLED|CHILDSUSP signame message?
+    if {[lindex $result 2] == 0 && [llength $result] > 4} {
+        # The stock CS:S v34 engine (no Metamod, no SourceMod) ends every quit
+        # with this assertion and a SIGSEGV (CI, 2026-11-26). Only that exact
+        # ending passes; any other crash in shutdown, or this one after other
+        # output, fails.
+        set lines [lsearch -all -inline -not -exact [split [string map {"\r" ""} $tail] "\n"] ""]
+        set last [string trim [lindex $lines end]]
+        if {[lindex $result 5] eq "SIGSEGV" &&
+            $last eq "utlmemory.h (321) : Assertion Failed: IsIdxValid(i)"} {
+            puts stderr "OK: srcds exited after quit with the stock engine's shutdown crash ($last, SIGSEGV)"
+            return
+        }
+        puts stderr "FAIL: srcds died in shutdown: [lrange $result 4 end] (last output: $last)"
+        exit $code
+    }
+    puts stderr "OK: srcds exited after quit (status [lindex $result 3])"
+}
+
 cd $server_dir
 set env(LD_LIBRARY_PATH) ".:bin:$env(LD_LIBRARY_PATH)"
 
@@ -248,11 +295,7 @@ expect {
 # Allow plugin lines to flush before shutdown.
 sleep 1
 
-send "quit\r"
-expect {
-    eof {}
-    timeout {}
-}
+quit_and_reap 11
 
 # Retain a failed result after collecting the remaining diagnostics.
 exit $probe_failed
