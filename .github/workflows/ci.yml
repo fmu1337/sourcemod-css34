@@ -621,28 +621,6 @@ jobs:
           sudo apt-get install -y expect gcc-multilib lib32gcc-s1 lib32stdc++6 lib32z1 \
             libc6-i386 libstdc++6:i386 zlib1g:i386
 
-      # TEMPORARY (#193 diagnosis, remove before merge): does a srcds without
-      # Metamod / SourceMod also die on quit?
-      - name: "DIAG: vanilla srcds quit"
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/vanilla
-          tar -xzf server-art/css34-server.tar.gz -C /tmp/vanilla
-          ls /tmp/vanilla/cstrike/addons 2>/dev/null || echo "no addons dir"
-          cat > /tmp/vq.exp <<'EXP'
-          set timeout 120
-          cd /tmp/vanilla
-          set env(LD_LIBRARY_PATH) ".:bin"
-          spawn ./srcds_i686 -game cstrike -console -nohltv -nomaster -localcser -tickrate 66 -ip 127.0.0.1 -port 27015 +ip 127.0.0.1 +sv_lan 1 +maxplayers 10 +map de_dust2
-          expect { -re {Started map|Loading map} {} timeout { puts "no map"; exit 1 } eof { puts "eof at boot"; exit 1 } }
-          sleep 5
-          send "quit\r"
-          expect { -timeout 60 eof {} timeout { puts "VANILLA: hang on quit"; exit 2 } }
-          puts "VANILLA wait: [wait]"
-          EXP
-          expect /tmp/vq.exp
-
       - name: Install the packages into the server tree
         run: |
           set -euo pipefail
