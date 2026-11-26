@@ -191,9 +191,11 @@ require_fixed() {
 
 require_grep "${CONSOLE_PROBE_LOG}" 'Started map "'"${MAP}"'"' "engine started map (${MAP})"
 require_grep "${CONSOLE_PROBE_LOG}" 'hostname|# [0-9]+' "status command output"
-require_grep "${CONSOLE_PROBE_LOG}" 'Protocol version|version' "version command output"
-require_grep "${CONSOLE_PROBE_LOG}" 'Metamod|metamod|MM:S' "meta version command output"
-require_grep "${CONSOLE_PROBE_LOG}" 'SourceMod|SM' "sm version command output"
+# Replies only: the echoed commands ("version", "meta version", "sm version")
+# matched the old patterns by themselves (#201).
+require_grep "${CONSOLE_PROBE_LOG}" 'Protocol version [0-9]+' "version command output"
+require_grep "${CONSOLE_PROBE_LOG}" 'Metamod:Source [Vv]ersion' "meta version command output"
+require_grep "${CONSOLE_PROBE_LOG}" 'SourceMod Version:' "sm version command output"
 
 require_fixed "${CONSOLE_PROBE_LOG}" "${META_VERSION_NEEDLE}" \
   "meta version ${META_VERSION_NEEDLE}"
@@ -268,8 +270,9 @@ if [[ "${listed_exts:-0}" -lt 5 ]]; then
   fail=1
 fi
 
+# `sm exts list` rows ("[NN] SDK Tools (1.13...)"), not any mention.
 for required_ext in 'BinTools' 'SDK Tools' 'CS Tools' 'SDK Hooks'; do
-  require_grep "${CONSOLE_PROBE_LOG}" "${required_ext}" "required extension (${required_ext})"
+  require_grep "${CONSOLE_PROBE_LOG}" "^[[:space:]]*\\[[0-9]+\\] ${required_ext} \\(" "required extension (${required_ext})"
 done
 
 # Explicit loads. Autoload never opens dbi.mysql / dbi.pgsql, so a bad link
@@ -386,7 +389,7 @@ fi
 plugin_errors="$(
   grep -Ei 'Error loading|Failed to load|could not be loaded|Encountered error|Unable to load extension' \
     "${CONSOLE_PROBE_LOG}" 2>/dev/null \
-    | grep -Eiv 'geoip|regex' \
+    | grep -Ev '[Ee]xtension "?(geoip|regex)(\.ext)?(\.so)?("|:| )' \
     | grep -Ev "${dhooks_expected_failure}" || true
 )"
 if [[ -n "${plugin_errors}" ]]; then

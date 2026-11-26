@@ -41,7 +41,22 @@ fail=0
 die() { echo "FAIL: $*" >&2; exit 1; }
 
 [[ -f "${ext}" ]] || die "${ext} missing: install the SourceMod package first"
+# MYSQL_TLS_EXPECT=1/0; unset: from the package (sm13+ ships MariaDB
+# Connector/C + OpenSSL). A line that must have TLS never skips silently.
+expect_tls="${MYSQL_TLS_EXPECT:-}"
+if [[ -z "${expect_tls}" ]]; then
+  sm_product="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["sm_product_version"])' \
+    "${sm}/css34-package.json" 2>/dev/null || true)"
+  case "${sm_product}" in
+    1.1[3-9].*|1.[2-9][0-9].*) expect_tls=1 ;;
+    1.*) expect_tls=0 ;;
+    *) die "cannot read sm_product_version from ${sm}/css34-package.json; set MYSQL_TLS_EXPECT" ;;
+  esac
+fi
 if ! grep -aq 'OpenSSL [0-9]' "${ext}"; then
+  if [[ "${expect_tls}" == 1 ]]; then
+    die "dbi.mysql.ext links no OpenSSL, but this line must ship TLS (MYSQL_TLS_EXPECT=1)"
+  fi
   echo "SKIP: dbi.mysql.ext links no OpenSSL of ours (MySQL 5.6 client with bundled yaSSL)"
   exit 0
 fi

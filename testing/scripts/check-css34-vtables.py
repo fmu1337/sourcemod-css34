@@ -158,16 +158,45 @@ def load_vtables(path, wanted):
     return out
 
 
+# Keys that must stay absent (not virtual on v34); a present one is checked
+# and fails like any wrong offset.
+ABSENT_OK = {'GetMaxHealth'}
+
+
+def block_after(text, start):
+    """The text between the brace that follows `start` and its match."""
+    open_at = text.index('{', start)
+    depth = 0
+    for i in range(open_at, len(text)):
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            depth -= 1
+            if depth == 0:
+                return text[open_at + 1:i]
+    raise ValueError('unbalanced braces after offset {0}'.format(start))
+
+
 def gamedata_offsets(path):
+    """Every "linux" offset in every "Offsets" block (any indentation).
+
+    Returns {key: linux offset}; raises on a key given two different values.
+    """
     text = open(path, encoding='latin-1').read()
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+    text = re.sub(r'//[^\n]*', '', text)
     offsets = {}
-    block = re.search(r'"Offsets"\s*\{(.*?)\n\t\t\}', text, re.S)
-    if not block:
-        return offsets
-    for key, body in re.findall(r'"(\w+)"\s*\{([^{}]*)\}', block.group(1)):
-        kv = dict(re.findall(r'"([^"]+)"\s*"([^"]*)"', body))
-        if kv.get('linux', '').isdigit():
-            offsets[key] = int(kv['linux'])
+    for match in re.finditer(r'"Offsets"\s*(?=\{)', text):
+        block = block_after(text, match.end())
+        for key, body in re.findall(r'"(\w+)"\s*\{([^{}]*)\}', block):
+            kv = dict(re.findall(r'"([^"]+)"\s*"([^"]*)"', body))
+            if not kv.get('linux', '').isdigit():
+                continue
+            value = int(kv['linux'])
+            if offsets.get(key, value) != value:
+                raise SystemExit('{0}: {1} has linux offsets {2} and {3}'.format(
+                    path, key, offsets[key], value))
+            offsets[key] = value
     return offsets
 
 
@@ -184,11 +213,22 @@ def main():
     server_so, gamedata = args
     vtables = load_vtables(server_so, {vt for f in CHECKS.values() for vt, _ in f.values()})
     failures = 0
+    checked = 0
+    expected = 0
     for rel, checks in CHECKS.items():
         offsets = gamedata_offsets('{0}/{1}'.format(gamedata, rel))
         for key, (vt, method) in checks.items():
             if key not in offsets:
+                if key in ABSENT_OK:
+                    print('OK: {0} {1} absent (not virtual on v34)'.format(rel, key))
+                    continue
+                # A reindent or rename must not turn into "nothing checked".
+                print('FAIL: {0} {1}: no "linux" offset found'.format(rel, key))
+                failures += 1
+                expected += 1
                 continue
+            expected += 1
+            checked += 1
             pat = re.compile(r'::' + re.escape(method) + ('' if '(' in method else r'\('))
             slots = [i for i, n in enumerate(vtables[vt]) if pat.search(n)]
             got = offsets[key]
@@ -206,10 +246,13 @@ def main():
                 print('FAIL: {0} {1} linux={2}, v34 vtable slot is {3} ({4})'.format(
                     rel, key, got, slots, vtables[vt][slots[0]]))
                 failures += 1
+    if checked == 0 or checked != expected:
+        print('FAIL: checked {0} of {1} expected offsets'.format(checked, expected))
+        failures += 1
     if failures:
         print('css34 vtable check FAILED ({0})'.format(failures))
         return 1
-    print('css34 vtable check PASSED')
+    print('css34 vtable check PASSED ({0} offsets)'.format(checked))
     return 0
 
 
