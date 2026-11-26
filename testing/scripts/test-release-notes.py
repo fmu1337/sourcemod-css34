@@ -86,13 +86,20 @@ class ReleaseNotes(unittest.TestCase):
             tag = self.parts[0]["tag"]
             self.assertEqual(notes(tag, root).returncode, 0)
             data = json.loads((root / "builder/lines.json").read_text())
-            data["known_bad"][tag] = "test: broken"
+            # known_bad names single releases: a broken rebuild can be listed
+            # while its line stays on the same pins (#196).
+            data["known_bad"][tag + "-r3"] = "test: broken"
             (root / "builder/lines.json").write_text(json.dumps(data))
             res = notes(tag + "-r3", root)
             self.assertNotEqual(res.returncode, 0)
-            # lines.py itself refuses a known-bad tag pinned on a line.
-            self.assertIn("FAIL: builder/lines.json: known-bad tag " + tag, res.stderr)
+            self.assertIn("FAIL: {}-r3 is known-bad".format(tag), res.stderr)
             self.assertNotIn("Traceback", res.stderr)
+            self.assertEqual(notes(tag + "-r4", root).returncode, 0)
+            # A known-bad base no longer blocks its -rN fixes.
+            data["known_bad"][tag] = "test: broken"
+            (root / "builder/lines.json").write_text(json.dumps(data))
+            self.assertNotEqual(notes(tag, root).returncode, 0)
+            self.assertEqual(notes(tag + "-r4", root).returncode, 0)
 
 
 def workflow_jobs():

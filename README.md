@@ -71,7 +71,8 @@ MySQL 8.4 / HeatWave.
 
 ## Known-bad releases
 
-Never on a pointer; `known_bad` in `builder/lines.json`:
+Never on a pointer; `known_bad` in `builder/lines.json`. Each entry is one release (the exact tag, `-rN`
+included): a later `-rN` of the same pins is not blocked and gets the next free number.
 
 - `1.12.0.7239-mm1.12.0`, `1.12.0.7245-mm1.12.0`, `1.13.0.7394-mm1.12.0`: missing or wrong v34 gamedata
   (`SDKHook()` → `Hook type not supported on this game`).

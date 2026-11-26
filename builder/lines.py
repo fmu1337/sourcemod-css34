@@ -144,11 +144,11 @@ def load_manifest(path):
         require(isinstance(reason, str) and reason.strip(), "missing known_bad reason for " + tag)
     require(line_parts(data, data["default_line"])["status"] == "active",
             "default_line must be an active CI line")
+    # known_bad names single releases (a base tag is only the first build of
+    # its pins): a line may stay on pins whose base tag is known-bad, the next
+    # build gets -rN (upstream-bump.py next_free_tag), so no pin check here.
     for name in lines:
         part = line_parts(data, name)
-        for tag in [part["tag"]] + part["extra_tags"]:
-            if tag in data["known_bad"] and part["pointer"]:
-                raise ValueError("known-bad tag " + tag + " is pinned on pointer line " + name)
         if "frozen" in lines[name]:
             tag = lines[name]["frozen"]["tag"]
             require(re.fullmatch(re.escape(part["tag"]) + r"(-r[0-9]+)?", tag),

@@ -103,8 +103,9 @@ jobs:
             if [[ "$tag" =~ ^(.+)-r[0-9]+$ ]]; then
               base="${BASH_REMATCH[1]}"
             fi
-            if css34_tag_is_known_bad "$base"; then
-              echo "repoint_tag $base is known-bad and cannot be published as a pointer" >&2
+            # known_bad names single releases: test the exact tag (-rN included).
+            if css34_tag_is_known_bad "$tag"; then
+              echo "repoint_tag $tag is known-bad and cannot be published as a pointer" >&2
               exit 1
             fi
             echo "Repointing line pointer to ${repoint_tag}"
@@ -153,7 +154,7 @@ jobs:
             if [[ "${tag}" =~ ^(.+)-r[0-9]+$ ]]; then
               base="${BASH_REMATCH[1]}"
             fi
-            if css34_tag_is_known_bad "${base}"; then
+            if css34_tag_is_known_bad "${tag}"; then
               known_bad=1
             fi
             line="$(css34_line_for_tag "${base}")" || {
@@ -167,7 +168,7 @@ jobs:
             fi
             if [[ "$known_bad" == 1 ]]; then
               if [[ "$pointer" == 1 ]]; then
-                echo "known-bad tag ${base} cannot be published as a line pointer" >&2
+                echo "known-bad tag ${tag} cannot be published as a line pointer" >&2
                 exit 1
               fi
               pointer=0

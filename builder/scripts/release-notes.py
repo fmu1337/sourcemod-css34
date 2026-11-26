@@ -70,8 +70,9 @@ def render(tag, repo, commit, root=ROOT):
     base, part = line_for_tag(mod, data, tag)
     name = part["line"]
     line = data["lines"][name]
-    if base in data["known_bad"]:
-        raise SystemExit("FAIL: {} is known-bad: {}".format(base, data["known_bad"][base]))
+    # known_bad names single releases (exact tag, -rN included).
+    if tag in data["known_bad"]:
+        raise SystemExit("FAIL: {} is known-bad: {}".format(tag, data["known_bad"][tag]))
     gh = "https://github.com/"
     sm_url = gh + "alliedmodders/sourcemod/commit/" + part["sm_commit"]
     mm_url = gh + "alliedmodders/metamod-source/commit/" + part["mm_commit"]

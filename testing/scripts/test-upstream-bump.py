@@ -174,7 +174,7 @@ class UpstreamBumpTest(unittest.TestCase):
         taken = [sm13_tag, sm13_tag + "-r4", sm13_tag + "-r10", sm13_tag + "-rc1", "x" + sm13_tag + "-r99"]
         self.assertEqual(self.next_tag(data, "sm13-latest", taken).stdout.split(), [sm13_tag + "-r11"])
 
-    def test_next_tag_refuses_lines_that_cannot_release(self):
+    def test_next_tag_refuses_lines_that_cannot_release_and_skips_known_bad(self):
         data = json.loads((ROOT / "builder/lines.json").read_text())
         for line, reason in (("sm11-oldstable", "not a releasable pointer line"),
                              ("sm13-mm20-khook", "not a releasable pointer line"),
@@ -184,10 +184,13 @@ class UpstreamBumpTest(unittest.TestCase):
             self.assertIn(reason, res.stderr)
         bad = json.loads(json.dumps(data))
         sm13_tag = "1.13.0.{}-mm1.12.0".format(data["pins"]["SM_LATEST_13"]["rev"])
+        # known_bad names single releases (#196): a known-bad build is skipped,
+        # the next one gets a new -rN instead of being refused.
         bad["known_bad"][sm13_tag] = "test"
-        res = self.next_tag(bad, "sm13-latest", [], check=False)
-        self.assertNotEqual(res.returncode, 0)
-        self.assertIn("known-bad", res.stderr)
+        self.assertEqual(self.next_tag(bad, "sm13-latest", []).stdout.split(), [sm13_tag + "-r2"])
+        bad["known_bad"][sm13_tag + "-r3"] = "test"
+        self.assertEqual(self.next_tag(bad, "sm13-latest", [sm13_tag + "-r2"]).stdout.split(),
+                         [sm13_tag + "-r4"])
 
 
 class TagWorkflowTest(unittest.TestCase):
