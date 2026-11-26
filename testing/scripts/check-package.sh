@@ -396,6 +396,15 @@ while IFS= read -r -d '' elf; do
       fail=1
     fi
   fi
+  # Build-tree paths other than source file names (__FILE__) are lookup
+  # locations: OpenSSL's OPENSSLDIR / MODULESDIR, the MariaDB plugin dir. On a
+  # server they would read config or load code from /workspace (#195).
+  build_paths="$(strings -a "${elf}" | grep -E '/workspace(/|$)' | grep -vE '\.(c|cc|cpp|h|hpp)$' | sort -u || true)"
+  if [[ -n "${build_paths}" ]]; then
+    echo "FAIL: ${rel} embeds build-tree paths:" >&2
+    printf '%s\n' "${build_paths}" | sed 's/^/  /' >&2
+    fail=1
+  fi
   if readelf -d "${elf}" 2>/dev/null | grep -q 'libstdc++\.so\.6'; then
     if [[ "${base}" == "spcomp" || "${base}" == "oldspcomp" ]]; then
       elf_cxx="$(

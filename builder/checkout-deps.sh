@@ -133,7 +133,11 @@ install_openssl() {
     cd "$DEPS/openssl-${OPENSSL_VERSION}"
     export PERL5LIB="$CSS34_BUILD_PERL5LIB"
     bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/patches/patch-openssl-getentropy.py" "$PWD"
-    ./Configure linux-elf no-shared no-tests no-dso -fPIC --prefix="$prefix" --libdir=lib
+    # OPENSSLDIR / ENGINESDIR / MODULESDIR are compiled into dbi.mysql.ext.so:
+    # configure for the system locations a game server has (root-owned),
+    # never the build tree (#195), and install into $prefix via DESTDIR.
+    ./Configure linux-elf no-shared no-tests no-dso -fPIC \
+      --prefix=/usr/local --openssldir=/etc/ssl --libdir=lib
     make -j"$(nproc)"
     # Exercise the retained OS entropy path; never accept a seedless build.
     ./apps/openssl rand -hex 32 >/dev/null
@@ -142,7 +146,10 @@ install_openssl() {
       echo "FAIL: OpenSSL still references getentropy" >&2
       exit 1
     fi
-    make install_sw
+    rm -rf "$DEPS/openssl-stage"
+    make install_sw DESTDIR="$DEPS/openssl-stage"
+    mv "$DEPS/openssl-stage/usr/local" "$prefix"
+    rm -rf "$DEPS/openssl-stage"
   )
   rm -rf "$DEPS/openssl-${OPENSSL_VERSION}" "$tarball"
   deps_stamp "$prefix"
@@ -169,11 +176,14 @@ install_mariadb_connector_linux() {
     "$tarball" "a84bba97e59b6a322637a189964d4fd72bd8d92f2d22a9f8d6a5f0657c821e97"
   rm -rf "$src" "$prefix"
   tar -C "$DEPS" -xzf "$tarball"
+  # The plugin directory (dynamic auth plugins) is compiled in from the
+  # install prefix: use the system one, not the build tree (#195). Headers are
+  # installed into $prefix below with an explicit prefix.
   cmake -S "$src" -B "$src/build" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_C_COMPILER="${CC:-gcc}" \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-    -DCMAKE_INSTALL_PREFIX="$prefix" \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
     -DINSTALL_LAYOUT=DEFAULT \
     -DINSTALL_LIBDIR=lib \
     -DWITH_UNIT_TESTS=OFF \

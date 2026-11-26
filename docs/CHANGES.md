@@ -57,7 +57,8 @@ with reproduction steps are at
 - **One Metamod loader on Linux**: the package ships `server_i486.so` only. Episode1 appends `_i486.so` to
   the `metamod.vdf` path; `server.so` is MM's loader for L4D2 and newer (`builder/package-metamod.sh`).
 - **Build for old Linux**: manylinux2014 i686 (glibc 2.17, GCC 10), static hidden libstdc++, every ELF
-  checked for GLIBC ≤ 2.17 and unversioned imports (`testing/unversioned-imports.txt`).
+  checked for GLIBC ≤ 2.17 and unversioned imports (`testing/unversioned-imports.txt`), and for build-tree
+  lookup paths (sm13 OpenSSL uses `/etc/ssl`, MariaDB plugins `/usr/local/lib/mariadb/plugin`).
 - **sm13 MySQL stack**: OpenSSL 3.5 LTS and MariaDB Connector/C 3.4.9 built from pinned sources
   (AlliedModders' connector binary is built against OpenSSL 1.1); OpenSSL's libc `getentropy` probe
   compiled out (glibc 2.17).
