@@ -54,6 +54,7 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     outputs:
       build: ${{ steps.plan.outputs.build }}
       # Full rows by image name; `build` holds only the names (job names).
@@ -209,6 +210,7 @@ jobs:
       always() && needs.plan.outputs.count != '0' && needs.plan.outputs.push == 'true' &&
       needs.build.result != 'cancelled' && needs.build.result != 'skipped'
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

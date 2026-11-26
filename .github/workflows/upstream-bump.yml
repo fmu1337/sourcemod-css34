@@ -42,14 +42,18 @@ on:
 permissions:
   contents: read
 
+# Release runs are grouped per pushed commit: one shared group holds one
+# running + one pending run, and a third quick merge cancelled the pending one,
+# so that line never got its tag (#199). Each push diffs its own before..sha.
 concurrency:
-  group: upstream-bump-${{ github.event_name == 'push' && 'release' || 'bump' }}
+  group: upstream-bump-${{ github.event_name == 'push' && format('release-{0}', github.sha) || 'bump' }}
   cancel-in-progress: false
 
 jobs:
   plan:
     if: github.event_name != 'push'
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     outputs:
       targets: ${{ steps.plan.outputs.targets }}
     steps:
@@ -264,6 +268,7 @@ jobs:
   release:
     if: github.event_name == 'push'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -320,6 +325,19 @@ jobs:
           set -euo pipefail
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           for tag in $TAGS; do
+            # A re-run after a partial push must not add <base>-r2 next to the
+            # tag it already pushed (same guard as release-tag.yml).
+            base="${tag%-r[0-9]*}"
+            skip=""
+            while read -r other; do
+              if [[ "$other" == "$base" || "$other" =~ ^${base//./\\.}-r[0-9]+$ ]]; then
+                skip="$other"
+              fi
+            done < <(git tag --points-at "$GITHUB_SHA")
+            if [[ -n "$skip" ]]; then
+              echo "::notice::${GITHUB_SHA:0:8} already carries ${skip}; not pushing ${tag}"
+              continue
+            fi
             git tag "$tag" "$GITHUB_SHA"
             git push origin "refs/tags/${tag}"
             echo "::notice::pushed ${tag} at ${GITHUB_SHA:0:8}"

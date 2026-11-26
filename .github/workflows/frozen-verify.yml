@@ -17,6 +17,10 @@ on:
     paths:
       - ".github/workflows/frozen-verify.yml"
       - "testing/scripts/verify-frozen-line.py"
+      # What a frozen line's check depends on (#199).
+      - "builder/lines.json"
+      - "builder/lines.py"
+      - "testing/scripts/release-smoke.sh"
 
 permissions:
   contents: read
@@ -30,6 +34,7 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     outputs:
       frozen: ${{ steps.m.outputs.frozen }}
     steps:
@@ -47,6 +52,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.frozen != '[]'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
