@@ -56,7 +56,7 @@ passed smoke and the DHooks probe.
 - **Upstream SourceMod does not run on it.** We would ship a fork of an unmerged branch plus our own
   merge of `master`, redone on every bump. Weekly bump PRs (`upstream-bump.yml`) cannot do that.
 - **Old Metamod plugins break.** Metamod 2.0 refuses SourceHook-era plugins; v34 servers still run
-  PLAPI 7–12 plugins, which `sm12-latest` / `sm13-latest` keep running through the legacy-plugin bridge.
+  PLAPI 7–11 plugins, which `sm12-latest` / `sm13-latest` keep running through the legacy-plugin bridge.
 - **x86 is not an upstream target.** Ten bugs on the way were ours to find and fix (list below); every
   upstream change to KHook or DHooks could break 32-bit again, and only we would notice.
 - **Cost.** Its own patch layer, merge tooling, Windows fixes and CI rows, for a line almost nobody installs.

@@ -1,5 +1,5 @@
 /**
- * css34: run PLAPI 7-12 Metamod plugins (built for MM 1.4-1.10) next to the
+ * css34: run PLAPI 7-11 Metamod plugins (built for MM 1.4-1.10) next to the
  * modern core.
  *
  * Upstream MM 1.12 refuses such a plugin ("Older Metamod version required,
@@ -10,8 +10,13 @@
  * work as for any other plugin. Without metamod.1.ep1 the plugin fails with
  * the upstream message, as before.
  *
+ * Forced unloads pass through to the legacy core, a proxy is freed with its
+ * plugin, a plugin's EnableVSPListener() reaches the modern core's VSP
+ * listener (OnVSPListening and GetVSPInfo() work), and the legacy core shuts
+ * down (plugins unloaded, SourceHook v4 hooks removed) when Metamod does.
+ *
  * The css34_old_* functions are exported by builder/patches/mm-oldbridge/
- * css34_nested.cpp in the legacy core (bridge ABI version 1).
+ * css34_nested.cpp in the legacy core (bridge ABI version 2).
  */
 
 #include <stdio.h>
@@ -27,7 +32,7 @@
 #else
 #define CSS34_OLD_CORE "metamod.1.ep1.so"
 #endif
-#define CSS34_OLD_BRIDGE_API 1
+#define CSS34_OLD_BRIDGE_API 2
 
 using namespace SourceMM;
 
@@ -41,6 +46,10 @@ namespace
 	typedef int (*old_pause_t)(int, int, char *, size_t);
 	typedef int (*old_running_t)(int, char *, size_t);
 	typedef const char *(*old_info_t)(int, int);
+	typedef void (*old_vsp_request_t)();
+	typedef void (*old_set_vsp_request_t)(old_vsp_request_t);
+	typedef void (*old_vsp_t)(void *, int);
+	typedef void (*old_shutdown_t)();
 
 	struct OldCore
 	{
@@ -55,7 +64,27 @@ namespace
 		old_pause_t pause;
 		old_running_t running;
 		old_info_t info;
+		old_set_vsp_request_t set_vsp_request;
+		old_vsp_t vsp;
+		old_shutdown_t shutdown;
 	} g_OldCore;
+
+	/* A legacy plugin called EnableVSPListener(): pass on the modern core's
+	 * VSP callbacks now, or start its listener; NotifyVSPListening forwards
+	 * them once it listens. */
+	void OldVspRequest()
+	{
+		int version = 0;
+		IServerPluginCallbacks *callbacks = g_Metamod.GetVSPInfo(&version);
+		if (callbacks)
+		{
+			g_OldCore.vsp(callbacks, version);
+		}
+		else
+		{
+			g_Metamod.EnableVSPListener();
+		}
+	}
 
 	template <typename T>
 	bool Resolve(T &fn, const char *name)
@@ -111,7 +140,10 @@ namespace
 			|| !Resolve(g_OldCore.unload, "css34_old_unload")
 			|| !Resolve(g_OldCore.pause, "css34_old_pause")
 			|| !Resolve(g_OldCore.running, "css34_old_running")
-			|| !Resolve(g_OldCore.info, "css34_old_info"))
+			|| !Resolve(g_OldCore.info, "css34_old_info")
+			|| !Resolve(g_OldCore.set_vsp_request, "css34_old_set_vsp_request")
+			|| !Resolve(g_OldCore.vsp, "css34_old_vsp")
+			|| !Resolve(g_OldCore.shutdown, "css34_old_shutdown"))
 		{
 			UTIL_Format(g_OldCore.failure, sizeof(g_OldCore.failure),
 				"%s has no css34 bridge (bridge API %d required)", CSS34_OLD_CORE, CSS34_OLD_BRIDGE_API);
@@ -127,16 +159,53 @@ namespace
 			return false;
 		}
 
+		g_OldCore.set_vsp_request(&OldVspRequest);
+		int version = 0;
+		IServerPluginCallbacks *callbacks = g_Metamod.GetVSPInfo(&version);
+		if (callbacks)
+		{
+			g_OldCore.vsp(callbacks, version);
+		}
+
 		g_OldCore.ready = true;
-		g_Metamod.ConPrintf("[META] Started %s for PLAPI 7-12 plugins\n", CSS34_OLD_CORE);
+		g_Metamod.ConPrintf("[META] Started %s for PLAPI 7-11 plugins\n", CSS34_OLD_CORE);
 		return true;
 	}
+
+	/* Set by css34_UnloadPlugin for the Unload() call it makes. */
+	bool g_UnloadForce = false;
+
+	class OldPluginProxy;
+	OldPluginProxy *g_Proxies = NULL;
 
 	class OldPluginProxy : public ISmmPlugin
 	{
 	public:
-		explicit OldPluginProxy(int id) : m_Id(id)
+		explicit OldPluginProxy(int id) : m_Id(id), m_Next(g_Proxies)
 		{
+			g_Proxies = this;
+		}
+		virtual ~OldPluginProxy()
+		{
+			for (OldPluginProxy **p = &g_Proxies; *p; p = &(*p)->m_Next)
+			{
+				if (*p == this)
+				{
+					*p = m_Next;
+					break;
+				}
+			}
+		}
+		static OldPluginProxy *Find(ISmmPlugin *api)
+		{
+			for (OldPluginProxy *p = g_Proxies; p; p = p->m_Next)
+			{
+				if (p == api)
+				{
+					return p;
+				}
+			}
+			return NULL;
 		}
 		virtual int GetApiVersion()
 		{
@@ -156,7 +225,7 @@ namespace
 		}
 		virtual bool Unload(char *error, size_t maxlen)
 		{
-			return g_OldCore.unload(m_Id, 0, error, maxlen) != 0;
+			return g_OldCore.unload(m_Id, g_UnloadForce ? 1 : 0, error, maxlen) != 0;
 		}
 		virtual bool Pause(char *error, size_t maxlen)
 		{
@@ -176,7 +245,43 @@ namespace
 		virtual const char *GetLogTag() { return g_OldCore.info(m_Id, 7); }
 	private:
 		int m_Id;
+		OldPluginProxy *m_Next;
 	};
+}
+
+bool css34_UnloadPlugin(CPluginManager::CPlugin *pl, bool force, char *error, size_t maxlen)
+{
+	g_UnloadForce = force;
+	bool ok = pl->m_API->Unload(error, maxlen);
+	g_UnloadForce = false;
+	return ok;
+}
+
+void css34_ReleaseOldPlugin(CPluginManager::CPlugin *pl)
+{
+	OldPluginProxy *proxy = OldPluginProxy::Find(pl->m_API);
+	if (proxy)
+	{
+		pl->m_API = NULL;
+		delete proxy;
+	}
+}
+
+void css34_OldVspListening(IServerPluginCallbacks *callbacks, int version)
+{
+	if (g_OldCore.ready && callbacks)
+	{
+		g_OldCore.vsp(callbacks, version);
+	}
+}
+
+void css34_ShutdownOldCore()
+{
+	if (g_OldCore.ready)
+	{
+		g_OldCore.ready = false;
+		g_OldCore.shutdown();
+	}
 }
 
 bool css34_IsOldPluginApi(int api)

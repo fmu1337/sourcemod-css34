@@ -356,7 +356,7 @@ def line_parts(data, name):
         res["secondary_mm_rev"] = s_mm["rev"]
         res["secondary_mm_mode"] = s_mm["mode"]
         res["secondary_mm_expect"] = mm_version(s_mm["mode"])
-    # The MM 1.10 legacy core the MM 1.12 package ships for PLAPI 7-12 plugins.
+    # The MM 1.10 legacy core the MM 1.12 package ships for PLAPI 7-11 plugins.
     bridge = line.get("bridge_metamod")
     if bridge is not None:
         res["bridge_mm_commit"] = data["pins"][bridge]["commit"]

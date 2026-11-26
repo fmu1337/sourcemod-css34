@@ -2,7 +2,7 @@
  * css34: nested legacy core (metamod.1.ep1 from MM 1.10 core-legacy).
  *
  * metamod.2.ep1 (MM 1.12) loads this library on demand and hands it every
- * plugin that reports PLAPI 7-12. The legacy core then runs next to the
+ * plugin that reports PLAPI 7-11. The legacy core then runs next to the
  * modern one in the same process:
  *   - it starts like the VSP bridge does (AlternatelyLoadMetamod with the
  *     engine and server factories), hooking IServerGameDLL with SourceHook v4;
@@ -10,7 +10,11 @@
  *     its own meta / metamod_version / mm_* commands and does not hook the
  *     client "meta" command: the modern core owns all of those;
  *   - plugins are loaded, listed, paused and unloaded through the C functions
- *     below; the modern core shows each one as a proxy in "meta list".
+ *     below; the modern core shows each one as a proxy in "meta list";
+ *   - EnableVSPListener() asks the modern core, which hands its VSP callbacks
+ *     over with css34_old_vsp (OnVSPListening, GetVSPInfo);
+ *   - css34_old_shutdown unloads its plugins and removes its SourceHook v4
+ *     hooks when the modern core shuts down.
  *
  * The functions are this project's own ABI (version CSS34_OLD_BRIDGE_API);
  * both sides are built from this repository.
@@ -22,12 +26,24 @@
 #include "CSmmAPI.h"
 #include "util.h"
 
-#define CSS34_OLD_BRIDGE_API 1
+#define CSS34_OLD_BRIDGE_API 2
 
 using namespace SourceMM;
 
 bool g_bCss34Nested = false;
 static bool g_bCss34NestedAllLoaded = false;
+static bool g_bCss34NestedDown = false;
+typedef void (*css34_vsp_request_t)();
+static css34_vsp_request_t g_Css34VspRequest = NULL;
+
+/* CSmmAPI::EnableVSPListener in nested mode (apply-mmsource-oldbridge.sh). */
+void css34_nested_request_vsp()
+{
+	if (g_Css34VspRequest && !g_bCss34NestedDown)
+	{
+		g_Css34VspRequest();
+	}
+}
 
 static void css34_copy_error(char *error, size_t maxlen, const char *msg)
 {
@@ -82,9 +98,9 @@ SMM_API void css34_old_all_loaded()
 /* Returns the legacy plugin id (>= Pl_MinId) or -1 with error set. */
 SMM_API int css34_old_load(const char *file, int late, char *error, size_t maxlen)
 {
-	if (!g_bCss34Nested)
+	if (!g_bCss34Nested || g_bCss34NestedDown)
 	{
-		css34_copy_error(error, maxlen, "the legacy core is not initialized");
+		css34_copy_error(error, maxlen, "the legacy core is not running");
 		return -1;
 	}
 	if (late)
@@ -171,4 +187,34 @@ SMM_API const char *css34_old_info(int id, int field)
 SMM_API int css34_old_count()
 {
 	return (int)g_PluginMngr.GetPluginCount();
+}
+
+SMM_API void css34_old_set_vsp_request(css34_vsp_request_t fn)
+{
+	g_Css34VspRequest = fn;
+}
+
+/* The modern core's VSP callbacks: what a vsp_bridge load would have set. */
+SMM_API void css34_old_vsp(void *callbacks, int version)
+{
+	if (!g_bCss34Nested || g_bCss34NestedDown || !callbacks)
+	{
+		return;
+	}
+	g_pRealVspCallbacks = (IServerPluginCallbacks *)callbacks;
+	g_vsp_version = (unsigned int)version;
+	g_PluginMngr.SetVSPAsLoaded();
+}
+
+/* Metamod shuts down: unload every legacy plugin and remove the SourceHook v4
+ * hooks. The legacy core registered no cvars of its own (the modern core owns
+ * them), so this is UnloadMetamod without the shutting-down cvar unlink. */
+SMM_API void css34_old_shutdown()
+{
+	if (!g_bCss34Nested || g_bCss34NestedDown)
+	{
+		return;
+	}
+	g_bCss34NestedDown = true;
+	UnloadMetamod(false);
 }

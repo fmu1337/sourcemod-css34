@@ -260,6 +260,7 @@ if [[ -n "${LEGACY_PROBE:-}" ]]; then
   echo "==== css34_legacy_probe.log ===="; cat "${PROBE_LOG}" 2>/dev/null || true
   grep -qx 'load api=11 late=0' <(tr -d '\r' <"${PROBE_LOG}" 2>/dev/null) || fail "the PLAPI 11 probe did not load through metamod.1.ep1"
   grep -q '^level_init map=' <(tr -d '\r' <"${PROBE_LOG}" 2>/dev/null) || fail "the probe's SourceHook v4 LevelInit hook did not fire"
+  grep -qx 'vsp_listening ok=1' <(tr -d '\r' <"${PROBE_LOG}" 2>/dev/null) || fail "the probe's EnableVSPListener got no OnVSPListening (legacy-plugin bridge)"
   echo "==> Legacy-plugin bridge OK on Windows"
 fi
 
