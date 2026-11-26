@@ -6,9 +6,9 @@
 
 srcds_zip_sha256() {
   case "$1" in
-    srcds_css34_4044.zip) echo "PIN_ME" ;;
-    srcds_css34_l_a.zip) echo "PIN_ME" ;;
-    srcds_css34_l_eSTEAMATiON.zip) echo "PIN_ME" ;;
+    srcds_css34_4044.zip) echo 669d3a6c3a65467207ed0e88a4084e1dc5e526eb1cbfcf578627a51d8a7d979d ;;
+    srcds_css34_l_a.zip) echo a5362cf0fb6f4acb3096ba3ed03b2b03f114bf8faf365b0d6aa3bdc71d091366 ;;
+    srcds_css34_l_eSTEAMATiON.zip) echo 7f284b321d093cacee86937965664000fe59d093692d1b6a0fc4836fefc48d85 ;;
     srcds_css34_w_a.zip) echo "PIN_ME" ;;
     *) return 1 ;;
   esac
