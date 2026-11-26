@@ -5,7 +5,8 @@ Usage: check-css34-vtables.py <server_i486.so> <gamedata dir> [--dump CLASS]
 
 Reads the CCSPlayer (and CWeaponCSBase) vtables straight from the v34 server
 binary, which still ships symbols, and verifies every "linux" offset in
-sdktools.games/game.cstrike.txt and sdkhooks.games/game.cstrike.txt whose
+sdktools.games/game.cstrike.txt, sdkhooks.games/game.cstrike.txt and
+core.games/engine.ep1.txt (DispatchKeyValue) whose
 method is virtual on v34. Offsets for methods that are not virtual on v34
 (e.g. GetMaxHealth) are reported as failures because SM would hook or call an
 unrelated slot. Pure python3 stdlib (no pyelftools) so it runs on CI hosts.
@@ -38,6 +39,10 @@ CHECKS = {
         'PlayerRunCmd': ('_ZTV9CCSPlayer', 'PlayerRunCommand'),
         'GiveAmmo': ('_ZTV9CCSPlayer', 'GiveAmmo'),
         'GetAttachment': ('_ZTV9CCSPlayer', 'GetAttachment(int, matrix3x4_t&)'),
+    },
+    # Core reads its own copy for AllocPooledString (SetEntPropString, #192).
+    'core.games/engine.ep1.txt': {
+        'DispatchKeyValue': ('_ZTV9CCSPlayer', 'KeyValue(char const*, char const*)'),
     },
     'sdkhooks.games/game.cstrike.txt': {
         'Blocked': ('_ZTV9CCSPlayer', 'Blocked'),

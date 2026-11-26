@@ -27,6 +27,15 @@
 				"windows"	"4"	
 				"linux"		"4"
 			}
+
+			/* For AllocPooledString (SetEntPropString on string_t fields).
+			 * CBaseEntity::KeyValue(const char *, const char *); same slot as
+			 * sdktools.games/game.cstrike.txt, checked by check-css34-vtables.py. */
+			"DispatchKeyValue"
+			{
+				"windows"	"31"
+				"linux"		"30"
+			}
 		}
 
 		"Keys"

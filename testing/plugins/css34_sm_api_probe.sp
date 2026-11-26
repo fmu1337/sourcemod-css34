@@ -591,6 +591,15 @@ RunEntityProbes(bot)
 
         new weapon = GetEntPropEnt(bot, Prop_Send, "m_hActiveWeapon");
         ProbeResult(weapon == -1 || IsValidEntity(weapon), "entity", "GetEntPropEnt_weapon");
+
+        // string_t field: core needs DispatchKeyValue in core.games (#192).
+        new String:oldName[64];
+        new String:readName[64];
+        GetEntPropString(bot, Prop_Data, "m_iName", oldName, sizeof(oldName));
+        SetEntPropString(bot, Prop_Data, "m_iName", "css34_probe_name");
+        GetEntPropString(bot, Prop_Data, "m_iName", readName, sizeof(readName));
+        ProbeResult(StrEqual(readName, "css34_probe_name"), "entity", "SetEntPropString_string_t");
+        SetEntPropString(bot, Prop_Data, "m_iName", oldName);
     }
 }
 

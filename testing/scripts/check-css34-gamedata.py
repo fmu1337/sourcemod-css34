@@ -104,15 +104,22 @@ LOOKUP = re.compile(r'Get(?:KeyValue|Offset|MemSig|Address)\("([^"]+)"')
 SOURCE_DIRS = ('core', 'extensions/sdktools', 'extensions/sdkhooks', 'extensions/cstrike')
 
 
-def source_keys(source: Path) -> set[str]:
-    keys = set()
+# Core reads only its own gameconf (core.games/*); a key that exists only in an
+# extension's file is still missing for core (DispatchKeyValue, #192).
+# Extensions may also see core keys, so they are checked against all files.
+GAMEDATA_FOR_SOURCE = {'core': 'core.games/'}
+
+
+def source_keys(source: Path) -> dict[str, set[str]]:
+    keys = {}
     for rel in SOURCE_DIRS:
         directory = source / rel
         if not directory.is_dir():
             raise ValueError(f'missing SourceMod source directory: {directory}')
+        found = keys.setdefault(rel, set())
         for path in directory.rglob('*'):
             if path.suffix in ('.cpp', '.h'):
-                keys.update(LOOKUP.findall(path.read_text(encoding='latin-1')))
+                found.update(LOOKUP.findall(path.read_text(encoding='latin-1')))
     return keys
 
 
@@ -165,11 +172,19 @@ def main() -> int:
         except ValueError as exc:
             print(f'FAIL: {exc}', file=sys.stderr)
             return 1
-        all_data = '\n'.join(path.read_text(encoding='latin-1') for path in root.rglob('*.txt'))
-        uncovered = sorted(
-            key for key in referenced
-            if key not in UNSUPPORTED_SOURCE_KEYS and f'"{key}"' not in all_data
-        )
+        texts = {
+            path.relative_to(root).as_posix(): path.read_text(encoding='latin-1')
+            for path in root.rglob('*.txt')
+        }
+        uncovered = set()
+        for rel, keys in referenced.items():
+            prefix = GAMEDATA_FOR_SOURCE.get(rel, '')
+            data = '\n'.join(text for name, text in texts.items() if name.startswith(prefix))
+            uncovered.update(
+                f'{key} ({prefix or "any"})' for key in keys
+                if key not in UNSUPPORTED_SOURCE_KEYS and f'"{key}"' not in data
+            )
+        uncovered = sorted(uncovered)
         if uncovered:
             print('FAIL: unclassified SourceMod gamedata lookups: ' + ', '.join(uncovered), file=sys.stderr)
             failed = True

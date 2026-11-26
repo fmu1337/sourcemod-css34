@@ -51,7 +51,8 @@ with reproduction steps are at
 - **CS:S v34 gamedata** (`builder/assets/gamedata/`, checked by `check-css34-gamedata.py`): v34 vtable
   offsets for SDKHooks / SDKTools (upstream's are for Steam CS:S and crash), `HintTextPreByte` (without
   it the v34 client shows no hint text), `HudTextMsg` kept (ClientMod draws it; the stock client may not),
-  no `GetMaxHealth` hook (not virtual on v34; read `m_iMaxHealth` instead), `VPhysicsUpdate` 143.
+  no `GetMaxHealth` hook (not virtual on v34; read `m_iMaxHealth` instead), `VPhysicsUpdate` 143,
+  `DispatchKeyValue` in the core gamedata (`SetEntPropString` on `string_t` fields such as `m_iName`).
 - **Legacy-plugin bridge** (`builder/patches/mm-oldbridge/`): every MM 1.12 package also ships the
   MM 1.10.7 core `metamod.1.ep1`, and MM 1.12 hands PLAPI 7–12 plugins from `metaplugins.ini` to it.
 - **One Metamod loader on Linux**: the package ships `server_i486.so` only. Episode1 appends `_i486.so` to
