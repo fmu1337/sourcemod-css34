@@ -33,7 +33,11 @@ for line in sys.stdin:
         else:
             response = '[SM] Loaded extension ' + name + ' successfully'
     if cmd == 'quit':
-        if os.environ['MODE'] == 'segv':
+        if os.environ['MODE'] in ('stock', 'stock-then-more'):
+            print('utlmemory.h (321) : Assertion Failed: IsIdxValid(i)', flush=True)
+            if os.environ['MODE'] == 'stock-then-more':
+                print('[SM] something else after the assertion', flush=True)
+        if os.environ['MODE'] in ('segv', 'stock', 'stock-then-more'):
             import signal
             os.kill(os.getpid(), signal.SIGSEGV)
         if os.environ['MODE'] == 'hang':
@@ -68,6 +72,34 @@ class ConsoleProbe(unittest.TestCase):
                 commands = (root / 'commands').read_text().splitlines()
                 self.assertEqual(commands[-3:], ['sm exts list', 'sm plugins list', 'quit'])
                 self.assertIn('sm exts load regex.ext', commands)
+
+    def run_quit(self, mode):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake = root / 'srcds'
+            fake.write_text(FAKE)
+            fake.chmod(0o755)
+            wrapper = root / 'test.exp'
+            wrapper.write_text('rename sleep real_sleep\nproc sleep {seconds} {}\n'
+                               'source {' + str(PROBE) + '}\n')
+            env = dict(os.environ, SERVER_DIR=tmp, SRCDS_BINARY=str(fake),
+                       COMMAND_LOG=str(root / 'commands'), MODE=mode,
+                       CONSOLE_PROBE_LOG=str(root / 'console.log'),
+                       CONSOLE_PROBE_TIMEOUT='1', QUIT_TIMEOUT='2',
+                       LD_LIBRARY_PATH=os.environ.get('LD_LIBRARY_PATH', ''))
+            return subprocess.run([os.environ.get('EXPECT', 'expect'), str(wrapper)],
+                                  env=env, capture_output=True, text=True, timeout=30)
+
+    def test_stock_engine_shutdown_crash_passes(self):
+        # The vanilla v34 engine ends quit with this assertion and SIGSEGV.
+        result = self.run_quit('stock')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("stock engine's shutdown crash", result.stderr)
+
+    def test_crash_after_other_output_fails(self):
+        result = self.run_quit('stock-then-more')
+        self.assertEqual(result.returncode, 11, result.stdout + result.stderr)
+        self.assertIn('died in shutdown', result.stderr)
 
     def test_crash_or_hang_at_quit_fails(self):
         # A segfault or a hang in shutdown used to exit 0 (#193).
