@@ -166,6 +166,20 @@ class SslOptions(unittest.TestCase):
         natives = section(CORE, 'core/logic/smn_database.cpp')
         self.assertIn('DBConnectOptionsScope scope(&info, &options);', natives)
 
+    def test_clientprefs_copy_keeps_keys(self):
+        # clientprefs connects with its own copy of the databases.cfg entry
+        # (DBInfo = *info); without a copy registration the driver found no
+        # ssl_mode and connected in plaintext (#191).
+        header = new_file(CORE, 'public/IDBConnectOptions.h')
+        self.assertIn('#define SMINTERFACE_DBCONNECTOPTIONS_VERSION\t2', header)
+        self.assertIn('virtual bool CopyConnectOptions(const DatabaseInfo *copy, const DatabaseInfo *source) =0;', header)
+        self.assertIn('virtual void RemoveConnectOptions(const DatabaseInfo *copy) =0;', header)
+        builder = section(CORE, 'core/logic/DatabaseConfBuilder.cpp')
+        self.assertIn('m_Copies.find(info)', builder)
+        prefs = section(CORE, 'extensions/clientprefs/extension.cpp')
+        self.assertIn('CopyConnectOptions(&DBInfo, info);', prefs)
+        self.assertIn('RemoveConnectOptions(&DBInfo);', prefs)
+
     def test_sm12_has_no_tls_options(self):
         # SM 1.12's MySQL 5.6 client bundles yaSSL (TLS <= 1.1, no
         # caching_sha2_password): MySQL 8.4 / HeatWave need sm13.
