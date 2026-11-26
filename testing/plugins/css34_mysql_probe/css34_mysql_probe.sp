@@ -40,6 +40,8 @@ public void OnPluginStart()
 	RegServerCmd("css34_mysql_probe_async", Command_ProbeAsync, "<label> <databases.cfg entry>: Database.Connect, query, log");
 	RegServerCmd("css34_mysql_probe_custom", Command_ProbeCustom,
 		"<label> <host> <user> <pass> <ssl_mode> [ssl_ca]: SQL_ConnectCustom, query, log");
+	RegServerCmd("css34_mysql_probe_table", Command_ProbeTable,
+		"<label> <databases.cfg entry> <table>: log whether the entry's database has the table");
 }
 
 static void Report(const char[] label, const char[] format, any ...)
@@ -204,6 +206,45 @@ public Action Command_ProbeCustom(int args)
 		return Plugin_Handled;
 	}
 	Describe(label, db);
+	delete db;
+	return Plugin_Handled;
+}
+
+// clientprefs creates sm_cookies once its own connection is up; the account
+// it uses is REQUIRE SSL, so the table proves it connected with TLS (#191).
+public Action Command_ProbeTable(int args)
+{
+	char label[64], conf[64], table[64], error[256], query[256];
+	if (args != 3)
+	{
+		Report("-", "FAIL usage: css34_mysql_probe_table <label> <databases.cfg entry> <table>");
+		return Plugin_Handled;
+	}
+	GetCmdArg(1, label, sizeof(label));
+	GetCmdArg(2, conf, sizeof(conf));
+	GetCmdArg(3, table, sizeof(table));
+
+	Database db = SQL_Connect(conf, false, error, sizeof(error));
+	if (db == null)
+	{
+		Report(label, "FAIL connect %s: %s", conf, error);
+		return Plugin_Handled;
+	}
+	char escaped[160];
+	db.Escape(table, escaped, sizeof(escaped));
+	Format(query, sizeof(query),
+		"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '%s'", escaped);
+	DBResultSet rs = SQL_Query(db, query);
+	if (rs == null)
+	{
+		SQL_GetError(db, error, sizeof(error));
+		Report(label, "FAIL query: %s", error);
+	}
+	else
+	{
+		Report(label, "table %s=%d", table, rs.FetchRow() ? rs.FetchInt(0) : -1);
+		delete rs;
+	}
 	delete db;
 	return Plugin_Handled;
 }

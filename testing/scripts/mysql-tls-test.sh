@@ -129,11 +129,16 @@ entry css34_notls_required "${notls_host}" css34_plain ssl_mode required
 entry css34_notls_verify "${notls_host}" css34_plain ssl_mode verify_ca ssl_ca "${ca}"
 entry css34_mdb_default "${MYSQL_TLS_HOST}" css34_plain
 entry css34_mdb_identity "${MYSQL_TLS_HOST}" css34_tls ssl_mode verify_identity ssl_ca "${ca}"
+# clientprefs copies its entry and connects with the copy (#191); the account is
+# REQUIRE SSL, so its keys must survive the copy. Replaces the stock sqlite entry.
+entry clientprefs "${mysql_host}" css34_tls ssl_mode verify_identity ssl_ca "${ca}" database css34_prefs
 # Add the entries before the closing brace of "Databases". SourceMod ships
 # databases.cfg with CRLF line ends, and mawk 1.3.3 (debian:8, ubuntu:14.04) has
 # no [[:space:]]: spell the blanks out, \r included.
+# The stock "clientprefs" entry is renamed: the first entry of a name wins.
 ENTRIES="${entries}" awk '
-  { lines[NR] = $0 }
+  { if ($0 ~ /^[ \t]*"clientprefs"[ \t\r]*$/) sub(/"clientprefs"/, "\"css34_stock_clientprefs\"")
+    lines[NR] = $0 }
   END {
     last = 0
     for (i = NR; i > 0; i--) if (lines[i] ~ /^[ \t\r]*}[ \t\r]*$/) { last = i; break }
@@ -173,6 +178,9 @@ cases=(
   "notls_verify|css34_mysql_probe notls_verify css34_notls_verify|FAIL connect css34_notls_verify: \[2026\]: .*SSL is required, but the server does not support it"
   "mdb_default|css34_mysql_probe mdb_default css34_mdb_default|ok driver=mysql result=css34-42 server=[^ ]*MariaDB[^ ]* charset=utf8mb4 ssl_version='' ssl_cipher=''"
   "mdb_identity|css34_mysql_probe mdb_identity css34_mdb_identity|${mdb_tls}"
+  # clientprefs' own connection (a copy of its entry) created its table (#191).
+  "prefs_tls|css34_mysql_probe prefs_tls clientprefs|${tls}"
+  "prefs_table|css34_mysql_probe_table prefs_table clientprefs sm_cookies|table sm_cookies=1"
 )
 commands=()
 for c in "${cases[@]}"; do

@@ -90,6 +90,9 @@ SQL
   cat >"$mysql_init" <<'SQL'
 CREATE USER 'css34_tls'@'%' IDENTIFIED WITH caching_sha2_password BY 'css34-tls-probe' REQUIRE SSL;
 CREATE USER 'css34_plain'@'%' IDENTIFIED WITH caching_sha2_password BY 'css34-plain-probe';
+-- clientprefs connects here as css34_tls (REQUIRE SSL) and creates its tables.
+CREATE DATABASE css34_prefs;
+GRANT ALL ON css34_prefs.* TO 'css34_tls'@'%';
 SQL
   chmod 0644 "$init" "$mysql_init"
   docker_cmd rm -f "$name" "$mysql_name" "$notls_name" >/dev/null 2>&1 || true

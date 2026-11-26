@@ -22,7 +22,7 @@ with reproduction steps are at
 | `0005-sourcemm-api-safe-iface` | a NULL interface factory crashes at load | check for NULL, report the missing interface | — |
 | `0006-gcc10-warnings` | `MIN()` breaks `-Werror` on GCC 10 | replace it in two units | — |
 | `0007-css34-versioning` | shallow clones give a wrong build number | build number from `lines.json`; `CSS34 pack:` line in `sm version` | — |
-| `0008-dbi-connect-options` (sm13 only) | core passes only the fixed `DatabaseInfo` fields to a DB driver | `IDBConnectOptions`: drivers can read any key of a `databases.cfg` entry | — |
+| `0008-dbi-connect-options` (sm13 only) | core passes only the fixed `DatabaseInfo` fields to a DB driver | `IDBConnectOptions`: drivers can read any key of a `databases.cfg` entry, also through clientprefs' copy of it | — |
 | `0009-mysql-tls-options` (sm13 only) | MySQL driver never requests TLS and turns verification off; HeatWave / MySQL 8.4 `REQUIRE SSL` accounts are refused | `ssl_mode` / `ssl_ca` (see README), TLS 1.2+, `utf8mb4` | — |
 | `0010-handlesys-lazy-table` | since 1.11.0.6792 the 2^20-entry handle table is zeroed at startup: +64 MB RSS in every srcds (156 MB vs 82 MB) | `calloc` instead of `new[]` + `memset`: 90 MB | — |
 | `0011-no-gamedata-updater` | `updater.ext` overwrites the css34 gamedata with upstream's (no v34 entries) over plain HTTP | `updater.ext` and `webternet.ext` are not built or loaded | — |

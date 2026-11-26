@@ -40,10 +40,10 @@ index e7a6e343878e1b23e541d2216e4e81a5c03a29f3..6d7dd018dfd87d548afc2f15b13d8440
  	g_pSM->BuildPath(Path_SM, m_Filename, sizeof(m_Filename), "configs/databases.cfg");
  	m_Builder.SetPath(m_Filename);
 diff --git a/core/logic/DatabaseConfBuilder.cpp b/core/logic/DatabaseConfBuilder.cpp
-index 56f7ba4161e7f62d4e542ae41ebe73fa7efb404a..4c2a746e55b5a58a3e9bc04c838be9fd036f7de2 100644
+index 56f7ba4161e7f62d4e542ae41ebe73fa7efb404a..689c0ca76ad94194c7d7a30da84f223bda08f532 100644
 --- a/core/logic/DatabaseConfBuilder.cpp
 +++ b/core/logic/DatabaseConfBuilder.cpp
-@@ -35,6 +35,59 @@
+@@ -35,6 +35,105 @@
  #define DBPARSE_LEVEL_MAIN		1
  #define DBPARSE_LEVEL_DATABASE	2
  
@@ -73,10 +73,20 @@ index 56f7ba4161e7f62d4e542ae41ebe73fa7efb404a..4c2a746e55b5a58a3e9bc04c838be9fd
 +		return false;
 +
 +	std::lock_guard<std::mutex> lock(m_Lock);
++	const DBConnectOptionList *found = nullptr;
 +	auto iter = m_Options.find(info);
-+	if (iter == m_Options.end())
-+		return false;
-+	const DBConnectOptionList &options = *iter->second;
++	if (iter != m_Options.end())
++	{
++		found = iter->second;
++	}
++	else
++	{
++		auto copy = m_Copies.find(info);
++		if (copy == m_Copies.end())
++			return false;
++		found = &copy->second;
++	}
++	const DBConnectOptionList &options = *found;
 +	for (size_t i = options.size(); i > 0; i--)
 +	{
 +		if (!DBOptionKeyEquals(options[i - 1].first, key))
@@ -86,6 +96,42 @@ index 56f7ba4161e7f62d4e542ae41ebe73fa7efb404a..4c2a746e55b5a58a3e9bc04c838be9fd
 +		return true;
 +	}
 +	return false;
++}
++
++bool DBConnectOptions::CopyConnectOptions(const DatabaseInfo *copy, const DatabaseInfo *source)
++{
++	if (!copy)
++		return false;
++
++	std::lock_guard<std::mutex> lock(m_Lock);
++	DBConnectOptionList snapshot;
++	bool found = false;
++	auto iter = source ? m_Options.find(source) : m_Options.end();
++	if (iter != m_Options.end())
++	{
++		snapshot = *iter->second;
++		found = true;
++	}
++	else if (source)
++	{
++		auto other = m_Copies.find(source);
++		if (other != m_Copies.end())
++		{
++			snapshot = other->second;
++			found = true;
++		}
++	}
++	if (found)
++		m_Copies[copy] = std::move(snapshot);
++	else
++		m_Copies.erase(copy);
++	return found;
++}
++
++void DBConnectOptions::RemoveConnectOptions(const DatabaseInfo *copy)
++{
++	std::lock_guard<std::mutex> lock(m_Lock);
++	m_Copies.erase(copy);
 +}
 +
 +void DBConnectOptions::Add(const DatabaseInfo *info, const DBConnectOptionList *options)
@@ -103,7 +149,7 @@ index 56f7ba4161e7f62d4e542ae41ebe73fa7efb404a..4c2a746e55b5a58a3e9bc04c838be9fd
  DatabaseConfBuilder::DatabaseConfBuilder()
  	: m_ParseList(),
  	  m_InfoList()
-@@ -119,6 +172,8 @@ SMCResult DatabaseConfBuilder::ReadSMC_KeyValue(const SMCStates *states, const c
+@@ -119,6 +218,8 @@ SMCResult DatabaseConfBuilder::ReadSMC_KeyValue(const SMCStates *states, const c
  			m_ParseList.SetDefaultDriver(value);
  		}
  	} else if (m_ParseState == DBPARSE_LEVEL_DATABASE) {
@@ -112,7 +158,7 @@ index 56f7ba4161e7f62d4e542ae41ebe73fa7efb404a..4c2a746e55b5a58a3e9bc04c838be9fd
  		if (strcmp(key, "driver") == 0)
  		{
  			if (strcmp(value, "default") != 0)
-@@ -161,6 +216,7 @@ SMCResult DatabaseConfBuilder::ReadSMC_LeavingSection(const SMCStates *states)
+@@ -161,6 +262,7 @@ SMCResult DatabaseConfBuilder::ReadSMC_LeavingSection(const SMCStates *states)
  		m_ParseCurrent->info.user = m_ParseCurrent->user.c_str();
  		m_ParseCurrent->info.pass = m_ParseCurrent->pass.c_str();
  		m_ParseCurrent->info.schemaName = m_ParseCurrent->schemaName.c_str();
@@ -121,7 +167,7 @@ index 56f7ba4161e7f62d4e542ae41ebe73fa7efb404a..4c2a746e55b5a58a3e9bc04c838be9fd
  		/* Save it.. */
  		m_ParseCurrent->AddRef();
 diff --git a/core/logic/DatabaseConfBuilder.h b/core/logic/DatabaseConfBuilder.h
-index 376a123c3dfc35e74eb6ac3aace75eb7e8624b35..bd940723e5e66667045ede12926ef54099d7c643 100644
+index 376a123c3dfc35e74eb6ac3aace75eb7e8624b35..bb0e465a31853ee52aebee611791314c240a74fc 100644
 --- a/core/logic/DatabaseConfBuilder.h
 +++ b/core/logic/DatabaseConfBuilder.h
 @@ -33,6 +33,7 @@
@@ -132,7 +178,7 @@ index 376a123c3dfc35e74eb6ac3aace75eb7e8624b35..bd940723e5e66667045ede12926ef540
  #include <ITextParsers.h>
  #include "common_logic.h"
  
-@@ -40,6 +41,51 @@
+@@ -40,6 +41,57 @@
  #include <am-string.h>
  #include <am-refcounting.h>
  #include <am-refcounting-threadsafe.h>
@@ -147,18 +193,24 @@ index 376a123c3dfc35e74eb6ac3aace75eb7e8624b35..bd940723e5e66667045ede12926ef540
 +
 +/* css34: IDBConnectOptions. Maps the DatabaseInfo a driver receives to the
 + * keys of the configuration it was built from. Entries are added when a
-+ * databases.cfg entry is complete and removed when the entry is destroyed
-+ * (it is refcounted, so a pending threaded connect keeps it); SQL_ConnectCustom
-+ * adds its KeyValues for the duration of the driver's Connect() call. */
++ * databases.cfg entry is complete and removed if the entry is destroyed
++ * (upstream keeps an extra reference, so in practice entries of every parsed
++ * databases.cfg stay, one set per reload); SQL_ConnectCustom adds its
++ * KeyValues for the duration of the driver's Connect() call; copies of a
++ * DatabaseInfo (clientprefs) get an owned snapshot via CopyConnectOptions. */
 +class DBConnectOptions : public IDBConnectOptions
 +{
 +public:
 +	bool GetConnectOption(const DatabaseInfo *info, const char *key, char *buffer, size_t maxlength) override;
++	bool CopyConnectOptions(const DatabaseInfo *copy, const DatabaseInfo *source) override;
++	void RemoveConnectOptions(const DatabaseInfo *copy) override;
 +	void Add(const DatabaseInfo *info, const DBConnectOptionList *options);
 +	void Remove(const DatabaseInfo *info);
 +private:
 +	std::mutex m_Lock;
 +	std::unordered_map<const DatabaseInfo *, const DBConnectOptionList *> m_Options;
++	/* Owned snapshots for copied DatabaseInfo structs. */
++	std::unordered_map<const DatabaseInfo *, DBConnectOptionList> m_Copies;
 +};
 +
 +/* Never destroyed: ConfDbInfo objects owned by other globals unregister from it
@@ -184,7 +236,7 @@ index 376a123c3dfc35e74eb6ac3aace75eb7e8624b35..bd940723e5e66667045ede12926ef540
  
  class ConfDbInfo : public ke::RefcountedThreadsafe<ConfDbInfo>
  {
-@@ -47,6 +93,10 @@ public:
+@@ -47,6 +99,10 @@ public:
  	ConfDbInfo() : realDriver(NULL)
  	{
  	}
@@ -195,7 +247,7 @@ index 376a123c3dfc35e74eb6ac3aace75eb7e8624b35..bd940723e5e66667045ede12926ef540
  	std::string name;
  	std::string driver;
  	std::string host;
-@@ -56,6 +106,7 @@ public:
+@@ -56,6 +112,7 @@ public:
  	std::string schemaName;
  	IDBDriver *realDriver;
  	DatabaseInfo info;
@@ -260,12 +312,65 @@ index 4c86d592bcc042acafb04752d3a620bceb579b90..77c19579b4f7000f1fca6afa5aa13d88
  	this->gamesuffix = GAMEFIX;
  	this->serverGlobals = &::serverGlobals;
  	this->listeners = nullptr;
+diff --git a/extensions/clientprefs/extension.cpp b/extensions/clientprefs/extension.cpp
+index 0cfb5553421070d7d73ebe98490dd42270bb6433..d10e4e3579a03f56c721d7dfd4730656e8ce7789 100644
+--- a/extensions/clientprefs/extension.cpp
++++ b/extensions/clientprefs/extension.cpp
+@@ -30,6 +30,7 @@
+  */
+ 
+ #include <sourcemod_version.h>
++#include <IDBConnectOptions.h>
+ #include "extension.h"
+ 
+ using namespace ke;
+@@ -52,6 +53,9 @@ DbDriver g_DriverType;
+ 
+ constexpr auto kReconnectRetryDelay = std::chrono::seconds(30);
+ 
++/* css34: driver keys (ssl_mode, ssl_ca) follow DBInfo, which is a copy. */
++static IDBConnectOptions *g_pDBConnectOptions = nullptr;
++
+ bool ClientPrefs::SDK_OnLoad(char *error, size_t maxlength, bool late)
+ {
+ 	if (!this->RefreshDatabaseInfo(error, maxlength))
+@@ -152,6 +156,18 @@ bool ClientPrefs::RefreshDatabaseInfo(char *error, size_t maxlength)
+ 	DBInfo.schemaName = dbSchemaName.c_str();
+ 	Driver = driver;
+ 
++	/* css34: Connect() gets &DBInfo, not the databases.cfg entry; without this
++	 * the MySQL driver finds no ssl_mode / ssl_ca and connects without TLS. */
++	if (!g_pDBConnectOptions && !sharesys->RequestInterface(SMINTERFACE_DBCONNECTOPTIONS_NAME,
++		SMINTERFACE_DBCONNECTOPTIONS_VERSION, myself, (SMInterface **)&g_pDBConnectOptions))
++	{
++		g_pDBConnectOptions = nullptr;
++	}
++	if (g_pDBConnectOptions)
++	{
++		g_pDBConnectOptions->CopyConnectOptions(&DBInfo, info);
++	}
++
+ 	return true;
+ }
+ 
+@@ -187,6 +203,11 @@ void ClientPrefs::SDK_OnDependenciesDropped()
+ 
+ 	Database = NULL;
+ 
++	if (g_pDBConnectOptions)
++	{
++		g_pDBConnectOptions->RemoveConnectOptions(&DBInfo);
++	}
++
+ 	if (g_CookieManager.cookieDataLoadedForward != NULL)
+ 	{
+ 		forwards->ReleaseForward(g_CookieManager.cookieDataLoadedForward);
 diff --git a/public/IDBConnectOptions.h b/public/IDBConnectOptions.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..78da31ab65d0bb99ad8cb2ee88bdaf4c353ac1a0
+index 0000000000000000000000000000000000000000..d12b51a7666ce328077e61e2f217cdf5b774408a
 --- /dev/null
 +++ b/public/IDBConnectOptions.h
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,108 @@
 +/**
 + * vim: set ts=4 sw=4 tw=99 noet :
 + * =============================================================================
@@ -304,10 +409,14 @@ index 0000000000000000000000000000000000000000..78da31ab65d0bb99ad8cb2ee88bdaf4c
 + * and ssl_ca) without any change to IDBDriver.h. Drivers that never ask are
 + * unaffected; a driver loaded by a core without this interface simply fails to
 + * request it.
++ *
++ * Version 2: CopyConnectOptions / RemoveConnectOptions, for code that copies a
++ * DatabaseInfo (clientprefs keeps its own copy across map changes) and
++ * connects with the copy.
 + */
 +
 +#define SMINTERFACE_DBCONNECTOPTIONS_NAME		"IDBConnectOptions"
-+#define SMINTERFACE_DBCONNECTOPTIONS_VERSION	1
++#define SMINTERFACE_DBCONNECTOPTIONS_VERSION	2
 +
 +namespace SourceMod
 +{
@@ -345,6 +454,27 @@ index 0000000000000000000000000000000000000000..78da31ab65d0bb99ad8cb2ee88bdaf4c
 +			const char *key,
 +			char *buffer,
 +			size_t maxlength) =0;
++
++		/**
++		 * @brief Gives a copied DatabaseInfo the keys of its source (version 2).
++		 *
++		 * Takes a snapshot of the keys registered for source (none if source
++		 * has none) and serves them for copy until RemoveConnectOptions(copy)
++		 * or the next CopyConnectOptions to the same copy. The snapshot does
++		 * not depend on source staying alive. Thread-safe.
++		 *
++		 * @param copy			The DatabaseInfo that will be passed to Connect().
++		 * @param source		The DatabaseInfo it was copied from.
++		 * @return				True if source had keys.
++		 */
++		virtual bool CopyConnectOptions(const DatabaseInfo *copy, const DatabaseInfo *source) =0;
++
++		/**
++		 * @brief Drops the keys given to copy by CopyConnectOptions.
++		 *
++		 * @param copy			The DatabaseInfo passed to CopyConnectOptions.
++		 */
++		virtual void RemoveConnectOptions(const DatabaseInfo *copy) =0;
 +	};
 +}
 +
