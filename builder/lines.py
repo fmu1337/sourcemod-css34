@@ -24,7 +24,7 @@ LINE_FIELDS = {
 }
 # T2.7 (docs/MAINTAINING.md): a frozen line keeps its published release and pointer,
 # leaves CI, and is rebuilt only from its freeze tag and input archive.
-FROZEN_FIELDS = {"tag", "freeze_tag", "inputs_release", "assets"}
+FROZEN_FIELDS = {"tag", "freeze_tag", "inputs_release", "inputs_sha256", "assets"}
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 GENERATED = (
@@ -90,6 +90,7 @@ def load_manifest(path):
             if key in line:
                 require(isinstance(line[key], str) and line[key].strip() and "\n" not in line[key],
                         name + "." + key + " must be a nonempty single-line string")
+        require(isinstance(line.get("extra_tags", []), list), name + ".extra_tags must be a list")
         for tag in line.get("extra_tags", []):
             require(isinstance(tag, str) and TAG_RE.fullmatch(tag), "invalid extra tag on " + name)
         images = []
@@ -108,6 +109,8 @@ def load_manifest(path):
         for component, prefix in (("sourcemod", "SM_"), ("metamod", "MM_")):
             ref = line[component]
             require(ref in pins and ref.startswith(prefix), "invalid pin reference for " + name)
+        if "frozen" in line:
+            require(line.get("smoke"), "frozen line " + name + " needs smoke images (weekly frozen verify)")
         if "secondary_metamod" in line:
             # D7: dual-core sm11 ships a second Metamod build. Master no longer
             # builds one (T3.3); only a frozen line may keep the field.
@@ -131,6 +134,8 @@ def load_manifest(path):
             for key in ("tag", "freeze_tag", "inputs_release"):
                 require(isinstance(frozen[key], str) and TAG_RE.fullmatch(frozen[key]),
                         "invalid {}.frozen.{}".format(name, key))
+            require(isinstance(frozen["inputs_sha256"], str) and SHA256_RE.fullmatch(frozen["inputs_sha256"]),
+                    name + ".frozen.inputs_sha256 must be the sha256 of the input release's SHA256SUMS")
             require(not line.get("releasable", True),
                     name + " is frozen: it is rebuilt only from " + frozen["freeze_tag"] + " (releasable false)")
             require(isinstance(frozen["assets"], dict) and frozen["assets"], name + ".frozen.assets is empty")
@@ -138,15 +143,31 @@ def load_manifest(path):
                 require(isinstance(asset, str) and TAG_RE.fullmatch(asset), "invalid frozen asset name " + repr(asset))
                 require(isinstance(digest, str) and SHA256_RE.fullmatch(digest),
                         "frozen asset " + asset + " needs a sha256")
+        if line["status"] == "active":
+            # What the builder can build: SourceMod 1.12+ with its own patch
+            # series, on a Metamod pin that has a patch series too.
+            series_root = path.parent / "patches" / "series"
+            require(pins[line["sourcemod"]]["major"] >= 12,
+                    "active line " + name + " needs SourceMod 1.12+ (the builder refuses older)")
+            # (A manifest outside a builder tree, as in tests, has no series.)
+            if series_root.is_dir():
+                require((series_root / name / "series.json").is_file(),
+                        "active line " + name + " has no patch series builder/patches/series/" + name)
+                require((series_root / line["metamod"] / "series.json").is_file(),
+                        "active line " + name + " uses Metamod " + line["metamod"] + ", which has no patch series")
     require(isinstance(data["known_bad"], dict), "known_bad must map release tags to reasons")
     for tag, reason in data["known_bad"].items():
         require(TAG_RE.fullmatch(tag), "invalid known_bad tag " + tag)
         require(isinstance(reason, str) and reason.strip(), "missing known_bad reason for " + tag)
     require(line_parts(data, data["default_line"])["status"] == "active",
             "default_line must be an active CI line")
+    seen_tags = {}
     for name in lines:
         part = line_parts(data, name)
         for tag in [part["tag"]] + part["extra_tags"]:
+            require(tag not in seen_tags,
+                    "tag {} belongs to both {} and {}".format(tag, seen_tags.get(tag), name))
+            seen_tags[tag] = name
             if tag in data["known_bad"] and part["pointer"]:
                 raise ValueError("known-bad tag " + tag + " is pinned on pointer line " + name)
         if "frozen" in lines[name]:
@@ -590,6 +611,14 @@ def render_versions(data):
             rows.append("{}={}".format(prefix + "_" + field.upper(), shlex.quote(str(value))))
         rows.append("")
     rows.append("CSS34_LINE=${CSS34_LINE:-" + data["default_line"] + "}")
+    rows += ["",
+             "# Line -> \"<sourcemod pin> <metamod pin> <status>\" for resolve-version.sh.",
+             "css34_line_pins() {",
+             "  case \"$1\" in"]
+    for name, line in data["lines"].items():
+        rows.append(shell_case_arm(name, "echo \"{} {} {}\"".format(
+            line["sourcemod"], line["metamod"], line["status"])))
+    rows += ["    *) return 1 ;;", "  esac", "}"]
     return "\n".join(rows) + "\n"
 
 
@@ -641,6 +670,7 @@ def frozen_rows(data):
             rows.append(attach_image({
                 "line": name, "tag": frozen["tag"], "freeze_tag": frozen["freeze_tag"],
                 "inputs_release": frozen["inputs_release"],
+                "inputs_sha256": frozen["inputs_sha256"],
                 "assets": json.dumps(frozen["assets"], sort_keys=True),
                 "pointer_assets": json.dumps(pointer, sort_keys=True),
             }, data, entry["image"]))

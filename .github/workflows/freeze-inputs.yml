@@ -134,6 +134,11 @@ jobs:
       - name: Rebuild with --network none
         run: |
           sudo apt-get install -y gcc-multilib lib32stdc++6 lib32z1
+          # This run collected the archive itself; a later rebuild takes the pin
+          # from lines.json frozen.inputs_sha256 (record this value there).
+          CSS34_INPUTS_SHA256="$(sha256sum "$RUNNER_TEMP/freeze/assets/SHA256SUMS" | cut -d' ' -f1)"
+          echo "SHA256SUMS sha256 (frozen.inputs_sha256): $CSS34_INPUTS_SHA256"
+          export CSS34_INPUTS_SHA256
           bash offline-checkout/builder/freeze/build-offline.sh "$RUNNER_TEMP/freeze/assets" "$RUNNER_TEMP/offline"
 
       - name: Same ABI as the online build

@@ -150,7 +150,7 @@ def write_manifest(out_path, metamod_binary):
     mm_rev = require_rev("MMS_GIT_REV")
     sm_product = product_version(sm_dir / "product.version")
     mm_product = product_version(mm_dir / "product.version")
-    sm_commit = os.environ.get("SOURCEMOD_BUILD_COMMIT") or os.environ.get("SOURCEMOD_COMMIT") or ""
+    sm_commit = os.environ.get("SOURCEMOD_COMMIT") or ""
     if not sm_commit:
         sm_commit = git_head(sm_dir)
     mm_commit = os.environ.get("MMS_COMMIT") or git_head(mm_dir)
@@ -207,6 +207,13 @@ def core_fields(addon_dir):
     return {}
 
 
+def required_package_files(lib):
+    """builder/package-required.txt, shared with the Linux builder/package.sh."""
+    text = (Path(__file__).resolve().parent / "package-required.txt").read_text(encoding="utf-8")
+    return [line.replace("{lib}", lib) for line in text.splitlines()
+            if line and not line.startswith("#")]
+
+
 def core_name(package_dir, folder, candidates):
     for name in candidates:
         if (package_dir / folder / name).is_file():
@@ -229,7 +236,8 @@ def package_metamod(package_dir, output_dir, mms_dir):
     mm_core = core_name(
         package_dir,
         Path("addons/metamod/bin"),
-        ("metamod.2.ep1.dll", "metamod.1.ep1.dll"),
+        # The core is metamod.2.ep1 (MM 1.12); metamod.1.ep1 is the bridge's.
+        ("metamod.2.ep1.dll",),
     )
     require_files(package_dir, [
         "addons/metamod.vdf",
@@ -262,18 +270,7 @@ def package_sourcemod(package_dir, output_dir, sourcemod_dir):
     # dual-core SM 1.11 (sm11-oldstable is frozen, docs/MAINTAINING.md).
     if (package_dir / "addons/sourcemod/bin/sourcemod.1.ep1.dll").is_file():
         fail("unexpected sourcemod.1.ep1.dll: master packages SourceMod 1.12+ (2.ep1) only")
-    required = [
-        "addons/metamod/sourcemod.vdf",
-        "addons/sourcemod/bin/sourcemod.2.ep1.dll",
-        "addons/sourcemod/extensions/dbi.mysql.ext.dll",
-        "addons/sourcemod/extensions/dbi.sqlite.ext.dll",
-        "addons/sourcemod/extensions/dhooks.ext.dll",
-        "addons/sourcemod/extensions/game.cstrike.ext.2.ep1.dll",
-        "addons/sourcemod/extensions/sdkhooks.ext.2.ep1.dll",
-        "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt",
-        "addons/sourcemod/scripting/include/version_auto.inc",
-        "cfg/sourcemod/sourcemod.cfg",
-    ]
+    required = required_package_files("dll")
     mm_binary = "metamod.2.ep1"
     require_files(package_dir, required)
     refuse_gamedata_updater(package_dir)
@@ -450,18 +447,7 @@ def self_test():
             "#define SMINTERFACE_EXTENSIONAPI_VERSION_MIN 7\n",
             encoding="utf-8",
         )
-        for rel in (
-            "addons/metamod/sourcemod.vdf",
-            "addons/sourcemod/bin/sourcemod.2.ep1.dll",
-            "addons/sourcemod/extensions/dbi.mysql.ext.dll",
-            "addons/sourcemod/extensions/dbi.sqlite.ext.dll",
-            "addons/sourcemod/extensions/game.cstrike.ext.2.ep1.dll",
-            "addons/sourcemod/extensions/sdkhooks.ext.2.ep1.dll",
-            "addons/sourcemod/extensions/dhooks.ext.dll",
-            "addons/sourcemod/gamedata/sm-cstrike.games/game.cstrike.txt",
-            "addons/sourcemod/scripting/include/version_auto.inc",
-            "cfg/sourcemod/sourcemod.cfg",
-        ):
+        for rel in required_package_files("dll"):
             path = sm_pkg / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("x", encoding="utf-8")

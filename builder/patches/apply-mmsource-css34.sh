@@ -221,7 +221,11 @@ PY
 # Ext.h: define METAMOD_PLAPI_VERSION=11 so smsdk_ext takes the modern-name code path
 # against our renamed legacy-layout ISmmAPI. GetApiVersion still returns PLAPI_VERSION (11)
 # from ISmmPlugin.h.
-if [ -f "$legacy_core_dir/ISmmPluginExt.h" ]; then
+if [ ! -f "$legacy_core_dir/ISmmPluginExt.h" ]; then
+  echo "FAIL: $legacy_core_dir/ISmmPluginExt.h is missing; METAMOD_PLAPI_VERSION cannot be pinned" >&2
+  exit 1
+fi
+{
   "${PY[@]}" - <<'PY'
 from pathlib import Path
 import os
@@ -253,7 +257,7 @@ else:
     path.write_text(text2)
     print('==> Pinned METAMOD_PLAPI_VERSION to 11 in core-css34legacy/ISmmPluginExt.h')
 PY
-fi
+}
 
 # css34: lines.json MMS_GIT_REV (shallow clone cannot count commits).
 # MM 1.10's generator also omits +rev from the version string.

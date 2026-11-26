@@ -1,7 +1,7 @@
 css34: episode1 build: tier1 before vstdlib, pthread/rt NEEDED, C++ link driver, GCC 10 flags, static hidden libstdc++, dynamic libgcc_s
 
 diff --git a/AMBuildScript b/AMBuildScript
-index f0263d03c813f2f1b009196472ac9e12e9290477..0997a9ad7e7652f44808da1510168190342a500b 100644
+index f0263d03c813f2f1b009196472ac9e12e9290477..a0d1b06df8cc48853163e3e0d982b012d46fc38d 100644
 --- a/AMBuildScript
 +++ b/AMBuildScript
 @@ -78,6 +78,10 @@ class SMConfig(object):
@@ -58,7 +58,7 @@ index f0263d03c813f2f1b009196472ac9e12e9290477..0997a9ad7e7652f44808da1510168190
      return binary
  
    def AddCxxCompat(self, binary):
-@@ -566,6 +586,17 @@ class SMConfig(object):
+@@ -566,6 +586,18 @@ class SMConfig(object):
  
      SdkHelpers.configureCxx(context, binary, sdk)
  
@@ -67,8 +67,9 @@ index f0263d03c813f2f1b009196472ac9e12e9290477..0997a9ad7e7652f44808da1510168190
 +      # Static tier1 BEFORE shared vstdlib so ConVar is embedded, not imported.
 +      if compiler.target.platform == 'linux':
 +        tier1 = os.path.join(sdk['path'], 'linux_sdk', 'tier1_i486.a')
-+        if os.path.isfile(tier1):
-+          compiler.linkflags[0:0] = [tier1]
++        if not os.path.isfile(tier1):
++          raise Exception('css34: missing static tier1 ' + tier1)
++        compiler.linkflags[0:0] = [tier1]
 +        for flag in ('-Wl,--no-as-needed', '-lpthread', '-lrt', '-lgcc_s'):
 +          if flag not in compiler.linkflags:
 +            compiler.linkflags += [flag]

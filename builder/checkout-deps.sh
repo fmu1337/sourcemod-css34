@@ -202,29 +202,17 @@ install_mariadb_connector_linux() {
 }
 
 clone_repo() {
+  # Every dependency is pinned by commit; there is no branch-tip checkout.
   local name="$1"
   local url="$2"
-  local branch="${3:-}"
-  local commit="${4:-}"
+  local commit="${3:?clone_repo $1: a pinned commit is required}"
 
-  if [ -d "$DEPS/$name/.git" ]; then
-    if [ -n "$commit" ]; then
-      echo "==> Pinning $name to $commit"
-      git -C "$DEPS/$name" fetch --depth 1 origin "$commit"
-      git -C "$DEPS/$name" checkout --force "$commit"
-    fi
-    return 0
-  fi
-
-  if [ -n "$commit" ]; then
-    git clone --depth 1 "$url" "$DEPS/$name"
-    git -C "$DEPS/$name" fetch --depth 1 origin "$commit"
-    git -C "$DEPS/$name" checkout --force "$commit"
-  elif [ -n "$branch" ]; then
-    git clone --depth 1 --branch "$branch" "$url" "$DEPS/$name"
-  else
+  if [ ! -d "$DEPS/$name/.git" ]; then
     git clone --depth 1 "$url" "$DEPS/$name"
   fi
+  echo "==> Pinning $name to $commit"
+  git -C "$DEPS/$name" fetch --depth 1 origin "$commit"
+  git -C "$DEPS/$name" checkout --force "$commit"
 }
 
 patch_episode1_sdk() {
@@ -233,21 +221,6 @@ patch_episode1_sdk() {
 
   if [ -f "$platform_h" ] && grep -q '#include <new.h>' "$platform_h"; then
     sed -i 's|#include <new.h>|#if defined(_WIN32)\n#include <new.h>\n#else\n#include <new>\n#endif|' "$platform_h"
-  fi
-
-  # alliedmodders/hl2sdk episode1 already ships mixed-case headers; only
-  # create symlinks when lowercase sources exist (rom4s-style SDK layouts).
-  local appframework="$sdk_dir/public/appframework"
-  if [ -d "$appframework" ]; then
-    if [ -f "$appframework/iappsystem.h" ] && [ ! -f "$appframework/IAppSystem.h" ]; then
-      ln -sfn iappsystem.h "$appframework/IAppSystem.h"
-    fi
-    if [ -f "$appframework/iappsystemgroup.h" ] && [ ! -f "$appframework/IAppSystemGroup.h" ]; then
-      ln -sfn iappsystemgroup.h "$appframework/IAppSystemGroup.h"
-    fi
-    if [ -f "$appframework/appframework.h" ] && [ ! -f "$appframework/AppFramework.h" ]; then
-      ln -sfn appframework.h "$appframework/AppFramework.h"
-    fi
   fi
 }
 
@@ -328,11 +301,10 @@ if [ "$need_mariadb" = 1 ] && [ "$BUILD_PLATFORM" = "windows" ]; then
 fi
 
 echo "==> Fetching Metamod:Source"
-# MMS_MODE / MMS_DIRNAME / MMS_COMMIT / MMS_BRANCH: the line's primary Metamod
+# MMS_MODE / MMS_DIRNAME / MMS_COMMIT: the line's primary Metamod
 # (resolve-version.sh, via builder/run/*.sh).
 : "${MMS_MODE:?MMS_MODE is required (source builder/resolve-version.sh)}"
 : "${MMS_DIRNAME:?MMS_DIRNAME is required}" "${MMS_COMMIT:?MMS_COMMIT is required}"
-MMS_BRANCH="${MMS_BRANCH:-}"
 
 # The Metamod patch series made for <commit> (builder/patches/series/*/series.json
 # with root "metamod"), or nothing.
@@ -350,8 +322,7 @@ mm_series_for() {
 fetch_and_patch_mms() {
   local dirname="$1"
   local mode="$2"
-  local branch="$3"
-  local commit="$4"
+  local commit="$3"
 
   local series=""
   if [[ "$mode" == 1.12 ]]; then
@@ -366,7 +337,7 @@ fetch_and_patch_mms() {
     SOURCEMOD_URL="https://github.com/alliedmodders/metamod-source" \
       bash "$BUILDER_DIR/fetch-sourcemod.sh" "$DEPS/$dirname" "$commit" Metamod:Source
   else
-    clone_repo "$dirname" "https://github.com/alliedmodders/metamod-source" "$branch" "$commit"
+    clone_repo "$dirname" "https://github.com/alliedmodders/metamod-source" "$commit"
   fi
   echo "==> Metamod:Source (${mode}) in $dirname at $(git -C "$DEPS/$dirname" rev-parse HEAD)"
 
@@ -389,12 +360,12 @@ fetch_and_patch_mms() {
 # The primary Metamod (MMS_*, resolve-version.sh), then the line's
 # bridge_metamod from lines.json (the MM 1.10 legacy core of the MM 1.12
 # package, legacy-plugin bridge T2.9).
-fetch_and_patch_mms "$MMS_DIRNAME" "$MMS_MODE" "$MMS_BRANCH" "$MMS_COMMIT"
+fetch_and_patch_mms "$MMS_DIRNAME" "$MMS_MODE" "$MMS_COMMIT"
 mm_inputs="$(bash "$BUILDER_DIR/py.sh" "$BUILDER_DIR/resolve-metamod-pins.py" "${CSS34_LINE:-sm13-latest}")" ||
   { echo "FAIL: cannot resolve the Metamod inputs of ${CSS34_LINE:-sm13-latest}" >&2; exit 1; }
-while IFS=$'\t' read -r role dirname mode branch commit rev version; do
+while IFS=$'\t' read -r role dirname mode _branch commit rev version; do
   [[ -n "$role" && "$role" != primary ]] || continue
-  fetch_and_patch_mms "$dirname" "$mode" "$branch" "$commit"
+  fetch_and_patch_mms "$dirname" "$mode" "$commit"
 done <<< "$mm_inputs"
 
 # Pinned 2026-10-20 (episode1 tip). Override only to reproduce another tree.
@@ -403,7 +374,7 @@ AMBUILD_COMMIT="${AMBUILD_COMMIT:-01212cb57c96561f664b6dfb2ee10e66de6f81e4}"
 
 echo "==> Fetching HL2SDK episode1 @ ${HL2SDK_EPISODE1_COMMIT}"
 rm -rf "$DEPS/hl2sdk-episode1"
-clone_repo "hl2sdk-episode1" "https://github.com/alliedmodders/hl2sdk" "" "$HL2SDK_EPISODE1_COMMIT"
+clone_repo "hl2sdk-episode1" "https://github.com/alliedmodders/hl2sdk" "$HL2SDK_EPISODE1_COMMIT"
 if [[ "$(git -C "$DEPS/hl2sdk-episode1" rev-parse HEAD)" != "$HL2SDK_EPISODE1_COMMIT" ]]; then
   echo "FAIL: hl2sdk-episode1 is not ${HL2SDK_EPISODE1_COMMIT}" >&2
   exit 1
@@ -414,22 +385,20 @@ echo "==> Fetching AMBuild @ ${AMBUILD_COMMIT}"
 # Tag 2.2 is too old for current hl2sdk-manifests. One SHA serves every line.
 if [[ "$(git -C "$DEPS/ambuild" rev-parse HEAD 2>/dev/null || true)" != "$AMBUILD_COMMIT" ]]; then
   rm -rf "$DEPS/ambuild"
-  clone_repo "ambuild" "https://github.com/alliedmodders/ambuild" "" "$AMBUILD_COMMIT"
+  clone_repo "ambuild" "https://github.com/alliedmodders/ambuild" "$AMBUILD_COMMIT"
 fi
 if [[ "$(git -C "$DEPS/ambuild" rev-parse HEAD)" != "$AMBUILD_COMMIT" ]]; then
   echo "FAIL: AMBuild is not ${AMBUILD_COMMIT}" >&2
   exit 1
 fi
+# Both platforms build AMBuild with the pinned setuptools wheel, never PyPI.
+css34_fetch_build_wheels "$DEPS"
 if [ "$BUILD_PLATFORM" = "windows" ]; then
-  python -m pip install --force-reinstall --no-cache-dir "$DEPS/ambuild"
+  python -m pip install --force-reinstall --no-cache-dir --no-index --find-links "$DEPS/wheels" "$DEPS/ambuild"
 else
-  css34_fetch_build_wheels "$DEPS"
   python3 -m pip install --force-reinstall --no-cache-dir --user --no-index --find-links "$DEPS/wheels" "$DEPS/ambuild"
 fi
 if ! python -c "import ambuild2" 2>/dev/null && ! python3 -c "import ambuild2" 2>/dev/null; then
-  if [ "$BUILD_PLATFORM" = "windows" ]; then
-    python -m pip install "$DEPS/ambuild"
-  else
-    python3 -m pip install --user --no-index --find-links "$DEPS/wheels" "$DEPS/ambuild"
-  fi
+  echo "FAIL: AMBuild did not install" >&2
+  exit 1
 fi

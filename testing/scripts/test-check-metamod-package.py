@@ -146,7 +146,7 @@ class TestCheckMetamodPackage(unittest.TestCase):
         # The primary Metamod comes from resolve-version.sh (MMS_*), the bridge
         # from the resolver.
         for path, function, commit_arg in (
-            ("builder/checkout-deps.sh", "fetch_and_patch_mms", 4),
+            ("builder/checkout-deps.sh", "fetch_and_patch_mms", 3),
             ("builder/run/linux.sh", "build_and_package_mm", 5),
             ("builder/run/windows.sh", "build_and_package_mm_win", 5),
         ):

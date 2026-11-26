@@ -5,7 +5,6 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/resolve-version.sh"
 
 case "$MMS_MODE" in
-  1.10) package_mm_version=1.10.7 ;;
   1.12) package_mm_version=1.12.0 ;;
   *) echo "Unsupported package MM mode: $MMS_MODE" >&2; return 1 ;;
 esac

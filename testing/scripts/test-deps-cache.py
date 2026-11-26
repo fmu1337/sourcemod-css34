@@ -64,6 +64,17 @@ class Digest(unittest.TestCase):
         self.assertNotEqual(self.base, dc.compute_digest(self.root, IMAGE[:-1] + '1', '/workspace/deps'))
         self.assertNotEqual(self.base, dc.compute_digest(self.root, IMAGE, '/other/deps'))
 
+    def test_compiler_env_changes_it(self):
+        from unittest import mock
+        for name in dc.BUILD_ENV:
+            with self.subTest(name=name), mock.patch.dict(os.environ, {name: '-O0'}):
+                self.assertNotEqual(self.base, dc.compute_digest(self.root, IMAGE, '/workspace/deps'))
+
+    def test_tag_only_image_never_matches(self):
+        tag = 'quay.io/pypa/manylinux2014_i686:latest'
+        self.assertNotEqual(dc.compute_digest(self.root, tag, '/workspace/deps'),
+                            dc.compute_digest(self.root, tag, '/workspace/deps'))
+
     def test_missing_input_fails(self):
         (self.root / dc.INPUT_FILES[0]).unlink()
         with self.assertRaises(SystemExit):

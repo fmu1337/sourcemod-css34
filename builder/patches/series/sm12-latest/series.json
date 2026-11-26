@@ -3,7 +3,7 @@
   "commit": "b84d922dccee2d9ad095893b8770014b1ed58cf6",
   "trees": {
     "hl2sdk-manifests": "faa0989e4e2db01454a4226b33d47a3672a947f3",
-    "sourcemod": "75698bd0ce5326714e147c1c368d862cfb9552f7",
+    "sourcemod": "202647db24a8abc640e46093f3693fef5550e415",
     "sourcepawn": "6a62937000456471f69c0ce4c3f408b29cb8ee9f"
   }
 }

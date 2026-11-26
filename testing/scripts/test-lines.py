@@ -182,6 +182,54 @@ class LinesTest(unittest.TestCase):
                 self.edit_frozen(change)
                 self.assertIn(message, self.run_command("check", False).stderr)
 
+    def edit(self, change):
+        target = self.root / "builder/lines.json"
+        data = json.loads(target.read_text())
+        change(data)
+        target.write_text(json.dumps(data))
+
+    def test_states_the_builder_cannot_build_are_refused(self):
+        def frozen_mm(d):
+            d["lines"]["sm13-latest"]["metamod"] = "MM_112_FROZEN"
+
+        def mm20(d):
+            d["lines"]["sm13-latest"].pop("bridge_metamod")
+            d["lines"]["sm13-latest"]["metamod"] = "MM_20"
+
+        def new_line(d):
+            d["lines"]["sm14-latest"] = dict(d["lines"]["sm13-latest"], role="New")
+
+        def duplicate_tag(d):
+            d["lines"]["sm12-latest"]["extra_tags"] = ["1.13.0.7496-mm1.12.0"]
+
+        def string_tags(d):
+            d["lines"]["sm12-latest"]["extra_tags"] = "1.12.0.1-mm1.12.0"
+
+        def frozen_no_smoke(d):
+            d["lines"]["sm11-oldstable"].pop("smoke")
+
+        cases = (
+            (frozen_mm, "uses Metamod MM_112_FROZEN, which has no patch series"),
+            (mm20, "uses Metamod MM_20, which has no patch series"),
+            (new_line, "has no patch series builder/patches/series/sm14-latest"),
+            (duplicate_tag, "belongs to both sm12-latest and sm13-latest"),
+            (string_tags, "extra_tags must be a list"),
+            (frozen_no_smoke, "needs smoke images (weekly frozen verify)"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                self.setUp()
+                shutil.copytree(ROOT / "builder/patches/series", self.root / "builder/patches/series")
+                self.edit(change)
+                self.assertIn(message, self.run_command("check", False).stderr)
+
+    def test_versions_env_resolves_every_line_from_lines_json(self):
+        text = (self.root / "builder/versions.env").read_text()
+        data = json.loads((self.root / "builder/lines.json").read_text())
+        for name, line in data["lines"].items():
+            self.assertIn('{}) echo "{} {} {}" ;;'.format(name, line["sourcemod"], line["metamod"],
+                                                         line["status"]), text)
+
     def test_frozen_assets_must_cover_the_pointer(self):
         self.edit_frozen(lambda l: l["frozen"]["assets"].pop("mmsource-1.10.7-git976-css34-linux.tar.gz"))
         result = subprocess.run([sys.executable, str(self.root / "builder/lines.py"), "frozen-gha"],

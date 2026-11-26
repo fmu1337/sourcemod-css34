@@ -62,9 +62,6 @@ echo "==> Static deps: CPATH=${CPATH:-} LIBRARY_PATH=${LIBRARY_PATH:-}"
 chmod +x "$BUILDER_DIR/py.sh" "$BUILDER_DIR/build-metamod.sh" "$BUILDER_DIR/package-metamod.sh" \
   "$BUILDER_DIR/write-build-stamps.sh" 2>/dev/null || true
 
-if [[ "${CSS34_OFFLINE:-0}" != 1 ]]; then
-  python3 -m pip install --upgrade pip --user
-fi
 chmod +x "$BUILDER_DIR/patches/patch-ambuild-py312.sh" 2>/dev/null || true
 bash "$BUILDER_DIR/patches/patch-ambuild-py312.sh" "$DEPS_DIR/ambuild"
 # setuptools from the pinned wheel checkout-deps.sh fetched (no PyPI)
