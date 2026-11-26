@@ -95,7 +95,7 @@ def render(tag, repo, commit, root=ROOT):
     out.append("| Metamod:Source | {} git{} | [`{}`]({}) |".format(
         part["mm_expect"], part["mm_rev"], part["mm_short"], mm_url))
     if "bridge_mm_commit" in part:
-        out.append("| Legacy-plugin bridge (`metamod.1.ep1`, PLAPI 7-12) | {} git{} | [`{}`]({}) |".format(
+        out.append("| Legacy-plugin bridge (`metamod.1.ep1`, PLAPI 7-11) | {} git{} | [`{}`]({}) |".format(
             mod.mm_version("1.10"), part["bridge_mm_rev"], part["bridge_mm_commit"][:8],
             gh + "alliedmodders/metamod-source/commit/" + part["bridge_mm_commit"]))
     if commit:

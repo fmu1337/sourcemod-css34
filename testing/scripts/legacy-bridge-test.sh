@@ -51,18 +51,36 @@ rcon() { python3 "${root}/testing/scripts/rcon.py" 127.0.0.1 "${rcon_pw}" "$@"; 
     -ip 127.0.0.1 -port 27015 +ip 127.0.0.1 +sv_lan 1 +maxplayers 4 +rcon_password "${rcon_pw}" +map de_dust2
 ) </dev/null >"${session}.console" 2>&1 &
 srcds_pid=$!
-trap 'kill "${srcds_pid}" 2>/dev/null || true; mv -f "${mm}/metaplugins.ini.legacy-bridge" "${mm}/metaplugins.ini"; rm -f "${mm}/css34_legacy_probe.so"' EXIT
+trap 'kill "${srcds_pid}" 2>/dev/null || true; mv -f "${mm}/metaplugins.ini.legacy-bridge" "${mm}/metaplugins.ini"; rm -f "${mm}/css34_legacy_probe.so" "${events}".after-*' EXIT
 deadline=$((SECONDS + ${LEGACY_BRIDGE_TIMEOUT:-120}))
 until rcon "echo css34-bridge-up" 2>/dev/null | grep -q css34-bridge-up; do
   kill -0 "${srcds_pid}" 2>/dev/null || { tail -n 30 "${session}.console"; die "srcds exited during boot"; }
   (( SECONDS < deadline )) || { tail -n 30 "${session}.console"; die "srcds did not answer RCON"; }
   sleep 3
 done
+probe_id_of() { sed -nE 's/.*\[0*([0-9]+)\] CSS34 Legacy Probe.*/\1/p' | head -n1; }
+# Everything before quit is judged from its own replies, so a shutdown unload
+# cannot stand in for "meta unload" (#198).
 {
   rcon "status" "meta list" "sm version"
-  probe_id="$(rcon "meta list" | sed -nE 's/.*\[0*([0-9]+)\] CSS34 Legacy Probe.*/\1/p' | head -n1)"
+  probe_id="$(rcon "meta list" | probe_id_of)"
   if [[ -n "${probe_id}" ]]; then
-    rcon "meta unload ${probe_id}" "sleep 2" "meta list"
+    rcon "meta unload ${probe_id}" >"${session}.unload" 2>&1 || true
+    sleep 2
+    rcon "meta list" >"${session}.after-unload" 2>&1 || true
+    cp -f "${events}" "${events}.after-unload" 2>/dev/null || true
+    # Late load, then a forced unload through the proxy.
+    rcon "meta load addons/metamod/css34_legacy_probe.so" >"${session}.reload" 2>&1 || true
+    sleep 2
+    late_id="$(rcon "meta list" | probe_id_of)"
+    if [[ -n "${late_id}" ]]; then
+      rcon "meta force_unload ${late_id}" >"${session}.force" 2>&1 || true
+      sleep 2
+      rcon "meta list" >"${session}.after-force" 2>&1 || true
+    fi
+    cp -f "${events}" "${events}.after-force" 2>/dev/null || true
+    cat "${session}.unload" "${session}.after-unload" "${session}.reload" \
+      "${session}.force" "${session}.after-force" 2>/dev/null || true
   fi
   rcon "quit" || true
 } >"${session}" 2>&1
@@ -74,7 +92,7 @@ grep -E 'META|CSS34|Legacy|Plugin|plugin|SourceMod Version' "${session}" | tail 
 echo "==== ${events##*/} ===="
 cat "${events}" 2>/dev/null || echo "(missing)"
 
-check 'Started metamod\.1\.ep1\.so for PLAPI 7-12 plugins' "${session}" "metamod.2.ep1 started the nested legacy core"
+check 'Started metamod\.1\.ep1\.so for PLAPI 7-11 plugins' "${session}" "metamod.2.ep1 started the nested legacy core"
 check 'Old plugin ".*css34_legacy_probe\.so" \(PLAPI 11\) runs in metamod\.1\.ep1\.so' "${session}" "the probe runs as an old plugin"
 check '\] CSS34 Legacy Probe' "${session}" "meta list shows the probe"
 check 'SourceMod Version: ' "${session}" "SourceMod (2.ep1) still answers"
@@ -83,11 +101,30 @@ if [[ -f "${events}" ]]; then
   check '^load api=11 late=0$' "${events}" "the probe loaded with PLAPI 11 at startup"
   check '^all_loaded$' "${events}" "the probe got AllPluginsLoaded"
   check '^level_init map=de_dust2$' "${events}" "its SourceHook v4 LevelInit hook fired"
-  check '^unload$' "${events}" "meta unload reached the probe"
+  check '^vsp_listening ok=1$' "${events}" "EnableVSPListener reached OnVSPListening, GetVSPInfo agrees"
+  check '^unload$' "${events}.after-unload" "meta unload reached the probe before quit"
+  check '^load api=11 late=1$' "${events}.after-force" "meta load loaded the probe late"
+  if [[ "$(grep -c '^unload$' "${events}.after-force" 2>/dev/null || true)" -ge 2 ]]; then
+    echo "OK: meta force_unload reached the probe"
+  else
+    echo "FAIL: meta force_unload did not reach the probe" >&2
+    fail=1
+  fi
 else
   echo "FAIL: the probe wrote no ${events##*/}" >&2
   fail=1
 fi
+check "Plugin ${probe_id:-?} unloaded\." "${session}.unload" "meta unload answered"
+check "Plugin ${late_id:-?} force unloaded\." "${session}.force" "meta force_unload answered"
+for listing in after-unload after-force; do
+  if [[ -f "${session}.${listing}" ]] && grep -Eq 'Listing [0-9]+ plugin' "${session}.${listing}" \
+      && ! grep -q 'CSS34 Legacy Probe' "${session}.${listing}"; then
+    echo "OK: meta list (${listing}) no longer shows the probe"
+  else
+    echo "FAIL: meta list (${listing}) still shows the probe, or was not answered" >&2
+    fail=1
+  fi
+done
 if grep -q 'Older Metamod version required' "${session}"; then
   echo "FAIL: metamod.2.ep1 refused the old plugin" >&2
   fail=1

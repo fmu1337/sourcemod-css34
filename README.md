@@ -40,7 +40,7 @@ exist only as `*.ext.1.ep1` (it runs the `1.ep1` SourceMod core; no DHooks).
 
 ## Compatibility
 
-- **Old Metamod plugins** (PLAPI 7–12, built for MM 1.4–1.10) run on every MM 1.12 package: it also ships
+- **Old Metamod plugins** (PLAPI 7–11, built for MM 1.4–1.10) run on every MM 1.12 package: it also ships
   the MM 1.10.7 core `metamod.1.ep1` and hands such plugins to it. Keep your `metaplugins.ini`.
 - **Old `.smx` plugins** load on 1.12 / 1.13 unchanged (CI loads plugins built by spcomp 1.7.3 and 1.11).
 - **Extensions** built for SM ≤ 1.12 do not load on 1.13 (API 9–11) and vice versa: one build per line.

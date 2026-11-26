@@ -61,7 +61,7 @@ fi
 # T2.6: which cores the package carries. SourceMod lists sourcemod.<core> under
 # "cores"; Metamod lists metamod.<core> under "metamod_binaries" and sets
 # "legacy_bridge" when it ships metamod.2.ep1 with the metamod.1.ep1 legacy core
-# (T2.9: PLAPI 7-12 plugins run on MM 1.12). "metamod_binary" keeps its meaning.
+# (T2.9: PLAPI 7-11 plugins run on MM 1.12). "metamod_binary" keeps its meaning.
 addon_dir="$(dirname "$OUT")"
 json_list() {
   local first=1 item

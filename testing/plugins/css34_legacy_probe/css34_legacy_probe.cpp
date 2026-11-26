@@ -9,7 +9,8 @@
  * hook on IServerGameDLL::LevelInit fires.
  *
  * Events go to <mod>/addons/metamod/css34_legacy_probe.log, one per line:
- *   load api=<n> late=<0|1>, all_loaded, level_init map=<name>, unload
+ *   load api=<n> late=<0|1>, all_loaded, level_init map=<name>,
+ *   vsp_listening ok=<1 when OnVSPListening's iface is GetVSPInfo()'s>, unload
  */
 
 #include <stdio.h>
@@ -41,6 +42,20 @@ SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, 0, bool, char const *, cha
 
 static IServerGameDLL *g_pServer = NULL;
 static char g_LogPath[512];
+static void ProbeLog(const char *fmt, const char *arg);
+
+/* EnableVSPListener() in Load: the nested legacy core must deliver the modern
+ * core's VSP callbacks (#198). */
+class ProbeListener : public IMetamodListener
+{
+public:
+	void OnVSPListening(IServerPluginCallbacks *iface)
+	{
+		int version = 0;
+		IServerPluginCallbacks *info = g_SMAPI->GetVSPInfo(&version);
+		ProbeLog("vsp_listening %s", (iface && info == iface) ? "ok=1" : "ok=0");
+	}
+} g_ProbeListener;
 
 static void ProbeLog(const char *fmt, const char *arg)
 {
@@ -81,6 +96,8 @@ bool LegacyProbe::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, b
 	}
 
 	SH_ADD_HOOK_STATICFUNC(IServerGameDLL, LevelInit, g_pServer, Hook_LevelInit, true);
+	ismm->AddListener(this, &g_ProbeListener);
+	ismm->EnableVSPListener();
 
 	char line[64];
 	snprintf(line, sizeof(line), "%d late=%d", GetApiVersion(), late ? 1 : 0);

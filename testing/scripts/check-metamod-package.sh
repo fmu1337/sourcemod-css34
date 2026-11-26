@@ -77,7 +77,7 @@ fi
 
 echo "==> Checking the css34 legacy-plugin bridge (T2.9)"
 # Every MM 1.10 legacy core exports the nested-mode API; every MM 1.12 core
-# carries the loader for it (the PLAPI 7-12 path names css34_old_init).
+# carries the loader for it (the PLAPI 7-11 path names css34_old_init).
 LEGACY_SO="${TMP}/addons/metamod/bin/metamod.1.ep1.so"
 MODERN_SO="${TMP}/addons/metamod/bin/metamod.2.ep1.so"
 if [[ -f "${LEGACY_SO}" ]]; then
@@ -95,7 +95,7 @@ if [[ -f "${LEGACY_SO}" ]]; then
 fi
 if [[ -f "${MODERN_SO}" ]]; then
   if grep -aq 'css34_old_init' "${MODERN_SO}"; then
-    echo "OK: metamod.2.ep1.so hands PLAPI 7-12 plugins to metamod.1.ep1"
+    echo "OK: metamod.2.ep1.so hands PLAPI 7-11 plugins to metamod.1.ep1"
   else
     echo "FAIL: metamod.2.ep1.so has no css34 legacy-plugin bridge" >&2
     fail=1

@@ -53,7 +53,10 @@ with reproduction steps are at
   it the v34 client shows no hint text), `HudTextMsg` kept (ClientMod draws it; the stock client may not),
   no `GetMaxHealth` hook (not virtual on v34; read `m_iMaxHealth` instead), `VPhysicsUpdate` 143.
 - **Legacy-plugin bridge** (`builder/patches/mm-oldbridge/`): every MM 1.12 package also ships the
-  MM 1.10.7 core `metamod.1.ep1`, and MM 1.12 hands PLAPI 7–12 plugins from `metaplugins.ini` to it.
+  MM 1.10.7 core `metamod.1.ep1`, and MM 1.12 hands PLAPI 7–11 plugins from `metaplugins.ini` to it.
+  `meta list` / `unload` / `force_unload` / `pause` work on them, `EnableVSPListener()` gets MM 1.12's VSP
+  callbacks (`OnVSPListening`, `GetVSPInfo()`), and the legacy core unloads its plugins and SourceHook v4
+  hooks when Metamod shuts down. PLAPI 12–13 (experimental MM 1.6 builds) stay refused.
 - **One Metamod loader on Linux**: the package ships `server_i486.so` only. Episode1 appends `_i486.so` to
   the `metamod.vdf` path; `server.so` is MM's loader for L4D2 and newer (`builder/package-metamod.sh`).
 - **Build for old Linux**: manylinux2014 i686 (glibc 2.17, GCC 10), static hidden libstdc++, every ELF

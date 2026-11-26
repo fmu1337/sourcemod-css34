@@ -77,7 +77,7 @@ build_and_package_mm_win() {
     bash "$BUILDER_DIR/build-metamod.sh"
 
   # css34 legacy-plugin bridge (T2.9): the MM 1.12 package also ships the line's
-  # MM 1.10 legacy core (bridge_metamod); metamod.2.ep1 loads it for PLAPI 7-12
+  # MM 1.10 legacy core (bridge_metamod); metamod.2.ep1 loads it for PLAPI 7-11
   # plugins. The PLAPI 11 test plugin goes to packages/test-plugins (never released).
   local mm_bin="$mm_dir/build/package/addons/metamod/bin"
   if [[ "$mm_mode" == 1.10 ]]; then
