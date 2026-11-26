@@ -1,7 +1,7 @@
 css34: GameConfigs: RTLD_NOLOAD for already-mapped engine binaries
 
 diff --git a/core/logic/GameConfigs.cpp b/core/logic/GameConfigs.cpp
-index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..78b30e383fda43b19f5dc9b16a29d32e9ea764ed 100644
+index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..41bda679482f6a0d8e768db20a050c8ce37b0c89 100644
 --- a/core/logic/GameConfigs.cpp
 +++ b/core/logic/GameConfigs.cpp
 @@ -52,6 +52,9 @@
@@ -102,7 +102,7 @@ index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..78b30e383fda43b19f5dc9b16a29d32e
  void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  {
  	GameBinaryInfo info;
-@@ -1273,10 +1348,34 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+@@ -1273,10 +1348,39 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  			FreeLibrary(hModule);
  		}
  #else
@@ -112,10 +112,10 @@ index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..78b30e383fda43b19f5dc9b16a29d32e
 +		 * ConVar static ctors into vstdlib's list; dlclose then dangling-pointer
 +		 * crashes FindVar (sv_logecho) during SM init. */
 +		void *pHandle = dlopen(binary_path, RTLD_NOW | RTLD_NOLOAD);
++		char alt_path[PLATFORM_MAX_PATH];
++		ke::SafeStrcpy(alt_path, sizeof(alt_path), binary_path);
 +		if (!pHandle)
 +		{
-+			char alt_path[PLATFORM_MAX_PATH];
-+			ke::SafeStrcpy(alt_path, sizeof(alt_path), binary_path);
 +			char *suf = strstr(alt_path, "_i486.so");
 +			if (suf)
 +			{
@@ -128,6 +128,11 @@ index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..78b30e383fda43b19f5dc9b16a29d32e
 +				pHandle = dlopen(alt_path, RTLD_NOW | RTLD_NOLOAD);
 +			}
 +		}
++		if (pHandle && strcmp(alt_path, binary_path) != 0)
++		{
++			/* the CRC below must come from the file that is mapped */
++			ke::SafeStrcpy(binary_path, sizeof(binary_path), alt_path);
++		}
  		if (pHandle)
  		{
 +#if defined PLATFORM_LINUX
@@ -138,7 +143,7 @@ index f6bdad098ddfb2c023d93266a3e14472d2e6a65b..78b30e383fda43b19f5dc9b16a29d32e
  			dlclose(pHandle);
  		}
  #endif
-@@ -1285,6 +1384,20 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
+@@ -1285,6 +1389,20 @@ void GameConfigManager::CacheGameBinaryInfo(const char* pszName)
  			break;
  	}
  

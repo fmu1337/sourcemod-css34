@@ -57,6 +57,53 @@ class Imports(unittest.TestCase):
                          'void probe(void) { if (__gmon_start__) __gmon_start__(); }')
             self.assertEqual(self.check().returncode, expected)
 
+    def versioned(self, name, version, elf='test.so'):
+        """An ELF importing `name@version` from a stub provider library."""
+        (self.root / 'stub.c').write_text('void ' + name + '(void) {}\n')
+        (self.root / 'stub.map').write_text(version + ' { global: ' + name + '; local: *; };\n')
+        libs = tempfile.TemporaryDirectory()
+        self.addCleanup(libs.cleanup)
+        provider = Path(libs.name)
+        subprocess.run(['gcc', '-shared', '-fPIC', '-nostdlib', str(self.root / 'stub.c'),
+                        '-Wl,--version-script=' + str(self.root / 'stub.map'),
+                        '-Wl,-soname,libstub.so', '-o', str(provider / 'libstub.so')], check=True)
+        (self.root / 'stub.c').unlink()
+        (self.root / 'stub.map').unlink()
+        c = self.root / 'test.c'
+        c.write_text('extern void ' + name + '(void); void probe(void) { ' + name + '(); }\n')
+        subprocess.run(['gcc', '-shared', '-fPIC', '-nostdlib', str(c), '-L' + str(provider),
+                        '-lstub', '-o', str(self.root / elf)], check=True)
+        c.unlink()
+
+    def test_new_libgcc_version_rejected(self):
+        # Only GLIBC_ was bounded: __divmoddi4@GCC_7.0.0 passed (#201).
+        self.versioned('__divmoddi4', 'GCC_7.0.0')
+        result = self.check()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('GCC_7.0.0 > GCC_4.2.0', result.stderr)
+
+    def test_old_libgcc_version_allowed(self):
+        self.versioned('_Unwind_GetIPInfo', 'GCC_4.2.0')
+        self.assertEqual(self.check().returncode, 0, self.check().stderr)
+
+    def test_libstdcxx_only_in_spcomp(self):
+        self.versioned('_ZSt4cout', 'GLIBCXX_3.4')
+        result = self.check()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('libstdc++ must be linked statically', result.stderr)
+        (self.root / 'test.so').unlink()
+        self.versioned('_ZSt4cout', 'GLIBCXX_3.4', elf='spcomp')
+        self.assertEqual(self.check().returncode, 0)
+        (self.root / 'spcomp').unlink()
+        self.versioned('_ZSt4cout', 'GLIBCXX_3.4.30', elf='spcomp')
+        self.assertEqual(self.check().returncode, 1)
+
+    def test_unknown_version_namespace_rejected(self):
+        self.versioned('ssl_thing', 'OPENSSL_3.0.0')
+        result = self.check()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('unknown symbol version namespace', result.stderr)
+
     def test_bad_elf_fails_closed(self):
         (self.root / 'broken').write_bytes(b'\x7fELFgarbage')
         self.assertEqual(self.check().returncode, 1)
