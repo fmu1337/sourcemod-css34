@@ -49,8 +49,10 @@ tag_map="$repo_root/builder/generated/tag-map.sh"
 expect_file_contains "$tag_map" "${sm12_tag})" "tag-map.sh sm12 tag"
 expect_file_contains "$tag_map" "${sm13_tag})" "tag-map.sh sm13-latest tag"
 
-# Workflows load matrices at runtime. A full SHA here is a second pin copy.
-if grep -R -E -n '[0-9a-f]{40}' .github/workflows; then
+# Workflows load matrices at runtime. A full SHA here is a second pin copy;
+# third-party actions pinned by commit (uses: x@sha) and image digests are not.
+if grep -R -E -n '[0-9a-f]{40}' .github/workflows \
+    | grep -v -E 'uses: [^ ]+@[0-9a-f]{40}( |$)|@sha256:[0-9a-f]{64}'; then
   note_fail ".github/workflows still embeds a full commit SHA; generate the matrix from lines.json"
 fi
 

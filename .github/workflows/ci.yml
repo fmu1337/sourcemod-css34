@@ -63,7 +63,7 @@ jobs:
       - name: Detect non-doc changes
         id: filter
         if: github.event_name == 'pull_request' || github.event_name == 'push'
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           predicate-quantifier: every
           filters: |
@@ -275,7 +275,7 @@ jobs:
     needs: [plan, build-windows, prepare-server]
     if: needs.plan.outputs.run_wine == 'true' && !cancelled()
     runs-on: ubuntu-22.04
-    container: ubuntu:22.04
+    container: ${{ fromJSON(needs.plan.outputs.rows)[format('windows|{0}', matrix.line)].wine_image }}
     strategy:
       fail-fast: false
       matrix:

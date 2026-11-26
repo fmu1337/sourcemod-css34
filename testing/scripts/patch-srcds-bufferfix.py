@@ -38,6 +38,7 @@ DT_NULL = 0
 DT_STRTAB = 5
 DT_SYMTAB = 6
 DT_STRSZ = 10
+EM_386 = 3
 
 # steamclient: mov DWORD PTR [esp], imm32 ; call rel32(-4)
 # imm32 is the "Assertion Failed: !"Implement me!"" string VA in this binary.
@@ -71,6 +72,8 @@ def patch_memcpy_relocs(data: bytearray) -> dict:
         raise ValueError("not an ELF file")
     if data[4] != 1:
         raise ValueError("only ELF32 supported")
+    if _u16(data, 18) != EM_386:
+        raise ValueError("not an i386 ELF")
 
     e_shoff = _u32(data, 32)
     e_shentsize = _u16(data, 46)
@@ -112,8 +115,16 @@ def patch_memcpy_relocs(data: bytearray) -> dict:
             memcpy_idx = i
         elif name == "memmove" and memmove_idx is None:
             memmove_idx = i
-    if memcpy_idx is None or memmove_idx is None:
-        return {"skipped": True, "reason": "memcpy/memmove not both present"}
+    if memmove_idx is None:
+        raise ValueError("no memmove in .dynsym")
+    if memcpy_idx is None:
+        # A tree this script already patched: memcpy's entry is zeroed (an
+        # all-zero symbol past the reserved index 0), so nothing is left to do.
+        for i in range(1, nsym):
+            o = dynsym["offset"] + i * entsz
+            if not any(data[o : o + entsz]):
+                return {"already": True}
+        raise ValueError("no memcpy in .dynsym and no zeroed entry: unexpected input")
 
     retargeted = 0
     for sec in sections:
@@ -132,6 +143,9 @@ def patch_memcpy_relocs(data: bytearray) -> dict:
                 continue
             struct.pack_into("<I", data, ro + 4, (memmove_idx << 8) | r_type)
             retargeted += 1
+
+    if retargeted == 0:
+        raise ValueError("memcpy is in .dynsym but no relocation uses it: unexpected input")
 
     # Zero primary memcpy dynsym entry (16 bytes).
     so = dynsym["offset"] + memcpy_idx * entsz
@@ -152,22 +166,27 @@ def patch_memcpy_relocs(data: bytearray) -> dict:
     }
 
 
-def patch_steamclient_asserts(data: bytearray) -> int:
-    """Mute the three Implement-me assertion call sites. Returns count."""
-    n = 0
+def _count_sites(data: bytes, pattern: bytes) -> list[int]:
+    sites = []
     start = 0
     while True:
-        i = data.find(STEAM_ASSERT_PAT, start)
+        i = data.find(pattern, start)
         if i < 0:
-            break
-        after = bytes(data[i + 12 : i + 20])
-        if after in STEAM_ASSERT_AFTER:
-            data[i : i + 12] = STEAM_ASSERT_REPL
-            n += 1
+            return sites
+        if bytes(data[i + 12 : i + 20]) in STEAM_ASSERT_AFTER:
+            sites.append(i)
             start = i + 12
         else:
             start = i + 1
-    return n
+
+
+def patch_steamclient_asserts(data: bytearray) -> tuple[int, int]:
+    """Mute the Implement-me assertion call sites. Returns (muted now, muted before)."""
+    stock = _count_sites(data, STEAM_ASSERT_PAT)
+    done = _count_sites(data, STEAM_ASSERT_REPL)
+    for i in stock:
+        data[i : i + 12] = STEAM_ASSERT_REPL
+    return len(stock), len(done)
 
 
 ENGINE_FILES = (
@@ -188,10 +207,14 @@ def patch_tree(server_dir: Path, *, steamclient: bool = True) -> int:
             rc = 1
             continue
         data = bytearray(path.read_bytes())
-        info = patch_memcpy_relocs(data)
-        if info.get("skipped"):
-            print(f"SKIP {rel}: {info['reason']}", file=sys.stderr)
+        try:
+            info = patch_memcpy_relocs(data)
+        except (ValueError, struct.error, IndexError) as err:
+            print(f"FAIL {rel}: {err}", file=sys.stderr)
             rc = 1
+            continue
+        if info.get("already"):
+            print(f"OK {rel}: already patched")
             continue
         path.write_bytes(data)
         print(
@@ -204,14 +227,17 @@ def patch_tree(server_dir: Path, *, steamclient: bool = True) -> int:
         path = server_dir / STEAMCLIENT_FILE
         if path.is_file():
             data = bytearray(path.read_bytes())
-            n = patch_steamclient_asserts(data)
-            path.write_bytes(data)
-            print(f"OK {STEAMCLIENT_FILE}: muted {n} assertion site(s)")
-            if n != 3:
+            n, before = patch_steamclient_asserts(data)
+            if n + before != 3:
                 print(
-                    f"WARN expected 3 assertion sites, got {n}",
+                    f"FAIL {STEAMCLIENT_FILE}: expected 3 assertion sites, "
+                    f"found {n} stock + {before} patched",
                     file=sys.stderr,
                 )
+                return 1
+            if n:
+                path.write_bytes(data)
+            print(f"OK {STEAMCLIENT_FILE}: muted {n} assertion site(s), {before} already muted")
         else:
             print(f"SKIP missing {STEAMCLIENT_FILE}", file=sys.stderr)
     return rc

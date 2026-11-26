@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CACHE_DIR="${CACHE_DIR:-${ROOT}/.ci-cache}"
 SMAC_SRC="${SMAC_SRC:-${CACHE_DIR}/smac_v34}"
 SMAC_REF="${SMAC_REF:-https://github.com/fmu1337/smac_v34.git}"
+# Pinned smac_v34 commit; move it on purpose, like every other pin.
+SMAC_COMMIT="${SMAC_COMMIT:-3f7cab2d65bca546cd0b42431e35f62ca5c9aa67}"
 SMAC_OUT="${SMAC_OUT:-${ROOT}/.ci-artifacts/smac-plugins}"
 SM_PACKAGE="${SM_PACKAGE:-}"
 SERVER_DIR="${SERVER_DIR:-}"
@@ -20,12 +22,22 @@ trap cleanup EXIT
 
 fetch_smac_src() {
   if [[ -d "${SMAC_SRC}/.git" ]]; then
-    echo "Using cached SMAC source at ${SMAC_SRC}"
-    return 0
+    if [[ "$(git -C "${SMAC_SRC}" rev-parse HEAD 2>/dev/null)" == "${SMAC_COMMIT}" ]]; then
+      echo "Using cached SMAC source at ${SMAC_SRC} (${SMAC_COMMIT})"
+      return 0
+    fi
+    echo "Cached SMAC source is not at ${SMAC_COMMIT}; fetching again"
+    rm -rf "${SMAC_SRC}"
   fi
-  mkdir -p "$(dirname "${SMAC_SRC}")"
-  echo "Cloning SMAC from ${SMAC_REF}"
-  git clone --depth 1 "${SMAC_REF}" "${SMAC_SRC}"
+  mkdir -p "${SMAC_SRC}"
+  echo "Fetching SMAC ${SMAC_COMMIT} from ${SMAC_REF}"
+  git -C "${SMAC_SRC}" init -q
+  git -C "${SMAC_SRC}" fetch -q --depth 1 "${SMAC_REF}" "${SMAC_COMMIT}"
+  git -C "${SMAC_SRC}" checkout -q --detach FETCH_HEAD
+  if [[ "$(git -C "${SMAC_SRC}" rev-parse HEAD)" != "${SMAC_COMMIT}" ]]; then
+    echo "FAIL: SMAC checkout is not ${SMAC_COMMIT}" >&2
+    exit 1
+  fi
 }
 
 materialize_sm_tree() {
