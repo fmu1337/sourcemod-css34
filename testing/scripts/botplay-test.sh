@@ -237,6 +237,21 @@ require_min "round_start events" "${round_start}" "${MIN_ROUND_START}"
 require_min "round_end events" "${round_end}" "${MIN_ROUND_END}"
 require_min "player_death events" "${player_death}" "${MIN_PLAYER_DEATH}"
 require_min "SMAC running plugins" "${smac_running}" "${MIN_SMAC_RUNNING}"
+smac_failed="$(json_nested_field "${REPORT_JSON}" smac failed_plugins)"
+if [[ "${smac_failed:-0}" -gt 0 ]]; then
+  echo "FAIL: SMAC plugins in <Failed> state (${smac_failed})" >&2
+  record_failed=1
+else
+  echo "OK: no failed SMAC plugins"
+fi
+
+# The same SourceMod error-log gate as smoke: a plugin throwing native errors
+# all session used to pass (#194).
+if bash "${ROOT}/testing/scripts/check-sm-logs.sh" "${SM_LOG_DIR}"; then
+  :
+else
+  record_failed=1
+fi
 
 if [[ "${crash}" == "True" || "${crash}" == "true" ]]; then
   echo "FAIL: crash marker in botplay logs" >&2
@@ -245,13 +260,15 @@ else
   echo "OK: no crash marker"
 fi
 
-if grep -Fq "${MM_VERSION_EXPECT}" "${BOTPLAY_LOG}" 2>/dev/null; then
+# Anchored to the `meta version` / `sm version` replies: a bare substring
+# 1.12.0 was satisfied by "SourceMod Version: 1.12.0.x" (#194).
+if grep -Fq "Metamod:Source version ${MM_VERSION_EXPECT}" "${BOTPLAY_LOG}" 2>/dev/null; then
   echo "OK: Metamod version ${MM_VERSION_EXPECT}"
 else
   echo "FAIL: Metamod version ${MM_VERSION_EXPECT} not found in botplay log" >&2
   record_failed=1
 fi
-if grep -Fq "${SM_VERSION_EXPECT}" "${BOTPLAY_LOG}" 2>/dev/null; then
+if grep -Fq "SourceMod Version: ${SM_VERSION_EXPECT}" "${BOTPLAY_LOG}" 2>/dev/null; then
   echo "OK: SourceMod version ${SM_VERSION_EXPECT}"
 else
   echo "FAIL: SourceMod version ${SM_VERSION_EXPECT} not found in botplay log" >&2
@@ -259,8 +276,9 @@ else
 fi
 
 # SDK Tools / SDK Hooks must be listed after forced sdkhooks load (see botplay-record.exp).
+# Only `sm exts list` rows count ("[NN] SDK Tools (1.13...)"), not any mention.
 for required_ext in 'BinTools' 'SDK Tools' 'CS Tools' 'SDK Hooks'; do
-  if grep -Fq "${required_ext}" "${BOTPLAY_LOG}" 2>/dev/null; then
+  if grep -Eq "^[[:space:]]*\[[0-9]+\] ${required_ext} \(" "${BOTPLAY_LOG}" 2>/dev/null; then
     echo "OK: required extension (${required_ext}) in botplay log"
   else
     echo "FAIL: required extension (${required_ext}) missing from botplay log" >&2

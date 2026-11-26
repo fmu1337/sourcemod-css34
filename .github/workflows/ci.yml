@@ -525,6 +525,8 @@ jobs:
           MM_VERSION_EXPECT: ${{ fromJSON(env.CI_ROW).mm_expect }}
           SM_VERSION_EXPECT: ${{ fromJSON(env.CI_ROW).sm_expect }}
           BOTPLAY_EXPECT_DHOOKS: ${{ fromJSON(env.CI_ROW).dhooks_expect }}
+          # Weekly: unload dhooks.ext on the live server, changelevel, reload.
+          DHOOKS_UNLOAD_TEST: ${{ needs.plan.outputs.suite == 'weekly' && '1' || '0' }}
           MM_PACKAGE_NAME: ${{ fromJSON(env.CI_ROW).mm_package }}
         run: |
           set -euo pipefail
@@ -545,6 +547,7 @@ jobs:
             -e MM_VERSION_EXPECT \
             -e SM_VERSION_EXPECT \
             -e BOTPLAY_EXPECT_DHOOKS \
+            -e DHOOKS_UNLOAD_TEST \
             -e SM_PACKAGE="/workspace/${SM_PACKAGE}" \
             -e MM_PACKAGE="/workspace/${MM_PACKAGE}" \
             -e REPORT_JSON=/workspace/.ci-server/botplay-report.json \

@@ -24,8 +24,6 @@ error_pattern='(\[SM\][[:space:]]+(Encountered error|Fatal|Exception|Error))|(Fa
 matches="$(grep -Ehin -- "${error_pattern}" "${log_files[@]}" || true)"
 # css34: bintools is not built; splice may still race a stale extensions list entry.
 matches="$(printf '%s\n' "${matches}" | grep -v 'Unable to load extension "bintools.ext"' || true)"
-
-matches="$(grep -Ehin -- "${error_pattern}" "${log_files[@]}" || true)"
 if [[ -n "${matches}" ]]; then
   echo "FAIL: error markers found in SourceMod logs:" >&2
   echo "${matches}" >&2
