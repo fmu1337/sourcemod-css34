@@ -22,6 +22,7 @@ class FakeJules(http.server.BaseHTTPRequestHandler):
     requests = []
     sessions = []
     gets = {}
+    fail_next_gets = 0
 
     def log_message(self, *args):
         pass
@@ -51,6 +52,9 @@ class FakeJules(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         self.record()
+        if FakeJules.fail_next_gets:
+            FakeJules.fail_next_gets -= 1
+            return self.reply(503, {"error": "unavailable"})
         path = self.path.split("?")[0]
         if path == "/sessions":
             return self.reply(200, {"sessions": [{"name": s["name"], "title": s["title"], "url": s["url"]}
@@ -155,6 +159,16 @@ class JulesTest(unittest.TestCase):
         self.assertIn("https://github.com/x/y/pull/9", text)
         self.assertIn("nothing to change", text)
         self.assertNotIn("first thoughts", text)
+
+    def test_wait_survives_transient_errors(self):
+        # A 503 during the long poll used to end the wait (#199).
+        self.start("fix retry", "--auto-pr")
+        FakeJules.fail_next_gets = 2
+        out = self.tmp / "report.md"
+        res = self.run_jules("wait", "sessions/1", "--interval", "0.01", "--timeout", "5", "--out", str(out),
+                             env=dict(self.env, JULES_RETRY_DELAY="0"))
+        self.assertIn("state=COMPLETED", res.stderr)
+        self.assertEqual(FakeJules.fail_next_gets, 0)
 
     def test_wait_timeout_still_writes_a_report(self):
         self.start("review t")

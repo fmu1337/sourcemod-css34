@@ -36,13 +36,16 @@ on:
         required: false
         default: ""
 
+# Per event: the weekly schedule and dispatches no longer queue behind master
+# pushes, where a newer pending run cancelled them (#199).
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   plan:
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     outputs:
       run_code_jobs: ${{ steps.planner.outputs.run_code_jobs }}
       run_check_pins: ${{ steps.planner.outputs.run_check_pins }}
@@ -92,6 +95,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_check_pins == 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -112,6 +116,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -137,6 +142,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -156,12 +162,14 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
+          # run_attempt: "Re-run all jobs" tests its own build, not attempt 1's.
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}-${{ github.run_attempt }}
 
   build-windows:
     needs: plan
     if: needs.plan.outputs.run_windows == 'true'
     runs-on: windows-2022
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -257,6 +265,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     outputs:
       server_key: ${{ steps.server.outputs.key }}
     steps:
@@ -275,6 +284,7 @@ jobs:
     needs: [plan, build-windows, prepare-server]
     if: needs.plan.outputs.run_wine == 'true' && !cancelled()
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     container: ubuntu:22.04
     strategy:
       fail-fast: false
@@ -356,6 +366,7 @@ jobs:
     needs: [plan, build-linux, prepare-server]
     if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -371,7 +382,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
+          # This attempt's build, else (re-run of failed jobs only) the newest one of this run.
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}-${{ github.run_attempt }}
+          restore-keys: css34-pkg-${{ github.run_id }}-${{ matrix.line }}-
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
@@ -503,7 +516,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
+          # This attempt's build, else (re-run of failed jobs only) the newest one of this run.
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}-${{ github.run_attempt }}
+          restore-keys: css34-pkg-${{ github.run_id }}-${{ matrix.line }}-
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
@@ -586,6 +601,7 @@ jobs:
     needs: [plan, build-linux, prepare-server]
     if: needs.plan.outputs.run_code_jobs == 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -604,7 +620,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: packages
-          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}
+          # This attempt's build, else (re-run of failed jobs only) the newest one of this run.
+          key: css34-pkg-${{ github.run_id }}-${{ matrix.line }}-${{ github.run_attempt }}
+          restore-keys: css34-pkg-${{ github.run_id }}-${{ matrix.line }}-
           fail-on-cache-miss: true
 
       - name: Restore cached server tree
@@ -682,6 +700,7 @@ jobs:
       - botplay
       - host-checks
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7

@@ -101,6 +101,9 @@ def prompt(kind, target, old, new, rev, context):
     return head + task + "\n" + SAFETY + "\n" + ctx
 
 
+RETRY_DELAY = float(os.environ.get("JULES_RETRY_DELAY", "10"))
+
+
 def api(method, path, body=None):
     key = os.environ.get("JULES_API_KEY", "")
     if not key:
@@ -109,12 +112,24 @@ def api(method, path, body=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(base + "/" + path.lstrip("/"), data=data, method=method,
                                  headers={"X-Goog-Api-Key": key, "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return json.loads(resp.read().decode() or "{}")
-    except urllib.error.HTTPError as err:
-        detail = err.read().decode(errors="replace")[:500]
-        raise SystemExit("FAIL: Jules API {} {}: HTTP {} {}".format(method, path, err.code, detail))
+    # GETs (the 45-minute poll) retry transient failures; a POST is never
+    # repeated, so a session is not created twice (#199).
+    attempts = 4 if method == "GET" else 1
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read().decode() or "{}")
+        except urllib.error.HTTPError as err:
+            detail = err.read().decode(errors="replace")[:500]
+            if attempt < attempts and (err.code == 429 or err.code >= 500):
+                time.sleep(RETRY_DELAY * attempt)
+                continue
+            raise SystemExit("FAIL: Jules API {} {}: HTTP {} {}".format(method, path, err.code, detail))
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as err:
+            if attempt < attempts:
+                time.sleep(RETRY_DELAY * attempt)
+                continue
+            raise SystemExit("FAIL: Jules API {} {}: {}".format(method, path, err))
 
 
 def source():

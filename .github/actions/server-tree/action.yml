@@ -6,9 +6,9 @@ description: >-
   with any of the preparation scripts.
 inputs:
   save:
-    description: "'true': save a freshly prepared tree to the cache (ci.yml prepare-server)"
+    description: "'true' (default): save a freshly prepared tree to the cache, so other workflows' jobs do not download it again"
     required: false
-    default: "false"
+    default: "true"
 outputs:
   key:
     description: Cache key of the tree, for actions/cache/restore in later jobs
@@ -21,7 +21,7 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: server-art/css34-server.tar.gz
-        key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/trim-server-maps.sh') }}
+        key: css34-server-v1-1-${{ hashFiles('testing/scripts/fetch-server.sh', 'testing/scripts/apply-valve-rc-fix.sh', 'testing/scripts/apply-srcds-patch.sh', 'testing/scripts/patch-srcds-bufferfix.py', 'testing/configs/valve.rc', 'testing/scripts/trim-server-maps.sh') }}
 
     - name: Prepare server tree (cache miss)
       if: steps.restore.outputs.cache-hit != 'true'

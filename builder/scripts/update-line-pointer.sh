@@ -80,21 +80,37 @@ has_asset() {
   grep -qxF "$2" <<<"$names"
 }
 
-swap_asset() {
+# Two phases (#199): stage_asset uploads <name>.next-<run> (retried), commit_asset
+# renames it over <name>. The package set stages every file before the first
+# rename, so a failed upload leaves the old SM, MM and SHA256SUMS together.
+stage_asset() {
   local tag="$1" src="$2" name="$3"
   local tmp_name="${name}.next-${RUN_KEY}"
   local next="${work}/upload/${tmp_name}"
   mkdir -p "${work}/upload"
   cp -f "$src" "$next"
-  local stale
-  stale="$(asset_id "$tag" "$tmp_name")"
-  if [[ -n "$stale" ]]; then
-    gh api -X DELETE "repos/${REPO}/releases/assets/${stale}" >/dev/null
-  fi
-  gh release upload "$tag" --repo "$REPO" "$next"
+  local stale attempt
+  for attempt in 1 2 3 4; do
+    stale="$(asset_id "$tag" "$tmp_name")"
+    if [[ -n "$stale" ]]; then
+      gh api -X DELETE "repos/${REPO}/releases/assets/${stale}" >/dev/null 2>&1 || true
+    fi
+    if gh release upload "$tag" --repo "$REPO" "$next" && [[ -n "$(asset_id "$tag" "$tmp_name")" ]]; then
+      return 0
+    fi
+    echo "upload of ${tmp_name} failed (attempt ${attempt}); retrying" >&2
+    sleep $((attempt * 5))
+  done
+  echo "upload of ${tmp_name} did not appear" >&2
+  exit 1
+}
+
+commit_asset() {
+  local tag="$1" src="$2" name="$3"
+  local tmp_name="${name}.next-${RUN_KEY}"
   local new_id old_id attempt
   new_id="$(asset_id "$tag" "$tmp_name")"
-  [[ -n "$new_id" ]] || { echo "upload of ${tmp_name} did not appear" >&2; exit 1; }
+  [[ -n "$new_id" ]] || { echo "staged ${tmp_name} is missing" >&2; exit 1; }
   for attempt in 1 2 3 4 5; do
     old_id="$(asset_id "$tag" "$name")"
     if [[ -n "$old_id" ]]; then
@@ -110,6 +126,11 @@ swap_asset() {
   done
   echo "could not rename ${tag}/${tmp_name} → ${name}" >&2
   exit 1
+}
+
+swap_asset() {
+  stage_asset "$@"
+  commit_asset "$@"
 }
 
 # Merge every published line-*/lines.json into one {line: entry} document.
@@ -271,12 +292,13 @@ if [[ "$SMOKE" == "pass" ]]; then
     sums+=(mmsource-legacy-css34-linux.tar.gz)
   fi
   (cd "$work" && sha256sum "${sums[@]}" > SHA256SUMS)
-  swap_asset "$PTR_TAG" "${work}/sourcemod-css34-linux.tar.gz" sourcemod-css34-linux.tar.gz
-  swap_asset "$PTR_TAG" "${work}/mmsource-css34-linux.tar.gz" mmsource-css34-linux.tar.gz
-  if [[ -n "$LEGACY_MM_PKG" ]]; then
-    swap_asset "$PTR_TAG" "${work}/mmsource-legacy-css34-linux.tar.gz" mmsource-legacy-css34-linux.tar.gz
-  fi
-  swap_asset "$PTR_TAG" "${work}/SHA256SUMS" SHA256SUMS
+  sums+=(SHA256SUMS)
+  for f in "${sums[@]}"; do
+    stage_asset "$PTR_TAG" "${work}/${f}" "$f"
+  done
+  for f in "${sums[@]}"; do
+    commit_asset "$PTR_TAG" "${work}/${f}" "$f"
+  done
   python3 "$HERE/release-versions.py" --repo "$REPO" \
     --tag "$SRC_TAG" --pointer "$PTR_TAG" --sm-linux "$SM_PKG" --mm-linux "$MM_PKG" \
     ${LEGACY_MM_PKG:+--mm-legacy-linux "$LEGACY_MM_PKG"} > "${work}/VERSIONS.txt"

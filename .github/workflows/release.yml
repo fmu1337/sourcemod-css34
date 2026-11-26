@@ -59,6 +59,7 @@ concurrency:
 jobs:
   resolve-line:
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     outputs:
       css34_line: ${{ steps.map.outputs.css34_line }}
       pointer: ${{ steps.map.outputs.pointer }}
@@ -156,6 +157,10 @@ jobs:
             if css34_tag_is_known_bad "${base}"; then
               known_bad=1
             fi
+            # smoke-pointer compares the served tag's commit time with this one.
+            target_commit="${GITHUB_SHA}"
+            target_time="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
+              -q '.commit.committer.date | fromdateiso8601')"
             line="$(css34_line_for_tag "${base}")" || {
               echo "Unknown release tag '${tag}' — add the line in builder/lines.json and regenerate" >&2
               exit 1
@@ -204,6 +209,7 @@ jobs:
     needs: [resolve-line]
     if: needs.resolve-line.outputs.repoint != '1'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     # Exact names of what this run built: a release can hold older assets
     # with other names (e.g. mmsource-…-dev-…), so later jobs never glob.
     outputs:
@@ -233,8 +239,11 @@ jobs:
             # T4.3: a prerelease until promote; notes from this commit's pins.
             python3 builder/scripts/release-notes.py "${tag}" \
               --repo "${GITHUB_REPOSITORY}" --commit "${GITHUB_SHA}" > release-notes.md
+            # linux and windows race here: if the other job created it first,
+            # create fails and the release exists; anything else is an error.
             gh release create "${tag}" --title "${tag}" --notes-file release-notes.md \
-              --prerelease --latest=false
+              --prerelease --latest=false ||
+              { sleep 5; gh release view "${tag}" >/dev/null; }
           fi
           # The same files under fixed names (what line-<line> serves), so a script
           # can pin a tag without knowing the git<rev> in the asset names.
@@ -260,6 +269,7 @@ jobs:
     if: needs.resolve-line.outputs.repoint != '1'
     # Same build as ci.yml build-windows (toolchain pin: builder/windows-toolchain.env).
     runs-on: windows-2022
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -283,8 +293,11 @@ jobs:
             # T4.3: same prerelease and notes as the Linux job (whichever runs first).
             python builder/scripts/release-notes.py "${tag}" \
               --repo "${GITHUB_REPOSITORY}" --commit "${GITHUB_SHA}" > release-notes.md
+            # linux and windows race here: if the other job created it first,
+            # create fails and the release exists; anything else is an error.
             gh release create "${tag}" --title "${tag}" --notes-file release-notes.md \
-              --prerelease --latest=false
+              --prerelease --latest=false ||
+              { sleep 5; gh release view "${tag}" >/dev/null; }
           fi
           source builder/package-paths.sh
           [[ -f "$MM_WIN_PACKAGE" ]] || { echo "missing $MM_WIN_PACKAGE" >&2; exit 1; }
@@ -303,6 +316,7 @@ jobs:
     needs: [resolve-line, linux, windows, promote]
     if: always() && github.ref_type == 'tag' && needs.resolve-line.outputs.repoint != '1' && needs.linux.result == 'success'
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -340,6 +354,7 @@ jobs:
     if: github.ref_type == 'tag' || needs.resolve-line.outputs.repoint == '1'
     needs: [resolve-line]
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     outputs:
       weekly: ${{ steps.m.outputs.weekly }}
       weekly_botplay: ${{ steps.m.outputs.weekly_botplay }}
@@ -383,6 +398,7 @@ jobs:
       ((github.ref_type == 'tag' && needs.linux.result == 'success') ||
        needs.resolve-line.outputs.repoint == '1')
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -525,6 +541,7 @@ jobs:
       ((github.ref_type == 'tag' && needs.linux.result == 'success') ||
        needs.resolve-line.outputs.repoint == '1')
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     steps:
       - name: Promote ${{ needs.resolve-line.outputs.tag }}
         env:
@@ -536,6 +553,21 @@ jobs:
                 'true' || 'false' }}
         run: |
           set -euo pipefail
+          # An older tag that finishes last must not take Latest back (#199):
+          # keep the current Latest if its commit is newer (same commit: higher -rN).
+          if [[ "${LATEST}" == true ]]; then
+            current="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName -q .tagName 2>/dev/null || true)"
+            if [[ -n "${current}" && "${current}" != "${TAG}" ]]; then
+              when() { gh api "repos/${GITHUB_REPOSITORY}/commits/$1" -q '.commit.committer.date | fromdateiso8601'; }
+              rnum() { if [[ "$1" =~ -r([0-9]+)$ ]]; then echo "${BASH_REMATCH[1]}"; else echo 1; fi; }
+              cur_t="$(when "${current}")"
+              new_t="$(when "${TAG}")"
+              if (( cur_t > new_t )) || { (( cur_t == new_t )) && (( $(rnum "${current}") > $(rnum "${TAG}") )); }; then
+                echo "::notice::Latest stays on ${current} (newer than ${TAG})"
+                LATEST=false
+              fi
+            fi
+          fi
           gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" \
             --draft=false --prerelease=false --latest="${LATEST}"
           state="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" \
@@ -556,6 +588,7 @@ jobs:
       needs.promote.result != 'cancelled' &&
       ((github.ref_type == 'tag' && needs.linux.result == 'success') || needs.resolve-line.outputs.repoint == '1')
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     # One writer per line-<line>. Per line, not global: a concurrency group holds
     # one running + one pending job and a newer pending one cancels it, so a
     # global group would silently drop pointers when several lines are tagged
@@ -629,6 +662,7 @@ jobs:
     needs: [resolve-line, line-pointer]
     if: always() && needs.resolve-line.outputs.pointer == '1' && needs.line-pointer.result == 'success'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v7
