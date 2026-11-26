@@ -101,9 +101,11 @@ if [[ -d "${SM_LOG_DIR}" ]]; then
   shopt -u nullglob
   sm_log_files="${#sm_logs[@]}"
   if [[ ${#sm_logs[@]} -gt 0 ]]; then
-    sm_log_errors="$(grep -Eic \
+    # One number for all files (grep -c on several files prints file:N each,
+    # which made botplay-report.json invalid exactly when errors were found).
+    sm_log_errors="$(cat "${sm_logs[@]}" 2>/dev/null | grep -Eic \
       '(\[SM\][[:space:]]+(Encountered error|Fatal|Exception|Error))|(Failed to (load|open|create|initialize))|(Native error)|(Parse error)' \
-      "${sm_logs[@]}" 2>/dev/null || true)"
+      || true)"
     sm_log_errors="${sm_log_errors:-0}"
     probe_ok=0
     probe_fail=0
@@ -153,9 +155,9 @@ fi
 sm_probe_round_ok="${sm_probe_round_ok:-0}"
 sm_probe_round_fail="${sm_probe_round_fail:-0}"
 
-if [[ "${map_rotations}" -eq 0 ]]; then
-  map_rotations="$(count_pattern "${ENGINE_CONSOLE_LOG}" 'Started map|changelevel|Loading map')"
-fi
+# No fallback to "Started map" / "Loading map" in console.log: the initial
+# boot alone matched it, so a run that never rotated passed (#194). Only
+# css34_botplay_stress's own map_rotate lines count.
 
 record_secs="${RECORD_SECS:-600}"
 map_name="${MAP:-de_dust2}"
